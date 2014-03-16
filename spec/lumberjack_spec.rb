@@ -363,15 +363,15 @@ describe "logstash-forwarder" do
     end
     @file.close
 
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want #{count}" if @event_queue.size < count
-    end
-
     # We will always be missing the last line - this is currently acceptable
     # Reason is we will not know if the multiline is finished until we see another BEGIN or we hit the old age timeout (24h)
     # TODO(driskell): Make this unacceptable and force a flush of multiline after read_timeout (10s currently)
     count -= 1
+
+    # Wait for logstash-forwarder to finish publishing data to us.
+    Stud::try(20.times) do
+      raise "have #{@event_queue.size}, want #{count}" if @event_queue.size < count
+    end
 
     # Now verify that we have all the data and in the correct order.
     insist { @event_queue.size } == count
