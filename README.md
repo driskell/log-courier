@@ -106,13 +106,13 @@ include them in your config.:
 
 ## Building it
 
-1. Install [go](http://golang.org/doc/install)
+1. Install [go](http://golang.org/doc/install) (a minimum version of 1.1.x is required)
 
 2. Compile logstash-forwarder
 
         git clone git://github.com/elasticsearch/logstash-forwarder.git
         cd logstash-forwarder
-        go build
+        make
 
 ## Packaging it (optional)
 
