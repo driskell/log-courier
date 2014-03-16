@@ -25,24 +25,6 @@ describe "logstash-forwarder" do
       :ssl_key => @ssl_key.path
     )
 
-    @config.puts(<<-config)
-      {
-        "network": {
-          "servers": [ "localhost:#{@server.port}" ],
-          "ssl ca":  "#{@ssl_cert.path}"
-        },
-        "files": [
-          {
-            "paths": [ "#{@file.path}" ]
-          },
-          {
-            "paths": [ "#{@file2.path}" ]
-          }
-        ]
-      }
-    config
-    @config.close
-
     @event_queue = Queue.new
     @server_thread = Thread.new do
       @server.run do |event|
@@ -66,8 +48,37 @@ describe "logstash-forwarder" do
     end
   end
 
-  def startup (config="")
-    @logstash_forwarder = IO.popen("build/bin/logstash-forwarder -config #{@config.path}" + (config.empty? ? "" : " " + config), "r")
+  def startup(config=nil, extra_args="")
+    # A standard configuration when we don't want anything special
+    if config == nil
+      config = <<-config
+      {
+        "network": {
+          "servers": [ "localhost:#{@server.port}" ],
+          "ssl ca": "#{@ssl_cert.path}",
+          "timeout": 15,
+          "reconnect": 1
+        },
+        "files": [
+          {
+            "paths": [ "#{@file.path}" ]
+          },
+          {
+            "paths": [ "#{@file2.path}" ]
+          }
+        ]
+      }
+      config
+    end
+
+    if @config.closed?
+      # Reopen the config and rewrite it
+      @config.reopen(@config.path, "w")
+    end
+    @config.puts(config)
+    @config.close
+
+    @logstash_forwarder = IO.popen("build/bin/logstash-forwarder -config #{@config.path}" + (extra_args.empty? ? "" : " " + extra_args), "r")
     sleep 1 # let logstash-forwarder start up.
   end # def startup
 
@@ -121,7 +132,7 @@ describe "logstash-forwarder" do
 
     @file.reopen(@file.path, "a+")
 
-    startup "-from-beginning=true"
+    startup nil, "-from-beginning=true"
 
     count = rand(5000) + 25000
     count.times do |i|
@@ -242,7 +253,7 @@ describe "logstash-forwarder" do
       @file2.reopen(@file2.path, "a+")
 
       # From beginning makes testing this easier - without it we'd need to create lines inbetween shutdown and start and verify them which is more work
-      startup "-from-beginning=true"
+      startup nil, "-from-beginning=true"
       sleep(1) # let logstash-forwarder start up
 
       finish = true
@@ -319,6 +330,55 @@ describe "logstash-forwarder" do
     count.times do |i|
       event = @event_queue.pop
       insist { event["line"] } == "fizzle #{i}"
+      insist { event["file"] } == @file.path
+      insist { event["host"] } == host
+    end
+    insist { @event_queue }.empty?
+  end
+
+  it "should support multiline codec and emit blocks of lines as events" do
+    startup <<-config
+		{
+			"network": {
+				"servers": [ "localhost:#{@server.port}" ],
+				"ssl ca": "#{@ssl_cert.path}",
+				"timeout": 15,
+				"reconnect": 1
+			},
+			"files": [
+				{
+					"paths": [ "#{@file.path}" ],
+          "codec": { "name": "multiline", "pattern": "^BEGIN", "negate": false }
+				}
+			]
+		}
+		config
+
+    count = rand(1000) + 5000
+    count.times do |i|
+      @file.puts("BEGIN hello #{i}")
+      @file.puts("hello #{i}")
+      @file.puts("hello #{i}")
+      @file.puts("hello #{i}")
+    end
+    @file.close
+
+    # Wait for logstash-forwarder to finish publishing data to us.
+    Stud::try(20.times) do
+      raise "have #{@event_queue.size}, want #{count}" if @event_queue.size < count
+    end
+
+    # We will always be missing the last line - this is currently acceptable
+    # Reason is we will not know if the multiline is finished until we see another BEGIN or we hit the old age timeout (24h)
+    # TODO(driskell): Make this unacceptable and force a flush of multiline after read_timeout (10s currently)
+    count -= 1
+
+    # Now verify that we have all the data and in the correct order.
+    insist { @event_queue.size } == count
+    host = Socket.gethostname
+    count.times do |i|
+      event = @event_queue.pop
+      insist { event["line"] } == "BEGIN hello #{i}" + $/ + "hello #{i}" + $/ + "hello #{i}" + $/ + "hello #{i}"
       insist { event["file"] } == @file.path
       insist { event["host"] } == host
     end
