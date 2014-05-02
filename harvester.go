@@ -9,21 +9,35 @@ import (
   "time"
 )
 
+type Codec interface {
+  Init()
+  Event(uint64, *string)
+  Teardown()
+}
+
 type Harvester struct {
   Path       string /* the file path to harvest */
   FileConfig FileConfig
   Offset     int64
   FinishChan chan int64
   Initial    bool
-
-  file *os.File /* the file being watched */
+  Codec      Codec
+  Info       os.FileInfo
+  file       *os.File /* the file being watched */
 }
 
 func (h *Harvester) Harvest(output chan *FileEvent) {
+  if h.FileConfig.Codec["name"] == "multiline" {
+    h.Codec = &CodecMultiline{h: h, output: output}
+  } else {
+    h.Codec = &CodecPlain{h: h, output: output}
+  }
+  h.Codec.Init()
+  defer h.Codec.Teardown()
+
   h.open()
-  info, _ := h.file.Stat() // TODO(sissel): Check error
+  h.Info, _ = h.file.Stat() // TODO(sissel): Check error
   defer h.file.Close()
-  //info, _ := file.Stat()
 
   // On completion, push offset so we can continue where we left off if we relaunch on the same file
   defer func() { h.FinishChan <- h.Offset }()
@@ -59,8 +73,8 @@ func (h *Harvester) Harvest(output chan *FileEvent) {
       if err == io.EOF {
         // timed out waiting for data, got eof.
         // Check to see if the file was truncated
-        info, _ := h.file.Stat()
-        if info.Size() < h.Offset {
+        h.Info, _ = h.file.Stat() // TODO(driskell): check error
+        if h.Info.Size() < h.Offset {
           log.Printf("File truncated, seeking to beginning: %s\n", h.Path)
           h.file.Seek(0, os.SEEK_SET)
           h.Offset = 0
@@ -80,16 +94,8 @@ func (h *Harvester) Harvest(output chan *FileEvent) {
 
     line++
     h.Offset += int64(bytesread)
-    event := &FileEvent{
-      Source:   &h.Path,
-      Offset:   h.Offset,
-      Line:     line,
-      Text:     text,
-      Fields:   &h.FileConfig.Fields,
-      fileinfo: &info,
-    }
 
-    output <- event // ship the new event downstream
+    h.Codec.Event(line, text)
   } /* forever */
 }
 
