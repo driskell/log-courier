@@ -7,7 +7,6 @@ import (
   "crypto/x509"
   "encoding/binary"
   "encoding/pem"
-  "fmt"
   "io"
   "io/ioutil"
   "log"
@@ -24,7 +23,7 @@ import _ "crypto/sha256"
 import _ "crypto/sha512"
 
 var hostname string
-var hostport_re, _ = regexp.Compile("^(.+):([0-9]+)$")
+var hostport_re, _ = regexp.Compile(`^\[?([^]]+)\]?:([0-9]+)$`)
 
 func init() {
   log.Printf("publisher init\n")
@@ -272,8 +271,8 @@ func connect(config *NetworkConfig) (socket *tls.Conn) {
       continue
     }
 
-    address := addresses[rand.Int()%len(addresses)]
-    addressport := fmt.Sprintf("%s:%s", address, port)
+    address := addresses[rand.Int() % len(addresses)]
+    addressport := net.JoinHostPort(address, port)
 
     log.Printf("Connecting to %s (%s) \n", addressport, host)
 
