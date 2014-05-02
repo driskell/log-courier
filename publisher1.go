@@ -163,7 +163,7 @@ func Publishv1(input chan []*FileEvent,
         // basically everything is slow or down. We'll want to ratchet up the
         // timeout value slowly until things improve, then ratchet it down once
         // things seem healthy.
-        time.Sleep(1 * time.Second)
+        time.Sleep(config.reconnect)
         socket.Close()
         socket = connect(config)
       }
@@ -184,7 +184,7 @@ func Publishv1(input chan []*FileEvent,
       err = ping(config, socket)
       if err != nil {
         log.Printf("Socket error during ping, will reconnect: %s\n", err)
-        time.Sleep(1 * time.Second)
+        time.Sleep(config.reconnect)
         socket.Close()
         socket = connect(config)
       }
@@ -297,7 +297,7 @@ func connect(config *NetworkConfig) (socket *tls.Conn) {
     return
 
   TryNextServer:
-    time.Sleep(1 * time.Second)
+    time.Sleep(config.reconnect)
     socket.Close()
     continue
   }
