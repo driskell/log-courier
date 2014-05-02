@@ -3,6 +3,7 @@ package main
 import (
   "encoding/json"
   "errors"
+  "fmt"
   "log"
   "os"
   "time"
@@ -30,13 +31,15 @@ type NetworkConfig struct {
 }
 
 type FileConfig struct {
-  Paths    []string          `json:paths`
-  Fields   map[string]string `json:fields`
-  DeadTime string            `json:"dead time"`
-  deadtime time.Duration
+  Paths     []string          `json:paths`
+  Fields    map[string]string `json:fields`
+  Codec     map[string]interface{} `json:codec`
+  codec     interface{}
+  DeadTime  string            `json:"dead time"`
+  deadtime  time.Duration
 }
 
-func LoadConfig(path string) (config Config, err error) {
+func LoadConfig(path string) (config *Config, err error) {
   config_file, err := os.Open(path)
   if err != nil {
     log.Printf("Failed to open config file '%s': %s\n", path, err)
@@ -45,21 +48,25 @@ func LoadConfig(path string) (config Config, err error) {
 
   fi, err := config_file.Stat()
   if err != nil {
-    log.Printf("Stat failed for config file. Aborting. Config file was '%s'.\n", path)
+    log.Printf("Stat failed for config file: %s\n", err)
     return
   }
   if fi.Size() > (10 << 20) {
     err = errors.New("Config file too large?")
-    log.Printf("Config file too large? Aborting, just in case. '%s' is %d bytes\n",
-      path, fi)
+    log.Printf("Config file too large? Aborting, just in case. '%s' is %d bytes\n", path, fi)
     return
   }
 
   buffer := make([]byte, fi.Size())
   _, err = config_file.Read(buffer)
+  if err != nil {
+    log.Printf("Failed reading config file: %s\n", err)
+    return
+  }
   log.Printf("%s\n", buffer)
 
-  err = json.Unmarshal(buffer, &config)
+  config = &Config{}
+  err = json.Unmarshal(buffer, config)
   if err != nil {
     log.Printf("Failed unmarshalling json: %s\n", err)
     return
@@ -77,10 +84,41 @@ func LoadConfig(path string) (config Config, err error) {
 
   config.Network.reconnect = time.Duration(config.Network.Reconnect) * time.Second
 
-  for k, _ := range config.Files {
+  for k := range config.Files {
+    for _, path := range config.Files[k].Paths {
+      log.Printf("%d: %s", k, path)
+    }
+    if config.Files[k].Codec != nil {
+      var ok bool
+      config.Files[k].Codec["name"], ok = config.Files[k].Codec["name"].(string)
+      if !ok {
+        err = errors.New("The name of the codec must be specified.")
+        log.Printf(fmt.Sprint(err))
+        return
+      }
+    } else {
+      config.Files[k].Codec = make(map[string]interface{}, 1)
+      config.Files[k].Codec["name"] = "plain"
+    }
+
+    if config.Files[k].Codec["name"] == "" || config.Files[k].Codec["name"] == "plain" {
+      config.Files[k].codec, err = NewCodecPlainConfig(config.Files[k].Codec)
+    } else if config.Files[k].Codec["name"] == "multiline" {
+      config.Files[k].codec, err = NewCodecMultilineConfig(config.Files[k].Codec)
+    } else {
+      err = errors.New(fmt.Sprintf("Unrecognised codec '%s'. Please check your configuration.\n", config.Files[k].Codec["name"]))
+      log.Printf(fmt.Sprint(err))
+      return
+    }
+    if err != nil {
+      log.Printf(fmt.Sprint(err))
+      return
+    }
+
     if config.Files[k].DeadTime == "" {
       config.Files[k].DeadTime = default_FileConfig_DeadTime
     }
+
     config.Files[k].deadtime, err = time.ParseDuration(config.Files[k].DeadTime)
     if err != nil {
       log.Printf("Failed to parse dead time duration '%s'. Error was: %s\n", config.Files[k].DeadTime, err)
