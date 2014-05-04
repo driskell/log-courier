@@ -33,7 +33,7 @@ func init() {
 }
 
 func Publishv1(input chan []*FileEvent,
-  registrar chan []*FileEvent,
+  registrar_chan chan []*RegistrarEvent,
   config *NetworkConfig) {
   var buffer bytes.Buffer
   var compressed_payload []byte
@@ -123,6 +123,16 @@ func Publishv1(input chan []*FileEvent,
             }
 
             if sequence == ack_sequence {
+              // Tell the registrar that we've successfully sent the remainder of the events
+              last_ack_event := events[ack_sequence - last_ack_sequence - 1]
+              registrar_event := &RegistrarEvent{
+                ProspectorInfo: last_ack_event.ProspectorInfo,
+                Type:           EVENT_OFFSET,
+                Offset:         last_ack_event.Offset,
+                Events:         ack_sequence - last_ack_sequence,
+                fileinfo:       last_ack_event.fileinfo,
+              }
+              registrar_chan <- []*RegistrarEvent{registrar_event}
               last_ack_sequence = ack_sequence
               // All acknowledged! Stop reading acks
               break
@@ -139,9 +149,17 @@ func Publishv1(input chan []*FileEvent,
               goto RetryPayload
             }
 
-            // Send a slice of the acknowledged events downstream and slice what we're still waiting for
+            // Send the offset of the last acknowledged event downstream and slice what we're still waiting for
             // so that if we encounter an error, we only resend unacknowledged events
-            registrar <- events[:ack_sequence - last_ack_sequence]
+            last_ack_event := events[ack_sequence - last_ack_sequence - 1]
+            registrar_event := &RegistrarEvent{
+              ProspectorInfo: last_ack_event.ProspectorInfo,
+              Type:           EVENT_OFFSET,
+              Offset:         last_ack_event.Offset,
+              Events:         ack_sequence - last_ack_sequence,
+              fileinfo:       last_ack_event.fileinfo,
+            }
+            registrar_chan <- []*RegistrarEvent{registrar_event}
             events = events[ack_sequence - last_ack_sequence:]
             last_ack_sequence = ack_sequence
 
@@ -168,9 +186,6 @@ func Publishv1(input chan []*FileEvent,
         socket.Close()
         socket = connect(config)
       }
-
-      // Tell the registrar that we've successfully sent the remainder of the events
-      registrar <- events
 
       // Reset the events buffer
       buffer.Truncate(0)

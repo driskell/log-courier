@@ -10,11 +10,12 @@ import (
 )
 
 type Harvester struct {
-  Path       string /* the file path to harvest */
-  FileConfig FileConfig
-  Offset     int64
-  FinishChan chan int64
-  Initial    bool
+  ProspectorInfo *ProspectorInfo
+  Path           string /* the file path to harvest */
+  FileConfig     FileConfig
+  Offset         int64
+  FinishChan     chan int64
+  Initial        bool
 
   file *os.File /* the file being watched */
 }
@@ -81,12 +82,13 @@ func (h *Harvester) Harvest(output chan *FileEvent) {
     line++
     h.Offset += int64(bytesread)
     event := &FileEvent{
-      Source:   &h.Path,
-      Offset:   h.Offset,
-      Line:     line,
-      Text:     text,
-      Fields:   &h.FileConfig.Fields,
-      fileinfo: &info,
+      ProspectorInfo: h.ProspectorInfo,
+      Source:         &h.Path,
+      Offset:         h.Offset,
+      Line:           line,
+      Text:           text,
+      Fields:         &h.FileConfig.Fields,
+      fileinfo:       &info,
     }
 
     output <- event // ship the new event downstream

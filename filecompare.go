@@ -4,23 +4,23 @@ import (
   "os"
 )
 
-func lookup_file_ids(file string, info os.FileInfo, fileinfo map[string]ProspectorInfo, missingfiles map[string]os.FileInfo) string {
+func lookup_file_ids(file string, info os.FileInfo, fileinfo map[string]*ProspectorInfo, missingfiles map[string]*ProspectorInfo) (string, *ProspectorInfo) {
   for kf, ki := range fileinfo {
     if kf == file {
       continue
     }
     if os.SameFile(ki.fileinfo, info) {
-      return kf
+      return kf, ki
     }
   }
 
   // Now check the missingfiles
   for kf, ki := range missingfiles {
-    if os.SameFile(info, ki) {
-      return kf
+    if os.SameFile(ki.fileinfo, info) {
+      return kf, ki
     }
   }
-  return ""
+  return "", nil
 }
 
 func lookup_file_ids_resume(file string, info os.FileInfo, initial map[string]*FileState) string {
