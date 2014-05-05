@@ -14,20 +14,16 @@ type Harvester struct {
   Path           string /* the file path to harvest */
   FileConfig     FileConfig
   Offset         int64
-  FinishChan     chan int64
   Initial        bool
 
   file *os.File /* the file being watched */
 }
 
-func (h *Harvester) Harvest(output chan *FileEvent) {
+func (h *Harvester) Harvest(output chan *FileEvent) int64 {
   h.open()
   info, _ := h.file.Stat() // TODO(sissel): Check error
   defer h.file.Close()
   //info, _ := file.Stat()
-
-  // On completion, push offset so we can continue where we left off if we relaunch on the same file
-  defer func() { h.FinishChan <- h.Offset }()
 
   // NOTE(driskell): How would we know line number if from_beginning is false and we SEEK_END? Or would we scan,count,skip?
   var line uint64 = 0 // Ask registrar about the line number
@@ -69,12 +65,12 @@ func (h *Harvester) Harvest(output chan *FileEvent) {
           // if last_read_time was more than dead time, this file is probably
           // dead. Stop watching it.
           log.Printf("Stopping harvest of %s; last change was %v ago\n", h.Path, age)
-          return
+          return h.Offset
         }
         continue
       } else {
         log.Printf("Unexpected state reading from %s; error: %s\n", h.Path, err)
-        return
+        return h.Offset
       }
     }
     last_read_time = time.Now()
@@ -177,7 +173,7 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer, eof_tim
       // Get the str length with the EOL chars (LF or CRLF)
       bufferSize := buffer.Len()
       str := new(string)
-      *str = buffer.String()[:bufferSize - newline_length]
+      *str = buffer.String()[:bufferSize-newline_length]
       // Reset the buffer for the next line
       buffer.Reset()
       return str, bufferSize, nil

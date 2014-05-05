@@ -59,11 +59,8 @@ func main() {
     configureSyslog()
   }
 
-  resume := &ProspectorResume{}
-  resume.sync = make(chan bool)
-
   // Load the previous log file locations now, for use in prospector
-  resume.files = make(map[string]*FileState)
+  load_resume := make(map[string]*FileState)
   history, err := os.Open(".logstash-forwarder")
   if err == nil {
     wd, err := os.Getwd()
@@ -73,40 +70,21 @@ func main() {
     log.Printf("Loading registrar data from %s/.logstash-forwarder\n", wd)
 
     decoder := json.NewDecoder(history)
-    decoder.Decode(&resume.files)
+    decoder.Decode(&load_resume)
     history.Close()
   }
 
-  prospector_pending := 0
+  // Generate ProspectorInfo structures for registrar and prosector to communicate with
+  prospector_resume := make(map[string]*ProspectorResume, len(load_resume))
+  registrar_persist := make(map[*ProspectorInfo]*FileState, len(load_resume))
+  for file, filestate := range load_resume {
+    prospector_resume[file] = &ProspectorResume{prospectorinfo: &ProspectorInfo{harvester: make(chan int64, 1)}, filestate: filestate}
+    registrar_persist[prospector_resume[file].prospectorinfo] = filestate
+  }
 
   // Prospect the globs/paths given on the command line and launch harvesters
-  for _, fileconfig := range config.Files {
-    prospector := &Prospector{FileConfig: fileconfig}
-    go prospector.Prospect(resume, registrar_chan, event_chan)
-    prospector_pending++
-  }
-
-  // Now determine which states we need to persist by pulling the events from the prospectors
-  // When we hit a nil source a prospector had finished so we decrease the expected events
-  log.Printf("Waiting for %d prospectors to initialise\n", prospector_pending)
-  initial_persist := make([]*RegistrarEvent, 0)
-  for registrar_events := range registrar_chan {
-    initial_persist = append(initial_persist, registrar_events...)
-    prospector_pending--
-    if prospector_pending == 0 {
-      break
-    }
-  }
-
-  log.Printf("All prospectors initialised\n")
-
-  // Pass registrar the initial bulk
-  if len(initial_persist) != 0 {
-    registrar_chan <- initial_persist
-  }
-
-  // Allow prospectors to continue
-  close(resume.sync)
+  prospector := &Prospector{FileConfigs: config.Files}
+  go prospector.Prospect(prospector_resume, registrar_chan, event_chan)
 
   // Harvesters dump events into the spooler.
   go Spool(event_chan, publisher_chan, *spool_size, *idle_timeout)
@@ -114,5 +92,5 @@ func main() {
   go Publishv1(publisher_chan, registrar_chan, &config.Network)
 
   // registrar records last acknowledged positions in all files.
-  Registrar(registrar_chan)
+  Registrar(registrar_persist, registrar_chan)
 } /* main */

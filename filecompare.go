@@ -23,12 +23,12 @@ func lookup_file_ids(file string, info os.FileInfo, fileinfo map[string]*Prospec
   return "", nil
 }
 
-func lookup_file_ids_resume(file string, info os.FileInfo, initial map[string]*FileState) string {
+func lookup_file_ids_resume(file string, info os.FileInfo, initial map[string]*ProspectorResume) string {
   for kf, ki := range initial {
     if kf == file {
       continue
     }
-    if is_filestate_same(file, info, ki) {
+    if is_filestate_same(file, info, ki.filestate) {
       return kf
     }
   }

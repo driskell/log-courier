@@ -8,7 +8,7 @@ import (
 const EVENT_NEWFILE = 0x00000001
 const EVENT_DELETED = 0x00000002
 const EVENT_RENAMED = 0x00000003
-const EVENT_OFFSET  = 0x00000004
+const EVENT_OFFSET = 0x00000004
 
 type RegistrarEvent struct {
   ProspectorInfo *ProspectorInfo
@@ -19,8 +19,7 @@ type RegistrarEvent struct {
   fileinfo       *os.FileInfo
 }
 
-func Registrar(registrar chan []*RegistrarEvent) {
-  state := make(map[*ProspectorInfo]*FileState, 1)
+func Registrar(state map[*ProspectorInfo]*FileState, registrar chan []*RegistrarEvent) {
   for registrar_events := range registrar {
     for _, event := range registrar_events {
       if event.Type == EVENT_NEWFILE {

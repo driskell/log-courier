@@ -124,7 +124,7 @@ func Publishv1(input chan []*FileEvent,
 
             if sequence == ack_sequence {
               // Tell the registrar that we've successfully sent the remainder of the events
-              last_ack_event := events[ack_sequence - last_ack_sequence - 1]
+              last_ack_event := events[ack_sequence-last_ack_sequence-1]
               registrar_event := &RegistrarEvent{
                 ProspectorInfo: last_ack_event.ProspectorInfo,
                 Type:           EVENT_OFFSET,
@@ -143,7 +143,7 @@ func Publishv1(input chan []*FileEvent,
             if ack_sequence == last_ack_sequence {
               // Just keep waiting
               continue
-            } else if ack_sequence - last_ack_sequence > uint32(len(events)) {
+            } else if ack_sequence-last_ack_sequence > uint32(len(events)) {
               // This is wrong - we've already had an ack for these
               log.Printf("Socket error, will reconnect: Repeated ACK\n")
               goto RetryPayload
@@ -151,7 +151,7 @@ func Publishv1(input chan []*FileEvent,
 
             // Send the offset of the last acknowledged event downstream and slice what we're still waiting for
             // so that if we encounter an error, we only resend unacknowledged events
-            last_ack_event := events[ack_sequence - last_ack_sequence - 1]
+            last_ack_event := events[ack_sequence-last_ack_sequence-1]
             registrar_event := &RegistrarEvent{
               ProspectorInfo: last_ack_event.ProspectorInfo,
               Type:           EVENT_OFFSET,
@@ -160,7 +160,7 @@ func Publishv1(input chan []*FileEvent,
               fileinfo:       last_ack_event.fileinfo,
             }
             registrar_chan <- []*RegistrarEvent{registrar_event}
-            events = events[ack_sequence - last_ack_sequence:]
+            events = events[ack_sequence-last_ack_sequence:]
             last_ack_sequence = ack_sequence
 
             // Reset the events buffer so it gets regenerated if we need to retry the payload
