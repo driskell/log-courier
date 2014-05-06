@@ -39,7 +39,7 @@ func main() {
 
   event_chan := make(chan *FileEvent, 16)
   publisher_chan := make(chan []*FileEvent, 1)
-  registrar_chan := make(chan []*RegistrarEvent, 16)
+  registrar_chan := make(chan []RegistrarEvent, 16)
 
   if len(config.Files) == 0 {
     log.Fatalf("No paths given. What files do you want me to watch?\n")
@@ -78,7 +78,7 @@ func main() {
   prospector_resume := make(map[string]*ProspectorResume, len(load_resume))
   registrar_persist := make(map[*ProspectorInfo]*FileState, len(load_resume))
   for file, filestate := range load_resume {
-    prospector_resume[file] = &ProspectorResume{prospectorinfo: &ProspectorInfo{harvester: make(chan int64, 1)}, filestate: filestate}
+    prospector_resume[file] = &ProspectorResume{prospectorinfo: &ProspectorInfo{last_offset: make(chan int64, 1)}, filestate: filestate}
     registrar_persist[prospector_resume[file].prospectorinfo] = filestate
   }
 

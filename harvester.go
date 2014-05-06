@@ -11,6 +11,7 @@ import (
 
 type Harvester struct {
   ProspectorInfo *ProspectorInfo
+  FileInfo       os.FileInfo
   Path           string /* the file path to harvest */
   FileConfig     FileConfig
   Offset         int64
@@ -19,11 +20,12 @@ type Harvester struct {
   file *os.File /* the file being watched */
 }
 
-func (h *Harvester) Harvest(output chan *FileEvent) int64 {
-  h.open()
-  info, _ := h.file.Stat() // TODO(sissel): Check error
+func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
+  if !h.open() {
+    return h.Offset, true
+  }
+
   defer h.file.Close()
-  //info, _ := file.Stat()
 
   // NOTE(driskell): How would we know line number if from_beginning is false and we SEEK_END? Or would we scan,count,skip?
   var line uint64 = 0 // Ask registrar about the line number
@@ -54,24 +56,23 @@ func (h *Harvester) Harvest(output chan *FileEvent) int64 {
 
     if err != nil {
       if err == io.EOF {
-        // timed out waiting for data, got eof.
-        // Check to see if the file was truncated
-        info, _ := h.file.Stat()
-        if info.Size() < h.Offset {
-          log.Printf("File truncated, seeking to beginning: %s\n", h.Path)
-          h.file.Seek(0, os.SEEK_SET)
-          h.Offset = 0
-        } else if age := time.Since(last_read_time); age > h.FileConfig.deadtime {
-          // if last_read_time was more than dead time, this file is probably
-          // dead. Stop watching it.
-          log.Printf("Stopping harvest of %s; last change was %v ago\n", h.Path, age)
-          return h.Offset
+        // Timed out waiting for data, got EOF, check to see if the file was truncated
+        info, err := h.file.Stat()
+        if err == nil {
+          if info.Size() < h.Offset {
+            log.Printf("File truncated, seeking to beginning: %s\n", h.Path)
+            h.file.Seek(0, os.SEEK_SET)
+            h.Offset = 0
+            continue
+          } else if age := time.Since(last_read_time); age > h.FileConfig.deadtime {
+            // if last_read_time was more than dead time, this file is probably dead. Stop watching it.
+            log.Printf("Stopping harvest of %s; last change was %v ago\n", h.Path, age - (age % time.Second))
+            return h.Offset, false
+          }
         }
-        continue
-      } else {
-        log.Printf("Unexpected state reading from %s; error: %s\n", h.Path, err)
-        return h.Offset
       }
+      log.Printf("Unexpected state reading from %s; error: %s\n", h.Path, err)
+      return h.Offset, true
     }
     last_read_time = time.Now()
 
@@ -79,36 +80,37 @@ func (h *Harvester) Harvest(output chan *FileEvent) int64 {
     h.Offset += int64(bytesread)
     event := &FileEvent{
       ProspectorInfo: h.ProspectorInfo,
-      Source:         &h.Path,
+      Source:         &h.Path, /* If the file rotates we still send the original name before rotation until restarted */
       Offset:         h.Offset,
       Line:           line,
       Text:           text,
       Fields:         &h.FileConfig.Fields,
-      fileinfo:       &info,
     }
 
     output <- event // ship the new event downstream
   } /* forever */
 }
 
-func (h *Harvester) open() *os.File {
+func (h *Harvester) open() bool {
   // Special handling that "-" means to read from standard input
   if h.Path == "-" {
     h.file = os.Stdin
-    return h.file
+    return true
   }
 
-  for {
-    var err error
-    h.file, err = open_file_no_lock(h.Path)
+  var err error
+  h.file, err = open_file_no_lock(h.Path)
 
-    if err != nil {
-      // retry on failure.
-      log.Printf("Failed opening %s: %s\n", h.Path, err)
-      time.Sleep(5 * time.Second)
-    } else {
-      break
-    }
+  if err != nil {
+    log.Printf("Failed opening %s: %s\n", h.Path, err)
+    return false
+  }
+
+  // Check we opened the right file
+  info, err := h.file.Stat()
+  if err != nil || !os.SameFile(h.FileInfo, info) {
+    h.file.Close()
+    return false
   }
 
   // TODO(sissel): Only seek if the file is a file, not a pipe or socket.
@@ -126,7 +128,7 @@ func (h *Harvester) open() *os.File {
     h.file.Seek(h.Offset, os.SEEK_SET)
   }
 
-  return h.file
+  return true
 }
 
 func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer, eof_timeout time.Duration) (*string, int, error) {

@@ -33,7 +33,7 @@ func init() {
 }
 
 func Publishv1(input chan []*FileEvent,
-  registrar_chan chan []*RegistrarEvent,
+  registrar_chan chan []RegistrarEvent,
   config *NetworkConfig) {
   var buffer bytes.Buffer
   var compressed_payload []byte
@@ -123,16 +123,8 @@ func Publishv1(input chan []*FileEvent,
             }
 
             if sequence == ack_sequence {
-              // Tell the registrar that we've successfully sent the remainder of the events
-              last_ack_event := events[ack_sequence-last_ack_sequence-1]
-              registrar_event := &RegistrarEvent{
-                ProspectorInfo: last_ack_event.ProspectorInfo,
-                Type:           EVENT_OFFSET,
-                Offset:         last_ack_event.Offset,
-                Events:         ack_sequence - last_ack_sequence,
-                fileinfo:       last_ack_event.fileinfo,
-              }
-              registrar_chan <- []*RegistrarEvent{registrar_event}
+              // Give the registrar the remainder of the events so it can save to state the new offsets
+              registrar_chan <- []RegistrarEvent{&EventsEvent{Events: events}}
               last_ack_sequence = ack_sequence
               // All acknowledged! Stop reading acks
               break
@@ -149,17 +141,8 @@ func Publishv1(input chan []*FileEvent,
               goto RetryPayload
             }
 
-            // Send the offset of the last acknowledged event downstream and slice what we're still waiting for
-            // so that if we encounter an error, we only resend unacknowledged events
-            last_ack_event := events[ack_sequence-last_ack_sequence-1]
-            registrar_event := &RegistrarEvent{
-              ProspectorInfo: last_ack_event.ProspectorInfo,
-              Type:           EVENT_OFFSET,
-              Offset:         last_ack_event.Offset,
-              Events:         ack_sequence - last_ack_sequence,
-              fileinfo:       last_ack_event.fileinfo,
-            }
-            registrar_chan <- []*RegistrarEvent{registrar_event}
+            // Send the events to registrar so it can save to state the new offsets
+            registrar_chan <- []RegistrarEvent{&EventsEvent{Events: events[:ack_sequence-last_ack_sequence]}}
             events = events[ack_sequence-last_ack_sequence:]
             last_ack_sequence = ack_sequence
 
