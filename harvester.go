@@ -73,9 +73,13 @@ func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
             log.Printf("Stopping harvest of %s; last change was %v ago\n", h.Path, age - (age % time.Second))
             return h.Offset, false
           }
+          continue
+        } else {
+          log.Printf("Unexpected error checking status of %s: %s\n", h.Path, err)
         }
+      } else {
+        log.Printf("Unexpected error reading from %s: %s\n", h.Path, err)
       }
-      log.Printf("Unexpected state reading from %s; error: %s\n", h.Path, err)
       return h.Offset, true
     }
     last_read_time = time.Now()
