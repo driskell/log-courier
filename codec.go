@@ -1,7 +1,7 @@
 package main
 
 type Codec interface {
-  Teardown()
+  Teardown() int64
   Event(uint64, *string)
 }
 

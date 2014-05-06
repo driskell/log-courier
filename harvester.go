@@ -27,7 +27,6 @@ func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
   }
 
   h.Codec = h.FileConfig.codec.Create(h, output)
-  defer h.Codec.Teardown()
 
   defer h.file.Close()
 
@@ -71,7 +70,7 @@ func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
           } else if age := time.Since(last_read_time); age > h.FileConfig.deadtime {
             // if last_read_time was more than dead time, this file is probably dead. Stop watching it.
             log.Printf("Stopping harvest of %s; last change was %v ago\n", h.Path, age - (age % time.Second))
-            return h.Offset, false
+            return h.Codec.Teardown(), false
           }
           continue
         } else {
@@ -80,7 +79,7 @@ func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
       } else {
         log.Printf("Unexpected error reading from %s: %s\n", h.Path, err)
       }
-      return h.Offset, true
+      return h.Codec.Teardown(), true
     }
     last_read_time = time.Now()
 

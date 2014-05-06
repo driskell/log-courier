@@ -13,14 +13,15 @@ type CodecMultilineFactory struct {
 }
 
 type CodecMultiline struct {
-  config  *CodecMultilineFactory
-  harvester    *Harvester
-  output  chan *FileEvent
+  config      *CodecMultilineFactory
+  harvester   *Harvester
+  output      chan *FileEvent
+  last_offset int64
 
-  offset  int64
-  line    uint64
-  matcher *regexp.Regexp
-  buffer  []string
+  offset      int64
+  line        uint64
+  matcher     *regexp.Regexp
+  buffer      []string
 }
 
 func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultilineFactory, error) {
@@ -49,11 +50,11 @@ func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultiline
 }
 
 func (cf *CodecMultilineFactory) Create(harvester *Harvester, output chan *FileEvent) Codec {
-  return &CodecMultiline{config: cf, matcher: regexp.MustCompile(cf.pattern), harvester: harvester, output: output}
+  return &CodecMultiline{config: cf, matcher: regexp.MustCompile(cf.pattern), harvester: harvester, output: output, last_offset: harvester.Offset}
 }
 
-func (c *CodecMultiline) Teardown() {
-  c.flush()
+func (c *CodecMultiline) Teardown() int64 {
+  return c.last_offset
 }
 
 func (c *CodecMultiline) Event(line uint64, text *string) {
@@ -83,4 +84,7 @@ func (c *CodecMultiline) flush() {
   }
 
   c.output <- event // ship the new event downstream
+
+  // Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
+  c.last_offset = c.offset
 }

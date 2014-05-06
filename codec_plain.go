@@ -28,7 +28,8 @@ func (cf *CodecPlainFactory) Create(harvester *Harvester, output chan *FileEvent
 }
 
 
-func (c *CodecPlain) Teardown() {
+func (c *CodecPlain) Teardown() int64 {
+  return c.harvester.Offset
 }
 
 func (c *CodecPlain) Event(line uint64, text *string) {
