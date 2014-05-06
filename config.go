@@ -34,7 +34,7 @@ type FileConfig struct {
   Paths     []string          `json:paths`
   Fields    map[string]string `json:fields`
   Codec     map[string]interface{} `json:codec`
-  codec     interface{}
+  codec     CodecFactory
   DeadTime  string            `json:"dead time"`
   deadtime  time.Duration
 }
@@ -102,9 +102,9 @@ func LoadConfig(path string) (config *Config, err error) {
     }
 
     if config.Files[k].Codec["name"] == "" || config.Files[k].Codec["name"] == "plain" {
-      config.Files[k].codec, err = NewCodecPlainConfig(config.Files[k].Codec)
+      config.Files[k].codec, err = CreateCodecPlainFactory(config.Files[k].Codec)
     } else if config.Files[k].Codec["name"] == "multiline" {
-      config.Files[k].codec, err = NewCodecMultilineConfig(config.Files[k].Codec)
+      config.Files[k].codec, err = CreateCodecMultilineFactory(config.Files[k].Codec)
     } else {
       err = errors.New(fmt.Sprintf("Unrecognised codec '%s'. Please check your configuration.\n", config.Files[k].Codec["name"]))
       log.Printf(fmt.Sprint(err))

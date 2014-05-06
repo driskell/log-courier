@@ -7,23 +7,34 @@ import (
   "strings"
 )
 
-type CodecMultilineConfig struct {
-  Pattern string
-  Negate  bool
+type CodecMultilineFactory struct {
+  pattern string
+  negate  bool
 }
 
-func NewCodecMultilineConfig(config map[string]interface{}) (*CodecMultilineConfig, error) {
+type CodecMultiline struct {
+  config  *CodecMultilineFactory
+  harvester    *Harvester
+  output  chan *FileEvent
+
+  offset  int64
+  line    uint64
+  matcher *regexp.Regexp
+  buffer  []string
+}
+
+func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultilineFactory, error) {
   var ok bool
-  result := &CodecMultilineConfig{}
+  result := &CodecMultilineFactory{}
   for key, value := range config {
     if key == "name" {
     } else if key == "pattern" {
-      result.Pattern, ok = value.(string)
+      result.pattern, ok = value.(string)
       if !ok {
         return nil, errors.New("Invalid value for 'pattern'.")
       }
     } else if key == "negate" {
-      result.Negate, ok = value.(bool)
+      result.negate, ok = value.(bool)
       if !ok {
         return nil, errors.New("Invalid value for 'negate'.")
       }
@@ -31,57 +42,45 @@ func NewCodecMultilineConfig(config map[string]interface{}) (*CodecMultilineConf
       return nil, errors.New(fmt.Sprintf("Invalid property for multiline codec, '%s'.", key))
     }
   }
-  if result.Pattern == "" {
+  if result.pattern == "" {
     return nil, errors.New("Multiline codec pattern must be specified.")
   }
   return result, nil
 }
 
-type CodecMultiline struct {
-  h       *Harvester
-  output  chan *FileEvent
-
-  config  *CodecMultilineConfig
-  offset  int64
-  line    uint64
-  matcher *regexp.Regexp
-  buffer  []string
+func (cf *CodecMultilineFactory) Create(harvester *Harvester, output chan *FileEvent) Codec {
+  return &CodecMultiline{config: cf, matcher: regexp.MustCompile(cf.pattern), harvester: harvester, output: output}
 }
 
-func (codec *CodecMultiline) Init() {
-  codec.config = codec.h.FileConfig.codec.(*CodecMultilineConfig)
-  codec.matcher = regexp.MustCompile(codec.config.Pattern)
+func (c *CodecMultiline) Teardown() {
+  c.flush()
 }
 
-func (codec *CodecMultiline) Teardown() {
-  codec.Flush()
-}
-
-func (codec *CodecMultiline) Event(line uint64, text *string) {
-  if !codec.config.Negate == codec.matcher.MatchString(*text) {
-    if len(codec.buffer) != 0 {
-      codec.Flush()
-      codec.buffer = nil
+func (c *CodecMultiline) Event(line uint64, text *string) {
+  if !c.config.negate == c.matcher.MatchString(*text) {
+    if len(c.buffer) != 0 {
+      c.flush()
+      c.buffer = nil
     }
   }
-  if len(codec.buffer) == 0 {
-    codec.line = line
+  if len(c.buffer) == 0 {
+    c.line = line
   }
-  codec.offset = codec.h.Offset
-  codec.buffer = append(codec.buffer, *text)
+  c.offset = c.harvester.Offset
+  c.buffer = append(c.buffer, *text)
 }
 
-func (codec *CodecMultiline) Flush() {
-  text := strings.Join(codec.buffer, "\n")
+func (c *CodecMultiline) flush() {
+  text := strings.Join(c.buffer, "\n")
 
   event := &FileEvent{
-    ProspectorInfo: codec.h.ProspectorInfo,
-    Source:         &codec.h.Path, /* If the file rotates we still send the original name before rotation until restarted */
-    Offset:         codec.offset,
-    Line:           codec.line,
+    ProspectorInfo: c.harvester.ProspectorInfo,
+    Source:         &c.harvester.Path, /* If the file rotates we still send the original name before rotation until restarted */
+    Offset:         c.offset,
+    Line:           c.line,
     Text:           &text,
-    Fields:         &codec.h.FileConfig.Fields,
+    Fields:         &c.harvester.FileConfig.Fields,
   }
 
-  codec.output <- event // ship the new event downstream
+  c.output <- event // ship the new event downstream
 }

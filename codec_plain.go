@@ -5,42 +5,44 @@ import (
   "fmt"
 )
 
-type CodecPlainConfig struct {
+type CodecPlainFactory struct {
 }
 
-func NewCodecPlainConfig(config map[string]interface{}) (*CodecPlainConfig, error) {
+type CodecPlain struct {
+  harvester   *Harvester
+  output chan *FileEvent
+}
+
+func CreateCodecPlainFactory(config map[string]interface{}) (*CodecPlainFactory, error) {
   for key := range config {
     if key == "name" {
     } else {
       return nil, errors.New(fmt.Sprintf("Invalid property for plain codec, '%s'.", key))
     }
   }
-  return &CodecPlainConfig{}, nil
+  return &CodecPlainFactory{}, nil
 }
 
-type CodecPlain struct {
-  h      *Harvester
-  output chan *FileEvent
+func (cf *CodecPlainFactory) Create(harvester *Harvester, output chan *FileEvent) Codec {
+  return &CodecPlain{harvester: harvester, output: output}
 }
 
-func (codec *CodecPlain) Init() {
+
+func (c *CodecPlain) Teardown() {
 }
 
-func (codec *CodecPlain) Teardown() {
-}
-
-func (codec *CodecPlain) Event(line uint64, text *string) {
+func (c *CodecPlain) Event(line uint64, text *string) {
   event := &FileEvent{
-    ProspectorInfo: codec.h.ProspectorInfo,
-    Source:         &codec.h.Path, /* If the file rotates we still send the original name before rotation until restarted */
-    Offset:         codec.h.Offset,
+    ProspectorInfo: c.harvester.ProspectorInfo,
+    Source:         &c.harvester.Path, /* If the file rotates we still send the original name before rotation until restarted */
+    Offset:         c.harvester.Offset,
     Line:           line,
     Text:           text,
-    Fields:         &codec.h.FileConfig.Fields,
+    Fields:         &c.harvester.FileConfig.Fields,
   }
 
-  codec.output <- event // ship the new event downstream
+  c.output <- event // ship the new event downstream
 }
 
-func (codec *CodecPlain) Flush() {
+func (c *CodecPlain) Flush() {
 }

@@ -9,12 +9,6 @@ import (
   "time"
 )
 
-type Codec interface {
-  Init()
-  Event(uint64, *string)
-  Teardown()
-}
-
 type Harvester struct {
   ProspectorInfo *ProspectorInfo
   FileInfo       os.FileInfo
@@ -22,7 +16,7 @@ type Harvester struct {
   FileConfig     FileConfig
   Offset         int64
   Initial        bool
-  Codec      Codec
+  Codec          Codec
 
   file *os.File /* the file being watched */
 }
@@ -32,12 +26,7 @@ func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
     return h.Offset, true
   }
 
-  if h.FileConfig.Codec["name"] == "multiline" {
-    h.Codec = &CodecMultiline{h: h, output: output}
-  } else {
-    h.Codec = &CodecPlain{h: h, output: output}
-  }
-  h.Codec.Init()
+  h.Codec = h.FileConfig.codec.Create(h, output)
   defer h.Codec.Teardown()
 
   defer h.file.Close()
