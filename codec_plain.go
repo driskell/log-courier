@@ -9,8 +9,8 @@ type CodecPlainFactory struct {
 }
 
 type CodecPlain struct {
-  harvester   *Harvester
-  output chan *FileEvent
+  harvester *Harvester
+  output    chan *FileEvent
 }
 
 func CreateCodecPlainFactory(config map[string]interface{}) (*CodecPlainFactory, error) {
@@ -26,7 +26,6 @@ func CreateCodecPlainFactory(config map[string]interface{}) (*CodecPlainFactory,
 func (cf *CodecPlainFactory) Create(harvester *Harvester, output chan *FileEvent) Codec {
   return &CodecPlain{harvester: harvester, output: output}
 }
-
 
 func (c *CodecPlain) Teardown() int64 {
   return c.harvester.Offset

@@ -31,12 +31,12 @@ type NetworkConfig struct {
 }
 
 type FileConfig struct {
-  Paths     []string          `json:paths`
-  Fields    map[string]string `json:fields`
-  Codec     map[string]interface{} `json:codec`
-  codec     CodecFactory
-  DeadTime  string            `json:"dead time"`
-  deadtime  time.Duration
+  Paths    []string               `json:paths`
+  Fields   map[string]string      `json:fields`
+  Codec    map[string]interface{} `json:codec`
+  codec    CodecFactory
+  DeadTime string `json:"dead time"`
+  deadtime time.Duration
 }
 
 func LoadConfig(path string) (config *Config, err error) {

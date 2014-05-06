@@ -269,7 +269,7 @@ func connect(config *NetworkConfig) (socket *tls.Conn) {
       continue
     }
 
-    address := addresses[rand.Int() % len(addresses)]
+    address := addresses[rand.Int()%len(addresses)]
     addressport := net.JoinHostPort(address, port)
 
     log.Printf("Connecting to %s (%s) \n", addressport, host)

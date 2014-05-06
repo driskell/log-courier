@@ -35,14 +35,14 @@ func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
   } else {
     log.Printf("Registrar received %d events\n", len(e.Events))
   }
-  
+
   for _, event := range e.Events {
     _, is_found := state[event.ProspectorInfo]
     if !is_found {
       // This is probably stdin then or a deleted file we can't resume
       continue
     }
-  
+
     state[event.ProspectorInfo].Offset = event.Offset
   }
 }

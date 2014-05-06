@@ -18,10 +18,10 @@ type CodecMultiline struct {
   output      chan *FileEvent
   last_offset int64
 
-  offset      int64
-  line        uint64
-  matcher     *regexp.Regexp
-  buffer      []string
+  offset  int64
+  line    uint64
+  matcher *regexp.Regexp
+  buffer  []string
 }
 
 func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultilineFactory, error) {
