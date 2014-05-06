@@ -3,11 +3,34 @@ package main
 import "os"
 
 type FileEvent struct {
-  Source *string `json:"source,omitempty"`
-  Offset int64   `json:"offset,omitempty"`
-  Line   uint64  `json:"line,omitempty"`
-  Text   *string `json:"text,omitempty"`
-  Fields *map[string]string
+  ProspectorInfo *ProspectorInfo
+  Source         *string
+  Offset         int64
+  Line           uint64
+  Text           *string
+  Fields         *map[string]string
+}
 
-  fileinfo *os.FileInfo
+type RegistrarEvent interface {
+  Process(state map[*ProspectorInfo]*FileState)
+}
+
+type NewFileEvent struct {
+  ProspectorInfo *ProspectorInfo
+  Source         string
+  Offset         int64
+  fileinfo       *os.FileInfo
+}
+
+type DeletedEvent struct {
+  ProspectorInfo *ProspectorInfo
+}
+
+type RenamedEvent struct {
+  ProspectorInfo *ProspectorInfo
+  Source         string
+}
+
+type EventsEvent struct {
+  Events []*FileEvent
 }

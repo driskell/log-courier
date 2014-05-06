@@ -32,7 +32,7 @@ func init() {
 }
 
 func Publishv1(input chan []*FileEvent,
-  registrar chan []*FileEvent,
+  registrar_chan chan []RegistrarEvent,
   config *NetworkConfig) {
   var buffer bytes.Buffer
   var compressed_payload []byte
@@ -122,6 +122,8 @@ func Publishv1(input chan []*FileEvent,
             }
 
             if sequence == ack_sequence {
+              // Give the registrar the remainder of the events so it can save to state the new offsets
+              registrar_chan <- []RegistrarEvent{&EventsEvent{Events: events}}
               last_ack_sequence = ack_sequence
               // All acknowledged! Stop reading acks
               break
@@ -132,16 +134,15 @@ func Publishv1(input chan []*FileEvent,
             if ack_sequence == last_ack_sequence {
               // Just keep waiting
               continue
-            } else if ack_sequence - last_ack_sequence > uint32(len(events)) {
+            } else if ack_sequence-last_ack_sequence > uint32(len(events)) {
               // This is wrong - we've already had an ack for these
               log.Printf("Socket error, will reconnect: Repeated ACK\n")
               goto RetryPayload
             }
 
-            // Send a slice of the acknowledged events downstream and slice what we're still waiting for
-            // so that if we encounter an error, we only resend unacknowledged events
-            registrar <- events[:ack_sequence - last_ack_sequence]
-            events = events[ack_sequence - last_ack_sequence:]
+            // Send the events to registrar so it can save to state the new offsets
+            registrar_chan <- []RegistrarEvent{&EventsEvent{Events: events[:ack_sequence-last_ack_sequence]}}
+            events = events[ack_sequence-last_ack_sequence:]
             last_ack_sequence = ack_sequence
 
             // Reset the events buffer so it gets regenerated if we need to retry the payload
@@ -167,9 +168,6 @@ func Publishv1(input chan []*FileEvent,
         socket.Close()
         socket = connect(config)
       }
-
-      // Tell the registrar that we've successfully sent the remainder of the events
-      registrar <- events
 
       // Reset the events buffer
       buffer.Truncate(0)

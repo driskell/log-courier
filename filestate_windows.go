@@ -1,10 +1,10 @@
 package main
 
 import (
-  "os"
-  "syscall"
-  "reflect"
   "log"
+  "os"
+  "reflect"
+  "syscall"
 )
 
 type FileState struct {

@@ -75,12 +75,12 @@ func (codec *CodecMultiline) Flush() {
   text := strings.Join(codec.buffer, "\n")
 
   event := &FileEvent{
-	Source:   &codec.h.Path,
-	Offset:   codec.offset,
-	Line:     codec.line,
-	Text:     &text,
-	Fields:   &codec.h.FileConfig.Fields,
-	fileinfo: &codec.h.Info,
+    ProspectorInfo: codec.h.ProspectorInfo,
+    Source:         &codec.h.Path, /* If the file rotates we still send the original name before rotation until restarted */
+    Offset:         codec.offset,
+    Line:           codec.line,
+    Text:           &text,
+    Fields:         &codec.h.FileConfig.Fields,
   }
 
   codec.output <- event // ship the new event downstream
