@@ -95,7 +95,9 @@ include them in your config.:
           "paths": [
             "/var/log/apache/httpd-*.log"
           ],
-          "fields": { "type": "apache" }
+          "fields": { "type": "apache" },
+          # You can also set a time period after which inactive files will be closed (the default is 24h)
+          "dead time": "1h"
         }, {
           # You can also use a multiline codec like LogStash
           # Currently only "multiline" (with the options below) and "plain" (the default, with no options) are available
@@ -103,7 +105,7 @@ include them in your config.:
             "/var/log/apache/error.log"
           ],
           "fields": { "type": "stdin" },
-          "codec": { "name": "multiline", "pattern": "^\\[[0-9]+", "negate": false }
+          "codec": { "name": "multiline", "pattern": "^\\[[0-9]+", "what": previous, "negate": false }
         }
       ]
     }
