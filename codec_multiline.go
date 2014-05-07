@@ -14,6 +14,8 @@ type CodecMultilineFactory struct {
   pattern string
   what    uint32
   negate  bool
+
+  matcher *regexp.Regexp
 }
 
 type CodecMultiline struct {
@@ -24,7 +26,6 @@ type CodecMultiline struct {
 
   offset  int64
   line    uint64
-  matcher *regexp.Regexp
   buffer  []string
 }
 
@@ -37,6 +38,11 @@ func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultiline
       result.pattern, ok = value.(string)
       if !ok {
         return nil, errors.New("Invalid value for 'pattern'. Must be a string.")
+      }
+      var err error
+      result.matcher, err = regexp.Compile(result.pattern)
+      if err != nil {
+        return nil, errors.New(fmt.Sprintf("Failed to compile multiline codec pattern, '%s'.", err))
       }
     } else if key == "what" {
       var what string
@@ -67,7 +73,7 @@ func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultiline
 }
 
 func (cf *CodecMultilineFactory) Create(harvester *Harvester, output chan *FileEvent) Codec {
-  return &CodecMultiline{config: cf, matcher: regexp.MustCompile(cf.pattern), harvester: harvester, output: output, last_offset: harvester.Offset}
+  return &CodecMultiline{config: cf, harvester: harvester, output: output, last_offset: harvester.Offset}
 }
 
 func (c *CodecMultiline) Teardown() int64 {
@@ -75,7 +81,7 @@ func (c *CodecMultiline) Teardown() int64 {
 }
 
 func (c *CodecMultiline) Event(line uint64, text *string) {
-  if c.config.what == CODECMULTILINE_PREVIOUS && !c.config.negate == c.matcher.MatchString(*text) {
+  if c.config.what == CODECMULTILINE_PREVIOUS && !c.config.negate == c.config.matcher.MatchString(*text) {
     c.flush()
   }
   if len(c.buffer) == 0 {
@@ -83,7 +89,7 @@ func (c *CodecMultiline) Event(line uint64, text *string) {
   }
   c.offset = c.harvester.Offset
   c.buffer = append(c.buffer, *text)
-  if c.config.what == CODECMULTILINE_NEXT && !c.config.negate == c.matcher.MatchString(*text) {
+  if c.config.what == CODECMULTILINE_NEXT && !c.config.negate == c.config.matcher.MatchString(*text) {
     c.flush()
   }
 }
