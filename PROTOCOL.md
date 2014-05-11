@@ -62,6 +62,11 @@ Payload:
 Sequence number roll-over: If you receive a sequence number less than the
 previous value, this signals that the sequence number has rolled over.
 
+NOTE: For compatibility with older logstash-forwarder clients, the server
+should not response with partial ack unless the frame version is 2 or above.
+This is due to the older logstash-forwarder clients not having partial ack
+support implemented.
+
 ### 'ack' frame type
 
 * SENT FROM READER ONLY
