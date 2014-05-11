@@ -3,46 +3,40 @@ package main
 import (
   "bytes"
   "compress/zlib"
-  "crypto/tls"
-  "crypto/x509"
   "encoding/binary"
-  "encoding/pem"
   "io"
-  "io/ioutil"
   "log"
-  "math/rand"
-  "net"
   "os"
-  "regexp"
   "strconv"
   "time"
 )
 
-// Support for newer SSL signature algorithms
-import _ "crypto/sha256"
-import _ "crypto/sha512"
+const default_Publisher_Hostname string = "localhost.localdomain"
 
-var hostname string
-var hostport_re, _ = regexp.Compile(`^\[?([^]]+)\]?:([0-9]+)$`)
-
-func init() {
-  log.Printf("publisher init\n")
-  hostname, _ = os.Hostname()
-  rand.Seed(time.Now().UnixNano())
+type Publisher struct {
+  config    *NetworkConfig
+  hostname  string
+  transport Transport
 }
 
-func Publishv1(input chan []*FileEvent,
-  registrar_chan chan []RegistrarEvent,
-  config *NetworkConfig) {
+func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []RegistrarEvent) {
   var buffer bytes.Buffer
   var compressed_payload []byte
-  var socket *tls.Conn
   var last_ack_sequence uint32
   var sequence uint32
   var err error
 
-  socket = connect(config)
-  defer socket.Close()
+  p.hostname, err = os.Hostname()
+  if err != nil {
+    log.Printf("Failed to determine the FQDN; using localhost.localdomain.\n")
+    p.hostname = default_Publisher_Hostname
+  }
+
+  // Set up the selected transport (currently only TLS)
+  p.transport = CreateTransportTls(p.config)
+
+  p.transport.Connect()
+  defer p.transport.Disconnect()
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   timer := time.NewTimer(900 * time.Second)
@@ -58,7 +52,7 @@ func Publishv1(input chan []*FileEvent,
 
           for _, event := range events {
             sequence += 1
-            writeDataFrame(event, sequence, compressor)
+            p.writeDataFrame(event, sequence, compressor)
           }
           compressor.Flush()
           compressor.Close()
@@ -66,48 +60,52 @@ func Publishv1(input chan []*FileEvent,
           compressed_payload = buffer.Bytes()
         }
 
-        // Abort if our whole request takes longer than the configured network timeout.
-        socket.SetDeadline(time.Now().Add(config.timeout))
-
         // Set the window size to the length of this payload in events.
-        _, err = socket.Write([]byte("1W"))
+        _, err = p.transport.Write([]byte("1W"))
         if err != nil {
-          log.Printf("Socket error, will reconnect: %s\n", err)
+          log.Printf("Transport error, will reconnect: %s\n", err)
           goto RetryPayload
         }
-        err = binary.Write(socket, binary.BigEndian, uint32(len(events)))
+        err = binary.Write(p.transport, binary.BigEndian, uint32(len(events)))
         if err != nil {
-          log.Printf("Socket error, will reconnect: %s\n", err)
+          log.Printf("Transport error, will reconnect: %s\n", err)
+          goto RetryPayload
+        }
+        _, err = p.transport.Flush()
+        if err != nil {
+          log.Printf("Transport error, will reconnect: %s\n", err)
           goto RetryPayload
         }
 
         // Write compressed frame
-        _, err = socket.Write([]byte("1C"))
+        _, err = p.transport.Write([]byte("1C"))
         if err != nil {
-          log.Printf("Socket error, will reconnect: %s\n", err)
+          log.Printf("Transport error, will reconnect: %s\n", err)
           goto RetryPayload
         }
-        err = binary.Write(socket, binary.BigEndian, uint32(len(compressed_payload)))
+        err = binary.Write(p.transport, binary.BigEndian, uint32(len(compressed_payload)))
         if err != nil {
-          log.Printf("Socket error, will reconnect: %s\n", err)
+          log.Printf("Transport error, will reconnect: %s\n", err)
           goto RetryPayload
         }
-        _, err = socket.Write(compressed_payload)
+        _, err = p.transport.Write(compressed_payload)
         if err != nil {
-          log.Printf("Socket error, will reconnect: %s\n", err)
+          log.Printf("Transport error, will reconnect: %s\n", err)
+          goto RetryPayload
+        }
+        _, err = p.transport.Flush()
+        if err != nil {
+          log.Printf("Transport error, will reconnect: %s\n", err)
           goto RetryPayload
         }
 
-        // read ack
+        // Read ack
         for {
           var frame [2]byte
 
-          // Each time we've received a frame, reset the deadline
-          socket.SetDeadline(time.Now().Add(config.timeout))
-
-          err = binary.Read(socket, binary.BigEndian, &frame)
+          err = binary.Read(p.transport, binary.BigEndian, &frame)
           if err != nil {
-            log.Printf("Socket error, will reconnect: %s\n", err)
+            log.Printf("Transport error, will reconnect: %s\n", err)
             goto RetryPayload
           }
 
@@ -115,9 +113,9 @@ func Publishv1(input chan []*FileEvent,
             var ack_sequence uint32
 
             // Read the sequence number acked
-            err = binary.Read(socket, binary.BigEndian, &ack_sequence)
+            err = binary.Read(p.transport, binary.BigEndian, &ack_sequence)
             if err != nil {
-              log.Printf("Socket error, will reconnect: %s\n", err)
+              log.Printf("Transport error, will reconnect: %s\n", err)
               goto RetryPayload
             }
 
@@ -164,31 +162,25 @@ func Publishv1(input chan []*FileEvent,
         // basically everything is slow or down. We'll want to ratchet up the
         // timeout value slowly until things improve, then ratchet it down once
         // things seem healthy.
-        time.Sleep(config.reconnect)
-        socket.Close()
-        socket = connect(config)
+        p.transport.Disconnect()
+        time.Sleep(p.config.reconnect)
+        p.transport.Connect()
       }
 
       // Reset the events buffer
       buffer.Truncate(0)
 
-      // Prepare to enter idle by setting a long deadline... if we have more events we'll drop it down again
-      socket.SetDeadline(time.Now().Add(1800 * time.Second))
-
       // Reset the timer
       timer.Reset(900 * time.Second)
     case <-timer.C:
       // We've no events to send - throw a ping (well... window frame) so our connection doesn't idle and die
-      err = ping(config, socket)
+      err = p.ping()
       if err != nil {
-        log.Printf("Socket error during ping, will reconnect: %s\n", err)
-        time.Sleep(config.reconnect)
-        socket.Close()
-        socket = connect(config)
+        log.Printf("Transport error during ping, will reconnect: %s\n", err)
+        p.transport.Disconnect()
+        time.Sleep(p.config.reconnect)
+        p.transport.Connect()
       }
-
-      // Reset the deadline
-      socket.SetDeadline(time.Now().Add(1800 * time.Second))
 
       // Reset the timer
       timer.Reset(900 * time.Second)
@@ -196,18 +188,19 @@ func Publishv1(input chan []*FileEvent,
   } /* for */
 } // Publish
 
-func ping(config *NetworkConfig, socket *tls.Conn) error {
-  // Set deadline for this write
-  socket.SetDeadline(time.Now().Add(config.timeout))
-
+func (p *Publisher) ping() error {
   // This just keeps connection open through firewalls
   // We don't await for a response so its not a real ping, the protocol does not provide for a real ping
   // And with a complete replacement of protocol happening soon, makes no sense to add new frames and such
-  _, err := socket.Write([]byte("1W"))
+  _, err := p.transport.Write([]byte("1W"))
   if err != nil {
     return err
   }
-  err = binary.Write(socket, binary.BigEndian, uint32(*spool_size))
+  err = binary.Write(p.transport, binary.BigEndian, uint32(*spool_size))
+  if err != nil {
+    return err
+  }
+  _, err = p.transport.Flush()
   if err != nil {
     return err
   }
@@ -215,116 +208,27 @@ func ping(config *NetworkConfig, socket *tls.Conn) error {
   return nil
 }
 
-func connect(config *NetworkConfig) (socket *tls.Conn) {
-  var tlsconfig tls.Config
-
-  if len(config.SSLCertificate) > 0 && len(config.SSLKey) > 0 {
-    log.Printf("Loading client ssl certificate: %s and %s\n",
-      config.SSLCertificate, config.SSLKey)
-    cert, err := tls.LoadX509KeyPair(config.SSLCertificate, config.SSLKey)
-    if err != nil {
-      log.Fatalf("Failed loading client ssl certificate: %s\n", err)
-    }
-    tlsconfig.Certificates = []tls.Certificate{cert}
-  }
-
-  if len(config.SSLCA) > 0 {
-    log.Printf("Setting trusted CA from file: %s\n", config.SSLCA)
-    tlsconfig.RootCAs = x509.NewCertPool()
-
-    pemdata, err := ioutil.ReadFile(config.SSLCA)
-    if err != nil {
-      log.Fatalf("Failure reading CA certificate: %s\n", err)
-    }
-
-    block, _ := pem.Decode(pemdata)
-    if block == nil {
-      log.Fatalf("Failed to decode PEM data, is %s a valid cert?\n", config.SSLCA)
-    }
-    if block.Type != "CERTIFICATE" {
-      log.Fatalf("This is not a certificate file: %s\n", config.SSLCA)
-    }
-
-    cert, err := x509.ParseCertificate(block.Bytes)
-    if err != nil {
-      log.Fatalf("Failed to parse a certificate: %s\n", config.SSLCA)
-    }
-    tlsconfig.RootCAs.AddCert(cert)
-  }
-
-  for {
-    // Pick a random server from the list.
-    hostport := config.Servers[rand.Int()%len(config.Servers)]
-    submatch := hostport_re.FindSubmatch([]byte(hostport))
-    if submatch == nil {
-      log.Fatalf("Invalid host:port given: %s", hostport)
-    }
-    host := string(submatch[1])
-    port := string(submatch[2])
-    addresses, err := net.LookupHost(host)
-
-    if err != nil {
-      log.Printf("DNS lookup failure \"%s\": %s\n", host, err)
-      time.Sleep(config.reconnect)
-      continue
-    }
-
-    address := addresses[rand.Int()%len(addresses)]
-    addressport := net.JoinHostPort(address, port)
-
-    log.Printf("Connecting to %s (%s) \n", addressport, host)
-
-    tcpsocket, err := net.DialTimeout("tcp", addressport, config.timeout)
-    if err != nil {
-      log.Printf("Failure connecting to %s: %s\n", address, err)
-      time.Sleep(config.reconnect)
-      continue
-    }
-
-    socket = tls.Client(tcpsocket, &tlsconfig)
-    socket.SetDeadline(time.Now().Add(config.timeout))
-    err = socket.Handshake()
-    if err != nil {
-      log.Printf("Handshake failure with %s: Failed to TLS handshake: %s\n", address, err)
-      goto TryNextServer
-    }
-
-    log.Printf("Connected with %s\n", address)
-
-    // connected, let's rock and roll.
-    return
-
-  TryNextServer:
-    time.Sleep(config.reconnect)
-    socket.Close()
-    continue
-  }
-  return
-}
-
-func writeDataFrame(event *FileEvent, sequence uint32, output io.Writer) {
-  //log.Printf("event: %s\n", *event.Text)
-  // header, "2D"
+func (p *Publisher) writeDataFrame(event *FileEvent, sequence uint32, output io.Writer) {
+  // Header, "2D"
   // Why version 2 data frame? Because server.rb will correctly start returning partial ACKs if we specify version 2
   // This keeps the old logstash forwarders, which broke on partial ACK, working with even the newer server.rb
   // If the newer server.rb receives a 1D it will refuse to send partial ACK, just like before
   output.Write([]byte("2D"))
-  // sequence number
+  // Sequence number
   binary.Write(output, binary.BigEndian, uint32(sequence))
-  // 'pair' count
+  // Key-value pair count
   binary.Write(output, binary.BigEndian, uint32(len(*event.Fields)+4))
 
-  writeKV("file", *event.Source, output)
-  writeKV("host", hostname, output)
-  writeKV("offset", strconv.FormatInt(event.Offset, 10), output)
-  writeKV("line", *event.Text, output)
+  p.writeKeyValue("file", *event.Source, output)
+  p.writeKeyValue("host", p.hostname, output)
+  p.writeKeyValue("offset", strconv.FormatInt(event.Offset, 10), output)
+  p.writeKeyValue("line", *event.Text, output)
   for k, v := range *event.Fields {
-    writeKV(k, v, output)
+    p.writeKeyValue(k, v, output)
   }
 }
 
-func writeKV(key string, value string, output io.Writer) {
-  //log.Printf("kv: %d/%s %d/%s\n", len(key), key, len(value), value)
+func (p *Publisher) writeKeyValue(key string, value string, output io.Writer) {
   binary.Write(output, binary.BigEndian, uint32(len(key)))
   output.Write([]byte(key))
   binary.Write(output, binary.BigEndian, uint32(len(value)))

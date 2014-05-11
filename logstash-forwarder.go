@@ -89,7 +89,8 @@ func main() {
   // Harvesters dump events into the spooler.
   go Spool(event_chan, publisher_chan, *spool_size, *idle_timeout)
 
-  go Publishv1(publisher_chan, registrar_chan, &config.Network)
+  publisher := &Publisher{config: &config.Network}
+  go publisher.Publish(publisher_chan, registrar_chan)
 
   // registrar records last acknowledged positions in all files.
   Registrar(registrar_persist, registrar_chan)
