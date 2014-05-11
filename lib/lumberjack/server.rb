@@ -370,8 +370,8 @@ module Lumberjack
         raise ProtocolError
       end
 
-      # Increment the sequence number we're expecting next
-      @next_sequence = sequence + 1
+      # Increment the sequence number we're expecting next, handling uint32 overflow
+      @next_sequence = (sequence + 1) & 0xFFFFFFFF
 
       while true
         begin
@@ -391,8 +391,8 @@ module Lumberjack
           break
         end
       end
-      # Handle integer overflows
       if sequence < @last_window_ack
+        # Handle uint32 overflow
         if (sequence - @last_window_ack) + 2**32 >= @window_size
           send_ack(sequence)
           @last_window_ack = sequence
