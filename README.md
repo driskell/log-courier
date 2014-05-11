@@ -98,12 +98,24 @@ Here's a sample, with comments in-line to describe the settings:
           "dead time": "1h"
         }, {
           # You can also use a multiline codec like Logstash
-          # Currently only "multiline" (with the options below) and "plain" (the default, with no options) are available
+          # Remember to escape the regex sequence in the pattern string, so ^\s would be "^\\s"
+          # The what option is the same as Logstash:
+          #   previous: Matched lines belong to the previous line
+          #   next:     Matched lines belong to the next line
+          # In other words:
+          #   previous: When matching stops, the line signifies the start of the next multiline, flush previous lines
+          #   next:     When matching stops, the line is the last line of the multiline, flush previous lines and this line
+          # NOTE: As you can imagine, when using "previous" the multiline block cannot be flushed until the
+          #       first line of the next multiline block appears. To get around this you can use the "previous_timeout" option
+          #       to set a maximum time to wait for the next multiline block before flushing what is buffered.
+          #       Be warned that if the multiline event is not complete because the logging program has buffered some of it
+          #       then once the remainder of the event is written to the file, it will be seen and forwarded as the next
+          #       multiline event. This partial event could be filtered on a Logstash indexer if it poses problems.
           "paths": [
             "/var/log/apache/error.log"
           ],
           "fields": { "type": "stdin" },
-          "codec": { "name": "multiline", "pattern": "^\\[[0-9]+", "what": previous, "negate": false }
+          "codec": { "name": "multiline", "pattern": "^\\[[0-9]+", "what": previous, "negate": false, "previous_timeout": "15s" }
         }
       ]
     }
