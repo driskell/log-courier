@@ -37,9 +37,7 @@ logstash-forwarder is configured with a json file you specify with the -config f
 
 `logstash-forwarder -config yourstuff.json`
 
-Here's a sample, with comments in-line to describe the settings. Please please
-please keep in mind that comments are technically invalid in JSON, so you can't
-include them in your config.:
+Here's a sample, with comments in-line to describe the settings:
 
     {
       # The network section covers network configuration :)
@@ -99,7 +97,7 @@ include them in your config.:
           # You can also set a time period after which inactive files will be closed (the default is 24h)
           "dead time": "1h"
         }, {
-          # You can also use a multiline codec like LogStash
+          # You can also use a multiline codec like Logstash
           # Currently only "multiline" (with the options below) and "plain" (the default, with no options) are available
           "paths": [
             "/var/log/apache/error.log"

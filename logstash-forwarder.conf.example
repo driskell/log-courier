@@ -1,3 +1,8 @@
+/*
+  This is an example configuration file for logstash-forwarder
+  Configuration is JSON encoded with comments such as this allowed
+  Comments prefixed by a hash are also allowed
+*/
 {
   "network": {
     "servers": [ "localhost:5043" ],
