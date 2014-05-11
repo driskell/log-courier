@@ -60,6 +60,11 @@ func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
     if err != nil {
       if err == io.EOF {
         // Timed out waiting for data, got EOF, check to see if the file was truncated
+        if h.Path == "-" {
+          // This wouldn't make sense on stdin so lets not risk anything strange happening
+          continue
+        }
+
         info, err := h.file.Stat()
         if err == nil {
           if info.Size() < h.Offset {
