@@ -46,7 +46,7 @@ func LoadConfig(path string) (config *Config, err error) {
     log.Printf("Failed to open config file '%s': %s\n", path, err)
     return
   }
-  defer func() { config_file.Close() }()
+  defer config_file.Close()
 
   fi, err := config_file.Stat()
   if err != nil {
