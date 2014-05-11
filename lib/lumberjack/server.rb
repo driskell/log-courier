@@ -391,9 +391,17 @@ module Lumberjack
           break
         end
       end
-      if (sequence - @last_window_ack) >= @window_size
-        send_ack(sequence)
-        @last_window_ack = sequence
+      # Handle integer overflows
+      if sequence < @last_window_ack
+        if (sequence - @last_window_ack) + 2**32 >= @window_size
+          send_ack(sequence)
+          @last_window_ack = sequence
+        end
+      else if sequence > @last_window_ack
+        if (sequence - @last_window_ack) >= @window_size
+          send_ack(sequence)
+          @last_window_ack = sequence
+        end
       end
     end
 
