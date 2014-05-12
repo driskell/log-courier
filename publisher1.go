@@ -312,14 +312,17 @@ func writeDataFrame(event *FileEvent, sequence uint32, output io.Writer) {
   // sequence number
   binary.Write(output, binary.BigEndian, uint32(sequence))
   // 'pair' count
-  binary.Write(output, binary.BigEndian, uint32(len(*event.Fields)+4))
+  binary.Write(output, binary.BigEndian, uint32(len(*event.Event)+1))
 
-  writeKV("file", *event.Source, output)
+  writeKV("file", *(*event.Event)["file"].(*string), output)
   writeKV("host", hostname, output)
-  writeKV("offset", strconv.FormatInt(event.Offset, 10), output)
-  writeKV("line", *event.Text, output)
-  for k, v := range *event.Fields {
-    writeKV(k, v, output)
+  writeKV("offset", strconv.FormatInt((*event.Event)["offset"].(int64), 10), output)
+  writeKV("line", *(*event.Event)["line"].(*string), output)
+  for k, v := range *event.Event {
+    if k == "file" || k == "offset" || k == "line" {
+      continue
+    }
+    writeKV(k, *v.(*string), output)
   }
 }
 

@@ -4,11 +4,8 @@ import "os"
 
 type FileEvent struct {
   ProspectorInfo *ProspectorInfo
-  Source         *string
   Offset         int64
-  Line           uint64
-  Text           *string
-  Fields         *map[string]string
+  Event          *map[string]interface{}
 }
 
 type RegistrarEvent interface {
@@ -33,4 +30,16 @@ type RenamedEvent struct {
 
 type EventsEvent struct {
   Events []*FileEvent
+}
+
+func CreateEvent(fields map[string]string, file *string, offset int64, line uint64, message *string) *map[string]interface{} {
+  event := map[string]interface{}{
+    "file":   file,
+    "offset": offset,
+    "line":   message, // The lumberjack receiver expects "line" and not "message"
+  }
+  for k, v := range fields {
+    event[k] = &v
+  }
+  return &event
 }

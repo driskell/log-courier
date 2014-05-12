@@ -26,6 +26,7 @@ type CodecMultiline struct {
   output      chan *FileEvent
   last_offset int64
 
+  h_offset    int64
   offset      int64
   line        uint64
   buffer      []string
@@ -123,7 +124,7 @@ func (c *CodecMultiline) Teardown() int64 {
   return c.last_offset
 }
 
-func (c *CodecMultiline) Event(line uint64, text *string) {
+func (c *CodecMultiline) Event(offset int64, line uint64, text *string) {
   // TODO(driskell): If we are using previous and we match on the very first line read,
   // then this is because we've started in the middle of a multiline event (the first line
   // should never match) - so we could potentially offer an option to discard this.
@@ -144,8 +145,9 @@ func (c *CodecMultiline) Event(line uint64, text *string) {
   }
   if len(c.buffer) == 0 {
     c.line = line
+    c.offset = offset
   }
-  c.offset = c.harvester.Offset
+  c.h_offset = c.harvester.Offset
   c.buffer = append(c.buffer, *text)
   if c.config.what == codecMultiline_What_Previous {
     if c.config.previous_timeout != 0 {
@@ -166,11 +168,8 @@ func (c *CodecMultiline) flush() {
 
   event := &FileEvent{
     ProspectorInfo: c.harvester.ProspectorInfo,
-    Source:         &c.harvester.Path, /* If the file rotates we still send the original name before rotation until restarted */
-    Offset:         c.offset,
-    Line:           c.line,
-    Text:           &text,
-    Fields:         &c.harvester.FileConfig.Fields,
+    Offset:         c.h_offset,
+    Event:          CreateEvent(c.harvester.FileConfig.Fields, &c.harvester.Path, c.offset, c.line, &text),
   }
 
   c.output <- event // ship the new event downstream
