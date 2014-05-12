@@ -19,11 +19,7 @@ type Publisher struct {
   transport Transport
 }
 
-func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []RegistrarEvent) {
-  var buffer bytes.Buffer
-  var compressed_payload []byte
-  var last_ack_sequence uint32
-  var sequence uint32
+func (p *Publisher) Init() error {
   var err error
 
   p.hostname, err = os.Hostname()
@@ -33,7 +29,19 @@ func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []Regis
   }
 
   // Set up the selected transport (currently only TLS)
-  p.transport = CreateTransportTls(p.config)
+  if p.transport, err = CreateTransportTls(p.config); err != nil {
+    return err
+  }
+
+  return nil
+}
+
+func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []RegistrarEvent) {
+  var buffer bytes.Buffer
+  var compressed_payload []byte
+  var last_ack_sequence uint32
+  var sequence uint32
+  var err error
 
   p.transport.Connect()
   defer p.transport.Disconnect()

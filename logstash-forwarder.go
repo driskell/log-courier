@@ -82,16 +82,20 @@ func main() {
     registrar_persist[prospector_resume[file].prospectorinfo] = filestate
   }
 
-  // Prospect the globs/paths given on the command line and launch harvesters
+  // Initialise structures
   prospector := &Prospector{FileConfigs: config.Files}
-  go prospector.Prospect(prospector_resume, registrar_chan, event_chan)
-
-  // Harvesters dump events into the spooler.
-  go Spool(event_chan, publisher_chan, *spool_size, *idle_timeout)
 
   publisher := &Publisher{config: &config.Network}
+  if err := publisher.Init(); err != nil {
+    log.Fatalf("The publisher failed to initialise: %s\n", err)
+  }
+
+  // Start the pipeline
+  go prospector.Prospect(prospector_resume, registrar_chan, event_chan)
+
+  go Spool(event_chan, publisher_chan, *spool_size, *idle_timeout)
+
   go publisher.Publish(publisher_chan, registrar_chan)
 
-  // registrar records last acknowledged positions in all files.
   Registrar(registrar_persist, registrar_chan)
 } /* main */
