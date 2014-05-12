@@ -217,14 +217,17 @@ func (p *Publisher) writeDataFrame(event *FileEvent, sequence uint32, output io.
   // Sequence number
   binary.Write(output, binary.BigEndian, uint32(sequence))
   // Key-value pair count
-  binary.Write(output, binary.BigEndian, uint32(len(*event.Fields)+4))
+  binary.Write(output, binary.BigEndian, uint32(len(*event.Event)+1))
 
-  p.writeKeyValue("file", *event.Source, output)
+  p.writeKeyValue("file", *(*event.Event)["file"].(*string), output)
   p.writeKeyValue("host", p.hostname, output)
-  p.writeKeyValue("offset", strconv.FormatInt(event.Offset, 10), output)
-  p.writeKeyValue("line", *event.Text, output)
-  for k, v := range *event.Fields {
-    p.writeKeyValue(k, v, output)
+  p.writeKeyValue("offset", strconv.FormatInt((*event.Event)["offset"].(int64), 10), output)
+  p.writeKeyValue("line", *(*event.Event)["line"].(*string), output)
+  for k, v := range *event.Event {
+    if k == "file" || k == "offset" || k == "line" {
+      continue
+    }
+    p.writeKeyValue(k, *v.(*string), output)
   }
 }
 

@@ -2,7 +2,7 @@ package main
 
 type Codec interface {
   Teardown() int64
-  Event(uint64, *string)
+  Event(int64, uint64, *string)
 }
 
 type CodecFactory interface {

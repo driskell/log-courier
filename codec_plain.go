@@ -31,14 +31,11 @@ func (c *CodecPlain) Teardown() int64 {
   return c.harvester.Offset
 }
 
-func (c *CodecPlain) Event(line uint64, text *string) {
+func (c *CodecPlain) Event(offset int64, line uint64, text *string) {
   event := &FileEvent{
     ProspectorInfo: c.harvester.ProspectorInfo,
-    Source:         &c.harvester.Path, /* If the file rotates we still send the original name before rotation until restarted */
     Offset:         c.harvester.Offset,
-    Line:           line,
-    Text:           text,
-    Fields:         &c.harvester.FileConfig.Fields,
+    Event:          CreateEvent(c.harvester.FileConfig.Fields, &c.harvester.Path, offset, line, text),
   }
 
   c.output <- event // ship the new event downstream
