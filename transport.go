@@ -1,11 +1,12 @@
 package main
 
-// Implement io.Writer in the transport interface so we can use binary.Read/Write etc
-// Write will buffer until we flush to keep the message small as possible
+// Implement io.Writer in the transport interface so we can use binary.Write
 type Transport interface {
   Connect() error
+  CanSend() chan int
+  CanRecv() chan int
   Write([]byte) (int, error)
-  Flush() (int64, error)
-  Read([]byte) (int, error)
+  Flush() error
+  Read() ([]byte, error)
   Disconnect()
 }

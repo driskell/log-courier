@@ -34,9 +34,9 @@ type EventsEvent struct {
 
 func CreateEvent(fields map[string]string, file *string, offset int64, line uint64, message *string) *map[string]interface{} {
   event := map[string]interface{}{
-    "file":   file,
-    "offset": offset,
-    "line":   message, // The lumberjack receiver expects "line" and not "message"
+    "file":    file,
+    "offset":  offset,
+    "message": message,
   }
   for k, v := range fields {
     event[k] = &v

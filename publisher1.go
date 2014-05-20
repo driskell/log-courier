@@ -4,6 +4,9 @@ import (
   "bytes"
   "compress/zlib"
   "encoding/binary"
+  "encoding/json"
+  "errors"
+  "fmt"
   "io"
   "log"
   "os"
@@ -11,7 +14,17 @@ import (
   "time"
 )
 
-const default_Publisher_Hostname string = "localhost.localdomain"
+const (
+  default_publisher_hostname string = "localhost.localdomain"
+  keepalive_timeout          time.Duration = 900 * time.Second
+)
+
+type PendingPayload struct {
+  events     []*FileEvent
+  num_events int
+  payload    []byte
+  timeout    time.Time
+}
 
 type Publisher struct {
   config    *NetworkConfig
@@ -25,7 +38,7 @@ func (p *Publisher) Init() error {
   p.hostname, err = os.Hostname()
   if err != nil {
     log.Printf("Failed to determine the FQDN; using localhost.localdomain.\n")
-    p.hostname = default_Publisher_Hostname
+    p.hostname = default_publisher_hostname
   }
 
   // Set up the selected transport (currently only TLS)
@@ -37,186 +50,209 @@ func (p *Publisher) Init() error {
 }
 
 func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []RegistrarEvent) {
-  var buffer bytes.Buffer
-  var compressed_payload []byte
-  var last_ack_sequence uint32
+  var input_toggle chan []*FileEvent
   var sequence uint32
+  var buffer bytes.Buffer
   var err error
 
-  p.transport.Connect()
-  defer p.transport.Disconnect()
+  pending_payloads := make(map[uint32]*PendingPayload)
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
-  timer := time.NewTimer(900 * time.Second)
+  timer := time.NewTimer(keepalive_timeout)
 
   for {
-    select {
-    case events := <-input:
-      for {
-        // Do we need to populate the buffer again? Or do we already have it done?
-        if buffer.Len() == 0 {
-          sequence = last_ack_sequence
+    p.transport.Connect()
+    input_toggle = nil
+
+  SelectLoop:
+    for {
+      // TODO: implement shutdown select
+      select {
+        case <-p.transport.CanSend():
+          // Ready to send, enable event wait
+          // TODO: If pending_payloads is large, don't send anymore, leave it nil, then when we receive ack do this
+          // TODO: Process pending payloads we have not received a response for yet, queueing them as priority (switch input_toggle?) and regenerating compressor as required
+          input_toggle = input
+
+          // Continue loop so we don't reset the ping timer - we've not performed any activity just yet
+          continue
+        case events := <-input_toggle:
+          // Create the event message
+          start_sequence := sequence
+          // TODO: check error return
           compressor, _ := zlib.NewWriterLevel(&buffer, 3)
 
           for _, event := range events {
             sequence += 1
+            // TODO: check error return when we implement it
             p.writeDataFrame(event, sequence, compressor)
           }
-          compressor.Flush()
+
           compressor.Close()
 
-          compressed_payload = buffer.Bytes()
-        }
+          // Save pending payload until we receive ack, and discard buffer
+          payload := &PendingPayload{events: events, num_events: len(events), payload: buffer.Bytes(), timeout: time.Now().Add(p.config.timeout)}
+          pending_payloads[start_sequence] = payload
+          buffer.Reset()
 
-        // Set the window size to the length of this payload in events.
-        _, err = p.transport.Write([]byte("1W"))
-        if err != nil {
-          log.Printf("Transport error, will reconnect: %s\n", err)
-          goto RetryPayload
-        }
-        err = binary.Write(p.transport, binary.BigEndian, uint32(len(events)))
-        if err != nil {
-          log.Printf("Transport error, will reconnect: %s\n", err)
-          goto RetryPayload
-        }
-        _, err = p.transport.Flush()
-        if err != nil {
-          log.Printf("Transport error, will reconnect: %s\n", err)
-          goto RetryPayload
-        }
-
-        // Write compressed frame
-        _, err = p.transport.Write([]byte("1C"))
-        if err != nil {
-          log.Printf("Transport error, will reconnect: %s\n", err)
-          goto RetryPayload
-        }
-        err = binary.Write(p.transport, binary.BigEndian, uint32(len(compressed_payload)))
-        if err != nil {
-          log.Printf("Transport error, will reconnect: %s\n", err)
-          goto RetryPayload
-        }
-        _, err = p.transport.Write(compressed_payload)
-        if err != nil {
-          log.Printf("Transport error, will reconnect: %s\n", err)
-          goto RetryPayload
-        }
-        _, err = p.transport.Flush()
-        if err != nil {
-          log.Printf("Transport error, will reconnect: %s\n", err)
-          goto RetryPayload
-        }
-
-        // Read ack
-        for {
-          var frame [2]byte
-
-          err = binary.Read(p.transport, binary.BigEndian, &frame)
-          if err != nil {
-            log.Printf("Transport error, will reconnect: %s\n", err)
-            goto RetryPayload
+          if err = p.writePayload(payload); err != nil {
+            break SelectLoop
           }
 
-          if frame == [2]byte{'1', 'A'} {
-            var ack_sequence uint32
+          // Wait for send signal again
+          input_toggle = nil
+        case <-p.transport.CanRecv():
+          // Receive an ACK
+          var ack_sequence uint32
+          var payload_sequence uint32
+          var payload *PendingPayload
 
-            // Read the sequence number acked
-            err = binary.Read(p.transport, binary.BigEndian, &ack_sequence)
-            if err != nil {
-              log.Printf("Transport error, will reconnect: %s\n", err)
-              goto RetryPayload
-            }
+          if ack_sequence, err = p.readAck(); err != nil {
+            break SelectLoop
+          }
 
-            if sequence == ack_sequence {
-              // Give the registrar the remainder of the events so it can save to state the new offsets
-              registrar_chan <- []RegistrarEvent{&EventsEvent{Events: events}}
-              last_ack_sequence = ack_sequence
-              // All acknowledged! Stop reading acks
+          // TODO: Validate authenticity of the ack
+          //       Specifically, are we sure this ack came from the same peer we sent the payload to?
+          //       We will need to send a nonce with the payload and expect it back to confirm this, otherwise any peer could respond with an ACK
+          //       In this case we can discard the sequence counter and simply have it reset to 1 for each payload since we can distinguish ACK with nonce
+
+          // TODO: If we ack'd OK and we refused to send due to large pending_payloads, re-enable input_toggle in here
+
+          // Find the pending payload - ACK will be one before (which means nothing processed yet) up to the number of the last event
+          for start_sequence, this_payload := range pending_payloads {
+            if ack_sequence >= start_sequence && ack_sequence <= start_sequence + uint32(this_payload.num_events) {
+              payload_sequence = start_sequence
+              payload = this_payload
               break
             }
-
-            // NOTE(driskell): If the server is busy and not yet processed anything, we MAY
-            // end up receiving an ack for the last sequence in the previous payload, or 0
-            if ack_sequence == last_ack_sequence {
-              // Just keep waiting
-              continue
-            } else if ack_sequence-last_ack_sequence > uint32(len(events)) {
-              // This is wrong - we've already had an ack for these
-              log.Printf("Socket error, will reconnect: Repeated ACK\n")
-              goto RetryPayload
-            }
-
-            // Send the events to registrar so it can save to state the new offsets
-            registrar_chan <- []RegistrarEvent{&EventsEvent{Events: events[:ack_sequence-last_ack_sequence]}}
-            events = events[ack_sequence-last_ack_sequence:]
-            last_ack_sequence = ack_sequence
-
-            // Reset the events buffer so it gets regenerated if we need to retry the payload
-            buffer.Truncate(0)
-            continue
           }
 
-          // Unknown frame!
-          log.Printf("Socket error, will reconnect: Unknown frame received: %s\n", frame)
-          goto RetryPayload
-        }
+          // Fail the connection if we get back an ACK that is out of bounds
+          if payload == nil {
+            err = errors.New("Out of bounds, repeated or stale ACK")
+            break SelectLoop
+          }
 
-        // Success, stop trying to send the payload.
-        break
+          // Full ACK?
+          if ack_sequence == payload_sequence + uint32(payload.num_events) {
+            // Give the registrar the remainder of the events so it can save to state the new offsets, and drop from pending payloads
+            registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events}}
+            delete(pending_payloads, payload_sequence)
+          } else {
+            // Only process the ACK if something was actually processed, i.e. ack_sequence is not one less than the first sequence in the payload
+            if ack_sequence != payload_sequence {
+              // Send the events to registrar so it can save to state the new offsets and update pending payload, wiping the compressed part so it is regenerated if needed
+              registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events[:ack_sequence + 1 - payload_sequence]}}
+              payload.events = payload.events[ack_sequence + 1 - payload_sequence:]
+              payload.payload = nil
+            }
 
-      RetryPayload:
-        // TODO(sissel): Track how frequently we timeout and reconnect. If we're
-        // timing out too frequently, there's really no point in timing out since
-        // basically everything is slow or down. We'll want to ratchet up the
-        // timeout value slowly until things improve, then ratchet it down once
-        // things seem healthy.
-        p.transport.Disconnect()
-        time.Sleep(p.config.reconnect)
-        p.transport.Connect()
-      }
-
-      // Reset the events buffer
-      buffer.Truncate(0)
-
-      // Reset the timer
-      timer.Reset(900 * time.Second)
-    case <-timer.C:
-      // We've no events to send - throw a ping (well... window frame) so our connection doesn't idle and die
-      err = p.ping()
-      if err != nil {
-        log.Printf("Transport error during ping, will reconnect: %s\n", err)
-        p.transport.Disconnect()
-        time.Sleep(p.config.reconnect)
-        p.transport.Connect()
-      }
+            // Update the retry timeout on the payload
+            payload.timeout = time.Now().Add(keepalive_timeout)
+          }
+        case <-timer.C:
+          log.Printf("<-timer.C")
+          // We've no events to send - throw a ping (well... window frame) so our connection doesn't idle and die
+          // Protocol needs changing eventually to allow for a pong - same time as JSON change I guess
+          if err = p.ping(); err != nil {
+            break SelectLoop
+          }
+      } /* select */
 
       // Reset the timer
-      timer.Reset(900 * time.Second)
-    } /* select */
-  } /* for */
+      timer.Reset(keepalive_timeout)
+    } /* loop forever, break to reconnect */
+
+    // TODO: change this logic so we fail a specific connection instead of all (specifically for ZMQ)
+    log.Printf("Transport error, will reconnect: %s\n", err)
+    p.transport.Disconnect()
+
+    time.Sleep(p.config.reconnect)
+  } /* Publish: for loop, break to shutdown */
 } // Publish
 
 func (p *Publisher) ping() error {
   // This just keeps connection open through firewalls
   // We don't await for a response so its not a real ping, the protocol does not provide for a real ping
   // And with a complete replacement of protocol happening soon, makes no sense to add new frames and such
-  _, err := p.transport.Write([]byte("1W"))
-  if err != nil {
+  if _, err := p.transport.Write([]byte("1W")); err != nil {
     return err
   }
-  err = binary.Write(p.transport, binary.BigEndian, uint32(*spool_size))
-  if err != nil {
-    return err
-  }
-  _, err = p.transport.Flush()
-  if err != nil {
+  if err := binary.Write(p.transport, binary.BigEndian, uint32(*spool_size)); err != nil {
     return err
   }
 
-  return nil
+  // Flush the ping frame
+  return p.transport.Flush()
+}
+
+func (p *Publisher) writePayload(payload *PendingPayload) error {
+  // Set the window size to the length of this payload in events.
+  if _, err := p.transport.Write([]byte("1W")); err != nil {
+    return err
+  }
+  if err := binary.Write(p.transport, binary.BigEndian, uint32(payload.num_events)); err != nil {
+    return err
+  }
+
+  // Write compressed frame
+  if _, err := p.transport.Write([]byte("1C")); err != nil {
+    return err
+  }
+  if err := binary.Write(p.transport, binary.BigEndian, uint32(len(payload.payload))); err != nil {
+    return err
+  }
+  if _, err := p.transport.Write(payload.payload); err != nil {
+    return err
+  }
+
+  // Flush the frame
+  return p.transport.Flush()
+}
+
+func (p *Publisher) readAck() (sequence uint32, err error) {
+  var frame []byte
+  // Read will return a single frame
+  if frame, err = p.transport.Read(); err != nil {
+    return
+  }
+
+  // Validate its an ACK frame
+  if bytes.Compare(frame[0:2], []byte{'1', 'A'}) != 0 {
+    err = errors.New(fmt.Sprintf("Unknown frame received: % X", frame))
+    return
+  } else if len(frame) > 6 {
+    err = errors.New(fmt.Sprintf("Frame overflow: % X", frame))
+    return
+  }
+
+  // Read the sequence number acked
+  sequence = binary.BigEndian.Uint32(frame[2:6])
+  return
+}
+
+func (p *Publisher) writeJSONFrame(event *FileEvent, sequence uint32, output io.Writer) {
+  // TODO: check error returns
+  // Header, "1J"
+  output.Write([]byte("1J"))
+  // Sequence number
+  binary.Write(output, binary.BigEndian, uint32(sequence))
+
+  value, err := json.Marshal(*event.Event)
+  if err != nil {
+    log.Printf("JSON event encoding error: %s\n", err)
+    binary.Write(output, binary.BigEndian, 2)
+    output.Write([]byte("{}"))
+    return
+  }
+
+  binary.Write(output, binary.BigEndian, uint32(len(value)))
+  output.Write(value)
+  log.Printf("JSON: %s\n", value)
 }
 
 func (p *Publisher) writeDataFrame(event *FileEvent, sequence uint32, output io.Writer) {
+  // TODO: check error returns
   // Header, "2D"
   // Why version 2 data frame? Because server.rb will correctly start returning partial ACKs if we specify version 2
   // This keeps the old logstash forwarders, which broke on partial ACK, working with even the newer server.rb
@@ -230,9 +266,9 @@ func (p *Publisher) writeDataFrame(event *FileEvent, sequence uint32, output io.
   p.writeKeyValue("file", *(*event.Event)["file"].(*string), output)
   p.writeKeyValue("host", p.hostname, output)
   p.writeKeyValue("offset", strconv.FormatInt((*event.Event)["offset"].(int64), 10), output)
-  p.writeKeyValue("line", *(*event.Event)["line"].(*string), output)
+  p.writeKeyValue("line", *(*event.Event)["message"].(*string), output)
   for k, v := range *event.Event {
-    if k == "file" || k == "offset" || k == "line" {
+    if k == "file" || k == "offset" || k == "message" {
       continue
     }
     p.writeKeyValue(k, *v.(*string), output)
@@ -240,6 +276,7 @@ func (p *Publisher) writeDataFrame(event *FileEvent, sequence uint32, output io.
 }
 
 func (p *Publisher) writeKeyValue(key string, value string, output io.Writer) {
+  // TODO: check error returns
   binary.Write(output, binary.BigEndian, uint32(len(key)))
   output.Write([]byte(key))
   binary.Write(output, binary.BigEndian, uint32(len(value)))

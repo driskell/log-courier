@@ -26,6 +26,9 @@ type TransportTls struct {
   hostport_re *regexp.Regexp
 
   write_buffer *bytes.Buffer
+
+  can_send chan int
+  can_recv chan int
 }
 
 func CreateTransportTls(config *NetworkConfig) (*TransportTls, error) {
@@ -74,74 +77,109 @@ func CreateTransportTls(config *NetworkConfig) (*TransportTls, error) {
 }
 
 func (t *TransportTls) Connect() error {
+Connect:
   for {
-    // Pick a random server from the list.
-    hostport := t.config.Servers[rand.Int()%len(t.config.Servers)]
-    submatch := t.hostport_re.FindSubmatch([]byte(hostport))
-    if submatch == nil {
-      log.Printf("Invalid host:port given: %s\n", hostport)
-      goto TryNextServer
-    }
+    for {
+      // Pick a random server from the list.
+      hostport := t.config.Servers[rand.Int()%len(t.config.Servers)]
+      submatch := t.hostport_re.FindSubmatch([]byte(hostport))
+      if submatch == nil {
+        log.Printf("Invalid host:port given: %s\n", hostport)
+        break
+      }
 
-    {
       // Lookup the server in DNS (if this is IP it will implicitly return)
       host := string(submatch[1])
       port := string(submatch[2])
       addresses, err := net.LookupHost(host)
       if err != nil {
         log.Printf("DNS lookup failure \"%s\": %s\n", host, err)
-        goto TryNextServer
+        break
       }
 
-      {
-        // Select a random address from the pool of addresses provided by DNS
-        address := addresses[rand.Int()%len(addresses)]
-        addressport := net.JoinHostPort(address, port)
+      // Select a random address from the pool of addresses provided by DNS
+      address := addresses[rand.Int()%len(addresses)]
+      addressport := net.JoinHostPort(address, port)
 
-        log.Printf("Connecting to %s (%s) \n", addressport, host)
+      log.Printf("Connecting to %s (%s) \n", addressport, host)
 
-        tcpsocket, err := net.DialTimeout("tcp", addressport, t.config.timeout)
-        if err != nil {
-          log.Printf("Failure connecting to %s: %s\n", address, err)
-          goto TryNextServer
-        }
-
-        t.socket = tls.Client(tcpsocket, &t.tls_config)
-        t.socket.SetDeadline(time.Now().Add(t.config.timeout))
-        err = t.socket.Handshake()
-        if err != nil {
-          t.socket.Close()
-          log.Printf("Handshake failure with %s: Failed to TLS handshake: %s\n", address, err)
-          goto TryNextServer
-        }
-
-        log.Printf("Connected with %s\n", address)
-
-        // Connected, let's rock and roll.
-        return nil
+      tcpsocket, err := net.DialTimeout("tcp", addressport, t.config.timeout)
+      if err != nil {
+        log.Printf("Failure connecting to %s: %s\n", address, err)
+        break
       }
-    }
 
-  TryNextServer:
+      t.socket = tls.Client(tcpsocket, &t.tls_config)
+      t.socket.SetDeadline(time.Now().Add(t.config.timeout))
+      err = t.socket.Handshake()
+      if err != nil {
+        t.socket.Close()
+        log.Printf("TLS Handshake failure with %s: %s\n", address, err)
+        break
+      }
+
+      log.Printf("Connected with %s\n", address)
+
+      // Connected, let's rock and roll.
+      break Connect
+
+    } /* for, break for sleep */
+
     time.Sleep(t.config.reconnect)
-    continue
-  } /* Loop forever */
+  } /* Connect: for */
+
+  // Send/Recv signal channels
+  t.can_send = make(chan int, 1)
+  t.can_recv = make(chan int, 1)
+
+  // Start with a send
+  t.can_send <- 1
+
+  return nil
+}
+
+func (t *TransportTls) setChan(set chan int) {
+  select {
+  case set <- 1:
+  default:
+  }
+}
+
+func (t *TransportTls) CanSend() chan int {
+  return t.can_send
+}
+
+func (t *TransportTls) CanRecv() chan int {
+  return t.can_recv
 }
 
 func (t *TransportTls) Write(p []byte) (int, error) {
   return t.write_buffer.Write(p)
 }
 
-func (t *TransportTls) Flush() (int64, error) {
-  t.socket.SetDeadline(time.Now().Add(t.config.timeout))
+func (t *TransportTls) Flush() error {
+  // Expect to finish writing within the timeout period
+  t.socket.SetWriteDeadline(time.Now().Add(t.config.timeout))
 
-  return t.write_buffer.WriteTo(t.socket)
+  _, err := t.write_buffer.WriteTo(t.socket)
+  if err == nil {
+    t.setChan(t.can_recv)
+  }
+  return err
 }
 
-func (t *TransportTls) Read(p []byte) (int, error) {
-  t.socket.SetDeadline(time.Now().Add(t.config.timeout))
+func (t *TransportTls) Read() ([]byte, error) {
+  // Expect to hear back within the timeout period
+  t.socket.SetReadDeadline(time.Now().Add(t.config.timeout))
 
-  return t.socket.Read(p)
+  // We only receive ACK at the moment, which is 6 bytes
+  msg := make([]byte, 6)
+  _, err := t.socket.Read(msg)
+  if err == nil {
+    t.setChan(t.can_send)
+    return msg, nil
+  }
+  return nil, err
 }
 
 func (t *TransportTls) Disconnect() {
