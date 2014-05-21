@@ -104,7 +104,7 @@ func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []Regis
         case <-p.transport.CanRecv():
           // Receive an ACK
           var ack_sequence uint32
-          var payload_sequence uint32
+          var payload_sequence uint32 = 0xFFFFFFFF  // TODO: Temporary until we rework protocol
           var payload *PendingPayload
 
           if ack_sequence, err = p.readAck(); err != nil {
@@ -120,10 +120,9 @@ func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []Regis
 
           // Find the pending payload - ACK will be one before (which means nothing processed yet) up to the number of the last event
           for start_sequence, this_payload := range pending_payloads {
-            if ack_sequence >= start_sequence && ack_sequence <= start_sequence + uint32(this_payload.num_events) {
+            if payload_sequence >= start_sequence && ack_sequence >= start_sequence && ack_sequence <= start_sequence + uint32(this_payload.num_events) {
               payload_sequence = start_sequence
               payload = this_payload
-              break
             }
           }
 
@@ -134,7 +133,7 @@ func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []Regis
           }
 
           // Full ACK?
-          if ack_sequence == payload_sequence + uint32(payload.num_events) {
+          if ack_sequence == payload_sequence + uint32(len(payload.events)) {
             // Give the registrar the remainder of the events so it can save to state the new offsets, and drop from pending payloads
             registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events}}
             delete(pending_payloads, payload_sequence)
@@ -142,9 +141,13 @@ func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []Regis
             // Only process the ACK if something was actually processed, i.e. ack_sequence is not one less than the first sequence in the payload
             if ack_sequence != payload_sequence {
               // Send the events to registrar so it can save to state the new offsets and update pending payload, wiping the compressed part so it is regenerated if needed
-              registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events[:ack_sequence + 1 - payload_sequence]}}
-              payload.events = payload.events[ack_sequence + 1 - payload_sequence:]
+              registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events[:ack_sequence - payload_sequence - 1]}}
+              payload.events = payload.events[ack_sequence - payload_sequence:]
               payload.payload = nil
+
+              // Move to the new position
+              delete(pending_payloads, payload_sequence)
+              pending_payloads[ack_sequence] = payload
             }
 
             // Update the retry timeout on the payload
@@ -186,24 +189,24 @@ func (p *Publisher) ping() error {
   return p.transport.Flush()
 }
 
-func (p *Publisher) writePayload(payload *PendingPayload) error {
+func (p *Publisher) writePayload(payload *PendingPayload) (err error) {
   // Set the window size to the length of this payload in events.
-  if _, err := p.transport.Write([]byte("1W")); err != nil {
-    return err
+  if _, err = p.transport.Write([]byte("1W")); err != nil {
+    return
   }
-  if err := binary.Write(p.transport, binary.BigEndian, uint32(payload.num_events)); err != nil {
-    return err
+  if err = binary.Write(p.transport, binary.BigEndian, uint32(payload.num_events)); err != nil {
+    return
   }
 
   // Write compressed frame
-  if _, err := p.transport.Write([]byte("1C")); err != nil {
-    return err
+  if _, err = p.transport.Write([]byte("1C")); err != nil {
+    return
   }
-  if err := binary.Write(p.transport, binary.BigEndian, uint32(len(payload.payload))); err != nil {
-    return err
+  if err = binary.Write(p.transport, binary.BigEndian, uint32(len(payload.payload))); err != nil {
+    return
   }
-  if _, err := p.transport.Write(payload.payload); err != nil {
-    return err
+  if _, err = p.transport.Write(payload.payload); err != nil {
+    return
   }
 
   // Flush the frame
@@ -268,6 +271,10 @@ func (p *Publisher) writeDataFrame(event *FileEvent, sequence uint32, output io.
   p.writeKeyValue("offset", strconv.FormatInt((*event.Event)["offset"].(int64), 10), output)
   p.writeKeyValue("line", *(*event.Event)["message"].(*string), output)
   for k, v := range *event.Event {
+switch v.(type) {
+case *string:
+log.Printf("%s: %s", k, *v.(*string))
+}
     if k == "file" || k == "offset" || k == "message" {
       continue
     }

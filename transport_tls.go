@@ -29,9 +29,7 @@ type TransportTls struct {
   write_buffer *bytes.Buffer
 
   wait sync.WaitGroup
-
-  notify_send chan int
-  notify_recv chan int
+  shutdown chan int
 
   send_chan chan []byte
   recv_chan chan interface{}
@@ -40,9 +38,18 @@ type TransportTls struct {
   can_recv chan int
 }
 
+// If tls.Conn.Write ever times out it will permanently break, so we cannot use SetWriteDeadline with it directly
+// So we wrap the given tcpsocket and handle the SetWriteDeadline there and check shutdown signal and loop
+// Inside tls.Conn the Write blocks until it finishes and everyone is happy
+type TransportTlsWrap struct {
+  transport *TransportTls
+  tcpsocket net.Conn
+
+  net.Conn
+}
+
 const (
-  tls_signal_process  = 1
-  tls_signal_shutdown = 2
+  socket_interval_seconds = 5
 )
 
 func CreateTransportTls(config *NetworkConfig) (*TransportTls, error) {
@@ -125,7 +132,7 @@ Connect:
         break
       }
 
-      t.socket = tls.Client(tcpsocket, &t.tls_config)
+      t.socket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.tls_config)
       t.socket.SetDeadline(time.Now().Add(t.config.timeout))
       err = t.socket.Handshake()
       if err != nil {
@@ -145,8 +152,7 @@ Connect:
   } /* Connect: for */
 
   // Signal channels
-  t.notify_send = make(chan int, 1)
-  t.notify_recv = make(chan int, 1)
+  t.shutdown = make(chan int, 1)
   t.send_chan = make(chan []byte, 1)
   t.recv_chan = make(chan interface{}, 1)
   t.can_send = make(chan int, 1)
@@ -167,81 +173,62 @@ Connect:
 }
 
 func (t *TransportTls) sender() {
-SignalLoop:
+SendLoop:
   for {
     select {
-      case msg := <-t.notify_send:
-        // Control channel message - maybe something to send or need to shutdown
-        switch msg {
-        case tls_signal_process:
-          // Loop until we sent everything
-        SendLoop:
-          for {
-            select {
-              case msg := <-t.send_chan:
-                // Expect to finish writing within the timeout period
-                // TODO: Loop with this so we don't have to wait config.timeout to process shutdown
-                // TODO: Don't fail if write takes longer than config.timeout - it would be normal - we'll detect timeout in receive
-                t.socket.SetWriteDeadline(time.Now().Add(t.config.timeout))
-                log.Printf("sender() - sending %d bytes", len(msg))
-                _, err := t.socket.Write(msg)
-                if err == nil {
-                  log.Printf("sender() - sent")
-                  t.setChan(t.can_send)
-                } else {
-                  log.Printf("sender() - error: %s", err)
-                  // Pass error back
-                  t.recv_chan <- err
-                }
-
-                // Data has gone out, so we should expect some back (or an error)
-                t.setChan(t.can_recv)
-              default:
-                // Nothing left to send
-                break SendLoop
-            }
-          }
-        case tls_signal_shutdown:
-          log.Printf("sender() - shutdown")
-          // Shutdown
-          break SignalLoop
+      case <-t.shutdown:
+        // Shutdown
+        break SendLoop
+      case msg := <-t.send_chan:
+        // Write deadline is managed by our net.Conn wrapper that tls will call into
+        _, err := t.socket.Write(msg)
+        if err == nil {
+          t.setChan(t.can_send)
+        } else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
+          // Shutdown will have been received by the wrapper
+          break SendLoop
+        } else {
+          // Pass error back
+          t.recv_chan <- err
+          t.setChan(t.can_recv)
         }
-    } /* select */
-  } /* loop until shutdown */
+    }
+  }
 
   t.wait.Done()
 }
 
 func (t *TransportTls) receiver() {
-SignalLoop:
+  // We only receive ACK at the moment, which is 6 bytes
+  msg := make([]byte, 6)
+  received := 0
+
+RecvLoop:
   for {
     select {
-      case signal := <-t.notify_recv:
-        // Control channel message - maybe something to receive or need to shutdown
-        switch signal {
-        case tls_signal_process:
-          // Expect to hear back within the timeout period
-          // TODO: Loop with this so we don't have to wait config.timeout to process shutdown
-          t.socket.SetReadDeadline(time.Now().Add(t.config.timeout))
-          log.Printf("receiver() - receiving 6 bytes")
-          // We only receive ACK at the moment, which is 6 bytes
-          msg := make([]byte, 6)
-          _, err := t.socket.Read(msg)
-          if err == nil {
-            log.Printf("receiver() - received")
-            // Pass the message back
-            t.recv_chan <- msg
-          } else {
-            log.Printf("receiver() - error: %s", err)
-            // Pass an error back
-            t.recv_chan <- err
-          }
+    case <-t.shutdown:
+      // Shutdown
+      break RecvLoop
+    default:
+      // Timeout after socket_interval_seconds, check for shutdown, and try again
+      t.socket.SetReadDeadline(time.Now().Add(socket_interval_seconds * time.Second))
 
-        case tls_signal_shutdown:
-          log.Printf("receiver() - shutdown")
-          // Shutdown
-          break SignalLoop
-        }
+      length, err := t.socket.Read(msg[received:])
+      received += length
+      if err == nil || received >= 6 {
+        // Pass the message back
+        t.recv_chan <- msg
+        msg = make([]byte, 6)
+        received = 0
+      } else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
+        // Keep trying
+        continue
+      } else {
+        // Pass an error back
+        t.recv_chan <- err
+      }
+
+      t.setChan(t.can_recv)
     } /* select */
   } /* loop until shutdown */
 
@@ -270,22 +257,11 @@ func (t *TransportTls) Write(p []byte) (int, error) {
 func (t *TransportTls) Flush() error {
   t.send_chan <- t.write_buffer.Bytes()
   t.write_buffer.Reset()
-
-  // Ask for send to start
-  t.notify_send <- tls_signal_process
   return nil
 }
 
 func (t *TransportTls) Read() ([]byte, error) {
-  var msg interface{}
-  select {
-  case msg = <-t.recv_chan:
-    // Ask for more
-    t.notify_recv <- tls_signal_process
-  default:
-    t.notify_recv <- tls_signal_process
-    msg = <-t.recv_chan
-  }
+  msg := <-t.recv_chan
 
   // Error? Or data?
   switch msg.(type) {
@@ -298,9 +274,63 @@ func (t *TransportTls) Read() ([]byte, error) {
 
 func (t *TransportTls) Disconnect() {
   // Send shutdown request
-  t.notify_send <- tls_signal_shutdown
-  t.notify_recv <- tls_signal_shutdown
+  close(t.shutdown)
   t.wait.Wait()
   t.socket.Close()
   t.write_buffer.Reset()
+}
+
+func (w *TransportTlsWrap) Read(b []byte) (int, error) {
+  return w.tcpsocket.Read(b)
+}
+
+func (w *TransportTlsWrap) Write(b []byte) (n int, err error) {
+  length := 0
+
+RetrySend:
+  for {
+    // Timeout after socket_interval_seconds, check for shutdown, and try again
+    w.tcpsocket.SetWriteDeadline(time.Now().Add(socket_interval_seconds * time.Second))
+
+    n, err = w.tcpsocket.Write(b[length:])
+    length += n
+    if err == nil {
+      return length, err
+    } else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
+      // Check for shutdown, then try again
+      select {
+      case <-w.transport.shutdown:
+        // Shutdown
+        return length, err
+      default:
+        goto RetrySend
+      }
+    } else {
+      return length, err
+    }
+  } /* loop forever */
+}
+
+func (w *TransportTlsWrap) Close() error {
+  return w.tcpsocket.Close()
+}
+
+func (w *TransportTlsWrap) LocalAddr() net.Addr {
+  return w.tcpsocket.LocalAddr()
+}
+
+func (w *TransportTlsWrap) RemoteAddr() net.Addr {
+  return w.tcpsocket.RemoteAddr()
+}
+
+func (w *TransportTlsWrap) SetDeadline(t time.Time) error {
+  return w.tcpsocket.SetDeadline(t)
+}
+
+func (w *TransportTlsWrap) SetReadDeadline(t time.Time) error {
+  return w.tcpsocket.SetReadDeadline(t)
+}
+
+func (w *TransportTlsWrap) SetWriteDeadline(t time.Time) error {
+  return w.tcpsocket.SetWriteDeadline(t)
 }
