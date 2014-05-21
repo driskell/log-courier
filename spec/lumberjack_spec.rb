@@ -348,7 +348,7 @@ describe "logstash-forwarder" do
 			"files": [
 				{
 					"paths": [ "#{@file.path}" ],
-          "codec": { "name": "multiline", "pattern": "^BEGIN", "negate": false }
+          "codec": { "name": "multiline", "what": "next", "pattern": "^BEGIN" }
 				}
 			]
 		}
@@ -384,4 +384,12 @@ describe "logstash-forwarder" do
     end
     insist { @event_queue }.empty?
   end
+
+  # TODO - test for multiline what=previous
+
+  # TODO - test for multiline and previous timeout
+
+  # TODO - test for multiline and resuming
+
+  # TODO - test for statefile save conflict on rename
 end
