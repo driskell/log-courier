@@ -217,18 +217,24 @@ func (p *Prospector) scan(path string, config FileConfig, registrar_chan chan []
           p.spawn_harvester(info, output, &Harvester{ProspectorInfo: info, FileInfo: fileinfo, Path: file, FileConfig: config, Initial: (resume != nil)})
         }
       } else if len(info.last_offset) != 0 {
+        restart := false
+
         if info.fileinfo.ModTime() != fileinfo.ModTime() {
           // Resume harvesting of an old file we've stopped harvesting from
           log.Printf("Resuming harvester on an old file that was just modified: %s\n", file)
+
+          restart = true
         } else if info.failed {
           // Last attempt we failed to start, try again
           log.Printf("Attempting to restart failed harvester: %s\n", file)
-        } else {
-          continue
+
+          restart = true
         }
 
-        // The offset to continue from will be stored in the harvester channel - so take that to use and also clear the channel
-        p.spawn_harvester(info, output, &Harvester{ProspectorInfo: info, FileInfo: fileinfo, Path: file, FileConfig: config, Offset: <-info.last_offset})
+        if (restart) {
+          // The offset to continue from will be stored in the harvester channel - so take that to use and also clear the channel
+          p.spawn_harvester(info, output, &Harvester{ProspectorInfo: info, FileInfo: fileinfo, Path: file, FileConfig: config, Offset: <-info.last_offset})
+        }
       }
     }
 
