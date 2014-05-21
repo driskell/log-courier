@@ -89,9 +89,11 @@ func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
     last_read_time = time.Now()
 
     line++
-    new_offset := h.Offset + int64(bytesread)
-    h.Codec.Event(h.Offset, line, text)
-    h.Offset = new_offset
+    line_offset := h.Offset
+    h.Offset += int64(bytesread)
+
+    // Codec is last - it saves harvester state for us such as offset for resume
+    h.Codec.Event(line_offset, line, text)
   } /* forever */
 }
 

@@ -5,6 +5,7 @@ import (
   "fmt"
   "regexp"
   "strings"
+  "sync"
   "time"
 )
 
@@ -30,8 +31,8 @@ type CodecMultiline struct {
   offset      int64
   line        uint64
   buffer      []string
-  timer_stop  chan bool
-  timer_start chan time.Duration
+  timer_lock  *sync.Mutex
+  timer_chan  chan bool
 }
 
 func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultilineFactory, error) {
@@ -92,25 +93,32 @@ func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultiline
 
 func (cf *CodecMultilineFactory) Create(harvester *Harvester, output chan *FileEvent) Codec {
   c := &CodecMultiline{config: cf, harvester: harvester, output: output, last_offset: harvester.Offset}
+
   if cf.previous_timeout != 0 {
-    c.timer_stop = make(chan bool, 1)
-    c.timer_start = make(chan time.Duration, 1)
+    c.timer_lock = new(sync.Mutex)
+    c.timer_chan = make(chan bool, 1)
+
     go func() {
       var active bool
+
       timer := time.NewTimer(0)
+
       for {
         select {
-        case s := <-c.timer_stop:
+        case shutdown := <-c.timer_chan:
           timer.Stop()
-          if s {
-            // Shutdown signal
+          if shutdown {
+            // Shutdown signal so end the routine
             break
           }
-          timer.Reset(<-c.timer_start)
+          timer.Reset(c.config.previous_timeout)
           active = true
         case <-timer.C:
           if active {
+            // Surround flush in mutex to prevent data getting modified by a new line while we flush
+            c.timer_lock.Lock()
             c.flush()
+            c.timer_lock.Unlock()
             active = false
           }
         }
@@ -133,13 +141,13 @@ func (c *CodecMultiline) Event(offset int64, line uint64, text *string) {
   // odd incomplete data. It would be a signal from the user, "I will worry about the buffering
   // issues my programs may have - you just make sure to write each event either completely or
   // partially, always with the FIRST line correct (which could be the important one)."
-  matched := !c.config.negate == c.config.matcher.MatchString(*text)
+  match_failed := c.config.negate == c.config.matcher.MatchString(*text)
   if c.config.what == codecMultiline_What_Previous {
     if c.config.previous_timeout != 0 {
-      // Sync the timer
-      c.timer_stop <- false
+      // Prevent a flush happening while we're modifying the stored data
+      c.timer_lock.Lock()
     }
-    if matched {
+    if match_failed {
       c.flush()
     }
   }
@@ -151,10 +159,11 @@ func (c *CodecMultiline) Event(offset int64, line uint64, text *string) {
   c.buffer = append(c.buffer, *text)
   if c.config.what == codecMultiline_What_Previous {
     if c.config.previous_timeout != 0 {
-      // Reset the flush timer and let it continue
-      c.timer_start <- c.config.previous_timeout
+      // Reset the timer and unlock
+      c.timer_chan <- false
+      c.timer_lock.Unlock()
     }
-  } else if c.config.what == codecMultiline_What_Next && matched {
+  } else if c.config.what == codecMultiline_What_Next && match_failed {
     c.flush()
   }
 }

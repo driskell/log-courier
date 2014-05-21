@@ -32,14 +32,14 @@ type EventsEvent struct {
   Events []*FileEvent
 }
 
-func CreateEvent(fields map[string]string, file *string, offset int64, line uint64, message *string) *map[string]interface{} {
+func CreateEvent(fields map[string]*string, file *string, offset int64, line uint64, message *string) *map[string]interface{} {
   event := map[string]interface{}{
     "file":    file,
     "offset":  offset,
     "message": message,
   }
   for k, v := range fields {
-    event[k] = &v
+    event[k] = v
   }
   return &event
 }
