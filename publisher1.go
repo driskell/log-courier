@@ -271,10 +271,6 @@ func (p *Publisher) writeDataFrame(event *FileEvent, sequence uint32, output io.
   p.writeKeyValue("offset", strconv.FormatInt((*event.Event)["offset"].(int64), 10), output)
   p.writeKeyValue("line", *(*event.Event)["message"].(*string), output)
   for k, v := range *event.Event {
-switch v.(type) {
-case *string:
-log.Printf("%s: %s", k, *v.(*string))
-}
     if k == "file" || k == "offset" || k == "message" {
       continue
     }
