@@ -24,7 +24,7 @@ type TransportZmq struct {
   notify_chan chan []byte
 
   send_chan chan *ZMQMessage
-  recv_chan chan []byte
+  recv_chan chan interface{}
 
   can_send chan int
   can_recv chan int
@@ -57,13 +57,16 @@ func CreateTransportZmq(config *NetworkConfig) (*TransportZmq, error) {
 func (t *TransportZmq) Connect() error {
   t.write_buffer = new(bytes.Buffer)
 
-  // Control channel to enable/disable Recv/Send signals
-  t.notify_chan = make(chan []byte, 1)
-
-  t.dealer, _ = t.context.NewSocket(zmq.DEALER)
-
   hostport_re := regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`)
   endpoints := 0
+
+  // TODO: check error return
+  t.dealer, _ = t.context.NewSocket(zmq.DEALER)
+
+  // Control sockets that poller will wait on
+  // TODO: check error return
+  notify_in, _ := t.context.NewSocket(zmq.REQ)
+  notify_out, _ := t.context.NewSocket(zmq.REP)
 
   // Connect endpoints
   for _, hostport := range t.config.Servers {
@@ -95,16 +98,13 @@ func (t *TransportZmq) Connect() error {
     return errors.New("Failed to connect to any of the specified endpoints.")
   }
 
-  // Control sockets that poller will wait on
-  notify_in, _ := t.context.NewSocket(zmq.REQ)
-  notify_out, _ := t.context.NewSocket(zmq.REP)
-
   notify_in.Bind("inproc://notify")
   notify_out.Connect("inproc://notify")
 
-  // Send/Recv signal channels
+  // Signal channels
+  t.notify_chan = make(chan []byte, 1)
   t.send_chan = make(chan *ZMQMessage, 2)
-  t.recv_chan = make(chan []byte, 2)
+  t.recv_chan = make(chan interface{}, 2)
   t.can_send = make(chan int, 1)
   t.can_recv = make(chan int, 1)
 
@@ -155,6 +155,7 @@ func (t *TransportZmq) poller(notify_out *zmq.Socket) {
   pollitems[0].Events = zmq.POLLIN | zmq.POLLOUT
   pollitems[1].Socket = t.dealer
 
+PollLoop:
   for {
     // Poll for events
     // TODO: check return code
@@ -183,7 +184,7 @@ func (t *TransportZmq) poller(notify_out *zmq.Socket) {
         }
       case zmq_signal_shutdown:
         // Shutdown
-        break
+        break PollLoop
       }
     } /* if notify POLLING */
 
@@ -312,21 +313,31 @@ func (t *TransportZmq) Write(p []byte) (int, error) {
 func (t *TransportZmq) Flush() error {
   t.send_chan <- &ZMQMessage{part: []byte(""), final: false}
   t.send_chan <- &ZMQMessage{part: t.write_buffer.Bytes(), final: true}
+  t.write_buffer.Reset()
+
   // Ask for send to start
   t.notify_chan <- []byte(zmq_signal_output)
   return nil
 }
 
 func (t *TransportZmq) Read() ([]byte, error) {
+  var msg interface{}
   select {
-  case msg := <-t.recv_chan:
+  case msg = <-t.recv_chan:
     // Ask for more
     t.notify_chan <- []byte(zmq_signal_input)
-    return msg, nil
   default:
     t.notify_chan <- []byte(zmq_signal_input)
+    msg = <-t.recv_chan
   }
-  return <-t.recv_chan, nil
+
+  // Error? Or data?
+  switch msg.(type) {
+    case error:
+      return nil, msg.(error)
+    default:
+      return msg.([]byte), nil
+  }
 }
 
 func (t *TransportZmq) Disconnect() {
@@ -334,4 +345,5 @@ func (t *TransportZmq) Disconnect() {
   t.notify_chan <- []byte(zmq_signal_shutdown)
   t.wait.Wait()
   t.dealer.Close()
+  t.write_buffer.Reset()
 }
