@@ -389,7 +389,7 @@ module Lumberjack
           send_ack(sequence)
           @last_window_ack = sequence
         end
-      else if sequence > @last_window_ack
+      elsif sequence > @last_window_ack
         if (sequence - @last_window_ack) >= @window_size
           send_ack(sequence)
           @last_window_ack = sequence
