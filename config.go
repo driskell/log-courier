@@ -159,12 +159,11 @@ func LoadConfig(path string) (config *Config, err error) {
   config.Network.reconnect = time.Duration(config.Network.Reconnect) * time.Second
 
   for k := range config.Files {
-    for _, path := range config.Files[k].Paths {
-      log.Printf("%d: %s", k, path)
-    }
+    var codec_name string
+
     if config.Files[k].Codec != nil {
       var ok bool
-      config.Files[k].Codec["name"], ok = config.Files[k].Codec["name"].(string)
+      codec_name, ok = config.Files[k].Codec["name"].(string)
       if !ok {
         err = errors.New("The name of the codec must be specified.")
         log.Printf(fmt.Sprint(err))
@@ -173,19 +172,20 @@ func LoadConfig(path string) (config *Config, err error) {
     } else {
       config.Files[k].Codec = make(map[string]interface{}, 1)
       config.Files[k].Codec["name"] = "plain"
+      codec_name = "plain"
     }
 
-    if config.Files[k].Codec["name"] == "" || config.Files[k].Codec["name"] == "plain" {
-      config.Files[k].codec, err = CreateCodecPlainFactory(config.Files[k].Codec)
-    } else if config.Files[k].Codec["name"] == "multiline" {
-      config.Files[k].codec, err = CreateCodecMultilineFactory(config.Files[k].Codec)
+    var factory CodecFactory;
+    if factory, err = NewCodecFactory(codec_name, config.Files[k].Codec); err == nil {
+      if factory != nil {
+        config.Files[k].codec = factory
+      } else {
+        err = errors.New(fmt.Sprintf("Unrecognised codec '%s'. Please check your configuration.\n", codec_name))
+        log.Printf("%s", err)
+        return
+      }
     } else {
-      err = errors.New(fmt.Sprintf("Unrecognised codec '%s'. Please check your configuration.\n", config.Files[k].Codec["name"]))
-      log.Printf(fmt.Sprint(err))
-      return
-    }
-    if err != nil {
-      log.Printf(fmt.Sprint(err))
+      log.Printf("%s", err)
       return
     }
 

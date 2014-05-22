@@ -12,6 +12,9 @@ import (
 const codecMultiline_What_Previous = 0x00000001
 const codecMultiline_What_Next = 0x00000002
 
+type CodecMultilineRegistrar struct {
+}
+
 type CodecMultilineFactory struct {
   pattern          string
   what             int
@@ -35,7 +38,7 @@ type CodecMultiline struct {
   timer_chan  chan bool
 }
 
-func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultilineFactory, error) {
+func (r *CodecMultilineRegistrar) NewFactory(config map[string]interface{}) (CodecFactory, error) {
   var ok bool
   result := &CodecMultilineFactory{}
   for key, value := range config {
@@ -91,10 +94,10 @@ func CreateCodecMultilineFactory(config map[string]interface{}) (*CodecMultiline
   return result, nil
 }
 
-func (cf *CodecMultilineFactory) Create(harvester *Harvester, output chan *FileEvent) Codec {
-  c := &CodecMultiline{config: cf, harvester: harvester, output: output, last_offset: harvester.Offset}
+func (f *CodecMultilineFactory) NewCodec(harvester *Harvester, output chan *FileEvent) Codec {
+  c := &CodecMultiline{config: f, harvester: harvester, output: output, last_offset: harvester.Offset}
 
-  if cf.previous_timeout != 0 {
+  if f.previous_timeout != 0 {
     c.timer_lock = new(sync.Mutex)
     c.timer_chan = make(chan bool, 1)
 
@@ -178,7 +181,7 @@ func (c *CodecMultiline) flush() {
   event := &FileEvent{
     ProspectorInfo: c.harvester.ProspectorInfo,
     Offset:         c.h_offset,
-    Event:          CreateEvent(c.harvester.FileConfig.Fields, &c.harvester.Path, c.offset, c.line, &text),
+    Event:          NewEvent(c.harvester.FileConfig.Fields, &c.harvester.Path, c.offset, c.line, &text),
   }
 
   c.output <- event // ship the new event downstream
@@ -186,4 +189,9 @@ func (c *CodecMultiline) flush() {
   // Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
   c.last_offset = c.offset
   c.buffer = nil
+}
+
+// Register the codec
+func init() {
+  RegisterCodec(&CodecMultilineRegistrar{}, "multiline")
 }
