@@ -338,21 +338,21 @@ describe "logstash-forwarder" do
 
   it "should support multiline codec and emit blocks of lines as events" do
     startup <<-config
-		{
-			"network": {
-				"servers": [ "localhost:#{@server.port}" ],
-				"ssl ca": "#{@ssl_cert.path}",
-				"timeout": 15,
-				"reconnect": 1
-			},
-			"files": [
-				{
-					"paths": [ "#{@file.path}" ],
-          "codec": { "name": "multiline", "pattern": "^BEGIN", "negate": false }
-				}
-			]
-		}
-		config
+    {
+      "network": {
+        "servers": [ "localhost:#{@server.port}" ],
+        "ssl ca": "#{@ssl_cert.path}",
+        "timeout": 15,
+        "reconnect": 1
+      },
+      "files": [
+        {
+          "paths": [ "#{@file.path}" ],
+          "codec": { "name": "multiline", "what": "next", "pattern": "^BEGIN", "negate": true }
+        }
+      ]
+    }
+    config
 
     count = rand(1000) + 5000
     count.times do |i|
@@ -362,11 +362,6 @@ describe "logstash-forwarder" do
       @file.puts("hello #{i}")
     end
     @file.close
-
-    # We will always be missing the last line - this is currently acceptable
-    # Reason is we will not know if the multiline is finished until we see another BEGIN or we hit the old age timeout (24h)
-    # TODO(driskell): Make this unacceptable and force a flush of multiline after read_timeout (10s currently)
-    count -= 1
 
     # Wait for logstash-forwarder to finish publishing data to us.
     Stud::try(20.times) do
@@ -384,4 +379,12 @@ describe "logstash-forwarder" do
     end
     insist { @event_queue }.empty?
   end
+
+  # TODO - test for multiline what=previous
+
+  # TODO - test for multiline and previous timeout
+
+  # TODO - test for multiline and resuming
+
+  # TODO - test for statefile save conflict on rename
 end
