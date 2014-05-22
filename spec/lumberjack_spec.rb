@@ -348,7 +348,7 @@ describe "logstash-forwarder" do
       "files": [
         {
           "paths": [ "#{@file.path}" ],
-          "codec": { "name": "multiline", "what": "next", "pattern": "^BEGIN", "negate": true }
+          "codec": { "name": "multiline", "what": "previous", "pattern": "^BEGIN", "negate": true }
         }
       ]
     }
@@ -362,6 +362,11 @@ describe "logstash-forwarder" do
       @file.puts("hello #{i}")
     end
     @file.close
+
+    # We will always be missing the last line - this is currently acceptable
+    # Reason is we will not know if the multiline is finished until we see another BEGIN or we hit the old age timeout (24h)
+    # TODO(driskell): Make this unacceptable and force a flush of multiline after read_timeout (10s currently)
+    count -= 1
 
     # Wait for logstash-forwarder to finish publishing data to us.
     Stud::try(20.times) do
