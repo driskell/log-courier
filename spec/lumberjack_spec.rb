@@ -348,7 +348,7 @@ describe "logstash-forwarder" do
 			"files": [
 				{
 					"paths": [ "#{@file.path}" ],
-          "codec": { "name": "multiline", "what": "next", "pattern": "^BEGIN" }
+          "codec": { "name": "multiline", "what": "next", "pattern": "^BEGIN", negate: true }
 				}
 			]
 		}
