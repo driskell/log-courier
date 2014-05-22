@@ -2,10 +2,12 @@ package main
 
 import "os"
 
+type Event map[string]interface{};
+
 type FileEvent struct {
   ProspectorInfo *ProspectorInfo
   Offset         int64
-  Event          *map[string]interface{}
+  Event          *Event
 }
 
 type RegistrarEvent interface {
@@ -32,8 +34,8 @@ type EventsEvent struct {
   Events []*FileEvent
 }
 
-func CreateEvent(fields map[string]*string, file *string, offset int64, line uint64, message *string) *map[string]interface{} {
-  event := map[string]interface{}{
+func NewEvent(fields map[string]*string, file *string, offset int64, line uint64, message *string) *Event {
+  event := Event{
     "file":   file,
     "offset": offset,
     "line":   message, // The lumberjack receiver expects "line" and not "message"
