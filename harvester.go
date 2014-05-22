@@ -26,7 +26,7 @@ func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
     return h.Offset, true
   }
 
-  h.Codec = h.FileConfig.codec.Create(h, output)
+  h.Codec = h.FileConfig.codec.NewCodec(h, output)
 
   defer h.file.Close()
 
