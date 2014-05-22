@@ -338,21 +338,21 @@ describe "logstash-forwarder" do
 
   it "should support multiline codec and emit blocks of lines as events" do
     startup <<-config
-		{
-			"network": {
-				"servers": [ "localhost:#{@server.port}" ],
-				"ssl ca": "#{@ssl_cert.path}",
-				"timeout": 15,
-				"reconnect": 1
-			},
-			"files": [
-				{
-					"paths": [ "#{@file.path}" ],
-          "codec": { "name": "multiline", "what": "next", "pattern": "^BEGIN", negate: true }
-				}
-			]
-		}
-		config
+    {
+      "network": {
+        "servers": [ "localhost:#{@server.port}" ],
+        "ssl ca": "#{@ssl_cert.path}",
+        "timeout": 15,
+        "reconnect": 1
+      },
+      "files": [
+        {
+          "paths": [ "#{@file.path}" ],
+          "codec": { "name": "multiline", "what": "next", "pattern": "^BEGIN", "negate": true }
+        }
+      ]
+    }
+    config
 
     count = rand(1000) + 5000
     count.times do |i|
