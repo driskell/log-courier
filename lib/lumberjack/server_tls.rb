@@ -4,16 +4,14 @@ require "timeout"
 require "openssl"
 require "zlib"
 
-module Lumberjack
+module Lumberjack2
   # Wrap around TCPServer to grab last error for use in reporting which peer had an error
   class ExtendedTCPServer < TCPServer
-    attr_reader :last_peer
-
     # Yield the peer
     def accept
       sock = super
       peer = sock.peeraddr(:numeric)
-      yield "#{peer[2]}:#{peer[1]}"
+      Thread.current["LumberjackPeer"] = "#{peer[2]}:#{peer[1]}"
       return sock
     end
   end
@@ -81,21 +79,20 @@ module Lumberjack
 
     def run(&block)
       client_threads = Hash.new
-
+      @logger.warn("ServerTls running")
       while true
-        peer = "unknown"
-
         # This means ssl accepting is single-threaded.
         begin
-          client = @ssl_server.accept do |accepted_peer|
-            peer = accepted_peer
-          end
+          client = @ssl_server.accept
         rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
           # Handshake failure or other issue
+          peer = Thread.current["LumberjackPeer"] || "unknown"
           @logger.warn "[LumberjackTLS] Connection from #{peer} failed to initialise: #{e}" if not @logger.nil?
           client.close rescue nil
           next
         end
+
+        peer = Thread.current["LumberjackPeer"] || "unknown"
 
     	  @logger.info "[LumberjackTLS] New connection from #{peer}" if not @logger.nil?
 
@@ -106,12 +103,15 @@ module Lumberjack
 
         # Start a new connection thread
         client_threads[client] = Thread.new(client, peer) do |client, peer|
+          @logger.warn("ServerTls new client from #{peer}")
           ConnectionTls.new(@logger, client, peer).run &block
         end
 
     	  # Reset client so if ssl_server.accept fails, we don't close the previous connection within rescue
     	  client = nil
       end
+    rescue => e
+      @logger.warn("ServerTls error: #{e}")
     ensure
       # Raise shutdown in all client threads and join then
       client_threads.each do |thr|
@@ -119,30 +119,32 @@ module Lumberjack
       end
 
       client_threads.each &:join
+
+      @logger.warn("ServerTls shutdown")
     end # ensure
   end # class ServerTls
 
   class ConnectionTls
     def initialize(logger, fd, peer)
-      super
       @logger = logger
       @fd = fd
       @peer = peer
     end
 
     def run
+      @logger.warn("ServerTls #{@peer} running")
       while true
         # Read messages
         # Each message begins with a header
         # 4 byte signature
         # 4 byte length
-        signature, length = recv(8).unpack("NN")
-
+        signature, length = recv(8).unpack("A4N")
+        @logger.warn("ServerTls #{@peer} received #{signature} length #{length}")
         # Sanity
         if length > 1048576
           raise ProtocolError
         end
-
+        @logger.warn("ServerTls #{@peer} receiving #{signature} then yielding")
         # Read the message
         yield signature, recv(length), self
       end
@@ -158,6 +160,7 @@ module Lumberjack
     rescue => e
       # Some other unknown problem
       @logger.warn("[Lumberjack] Unknown error on connection from #{@peer}: #{e}") if not @logger.nil?
+      @logger.warn("[Lumberjack] #{e.backtrace}: #{e.message} (#{e.class})") if not @logger.nil?
     ensure
       @fd.close rescue nil
     end
@@ -172,11 +175,12 @@ module Lumberjack
       elsif buffer.length < need
         raise ProtocolError
       end
-      @parser.feed buffer
+      buffer
     end
 
     def send(signature, message)
       reset_timeout
+      @logger.warn("ConnectionTls sending #{@peer} #{signature}")
       data = signature + [message.length].pack("N") + message
       Timeout::timeout(@timeout - Time.now.to_i) do
         written = @fd.write(data)

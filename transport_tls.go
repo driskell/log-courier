@@ -4,6 +4,7 @@ import (
   "bytes"
   "crypto/tls"
   "crypto/x509"
+  "encoding/binary"
   "encoding/pem"
   "errors"
   "fmt"
@@ -199,8 +200,46 @@ SendLoop:
 }
 
 func (t *TransportTls) receiver() {
-  // We only receive ACK at the moment, which is 6 bytes
-  msg := make([]byte, 6)
+  var err error
+  var shutdown bool
+  header := make([]byte, 8)
+
+  for {
+    if err, shutdown = t.receiverRead(header); err != nil || shutdown {
+      break
+    }
+
+    // Grab length of message
+    length := binary.BigEndian.Uint32(header[4:8])
+
+    // Sanity
+    if length > 1048576 {
+      t.recv_chan <- errors.New(fmt.Sprintf("Received message too large (%d)", length))
+    }
+
+    // Allocate for full message including header
+    message := make([]byte, 8 + length)
+    copy(message, header)
+
+    if err, shutdown = t.receiverRead(message[8:]); err != nil || shutdown {
+      break
+    }
+
+    // Pass back the message
+    t.recv_chan <- message
+    t.setChan(t.can_recv)
+  } /* loop until shutdown */
+
+  if err != nil {
+    // Pass the error back and abort
+    t.recv_chan <- err
+    t.setChan(t.can_recv)
+  }
+
+  t.wait.Done()
+}
+
+func (t *TransportTls) receiverRead(data []byte) (error, bool) {
   received := 0
 
 RecvLoop:
@@ -213,26 +252,22 @@ RecvLoop:
       // Timeout after socket_interval_seconds, check for shutdown, and try again
       t.socket.SetReadDeadline(time.Now().Add(socket_interval_seconds * time.Second))
 
-      length, err := t.socket.Read(msg[received:])
+      length, err := t.socket.Read(data[received:])
       received += length
-      if err == nil || received >= 6 {
-        // Pass the message back
-        t.recv_chan <- msg
-        msg = make([]byte, 6)
-        received = 0
+      if err == nil || received >= len(data) {
+        // Success
+        return nil, false
       } else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
         // Keep trying
         continue
       } else {
         // Pass an error back
-        t.recv_chan <- err
+        return err, false
       }
-
-      t.setChan(t.can_recv)
     } /* select */
-  } /* loop until shutdown */
+  } /* loop until required amount receive or shutdown */
 
-  t.wait.Done()
+  return nil, true
 }
 
 func (t *TransportTls) setChan(set chan int) {
