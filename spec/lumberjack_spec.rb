@@ -385,11 +385,117 @@ describe "logstash-forwarder" do
     insist { @event_queue }.empty?
   end
 
+  it "should follow a file, detect rotation, and when restarted, resume both correctly" do
+    # Get rid of @file2 for now - we'll use it for rotation
+    @file2.close
+    File.unlink(@file2.path)
+
+    startup
+
+    # Write a line to @file
+    @file.puts("hello 1")
+    @file.close
+
+    # Wait for logstash-forwarder to finish publishing data to us.
+    Stud::try(20.times) do
+      raise "have #{@event_queue.size}, want 1" if @event_queue.size < 1
+    end
+
+    # Now verify that we have the line
+    insist { @event_queue.size } == 1
+    host = Socket.gethostname
+    event = @event_queue.pop
+    insist { event["line"] } == "hello 1"
+    insist { event["host"] } == host
+    insist { @event_queue }.empty?
+
+    # Rename @file to @file2, then reopen @file and @file2 (@file2 will be the old @file)
+    File.rename @file.path, @file2.path
+    @file.reopen(@file.path, "a+")
+    @file2.reopen(@file2.path, "a+")
+
+    # Write to both
+    @file.puts("hello 2")
+    @file2.puts("hello 3")
+    @file.close
+    @file2.close
+
+    # Wait for logstash-forwarder to finish publishing data to us.
+    Stud::try(20.times) do
+      raise "have #{@event_queue.size}, want 2" if @event_queue.size < 2
+    end
+
+    # Now verify that we have the line
+    insist { @event_queue.size } == 2
+    host = Socket.gethostname
+    2.times do
+      event = @event_queue.pop
+      # Don't enforce ordering - other tests can - this is due to ["file"] same as harvester doesn't update for rename
+      if event["line"] != "hello 2" && event["line"] != "hello 3"
+        raise "wrong line content"
+      end
+      insist { event["host"] } == host
+    end
+    insist { @event_queue }.empty?
+
+    @file2.reopen(@file2.path, "a+")
+
+    # Ensure the last write to be processed hits @file2, the rotated file
+    # The bug is the offset of that file is saved instead of the offset of @file, under the name of @file, breaking resume
+    @file2.puts("hello 4")
+    @file2.close
+
+    # Wait for logstash-forwarder to finish publishing data to us.
+    Stud::try(20.times) do
+      raise "have #{@event_queue.size}, want 1" if @event_queue.size < 1
+    end
+
+    # Now verify that we have the line
+    insist { @event_queue.size } == 1
+    host = Socket.gethostname
+    event = @event_queue.pop
+    insist { event["line"] } == "hello 4"
+    insist { event["host"] } == host
+    insist { @event_queue }.empty?
+
+    # Now shutdown logstash
+    shutdown
+
+    # From beginning makes testing this easier - without it we'd need to create lines inbetween shutdown and start and verify them which is more work
+    startup "-from-beginning=true"
+    sleep(1) # let logstash-forwarder start up
+
+    @file.reopen(@file.path, "a+")
+    @file2.reopen(@file2.path, "a+")
+
+    # Write to both
+    @file.puts("hello 5")
+    @file2.puts("hello 6")
+    @file.close
+    @file2.close
+
+    # Wait for logstash-forwarder to finish publishing data to us.
+    Stud::try(20.times) do
+      raise "have #{@event_queue.size}, want 2" if @event_queue.size < 2
+    end
+
+    # Now verify that we have the line
+    insist { @event_queue.size } == 2
+    host = Socket.gethostname
+    2.times do
+      event = @event_queue.pop
+      # Don't enforce ordering - other tests can - this is due to ["file"] same as harvester doesn't update for rename
+      if event["line"] != "hello 5" && event["line"] != "hello 6"
+        raise "wrong line content"
+      end
+      insist { event["host"] } == host
+    end
+    insist { @event_queue }.empty?
+  end
+
   # TODO - test for multiline what=previous
 
   # TODO - test for multiline and previous timeout
 
   # TODO - test for multiline and resuming
-
-  # TODO - test for statefile save conflict on rename
 end
