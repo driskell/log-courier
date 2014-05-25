@@ -462,7 +462,7 @@ describe "logstash-forwarder" do
     shutdown
 
     # From beginning makes testing this easier - without it we'd need to create lines inbetween shutdown and start and verify them which is more work
-    startup "-from-beginning=true"
+    startup nil, "-from-beginning=true"
     sleep(1) # let logstash-forwarder start up
 
     @file.reopen(@file.path, "a+")

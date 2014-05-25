@@ -138,7 +138,6 @@ func (p *Prospector) scan(path string, config FileConfig, registrar_chan chan []
         log.Printf("File rename was detected: %s -> %s\n", previous, file)
 
         info = previousinfo
-        delete(p.prospectorinfo, previous)
         p.registrar_events = append(p.registrar_events, &RenamedEvent{ProspectorInfo: info, Source: file})
       } else if fileinfo.ModTime().Before(p.lastscan) && time.Since(fileinfo.ModTime()) > config.deadtime {
         var offset int64 = 0
