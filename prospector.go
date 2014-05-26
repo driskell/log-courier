@@ -266,18 +266,18 @@ func (p *Prospector) spawnHarvester(info *ProspectorInfo, output chan *FileEvent
 func (p *Prospector) calculateResume(file string, fileinfo os.FileInfo, resume map[string]*ProspectorResume) (int64, *ProspectorInfo) {
   last_state, is_found := resume[file]
 
-  if is_found && is_filestate_same(file, fileinfo, last_state.filestate) {
-    // We're resuming, return the offset
-    delete(resume, file)
-    return last_state.filestate.Offset, last_state.prospectorinfo
-  }
-
-  if previous := p.lookupFileIdsResume(file, fileinfo, resume); previous != "" {
-    // File has rotated between shutdown and startup, return offset to resume
-    log.Printf("Detected rename of a previously harvested file: %s -> %s\n", previous, file)
-    delete(resume, previous)
-    return last_state.filestate.Offset, last_state.prospectorinfo
-  }
+  if is_found {
+    if is_filestate_same(file, fileinfo, last_state.filestate) {
+      // We're resuming, return the offset
+      delete(resume, file)
+      return last_state.filestate.Offset, last_state.prospectorinfo
+    }
+  } else if previous, last_state := p.lookupFileIdsResume(file, fileinfo, resume); previous != "" {
+      // File has rotated between shutdown and startup, return offset to resume
+      log.Printf("Detected rename of a previously harvested file: %s -> %s\n", previous, file)
+      delete(resume, previous)
+      return last_state.filestate.Offset, last_state.prospectorinfo
+    }
 
   if is_found {
     log.Printf("Not resuming rotated file: %s\n", file)
@@ -311,15 +311,15 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *Pros
   return "", nil
 }
 
-func (p *Prospector) lookupFileIdsResume(file string, info os.FileInfo, initial map[string]*ProspectorResume) string {
+func (p *Prospector) lookupFileIdsResume(file string, info os.FileInfo, initial map[string]*ProspectorResume) (string, *ProspectorResume) {
   for kf, ki := range initial {
     if kf == file {
       continue
     }
     if is_filestate_same(file, info, ki.filestate) {
-      return kf
+      return kf, ki
     }
   }
 
-  return ""
+  return "", nil
 }
