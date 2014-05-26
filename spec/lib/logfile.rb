@@ -6,6 +6,7 @@ class LogFile
   def initialize(path)
     @file = File.open(path, "a+")
     @path = path
+    @orig_path = path
     @count = 0
 
     @host = Socket.gethostname
@@ -14,17 +15,18 @@ class LogFile
 
   def close
     @file.close if not @file.closed?
-    File.unlink(@file.path) if File.exists?(@file.path)
+    File.unlink(@path) if File.exists?(@path)
   end
 
   def rename(dst)
     File.rename @path, dst
+    @path = dst
   end
 
   def log(num=1)
     num.times do |i|
       i += @count + @next
-      @file.puts @path + " test event #{i}"
+      @file.puts @orig_path + " test event #{i}"
     end
     @file.flush
     @count += num
@@ -32,7 +34,7 @@ class LogFile
   end
 
   def log_partial_start
-    @file.write @path
+    @file.write @orig_path
     @file.flush
     self
   end
@@ -53,8 +55,8 @@ class LogFile
 
   def logged?(event, check_file=true)
     return false if event["host"] != @host
-    return false if check_file and event["file"] != @path
-    return false if event["line"] != @path + " test event #{@next}"
+    return false if check_file and event["file"] != @orig_path
+    return false if event["line"] != @orig_path + " test event #{@next}"
     @count -= 1
     @next += 1
     true
