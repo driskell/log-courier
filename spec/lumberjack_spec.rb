@@ -42,7 +42,7 @@ describe "logstash-forwarder" do
 
   it "should follow a file from the end" do
     # Hide lines in the file - this makes sure we start at the end of the file
-    f = create_log().log(50).skip
+    f = create_log.log(50).skip
 
     startup
 
@@ -54,7 +54,7 @@ describe "logstash-forwarder" do
 
   it "should follow a file from the beginning with parameter -from-beginning=true" do
     # Hide lines in the file - this makes sure we start at the beginning of the file
-    f = create_log().log(50)
+    f = create_log.log(50)
 
     startup args: "-from-beginning=true"
 
@@ -113,13 +113,18 @@ describe "logstash-forwarder" do
   end
 
   it "should start newly created files found after startup from beginning and not the end" do
+    # Create a file and hide it
+    f1 = create_log.log(5000)
+    path = f1.path
+    f1.rename File.join(File.dirname(path), "hide-" + File.basename(path))
+
     startup
 
-    f = create_log().log(5000)
+    f2 = create_log.log(5000)
 
-    sleep 2
-
-    f = create_log().log(5000)
+    # Throw the file back with all the content already there
+    # We can't just create a new one, it might pick it up before we write
+    f1.rename path
 
     # Receive and check
     receive_and_check
@@ -148,9 +153,7 @@ describe "logstash-forwarder" do
   it "should handle log rotation and resume correctly" do
     startup
 
-    # Write a line to @file
-    f1 = create_log
-    f1.log
+    f1 = create_log.log 100
 
     # Receive and check
     receive_and_check
@@ -180,9 +183,7 @@ describe "logstash-forwarder" do
   it "should handle log rotation and resume correctly even if rotated file updated" do
     startup
 
-    # Write a line to @file
-    f1 = create_log
-    f1.log
+    f1 = create_log.log 100
 
     # Receive and check
     receive_and_check
@@ -217,9 +218,7 @@ describe "logstash-forwarder" do
   it "should handle log rotation during startup resume" do
     startup
 
-    # Write a line to @file
-    f1 = create_log
-    f1.log
+    f1 = create_log.log 100
 
     # Receive and check
     receive_and_check
@@ -232,12 +231,85 @@ describe "logstash-forwarder" do
 
     # Write to both
     f1.log 5000
-    f2.log 5000
+    f2.log(5000).skip 5000
 
     # Start again
     startup
 
     # Receive and check - but not file as it will be different now
     receive_and_check check_file: false
+  end
+
+  it "should resume harvesting a file that reached dead time but changed again" do
+    startup config: <<-config
+    {
+      "network": {
+        "servers": [ "127.0.0.1:#{@server.port}" ],
+        "ssl ca": "#{@ssl_cert.path}",
+        "timeout": 15,
+        "reconnect": 1
+      },
+      "files": [
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-*" ],
+          "dead time": "5s"
+        }
+      ]
+    }
+    config
+
+    f1 = create_log.log(5000)
+
+    # Receive and check
+    receive_and_check
+
+    # Let dead time occur
+    sleep 15
+
+    # Write again
+    f1.log(5000)
+
+    # Receive and check
+    receive_and_check
+  end
+
+  it "should prune deleted files from registrar state" do
+    # We use dead time to make sure the harvester stops, as file deletion is only acted upon once the harvester stops
+    startup config: <<-config
+    {
+      "network": {
+        "servers": [ "127.0.0.1:#{@server.port}" ],
+        "ssl ca": "#{@ssl_cert.path}",
+        "timeout": 15,
+        "reconnect": 1
+      },
+      "files": [
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-*" ],
+          "dead time": "5s"
+        }
+      ]
+    }
+    config
+
+    # Write lines
+    f1 = create_log.log(5000)
+    f2 = create_log.log(5000)
+
+    # Receive and check
+    receive_and_check
+
+    # Grab size of the saved state - sleep to ensure it was saved
+    sleep 1
+    s = File::Stat.new(".logstash-forwarder").size
+
+    # Close and delete one of the files
+    f1.close
+
+    # Wait for prospector to realise it is deleted
+    sleep 15
+
+    # Check new size of registrar state
+    File::Stat.new(".logstash-forwarder").size.should < s
   end
 end
