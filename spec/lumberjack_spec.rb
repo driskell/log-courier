@@ -213,4 +213,31 @@ describe "logstash-forwarder" do
     # Receive and check - but not file as it will be different now
     receive_and_check check_file: false
   end
+
+  it "should handle log rotation during startup resume" do
+    startup
+
+    # Write a line to @file
+    f1 = create_log
+    f1.log
+
+    # Receive and check
+    receive_and_check
+
+    # Stop
+    shutdown
+
+    # Rotate f1 - this renames it and returns a new file same name as original f1
+    f2 = rotate(f1)
+
+    # Write to both
+    f1.log 5000
+    f2.log 5000
+
+    # Start again
+    startup
+
+    # Receive and check - but not file as it will be different now
+    receive_and_check check_file: false
+  end
 end
