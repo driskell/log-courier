@@ -1,501 +1,216 @@
-$: << File.realpath(File.join(File.dirname(__FILE__), "..", "lib"))
-require "tempfile"
-require "lumberjack/server"
-require "insist"
-require "stud/temporary"
-require "stud/try"
+require "lib/common"
+require "lib/helpers/lsf"
 
 describe "logstash-forwarder" do
-  before :each do
-    # TODO(sissel): Generate a self-signed SSL cert
-    @file = Stud::Temporary.file("logstash-forwarder-test-file")
-    @file2 = Stud::Temporary.file("logstash-forwarder-test-file")
-    @config = Stud::Temporary.file("logstash-forwarder-test-file")
-    @ssl_cert = Stud::Temporary.file("logstash-forwarder-test-file")
-    @ssl_key = Stud::Temporary.file("logstash-forwarder-test-file")
-    @ssl_csr = Stud::Temporary.file("logstash-forwarder-test-file")
+  include_context "Helpers"
+  include_context "Helpers_LSF"
 
-    # Generate the ssl key
-    system("openssl genrsa -out #{@ssl_key.path} 1024")
-    system("openssl req -new -key #{@ssl_key.path} -batch -out #{@ssl_csr.path}")
-    system("openssl x509 -req -days 365 -in #{@ssl_csr.path} -signkey #{@ssl_key.path} -out #{@ssl_cert.path}")
-
-    @server = Lumberjack::Server.new(
-      :ssl_certificate => @ssl_cert.path,
-      :ssl_key => @ssl_key.path
-    )
-
-    @event_queue = Queue.new
-    @server_thread = Thread.new do
-      @server.run do |event|
-        @event_queue << event
-      end
-    end
-  end # before each
-
-  after :each do
-    shutdown
-    [@file, @file2, @config, @ssl_cert, @ssl_key, @ssl_csr].each do |f|
-      if not f.closed?
-        f.close
-      end
-      if File.exists?(f.path)
-        File.unlink(f.path)
-      end
-    end
-    if File.exists?(".logstash-forwarder")
-      File.unlink(".logstash-forwarder")
-    end
-  end
-
-  def startup(config=nil, extra_args="")
-    # A standard configuration when we don't want anything special
-    if config == nil
-      config = <<-config
-      {
-        "network": {
-          "servers": [ "localhost:#{@server.port}" ],
-          "ssl ca": "#{@ssl_cert.path}",
-          "timeout": 15,
-          "reconnect": 1
-        },
-        "files": [
-          {
-            "paths": [ "#{@file.path}" ]
-          },
-          {
-            "paths": [ "#{@file2.path}" ]
-          }
-        ]
-      }
-      config
-    end
-
-    if @config.closed?
-      # Reopen the config and rewrite it
-      @config.reopen(@config.path, "w")
-    end
-    @config.puts(config)
-    @config.close
-
-    @logstash_forwarder = IO.popen("build/bin/logstash-forwarder -config #{@config.path}" + (extra_args.empty? ? "" : " " + extra_args), "r")
-    sleep 1 # let logstash-forwarder start up.
-  end # def startup
-
-  def shutdown
-    Process::kill("KILL", @logstash_forwarder.pid)
-    Process::wait(@logstash_forwarder.pid)
-  end # def shutdown
-
-  it "should follow a file from the end and emit lines as events" do
-    # Hide 50 lines in the file - this makes sure we start at the end of the file
-    initialcount = 50
-    initialcount.times do |i|
-      @file.puts("test #{i}")
-    end
-    @file.close
-
-    @file.reopen(@file.path, "a+")
-
-    startup
-
-    count = rand(5000) + 25000
-    count.times do |i|
-      @file.puts("hello #{i}")
-    end
-    @file.close
-
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want #{count}" if @event_queue.size < count
-    end
-
-    # Now verify that we have all the data and in the correct order.
-    insist { @event_queue.size } == count
-    host = Socket.gethostname
-    count.times do |i|
-      event = @event_queue.pop
-      insist { event["line"] } == "hello #{i}"
-      insist { event["file"] } == @file.path
-      insist { event["host"] } == host
-    end
-    insist { @event_queue }.empty?
-  end
-
-  it "should follow a file from the beginning and emit lines as events" do
-    # Hide 50 lines in the file - this makes sure we start at the end of the file
-    initialcount = 50
-    initialcount.times do |i|
-      @file.puts("test #{i}")
-    end
-    @file.close
-
-    @file.reopen(@file.path, "a+")
-
-    startup nil, "-from-beginning=true"
-
-    count = rand(5000) + 25000
-    count.times do |i|
-      @file.puts("hello #{i}")
-    end
-    @file.close
-
-    totalcount = count + initialcount
-
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want #{totalcount}" if @event_queue.size < totalcount
-    end
-
-    # Now verify that we have all the data and in the correct order.
-    insist { @event_queue.size } == totalcount
-    host = Socket.gethostname
-    initialcount.times do |i|
-      event = @event_queue.pop
-      insist { event["line"] } == "test #{i}"
-      insist { event["file"] } == @file.path
-      insist { event["host"] } == host
-    end
-    count.times do |i|
-      event = @event_queue.pop
-      insist { event["line"] } == "hello #{i}"
-      insist { event["file"] } == @file.path
-      insist { event["host"] } == host
-    end
-    insist { @event_queue }.empty?
-  end
-
-  it "should follow a slowly-updating file and emit lines as events" do
-    startup
-
-    count = rand(50) + 1000
-    count.times do |i|
-      @file.puts("fizzle #{i}")
-
-      # Start fast, then go slower after 80% of the events
-      if i > (count * 0.8)
-        @file.flush # So we don't get stupid delays
-        sleep(rand * 0.200) # sleep up to 200ms
-      end
-    end
-    @file.close
-
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want #{count}" if @event_queue.size < count
-    end
-
-    # Now verify that we have all the data and in the correct order.
-    insist { @event_queue.size } == count
-    host = Socket.gethostname
-    count.times do |i|
-      event = @event_queue.pop
-      insist { event["line"] } == "fizzle #{i}"
-      insist { event["file"] } == @file.path
-      insist { event["host"] } == host
-    end
-    insist { @event_queue }.empty?
-  end
-
-  it "should follow multiple file, and when restarted, resume them" do
-    startup
-
-    finish = false
-    while true
-      count = rand(2500) + 12500
-      totalcount = count * 2
-      count.times do |i|
-        if finish
-          i += count # So the second set of lines have unique numbers
-        end
-        @file.puts("hello #{i}")
-        @file2.puts("hello #{i}")
-      end
-      @file.close
-      @file2.close
-
-      # Wait for logstash-forwarder to finish publishing data to us.
-      Stud::try(20.times) do
-        raise "have #{@event_queue.size}, want #{totalcount}" if @event_queue.size < totalcount
-      end
-
-      # Now verify that we have all the data and in the correct order.
-      insist { @event_queue.size } == totalcount
-      host = Socket.gethostname
-      if finish
-        count1 = count
-        count2 = count
-      else
-        count1 = 0
-        count2 = 0
-      end
-      totalcount.times do |i|
-        event = @event_queue.pop
-        if event["file"] == @file.path
-          insist { event["line"] } == "hello #{count1}"
-          count1 += 1
-        else
-          insist { event["file"] } == @file2.path
-          insist { event["line"] } == "hello #{count2}"
-          count2 += 1
-        end
-        insist { event["host"] } == host
-      end
-      insist { @event_queue }.empty?
-
-      break if finish
-
-      # Now restart logstash
-      shutdown
-
-      # Reopen the files for more output
-      @file.reopen(@file.path, "a+")
-      @file2.reopen(@file2.path, "a+")
-
-      # From beginning makes testing this easier - without it we'd need to create lines inbetween shutdown and start and verify them which is more work
-      startup nil, "-from-beginning=true"
-      sleep(1) # let logstash-forwarder start up
-
-      finish = true
-    end
-  end
-
-  it "should start newly created files found after startup from beginning and not the end" do
-    @file2.close
-    File.unlink(@file2.path)
-
-    startup
-
-    count = rand(2500) + 12500
-    totalcount = count * 2
-    count.times do |i|
-      @file.puts("hello #{i}")
-    end
-    @file.close
-
-    sleep(2)
-
-    FileUtils.cp(@file.path, @file2.path)
-
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want #{totalcount}" if @event_queue.size < totalcount
-    end
-
-    # Now verify that we have all the data and in the correct order.
-    insist { @event_queue.size } == totalcount
-    host = Socket.gethostname
-    count1 = 0
-    count2 = 0
-    totalcount.times do |i|
-      event = @event_queue.pop
-      if event["file"] == @file.path
-        insist { event["line"] } == "hello #{count1}"
-        count1 += 1
-      else
-        insist { event["file"] } == @file2.path
-        insist { event["line"] } == "hello #{count2}"
-        count2 += 1
-      end
-      insist { event["host"] } == host
-    end
-    insist { @event_queue }.empty?
-  end
-
-  it "should handle delayed new lines past eof_timeout and emit lines as events" do
-    startup
-
-    count = rand(50) + 1000
-    count.times do |i|
-      if (i + 100) % (count / 2) == 0
-        # Make 2 events where we pause for >10s before adding new line, this takes us past eof_timeout
-        @file.write("fizzle")
-        @file.flush
-        sleep(15)
-        @file.write(" #{i}\n")
-      else
-        @file.puts("fizzle #{i}")
-      end
-    end
-    @file.close
-
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want #{count}" if @event_queue.size < count
-    end
-
-    # Now verify that we have all the data and in the correct order.
-    insist { @event_queue.size } == count
-    host = Socket.gethostname
-    count.times do |i|
-      event = @event_queue.pop
-      insist { event["line"] } == "fizzle #{i}"
-      insist { event["file"] } == @file.path
-      insist { event["host"] } == host
-    end
-    insist { @event_queue }.empty?
-  end
-
-  it "should support multiline codec and emit blocks of lines as events" do
-    startup <<-config
+  it "should follow stdin" do
+    startup mode: "w", config: <<-config
     {
       "network": {
-        "servers": [ "localhost:#{@server.port}" ],
+        "servers": [ "127.0.0.1:#{@server.port}" ],
         "ssl ca": "#{@ssl_cert.path}",
         "timeout": 15,
         "reconnect": 1
       },
       "files": [
         {
-          "paths": [ "#{@file.path}" ],
-          "codec": { "name": "multiline", "what": "previous", "pattern": "^BEGIN", "negate": true }
+          "paths": [ "-" ]
         }
       ]
     }
     config
 
-    count = rand(1000) + 5000
-    count.times do |i|
-      @file.puts("BEGIN hello #{i}")
-      @file.puts("hello #{i}")
-      @file.puts("hello #{i}")
-      @file.puts("hello #{i}")
-    end
-    @file.close
-
-    # We will always be missing the last line - this is currently acceptable
-    # Reason is we will not know if the multiline is finished until we see another BEGIN or we hit the old age timeout (24h)
-    # TODO(driskell): Make this unacceptable and force a flush of multiline after read_timeout (10s currently)
-    count -= 1
-
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want #{count}" if @event_queue.size < count
+    5000.times do |i|
+      @logstash_forwarder.puts "stdin line test #{i}"
     end
 
-    # Now verify that we have all the data and in the correct order.
-    insist { @event_queue.size } == count
+    # Receive and check
+    wait_for_events 5000
+
     host = Socket.gethostname
-    count.times do |i|
-      event = @event_queue.pop
-      insist { event["line"] } == "BEGIN hello #{i}" + $/ + "hello #{i}" + $/ + "hello #{i}" + $/ + "hello #{i}"
-      insist { event["file"] } == @file.path
-      insist { event["host"] } == host
+    i = 0
+    while @event_queue.length > 0
+      e = @event_queue.pop
+      e["line"].should == "stdin line test #{i}"
+      e["host"].should == host
+      e["file"].should == "-"
+      i += 1
     end
-    insist { @event_queue }.empty?
   end
 
-  it "should follow a file, detect rotation, and when restarted, resume both correctly" do
-    # Get rid of @file2 for now - we'll use it for rotation
-    @file2.close
-    File.unlink(@file2.path)
+  it "should follow a file from the end" do
+    # Hide lines in the file - this makes sure we start at the end of the file
+    f = create_log().log(50).skip
 
     startup
 
-    # Write a line to @file
-    @file.puts("hello 1")
-    @file.close
+    f.log 5000
 
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want 1" if @event_queue.size < 1
-    end
+    # Receive and check
+    receive_and_check
+  end
 
-    # Now verify that we have the line
-    insist { @event_queue.size } == 1
-    host = Socket.gethostname
-    event = @event_queue.pop
-    insist { event["line"] } == "hello 1"
-    insist { event["host"] } == host
-    insist { @event_queue }.empty?
+  it "should follow a file from the beginning with parameter -from-beginning=true" do
+    # Hide lines in the file - this makes sure we start at the beginning of the file
+    f = create_log().log(50)
 
-    # Rename @file to @file2, then reopen @file and @file2 (@file2 will be the old @file)
-    File.rename @file.path, @file2.path
-    @file.reopen(@file.path, "a+")
-    @file2.reopen(@file2.path, "a+")
+    startup args: "-from-beginning=true"
 
-    # Write to both
-    @file.puts("hello 2")
-    @file2.puts("hello 3")
-    @file.close
-    @file2.close
+    f.log 5000
 
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want 2" if @event_queue.size < 2
-    end
+    # Receive and check
+    receive_and_check
+  end
 
-    # Now verify that we have the line
-    insist { @event_queue.size } == 2
-    host = Socket.gethostname
-    2.times do
-      event = @event_queue.pop
-      # Don't enforce ordering - other tests can - this is due to ["file"] same as harvester doesn't update for rename
-      if event["line"] != "hello 2" && event["line"] != "hello 3"
-        raise "wrong line content"
+  it "should follow a slowly-updating file" do
+    startup
+
+    f = create_log
+
+    100.times do |i|
+      f.log 50
+
+      # Start fast, then go slower after 80% of the events
+      if i > 80
+        sleep 0.2
       end
-      insist { event["host"] } == host
-    end
-    insist { @event_queue }.empty?
-
-    @file2.reopen(@file2.path, "a+")
-
-    # Ensure the last write to be processed hits @file2, the rotated file
-    # The bug is the offset of that file is saved instead of the offset of @file, under the name of @file, breaking resume
-    @file2.puts("hello 4")
-    @file2.close
-
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want 1" if @event_queue.size < 1
     end
 
-    # Now verify that we have the line
-    insist { @event_queue.size } == 1
-    host = Socket.gethostname
-    event = @event_queue.pop
-    insist { event["line"] } == "hello 4"
-    insist { event["host"] } == host
-    insist { @event_queue }.empty?
+    # Receive and check
+    receive_and_check
+  end
 
-    # Now shutdown logstash
+  it "should follow multiple files and resume them when restarted" do
+    startup
+
+    f1 = create_log
+    f2 = create_log
+    5000.times do
+      f1.log
+      f2.log
+    end
+
+    # Receive and check
+    receive_and_check
+
+    # Now restart logstash
     shutdown
 
     # From beginning makes testing this easier - without it we'd need to create lines inbetween shutdown and start and verify them which is more work
-    startup nil, "-from-beginning=true"
-    sleep(1) # let logstash-forwarder start up
+    startup args: "-from-beginning=true"
 
-    @file.reopen(@file.path, "a+")
-    @file2.reopen(@file2.path, "a+")
-
-    # Write to both
-    @file.puts("hello 5")
-    @file2.puts("hello 6")
-    @file.close
-    @file2.close
-
-    # Wait for logstash-forwarder to finish publishing data to us.
-    Stud::try(20.times) do
-      raise "have #{@event_queue.size}, want 2" if @event_queue.size < 2
+    f1 = create_log
+    f2 = create_log
+    5000.times do
+      f1.log
+      f2.log
     end
 
-    # Now verify that we have the line
-    insist { @event_queue.size } == 2
-    host = Socket.gethostname
-    2.times do
-      event = @event_queue.pop
-      # Don't enforce ordering - other tests can - this is due to ["file"] same as harvester doesn't update for rename
-      if event["line"] != "hello 5" && event["line"] != "hello 6"
-        raise "wrong line content"
-      end
-      insist { event["host"] } == host
-    end
-    insist { @event_queue }.empty?
+    # Receive and check
+    receive_and_check
   end
 
-  # TODO - test for multiline what=previous
+  it "should start newly created files found after startup from beginning and not the end" do
+    startup
 
-  # TODO - test for multiline and previous timeout
+    f = create_log().log(5000)
 
-  # TODO - test for multiline and resuming
+    sleep 2
+
+    f = create_log().log(5000)
+
+    # Receive and check
+    receive_and_check
+  end
+
+  it "should handle incomplete lines in buffered logs by waiting for a line end" do
+    startup
+
+    f = create_log
+
+    1000.times do |i|
+      if (i + 100) % 500 == 0
+        # Make 2 events where we pause for >10s before adding new line, this takes us past eof_timeout
+        f.log_partial_start
+        sleep 15
+        f.log_partial_end
+      else
+        f.log
+      end
+    end
+
+    # Receive and check
+    receive_and_check
+  end
+
+  it "should handle log rotation and resume correctly" do
+    startup
+
+    # Write a line to @file
+    f1 = create_log
+    f1.log
+
+    # Receive and check
+    receive_and_check
+
+    # Rotate f1 - this renames it and returns a new file same name as original f1
+    f2 = rotate(f1)
+
+    # Write to both
+    f1.log 5000
+    f2.log 5000
+
+    # Receive and check
+    receive_and_check
+
+    # Restart
+    shutdown
+    startup
+
+    # Write some more
+    f1.log 5000
+    f2.log 5000
+
+    # Receive and check - but not file as it will be different now
+    receive_and_check check_file: false
+  end
+
+  it "should handle log rotation and resume correctly even if rotated file updated" do
+    startup
+
+    # Write a line to @file
+    f1 = create_log
+    f1.log
+
+    # Receive and check
+    receive_and_check
+
+    # Rotate f1 - this renames it and returns a new file same name as original f1
+    f2 = rotate(f1)
+
+    # Write to both
+    f1.log 5000
+    f2.log 5000
+
+    # Make the last update go to f1 (the rotated file)
+    # This can throw up an edge case we used to fail
+    sleep 10
+    f1.log 5000
+
+    # Receive and check
+    receive_and_check
+
+    # Restart
+    shutdown
+    startup
+
+    # Write some more
+    f1.log 5000
+    f2.log 5000
+
+    # Receive and check - but not file as it will be different now
+    receive_and_check check_file: false
+  end
 end
