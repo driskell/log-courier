@@ -22,4 +22,8 @@ RSpec.configure do |config|
   config.after :each do |x|
     puts "\n\n"
   end
+
+  config.before :all do
+    puts "\n\n"
+  end
 end
