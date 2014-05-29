@@ -180,6 +180,38 @@ describe "logstash-forwarder" do
     receive_and_check check_file: false
   end
 
+  it "should handle log rotation and resume correctly even if rotated file moves out of scope" do
+    startup
+
+    f1 = create_log.log 100
+
+    # Receive and check
+    receive_and_check
+
+    # Rotate f1 - this renames it and returns a new file same name as original f1
+    # But prefix it so it moves out of scope
+    f2 = rotate(f1)
+
+    # Write to both - but a bit more to the out of scope
+    f1.log 5000
+    f2.log 5000
+    f1.log 5000
+
+    # Receive and check
+    receive_and_check
+
+    # Restart
+    shutdown
+    startup
+
+    # Write some more but remember f1 should be out of scope
+    f1.log(5000).skip 5000
+    f2.log 5000
+
+    # Receive and check - but not file as it will be different now
+    receive_and_check check_file: false
+  end
+
   it "should handle log rotation and resume correctly even if rotated file updated" do
     startup
 
