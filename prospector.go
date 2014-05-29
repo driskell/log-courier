@@ -8,28 +8,71 @@ import (
 )
 
 type ProspectorInfo struct {
-  fileinfo    os.FileInfo /* the file info */
-  last_offset chan int64  /* the harvester will send an event with its offset when it closes */
-  failed      bool        /* whether the harvester failed to start or finished successfully */
-  last_seen   uint32      /* the last iteration ID in which we saw this file */
+  file string
+  identity FileIdentity
+  last_seen uint32
+  harvester_cb chan int64
+  status int
+  running    bool
+  finish_offset int64
 }
 
-type ProspectorResume struct {
-  prospectorinfo *ProspectorInfo /* the prospectorinfo the registrar is using */
-  filestate      *FileState      /* the saved file state */
+const (
+  Status_Ok     = iota
+  Status_Resume = iota
+  Status_Failed = iota
+)
+
+func NewProspectorInfoFromFileState(file string, filestate *FileState) *ProspectorInfo {
+  return &ProspectorInfo{
+    file: file,
+    identity: filestate,
+    harvester_cb: make(chan int64, 1),
+    running: false,
+    status: Status_Resume,
+    finish_offset: filestate.Offset,
+  }
+}
+
+func NewProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *ProspectorInfo {
+  return &ProspectorInfo{
+    file: file,
+    identity: &FileInfo{fileinfo: fileinfo},
+    harvester_cb: make(chan int64, 1),
+    running: false,
+  }
+}
+
+func (pi *ProspectorInfo) IsRunning() bool {
+  if pi.running {
+    select {
+      case pi.finish_offset = <-pi.harvester_cb:
+        pi.running = false
+      default:
+    }
+  }
+  return pi.running
+}
+
+func (pi *ProspectorInfo) Update(fileinfo os.FileInfo, iteration uint32) {
+  // Allow identity to replace itself with a new identity (this allows a FileState to promote itself to a FileInfo)
+  pi.identity.Update(fileinfo, &pi.identity)
+  pi.last_seen = iteration
 }
 
 type Prospector struct {
   FileConfigs      []FileConfig
   prospectorinfo   map[string]*ProspectorInfo
-  missinginfo      map[string]*ProspectorInfo
+  orphanedinfo     map[*ProspectorInfo]*ProspectorInfo
+  from_beginning   bool
   iteration        uint32
   lastscan         time.Time
   registrar_events []RegistrarEvent
 }
 
-func (p *Prospector) Prospect(resume map[string]*ProspectorResume, registrar_chan chan []RegistrarEvent, output chan *FileEvent) {
-  p.prospectorinfo = make(map[string]*ProspectorInfo)
+func (p *Prospector) Prospect(resume map[string]*ProspectorInfo, registrar_chan chan<- []RegistrarEvent, output chan<- *FileEvent) {
+  // Pre-populate prospectorinfo with what we had previously
+  p.prospectorinfo = resume
 
   // Handle any "-" (stdin) paths - but only once
   stdin_started := false
@@ -38,7 +81,7 @@ func (p *Prospector) Prospect(resume map[string]*ProspectorResume, registrar_cha
       if path == "-" {
         if !stdin_started {
           // Offset and Initial never get used when path is "-"
-          harvester := Harvester{Path: path, FileConfig: config}
+          harvester := NewHarvester(nil, &config, 0)
           go harvester.Harvest(output)
           stdin_started = true
         }
@@ -49,26 +92,43 @@ func (p *Prospector) Prospect(resume map[string]*ProspectorResume, registrar_cha
     }
   }
 
-  newlastscan := time.Now()
   p.registrar_events = make([]RegistrarEvent, 0)
 
-  // To keep the old inode/dev reference if we see a file has renamed, in case it was also renamed prior
-  p.missinginfo = make(map[string]*ProspectorInfo)
+  // To keep orphaned prospectors resulting from rename detections etc
+  p.orphanedinfo = make(map[*ProspectorInfo]*ProspectorInfo)
 
-  // Now let's do one quick scan to pick up new files - flag true so new files obey from-beginning
-  for _, config := range p.FileConfigs {
-    for _, path := range config.Paths {
-      p.scan(path, config, registrar_chan, output, resume)
-    }
-  }
-
-  // Send deletion events for resumes that weren't used
-  for _, resume_entry := range resume {
-    p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: resume_entry.prospectorinfo})
-  }
+  // On first scan use from_beginning setting, then always from beginning
+  p.from_beginning = *from_beginning
 
   for {
-    // Flush registrar events
+
+    newlastscan := time.Now()
+    p.iteration++ // Overflow is allowed
+
+    for _, config := range p.FileConfigs {
+      for _, path := range config.Paths {
+        // Scan - flag false so new files always start at beginning
+        p.scan(path, &config, registrar_chan, output)
+      }
+    }
+
+    p.from_beginning = true
+
+    // Clear out entries that no longer exist and we've stopped harvesting
+    for file, info := range p.prospectorinfo {
+      if !info.IsRunning() && info.last_seen < p.iteration {
+        p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
+        delete(p.prospectorinfo, file)
+      }
+    }
+    for _, info := range p.orphanedinfo {
+      if !info.IsRunning() {
+        p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
+        delete(p.orphanedinfo, info)
+      }
+    }
+
+    // Flush the accumulated registrar events
     if len(p.registrar_events) != 0 {
       registrar_chan <- p.registrar_events
     }
@@ -77,32 +137,11 @@ func (p *Prospector) Prospect(resume map[string]*ProspectorResume, registrar_cha
     p.registrar_events = make([]RegistrarEvent, 0)
 
     // Defer next scan for a bit.
-    time.Sleep(10 * time.Second) // Make this tunable
-
-    newlastscan = time.Now()
-    p.iteration++ // Overflow is allowed
-
-    // To keep the old inode/dev reference if we see a file has renamed, in case it was also renamed prior
-    p.missinginfo = make(map[string]*ProspectorInfo)
-
-    for _, config := range p.FileConfigs {
-      for _, path := range config.Paths {
-        // Scan - flag false so new files always start at beginning
-        p.scan(path, config, registrar_chan, output, nil)
-      }
-    }
-
-    // Clear out files that disappeared and we've stopped harvesting
-    for file, info := range p.prospectorinfo {
-      if len(info.last_offset) != 0 && info.last_seen < p.iteration {
-        p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
-        delete(p.prospectorinfo, file)
-      }
-    }
+    time.Sleep(10 * time.Second) // TODO: Make this tunable
   }
-} /* Prospect */
+}
 
-func (p *Prospector) scan(path string, config FileConfig, registrar_chan chan []RegistrarEvent, output chan *FileEvent, resume map[string]*ProspectorResume) {
+func (p *Prospector) scan(path string, config *FileConfig, registrar_chan chan<- []RegistrarEvent, output chan<- *FileEvent) {
   // Evaluate the path as a wildcards/shell glob
   matches, err := filepath.Glob(path)
   if err != nil {
@@ -136,155 +175,102 @@ func (p *Prospector) scan(path string, config FileConfig, registrar_chan chan []
       if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
         // This file was simply renamed (known inode+dev) - link the same harvester channel as the old file
         log.Printf("File rename was detected: %s -> %s\n", previous, file)
-
         info = previousinfo
+        info.file = file
+
         p.registrar_events = append(p.registrar_events, &RenamedEvent{ProspectorInfo: info, Source: file})
       } else if fileinfo.ModTime().Before(p.lastscan) && time.Since(fileinfo.ModTime()) > config.deadtime {
-        var offset int64 = 0
-        var is_resuming bool = false
+        // Old file, skip it, but push offset of file size so we start from the end if this file changes and needs picking up
+        log.Printf("Skipping file (older than dead time of %v): %s\n", config.deadtime, file)
+        info = NewProspectorInfoFromFileInfo(file, fileinfo)
 
-        if resume != nil {
-          // Call the calculator - it will process resume state if there is one
-          offset, info = p.calculateResume(file, fileinfo, resume)
-        }
+        // Store the offset that we should resume from if we notice a modification
+        info.finish_offset = fileinfo.Size()
 
-        if info == nil {
-          info = &ProspectorInfo{last_offset: make(chan int64, 1)}
-        } else {
-          is_resuming = true
-        }
-
-        // Are we resuming a dead file? We have to resume even if dead so we catch any old updates to the file
-        // This is safe as the harvester, once it hits the EOF and a timeout, will stop harvesting
-        // Once we detect changes again we can resume another harvester again - this keeps number of go routines to a minimum
-        if is_resuming {
-          log.Printf("Resuming harvester on a previously harvested file: %s\n", file)
-
-          p.spawnHarvester(info, output, &Harvester{ProspectorInfo: info, FileInfo: fileinfo, Path: file, FileConfig: config, Offset: offset})
-        } else {
-          // Old file, skip it, but push offset of file size so we start from the end if this file changes and needs picking up
-          log.Printf("Skipping file (older than dead time of %v): %s\n", config.deadtime, file)
-          info.last_offset <- fileinfo.Size()
-          info.failed = false
-          p.registrar_events = append(p.registrar_events, &NewFileEvent{ProspectorInfo: info, Source: file, Offset: fileinfo.Size(), fileinfo: &fileinfo})
-        }
+        p.registrar_events = append(p.registrar_events, &NewFileEvent{ProspectorInfo: info, Source: file, Offset: fileinfo.Size(), fileinfo: fileinfo})
       } else {
-        var initial bool = false
-        var offset int64 = 0
-        var is_resuming bool = false
+        log.Printf("Launching harvester on new file: %s\n", file)
+        info = NewProspectorInfoFromFileInfo(file, fileinfo)
 
-        if resume != nil {
-          // Call the calculator - it will process resume state if there is one
-          offset, info = p.calculateResume(file, fileinfo, resume)
-          initial = true
-        }
-
-        if info == nil {
-          info = &ProspectorInfo{last_offset: make(chan int64, 1)}
-        } else {
-          is_resuming = true
-        }
-
-        // Are we resuming a file or is this a completely new file?
-        if is_resuming {
-          log.Printf("Resuming harvester on a previously harvested file: %s\n", file)
-
-          // By setting initial to false we ensure that offset is always obeyed, even on first scan, which is necessary for resume
-          initial = false
-        } else {
-          log.Printf("Launching harvester on new file: %s\n", file)
-          p.registrar_events = append(p.registrar_events, &NewFileEvent{ProspectorInfo: info, Source: file, Offset: offset, fileinfo: &fileinfo})
-        }
-
-        // Launch the harvester - if initial is true it means ignore offset and choose end if this is first scan, and choose beginning if subsequence scan
-        // This ensures we always pick up new logs from start - and only skip to end if we've just started up
-        p.spawnHarvester(info, output, &Harvester{ProspectorInfo: info, FileInfo: fileinfo, Path: file, FileConfig: config, Offset: offset, Initial: initial})
+        // Process new file
+        p.startHarvester(info, output, config)
       }
     } else {
-      if !os.SameFile(info.fileinfo, fileinfo) {
-        // Keep the old file in missinginfo so we don't rescan it if it was renamed and we've not yet reached the new filename
-        // We only need to keep it for the remainder of this iteration then we can assume it was deleted and forget about it
-        p.missinginfo[file] = info
+      if !info.identity.SameAs(fileinfo) {
+        // Keep the old file in orphanedinfo in case we find it again shortly
+        p.orphanedinfo[info] = info
 
         if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
           // This file was renamed from another file we know - link the same harvester channel as the old file
           log.Printf("File rename was detected: %s -> %s\n", previous, file)
-
           info = previousinfo
+          info.file = file
+
           p.registrar_events = append(p.registrar_events, &RenamedEvent{ProspectorInfo: info, Source: file})
         } else {
           // File is not the same file we saw previously, it must have rotated and is a new file
           log.Printf("Launching harvester on rotated file: %s\n", file)
 
           // Forget about the previous harvester and let it continue on the old file - so start a new channel to use with the new harvester
-          info = &ProspectorInfo{last_offset: make(chan int64, 1)}
-          p.registrar_events = append(p.registrar_events, &NewFileEvent{ProspectorInfo: info, Source: file, Offset: 0, fileinfo: &fileinfo})
+          info = NewProspectorInfoFromFileInfo(file, fileinfo)
 
-          // Start a harvester on the path
-          p.spawnHarvester(info, output, &Harvester{ProspectorInfo: info, FileInfo: fileinfo, Path: file, FileConfig: config, Initial: (resume != nil)})
-        }
-      } else if len(info.last_offset) != 0 {  // This should be safe since we are the only receiver
-        restart := false
-
-        if info.fileinfo.ModTime() != fileinfo.ModTime() {
-          // Resume harvesting of an old file we've stopped harvesting from
-          log.Printf("Resuming harvester on an old file that was just modified: %s\n", file)
-
-          restart = true
-        } else if info.failed {
-          // Last attempt we failed to start, try again
-          log.Printf("Attempting to restart failed harvester: %s\n", file)
-
-          restart = true
-        }
-
-        if (restart) {
-          // The offset to continue from will be stored in the harvester channel - so take that to use and also clear the channel
-          p.spawnHarvester(info, output, &Harvester{ProspectorInfo: info, FileInfo: fileinfo, Path: file, FileConfig: config, Offset: <-info.last_offset})
+          // Process new file
+          p.startHarvester(info, output, config)
         }
       }
     }
 
     // Update the fileinfo information used for future comparisons, and the last_seen counter
-    info.fileinfo = fileinfo
-    info.last_seen = p.iteration
-
-    // Track the stat data for this file for later comparison to check for
-    // rotation/etc
+    info.Update(fileinfo, p.iteration)
     p.prospectorinfo[file] = info
+
+    // Resume harvesters for files we're still monitoring if they happen to stop for whatever reason
+    if !info.IsRunning() {
+      if info.identity.Stat().ModTime() != fileinfo.ModTime() {
+        // Resume harvesting of an old file we've stopped harvesting from
+        log.Printf("Resuming harvester on an old file that was just modified: %s\n", file)
+      } else if info.status == Status_Failed {
+        // Last attempt we failed to start, try again
+        log.Printf("Attempting to restart failed harvester: %s\n", file)
+      } else if info.status == Status_Resume {
+        // This is a filestate that was saved, resume the harvester
+        log.Printf("Resuming harvester on a previously harvested file: %s\n", file)
+      } else {
+        continue
+      }
+
+      p.startHarvesterWithOffset(info, output, config, info.finish_offset)
+    }
   } // for each file matched by the glob
 }
 
-func (p *Prospector) spawnHarvester(info *ProspectorInfo, output chan *FileEvent, harvester *Harvester) {
-  go func() {
-    var offset int64
-    offset, info.failed = harvester.Harvest(output)
-    info.last_offset <- offset
-  }()
-}
+func (p *Prospector) startHarvester(info *ProspectorInfo, output chan<- *FileEvent, config *FileConfig) {
+  var offset int64
 
-func (p *Prospector) calculateResume(file string, fileinfo os.FileInfo, resume map[string]*ProspectorResume) (int64, *ProspectorInfo) {
-  last_state, is_found := resume[file]
-
-  if is_found {
-    if is_filestate_same(file, fileinfo, last_state.filestate) {
-      // We're resuming, return the offset
-      delete(resume, file)
-      return last_state.filestate.Offset, last_state.prospectorinfo
-    }
-  } else if previous, last_state := p.lookupFileIdsResume(file, fileinfo, resume); previous != "" {
-      // File has rotated between shutdown and startup, return offset to resume
-      log.Printf("Detected rename of a previously harvested file: %s -> %s\n", previous, file)
-      delete(resume, previous)
-      return last_state.filestate.Offset, last_state.prospectorinfo
-    }
-
-  if is_found {
-    log.Printf("Not resuming rotated file: %s\n", file)
+  if p.from_beginning {
+    offset = 0
+  } else {
+    offset = info.identity.Stat().Size()
   }
 
-  // New file so just start from an automatic position
-  return 0, nil
+  // Send a new file event to allow registrar to begin persisting for this harvester
+  p.registrar_events = append(p.registrar_events, &NewFileEvent{ProspectorInfo: info, Source: info.file, Offset: offset, fileinfo: info.identity.Stat()})
+
+  p.startHarvesterWithOffset(info, output, config, offset)
+}
+
+func (p *Prospector) startHarvesterWithOffset(info *ProspectorInfo, output chan<- *FileEvent, config *FileConfig, offset int64) {
+  // TODO - hook in a shutdown channel
+  harvester := NewHarvester(info, config, offset)
+  info.running = true
+  info.status = Status_Ok
+  go func() {
+    offset, failed := harvester.Harvest(output)
+    if failed {
+      info.status = Status_Failed
+    }
+    info.harvester_cb <- offset
+  }()
 }
 
 func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *ProspectorInfo) {
@@ -293,7 +279,7 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *Pros
     if kf == file {
       continue
     }
-    if os.SameFile(ki.fileinfo, info) {
+    if ki.identity.SameAs(info) {
       // OK must be a rename, so remove this entry from prospector info and return it, it'll be added again
       delete(p.prospectorinfo, kf)
       return kf, ki
@@ -301,23 +287,10 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *Pros
   }
 
   // Now check the missingfiles
-  for kf, ki := range p.missinginfo {
-    if os.SameFile(ki.fileinfo, info) {
-      delete(p.missinginfo, kf)
-      return kf, ki
-    }
-  }
-
-  return "", nil
-}
-
-func (p *Prospector) lookupFileIdsResume(file string, info os.FileInfo, initial map[string]*ProspectorResume) (string, *ProspectorResume) {
-  for kf, ki := range initial {
-    if kf == file {
-      continue
-    }
-    if is_filestate_same(file, info, ki.filestate) {
-      return kf, ki
+  for _, ki := range p.orphanedinfo {
+    if ki.identity.SameAs(info) {
+      delete(p.orphanedinfo, ki)
+      return ki.file, ki
     }
   }
 

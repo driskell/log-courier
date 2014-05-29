@@ -75,11 +75,11 @@ func main() {
   }
 
   // Generate ProspectorInfo structures for registrar and prosector to communicate with
-  prospector_resume := make(map[string]*ProspectorResume, len(load_resume))
+  prospector_resume := make(map[string]*ProspectorInfo, len(load_resume))
   registrar_persist := make(map[*ProspectorInfo]*FileState, len(load_resume))
   for file, filestate := range load_resume {
-    prospector_resume[file] = &ProspectorResume{prospectorinfo: &ProspectorInfo{last_offset: make(chan int64, 1)}, filestate: filestate}
-    registrar_persist[prospector_resume[file].prospectorinfo] = filestate
+    prospector_resume[file] = NewProspectorInfoFromFileState(file, filestate)
+    registrar_persist[prospector_resume[file]] = filestate
   }
 
   // Initialise structures

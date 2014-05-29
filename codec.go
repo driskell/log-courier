@@ -5,12 +5,12 @@ type CodecRegistrar interface {
 }
 
 type CodecFactory interface {
-  NewCodec(*Harvester, chan *FileEvent) Codec
+  NewCodec(string, *FileConfig, *ProspectorInfo, int64, chan<- *FileEvent) Codec
 }
 
 type Codec interface {
   Teardown() int64
-  Event(int64, uint64, *string)
+  Event(int64, int64, uint64, *string)
 }
 
 var codecRegistry map[string]CodecRegistrar = make(map[string]CodecRegistrar);

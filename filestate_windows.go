@@ -15,7 +15,7 @@ type FileState struct {
   IdxLo  uint32  `json:"idxlo,omitempty"`
 }
 
-func file_ids(info *os.FileInfo, state *FileState) {
+func file_ids(info os.FileInfo, state *FileState) {
   // For information on the following, see Go source: src/pkg/os/types_windows.go
   // This is the only way we can get at the idxhi and idxlo
   // Unix it is much easier as syscall.Stat_t is exposed and os.FileInfo interface has a Sys() method to get a syscall.Stat_t
@@ -23,8 +23,7 @@ func file_ids(info *os.FileInfo, state *FileState) {
 
   // NOTE: This WILL be prone to break if Go source changes, but I'd rather just fix it if it does or make it fail gracefully
 
-  // info is *os.FileInfo which is a pointer to a
-  // - os.FileInfo interface of a
+  // info is os.FileInfo which is an interface to a
   // - *os.fileStat (holding methods) which is a pointer to a
   // - os.fileStat (holding data)
 
@@ -44,7 +43,7 @@ func file_ids(info *os.FileInfo, state *FileState) {
   }()
 
   // Following makes fstat hold os.fileStat
-  fstat := reflect.ValueOf(info).Elem().Elem().Elem()
+  fstat := reflect.ValueOf(info).Elem().Elem()
 
   // To get the data, we need the os.fileStat that fstat points to, so one more Elem()
   state.Vol = uint32(fstat.FieldByName("vol").Uint())
@@ -52,28 +51,8 @@ func file_ids(info *os.FileInfo, state *FileState) {
   state.IdxLo = uint32(fstat.FieldByName("idxlo").Uint())
 }
 
-func is_filestate_same(path string, info os.FileInfo, state *FileState) bool {
-  istate := &FileState{}
-  file_ids(&info, istate)
-  return (istate.Vol == state.Vol && istate.IdxHi == state.IdxHi && istate.IdxLo == state.IdxLo)
-}
-
-func open_file_no_lock(path string) (*os.File, error) {
-  // We will call CreateFile directly so we can pass in FILE_SHARE_DELETE
-  // This ensures that a program can still rotate the file even though we have it open
-  pathp, err := syscall.UTF16PtrFromString(path)
-  if err != nil {
-    return nil, err
-  }
-
-  var sa *syscall.SecurityAttributes
-
-  handle, err := syscall.CreateFile(
-    pathp, syscall.GENERIC_READ, syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE|syscall.FILE_SHARE_DELETE,
-    sa, syscall.OPEN_EXISTING, syscall.FILE_ATTRIBUTE_NORMAL, 0)
-  if err != nil {
-    return nil, err
-  }
-
-  return os.NewFile(uintptr(handle), path), nil
+func (fs *FileState) SameAs(info os.FileInfo) bool {
+  state := &FileState{}
+  file_ids(info, state)
+  return (fs.Vol == state.Vol && fs.IdxHi == state.IdxHi && fs.IdxLo == state.IdxLo)
 }

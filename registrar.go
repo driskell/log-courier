@@ -47,7 +47,7 @@ func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
   }
 }
 
-func Registrar(state map[*ProspectorInfo]*FileState, registrar chan []RegistrarEvent) {
+func Registrar(state map[*ProspectorInfo]*FileState, registrar <-chan []RegistrarEvent) {
   for events := range registrar {
     for _, event := range events {
       event.Process(state)

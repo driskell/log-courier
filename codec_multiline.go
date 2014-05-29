@@ -26,12 +26,14 @@ type CodecMultilineFactory struct {
 
 type CodecMultiline struct {
   config      *CodecMultilineFactory
-  harvester   *Harvester
-  output      chan *FileEvent
+  path string
+  fileconfig *FileConfig
+  info *ProspectorInfo
   last_offset int64
+  output chan<- *FileEvent
 
-  h_offset    int64
-  offset      int64
+  end_offset    int64
+  start_offset      int64
   line        uint64
   buffer      []string
   timer_lock  *sync.Mutex
@@ -94,8 +96,15 @@ func (r *CodecMultilineRegistrar) NewFactory(config map[string]interface{}) (Cod
   return result, nil
 }
 
-func (f *CodecMultilineFactory) NewCodec(harvester *Harvester, output chan *FileEvent) Codec {
-  c := &CodecMultiline{config: f, harvester: harvester, output: output, last_offset: harvester.Offset}
+func (f *CodecMultilineFactory) NewCodec(path string, fileconfig *FileConfig, info *ProspectorInfo, offset int64, output chan<- *FileEvent) Codec {
+  c := &CodecMultiline{
+    config: f,
+    path: path,
+    fileconfig: fileconfig,
+    info: info,
+    last_offset: offset,
+    output: output,
+  }
 
   if f.previous_timeout != 0 {
     c.timer_lock = new(sync.Mutex)
@@ -135,7 +144,7 @@ func (c *CodecMultiline) Teardown() int64 {
   return c.last_offset
 }
 
-func (c *CodecMultiline) Event(offset int64, line uint64, text *string) {
+func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64, text *string) {
   // TODO(driskell): If we are using previous and we match on the very first line read,
   // then this is because we've started in the middle of a multiline event (the first line
   // should never match) - so we could potentially offer an option to discard this.
@@ -156,9 +165,9 @@ func (c *CodecMultiline) Event(offset int64, line uint64, text *string) {
   }
   if len(c.buffer) == 0 {
     c.line = line
-    c.offset = offset
+    c.start_offset = start_offset
   }
-  c.h_offset = c.harvester.Offset
+  c.end_offset = end_offset
   c.buffer = append(c.buffer, *text)
   if c.config.what == codecMultiline_What_Previous {
     if c.config.previous_timeout != 0 {
@@ -178,17 +187,15 @@ func (c *CodecMultiline) flush() {
 
   text := strings.Join(c.buffer, "\n")
 
-  event := &FileEvent{
-    ProspectorInfo: c.harvester.ProspectorInfo,
-    Offset:         c.h_offset,
-    Event:          NewEvent(c.harvester.FileConfig.Fields, &c.harvester.Path, c.offset, c.line, &text),
-  }
-
-  c.output <- event // ship the new event downstream
-
   // Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
-  c.last_offset = c.offset
+  c.last_offset = c.end_offset
   c.buffer = nil
+
+  c.output <- &FileEvent{
+    ProspectorInfo: c.info,
+    Offset:         c.end_offset,
+    Event:          NewEvent(c.fileconfig.Fields, &c.path, c.start_offset, c.line, &text),
+  }
 }
 
 // Register the codec

@@ -18,7 +18,7 @@ type NewFileEvent struct {
   ProspectorInfo *ProspectorInfo
   Source         string
   Offset         int64
-  fileinfo       *os.FileInfo
+  fileinfo       os.FileInfo
 }
 
 type DeletedEvent struct {
