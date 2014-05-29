@@ -12,8 +12,11 @@ type CodecPlainFactory struct {
 }
 
 type CodecPlain struct {
-  harvester *Harvester
-  output    chan *FileEvent
+  path string
+  fileconfig *FileConfig
+  info *ProspectorInfo
+  last_offset int64
+  output chan<- *FileEvent
 }
 
 func (r *CodecPlainRegistrar) NewFactory(config map[string]interface{}) (CodecFactory, error) {
@@ -26,25 +29,29 @@ func (r *CodecPlainRegistrar) NewFactory(config map[string]interface{}) (CodecFa
   return &CodecPlainFactory{}, nil
 }
 
-func (f *CodecPlainFactory) NewCodec(harvester *Harvester, output chan *FileEvent) Codec {
-  return &CodecPlain{harvester: harvester, output: output}
+func (f *CodecPlainFactory) NewCodec(path string, fileconfig *FileConfig, info *ProspectorInfo, offset int64, output chan<- *FileEvent) Codec {
+  return &CodecPlain{
+    path: path,
+    fileconfig: fileconfig,
+    info: info,
+    last_offset: offset,
+    output: output,
+  }
 }
 
 func (c *CodecPlain) Teardown() int64 {
-  return c.harvester.Offset
+  return c.last_offset
 }
 
-func (c *CodecPlain) Event(offset int64, line uint64, text *string) {
-  event := &FileEvent{
-    ProspectorInfo: c.harvester.ProspectorInfo,
-    Offset:         c.harvester.Offset,
-    Event:          NewEvent(c.harvester.FileConfig.Fields, &c.harvester.Path, offset, line, text),
+func (c *CodecPlain) Event(start_offset int64, end_offset int64, line uint64, text *string) {
+  c.last_offset = end_offset
+
+  // Ship downstream
+  c.output <- &FileEvent{
+    ProspectorInfo: c.info,
+    Offset:         end_offset,
+    Event:          NewEvent(c.fileconfig.Fields, &c.path, start_offset, line, text),
   }
-
-  c.output <- event // ship the new event downstream
-}
-
-func (c *CodecPlain) Flush() {
 }
 
 // Register the codec as default

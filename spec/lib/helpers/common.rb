@@ -57,11 +57,16 @@ shared_context "Helpers" do
   end
 
   # Rename a log file and create a new one in its place
-  def rotate(f)
+  def rotate(f, prefix="")
     old_name = f.path
 
-    new_name = File.join(TEMP_PATH, "logs", "log-" + @files.length.to_s)
-    f.rename f.path + "r"
+    if prefix == ""
+      new_name = f.path + "r"
+    else
+      new_name = File.join(File.dirname(f.path), prefix + File.basename(f.path) + "r")
+    end
+
+    f.rename new_name
 
     create_log(f.class, old_name)
   end
