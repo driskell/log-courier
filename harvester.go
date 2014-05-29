@@ -10,43 +10,55 @@ import (
 )
 
 type Harvester struct {
-  ProspectorInfo *ProspectorInfo
-  FileInfo       os.FileInfo
-  Path           string /* the file path to harvest */
-  FileConfig     FileConfig
-  Offset         int64
-  Initial        bool
-  Codec          Codec
+  info *ProspectorInfo
+  fileinfo os.FileInfo
+  path           string /* the file path to harvest */
+  fileconfig     *FileConfig
+  offset         int64
+  codec          Codec
 
   file *os.File /* the file being watched */
 }
 
-func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
-  if !h.open() {
-    return h.Offset, true
+
+func NewHarvester(info *ProspectorInfo, fileconfig *FileConfig, offset int64) *Harvester {
+  var fileinfo os.FileInfo
+  var path string
+  if info != nil {
+    // Grab now so we can safely use them even if prospector changes them
+    fileinfo = info.identity.Stat()
+    path = info.file
+  } else {
+    // This is stdin
+    fileinfo = nil
+    path = "-"
+  }
+  return &Harvester{
+    info: info,
+    fileinfo: fileinfo,
+    path: path,
+    fileconfig: fileconfig,
+    offset: offset,
+  }
+}
+
+func (h *Harvester) Harvest(output chan<- *FileEvent) (int64, bool) {
+  if !h.prepareHarvester() {
+    return h.offset, true
   }
 
-  h.Codec = h.FileConfig.codec.NewCodec(h, output)
+  h.codec = h.fileconfig.codec.NewCodec(h.path, h.fileconfig, h.info, h.offset, output)
 
   defer h.file.Close()
 
   // NOTE(driskell): How would we know line number if from_beginning is false and we SEEK_END? Or would we scan,count,skip?
   var line uint64 = 0 // Ask registrar about the line number
 
-  // get current offset in file
+  // Get current offset in file
+  // TODO: Check error?
   offset, _ := h.file.Seek(0, os.SEEK_CUR)
-
-  if h.Initial {
-    if *from_beginning {
-      log.Printf("Started harvester at position %d (requested beginning): %s\n", offset, h.Path)
-    } else {
-      log.Printf("Started harvester at position %d (requested end): %s\n", offset, h.Path)
-    }
-  } else {
-    log.Printf("Started harvester at position %d (requested %d): %s\n", offset, h.Offset, h.Path)
-  }
-
-  h.Offset = offset
+  log.Printf("Started harvester at position %d (requested %d): %s\n", offset, h.offset, h.path)
+  h.offset = offset
 
   // TODO(sissel): Make the buffer size tunable at start-time
   reader := bufio.NewReaderSize(h.file, 16<<10) // 16kb buffer by default
@@ -60,79 +72,66 @@ func (h *Harvester) Harvest(output chan *FileEvent) (int64, bool) {
     if err != nil {
       if err == io.EOF {
         // Timed out waiting for data, got EOF, check to see if the file was truncated
-        if h.Path == "-" {
+        if h.path == "-" {
           // This wouldn't make sense on stdin so lets not risk anything strange happening
           continue
         }
 
         info, err := h.file.Stat()
         if err == nil {
-          if info.Size() < h.Offset {
-            log.Printf("File truncated, seeking to beginning: %s\n", h.Path)
+          if info.Size() < h.offset {
+            log.Printf("File truncated, seeking to beginning: %s\n", h.path)
             h.file.Seek(0, os.SEEK_SET)
-            h.Offset = 0
+            h.offset = 0
             continue
-          } else if age := time.Since(last_read_time); age > h.FileConfig.deadtime {
+          } else if age := time.Since(last_read_time); age > h.fileconfig.deadtime {
             // if last_read_time was more than dead time, this file is probably dead. Stop watching it.
-            log.Printf("Stopping harvest of %s; last change was %v ago\n", h.Path, age-(age%time.Second))
-            return h.Codec.Teardown(), false
+            log.Printf("Stopping harvest of %s; last change was %v ago\n", h.path, age-(age%time.Second))
+            return h.codec.Teardown(), false
           }
           continue
         } else {
-          log.Printf("Unexpected error checking status of %s: %s\n", h.Path, err)
+          log.Printf("Unexpected error checking status of %s: %s\n", h.path, err)
         }
       } else {
-        log.Printf("Unexpected error reading from %s: %s\n", h.Path, err)
+        log.Printf("Unexpected error reading from %s: %s\n", h.path, err)
       }
-      return h.Codec.Teardown(), true
+      return h.codec.Teardown(), true
     }
     last_read_time = time.Now()
 
     line++
-    line_offset := h.Offset
-    h.Offset += int64(bytesread)
+    line_offset := h.offset
+    h.offset += int64(bytesread)
 
     // Codec is last - it saves harvester state for us such as offset for resume
-    h.Codec.Event(line_offset, line, text)
+    h.codec.Event(line_offset, h.offset, line, text)
   } /* forever */
 }
 
-func (h *Harvester) open() bool {
+func (h *Harvester) prepareHarvester() bool {
   // Special handling that "-" means to read from standard input
-  if h.Path == "-" {
+  if h.path == "-" {
     h.file = os.Stdin
     return true
   }
 
   var err error
-  h.file, err = open_file_no_lock(h.Path)
-
+  h.file, err = h.openFile(h.path)
   if err != nil {
-    log.Printf("Failed opening %s: %s\n", h.Path, err)
+    log.Printf("Failed opening %s: %s\n", h.path, err)
     return false
   }
 
   // Check we opened the right file
   info, err := h.file.Stat()
-  if err != nil || !os.SameFile(h.FileInfo, info) {
+  if err != nil || !os.SameFile(info, h.fileinfo) {
     h.file.Close()
     return false
   }
 
-  // TODO(sissel): Only seek if the file is a file, not a pipe or socket.
-  if h.Initial {
-    // This is a new file detected during startup so calculate offset based on from-beginning
-    if *from_beginning {
-      h.file.Seek(0, os.SEEK_SET)
-    } else {
-      h.file.Seek(0, os.SEEK_END)
-    }
-  } else {
-    // This is a new file detected after startup, or one that was resumed from the state file; in both cases we must obey the given offset
-    // For new files offset will be 0 so this ensures we always start from the beginning on files created while we're running
-    // This matches the LogStash behaviour
-    h.file.Seek(h.Offset, os.SEEK_SET)
-  }
+  // TODO: Check error?
+  h.file.Seek(h.offset, os.SEEK_SET)
 
   return true
 }
