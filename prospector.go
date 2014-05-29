@@ -220,27 +220,30 @@ func (p *Prospector) scan(path string, config *FileConfig, registrar_chan chan<-
       }
     }
 
-    // Update the fileinfo information used for future comparisons, and the last_seen counter
-    info.Update(fileinfo, p.iteration)
-    p.prospectorinfo[file] = info
-
-    // Resume harvesters for files we're still monitoring if they happen to stop for whatever reason
-    if !info.IsRunning() {
-      if info.identity.Stat().ModTime() != fileinfo.ModTime() {
-        // Resume harvesting of an old file we've stopped harvesting from
-        log.Printf("Resuming harvester on an old file that was just modified: %s\n", file)
+    // Resume stopped harvesters
+    resume := !info.IsRunning()
+    if resume {
+      if info.status == Status_Resume {
+        // This is a filestate that was saved, resume the harvester
+        log.Printf("Resuming harvester on a previously harvested file: %s\n", file)
       } else if info.status == Status_Failed {
         // Last attempt we failed to start, try again
         log.Printf("Attempting to restart failed harvester: %s\n", file)
-      } else if info.status == Status_Resume {
-        // This is a filestate that was saved, resume the harvester
-        log.Printf("Resuming harvester on a previously harvested file: %s\n", file)
+      } else if info.identity.Stat().ModTime() != fileinfo.ModTime() {
+        // Resume harvesting of an old file we've stopped harvesting from
+        log.Printf("Resuming harvester on an old file that was just modified: %s\n", file)
       } else {
-        continue
+        resume = false
       }
+    }
 
+    info.Update(fileinfo, p.iteration)
+
+    if resume {
       p.startHarvesterWithOffset(info, output, config, info.finish_offset)
     }
+
+    p.prospectorinfo[file] = info
   } // for each file matched by the glob
 }
 
