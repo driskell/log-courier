@@ -190,7 +190,7 @@ describe "logstash-forwarder" do
 
     # Rotate f1 - this renames it and returns a new file same name as original f1
     # But prefix it so it moves out of scope
-    f2 = rotate(f1)
+    f2 = rotate(f1, "r")
 
     # Write to both - but a bit more to the out of scope
     f1.log 5000
