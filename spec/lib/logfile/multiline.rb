@@ -22,7 +22,7 @@ class LogFile
     def logged?(event, check_path=true)
       return false if event["host"] != @host
       return false if check_path and event["file"] != @path
-      return false if event["line"] != "BEGIN " + @path + " test event #{@next}" + $/ + " line 2 of test event #{@next}" + $/ + " line 3 of test event #{@next}" + $/ + " END of test event"
+      return false if event["message"] != "BEGIN " + @path + " test event #{@next}" + $/ + " line 2 of test event #{@next}" + $/ + " line 3 of test event #{@next}" + $/ + " END of test event"
       @count -= 1
       @next += 1
       true

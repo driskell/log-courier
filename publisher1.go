@@ -17,11 +17,14 @@ import (
 const (
   default_publisher_hostname string = "localhost.localdomain"
   keepalive_timeout          time.Duration = 900 * time.Second
+  max_pending_payloads       int = 100
 )
 
 type PendingPayload struct {
+  next       *PendingPayload
   events     []*FileEvent
-  num_events uint32
+  ack_events int
+  num_events int
   payload    []byte
   timeout    time.Time
 }
@@ -30,8 +33,12 @@ type Publisher struct {
   config           *NetworkConfig
   hostname         string
   transport        Transport
+  can_send         chan int
   pending_ping     bool
   pending_payloads map[string]*PendingPayload
+  first_payload    *PendingPayload
+  last_payload     *PendingPayload
+  num_payloads     int
 }
 
 func (p *Publisher) Init() error {
@@ -53,8 +60,8 @@ func (p *Publisher) Init() error {
   return nil
 }
 
-func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []RegistrarEvent) {
-  var input_toggle chan []*FileEvent
+func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []RegistrarEvent) {
+  var input_toggle <-chan []*FileEvent
   var buffer bytes.Buffer
   var err error
 
@@ -63,20 +70,53 @@ func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []Regis
 
   for {
     p.transport.Connect()
+    p.can_send = p.transport.CanSend()
     input_toggle = nil
 
   SelectLoop:
     for {
       // TODO: implement shutdown select
       select {
-        case <-p.transport.CanSend():
-          // Ready to send, enable event wait
-          // TODO: If pending_payloads is large, don't send anymore, leave it nil, then when we receive ack do this
-          // TODO: Process pending payloads we have not received a response for yet, queueing them as priority (switch input_toggle?) and regenerating compressor as required
-          input_toggle = input
+        case <-p.can_send:
+          var oldest_nonce *string
+          var oldest_payload *PendingPayload
 
-          // Continue loop so we don't reset the ping timer - we've not performed any activity just yet
-          continue
+          if len(p.pending_payloads) != 0 {
+            oldest_timeout := time.Now()
+
+            // Do we have a timed out payload we need to retry? Find the oldest
+            // TODO: Use another linked list so we can find this instantly
+            for nonce, payload := range p.pending_payloads {
+              if payload.timeout.Before(oldest_timeout) {
+                oldest_nonce = &nonce
+                oldest_payload = payload
+              }
+            }
+          }
+
+          if oldest_payload == nil {
+            // No pending payloads, enable event wait
+            input_toggle = input
+
+            // Continue loop so we don't reset the ping timer - we've not performed any activity just yet
+            continue
+          } else {
+            // Do we need to regenerate the payload? Remember to account for ACK we have but not yet sent to registrar due to out-of-order receive
+            if oldest_payload.payload == nil {
+              if err = p.bufferJdatData(&buffer, oldest_payload.events[oldest_payload.ack_events:], *oldest_nonce); err != nil {
+                break SelectLoop
+              }
+
+              oldest_payload.payload = buffer.Bytes()
+            }
+
+            // Send the payload again
+            if err = p.writeJdat(oldest_payload.payload); err != nil {
+              break SelectLoop
+            }
+
+            oldest_payload.timeout = time.Now().Add(p.config.timeout)
+          }
         case events := <-input_toggle:
           // Calculate a nonce
           nonce := p.generateNonce()
@@ -94,8 +134,15 @@ func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []Regis
           }
 
           // Save pending payload until we receive ack, and discard buffer
-          payload := &PendingPayload{events: events, num_events: uint32(len(events)), payload: buffer.Bytes(), timeout: time.Now().Add(p.config.timeout)}
+          payload := &PendingPayload{events: events, num_events: len(events), payload: buffer.Bytes(), timeout: time.Now().Add(p.config.timeout)}
           p.pending_payloads[nonce] = payload
+          if p.first_payload == nil {
+            p.first_payload = payload
+          } else {
+            p.last_payload.next = payload
+          }
+          p.last_payload = payload
+          p.num_payloads++
           buffer.Reset()
 
           if err = p.writeJdat(payload.payload); err != nil {
@@ -104,6 +151,11 @@ func (p *Publisher) Publish(input chan []*FileEvent, registrar_chan chan []Regis
 
           // Wait for send signal again
           input_toggle = nil
+
+          if p.num_payloads >= max_pending_payloads {
+            // Too many pending payloads, disable send temporarily
+            p.can_send = nil
+          }
         case <-p.transport.CanRecv():
           var signature, message []byte
 
@@ -272,7 +324,7 @@ func (p *Publisher) processPong(message []byte) error {
   return nil
 }
 
-func (p *Publisher) processAck(message []byte, registrar_chan chan []RegistrarEvent) (err error) {
+func (p *Publisher) processAck(message []byte, registrar_chan chan<- []RegistrarEvent) (err error) {
   if len(message) != 20 {
     err = errors.New(fmt.Sprintf("ACKN message corruption (%d)", len(message)))
     return
@@ -280,8 +332,6 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan []RegistrarEv
 
   // Read the nonce and sequence number acked
   nonce, sequence := string(message[:16]), binary.BigEndian.Uint32(message[16:20])
-
-  // TODO: If we ack'd OK and we refused to send due to large pending_payloads, re-enable input_toggle in here somehow
 
   // Grab the payload the ACK corresponds to by using nonce
   payload, found := p.pending_payloads[nonce]
@@ -291,21 +341,48 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan []RegistrarEv
   }
 
   // Full ACK?
-  if sequence == payload.num_events {
-    // Give the registrar the remainder of the events so it can save to state the new offsets, and drop from pending payloads
-    registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events}}
+  // TODO: Protocol error if sequence is too large?
+  if int(sequence) >= len(payload.events) {
+    // No more events left for this payload, free the payload memory
+    payload.ack_events = len(payload.events)
+    payload.payload = nil
     delete(p.pending_payloads, nonce)
   } else {
     // Only process the ACK if something was actually processed
     if sequence != 0 {
-      // Send the events to registrar so it can save to state the new offsets and update pending payload, wiping the compressed part so it is regenerated if needed
-      registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events[:sequence]}}
-      payload.events = payload.events[sequence:]
+      payload.ack_events = int(sequence) - (payload.num_events - len(payload.events))
+      // If we need to resend, we'll need to regenerate payload, so free that memory early
       payload.payload = nil
     }
 
     // Update the retry timeout on the payload
-    payload.timeout = time.Now().Add(keepalive_timeout)
+    payload.timeout = time.Now().Add(p.config.timeout)
+  }
+
+  // We potentially receive out-of-order ACKs due to payloads distributed across servers 
+  // This is where we enforce ordering again to ensure registrar receives ACK in order
+  if payload == p.first_payload {
+    for payload.ack_events != 0 {
+      if payload.ack_events == len(payload.events) {
+        registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events}}
+        payload = payload.next
+        p.first_payload = payload
+        p.num_payloads--
+
+        // Resume sending if we stopped due to excessive pending payload count
+        if p.can_send == nil {
+          p.can_send = p.transport.CanSend()
+        }
+      } else {
+        registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events[:payload.ack_events]}}
+        payload.events = payload.events[payload.ack_events:]
+        payload.ack_events = 0
+      }
+
+      if payload == nil {
+        break
+      }
+    }
   }
 
   return
