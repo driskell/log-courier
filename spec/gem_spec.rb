@@ -31,7 +31,7 @@ describe "logstash-forwarder gem" do
     i = 0
     while @event_queue.length > 0
       e = @event_queue.pop
-      e["line"].should == "gem line test #{i}"
+      e["message"].should == "gem line test #{i}"
       e["host"].should == @host
       e["file"].should == "gemfile.log"
       i += 1

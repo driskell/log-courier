@@ -33,7 +33,7 @@ describe "logstash-forwarder" do
     i = 0
     while @event_queue.length > 0
       e = @event_queue.pop
-      e["line"].should == "stdin line test #{i}"
+      e["message"].should == "stdin line test #{i}"
       e["host"].should == host
       e["file"].should == "-"
       i += 1
