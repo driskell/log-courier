@@ -34,8 +34,19 @@ type EventsEvent struct {
   Events []*FileEvent
 }
 
+var hostname string
+
+// TODO: Is the right place for this?
+func init() {
+  var err error
+  if hostname, err = os.Hostname(); err != nil {
+    hostname = "Unknown"
+  }
+}
+
 func NewEvent(fields map[string]*string, file *string, offset int64, line uint64, message *string) *Event {
   event := Event{
+    "host": &hostname,
     "file":   file,
     "offset": offset,
     "line":   message, // The lumberjack receiver expects "line" and not "message"

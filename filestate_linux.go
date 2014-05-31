@@ -5,21 +5,19 @@ import (
   "syscall"
 )
 
-type FileState struct {
-  Source *string `json:"source,omitempty"`
-  Offset int64   `json:"offset,omitempty"`
+type FileStateOS struct {
   Inode  uint64  `json:"inode,omitempty"`
   Device uint64  `json:"device,omitempty"`
 }
 
-func file_ids(info os.FileInfo, state *FileState) {
+func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
   fstat := info.Sys().(*syscall.Stat_t)
-  state.Inode = fstat.Ino
-  state.Device = fstat.Dev
+  fs.Inode = fstat.Ino
+  fs.Device = fstat.Dev
 }
 
-func (fs *FileState) SameAs(info os.FileInfo) bool {
-  state := &FileState{}
-  file_ids(info, state)
+func (fs *FileStateOS) SameAs(info os.FileInfo) bool {
+  state := &FileStateOS{}
+  state.PopulateFileIds(info)
   return (fs.Inode == state.Inode && fs.Device == state.Device)
 }
