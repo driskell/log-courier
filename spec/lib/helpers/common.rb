@@ -1,3 +1,4 @@
+require "logger"
 require "lumberjack/server"
 
 # Common helpers for testing both ruby client and the forwarder
@@ -23,10 +24,14 @@ shared_context "Helpers" do
     # When we add a file we log it here, so after we can remove them
     @files = []
 
+    logger = Logger.new(STDOUT)
+    logger.level = Logger::DEBUG
+
     # Reset server for each test
     @server = Lumberjack::Server.new(
       :ssl_certificate => @ssl_cert.path,
-      :ssl_key => @ssl_key.path
+      :ssl_key => @ssl_key.path,
+      :logger => logger
     )
 
     @event_queue = Queue.new
