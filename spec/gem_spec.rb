@@ -1,3 +1,5 @@
+require "logger"
+require "timeout"
 require "lib/common"
 
 require "lumberjack/client"
@@ -10,19 +12,29 @@ describe "logstash-forwarder gem" do
   end
 
   def startup
+        puts "Startup #{@server.port}"
+    logger = Logger.new(STDOUT)
+    logger.level = Logger::DEBUG
+
     # Reset server for each test
     @client = Lumberjack::Client.new(
       :ssl_certificate => @ssl_cert.path,
       :addresses => "127.0.0.1",
-      :port => @server.port
+      :port => @server.port,
+      :logger => logger
     )
+        puts "Started"
   end
 
   it "should send and receive events" do
     startup
 
-    5000.times do |i|
-      @client.write "line" => "gem line test #{i}", "host" => @host, "file" => "gemfile.log"
+    # Allow 60 seconds
+    Timeout::timeout(60) do
+      5000.times do |i|
+        puts "Iteration #{i}"
+        @client.write "message" => "gem line test #{i}", "host" => @host, "file" => "gemfile.log"
+      end
     end
 
     # Receive and check

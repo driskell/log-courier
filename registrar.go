@@ -10,7 +10,7 @@ func (e *NewFileEvent) Process(state map[*ProspectorInfo]*FileState) {
     Source: &e.Source,
     Offset: e.Offset,
   }
-  file_ids(e.fileinfo, state[e.ProspectorInfo])
+  state[e.ProspectorInfo].PopulateFileIds(e.fileinfo)
 }
 
 func (e *DeletedEvent) Process(state map[*ProspectorInfo]*FileState) {

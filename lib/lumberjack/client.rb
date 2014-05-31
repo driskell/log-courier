@@ -32,8 +32,11 @@ module Lumberjack
         raise "Could not connect to any hosts" if addrs.empty?
         opts = @opts
         opts[:address] = addrs.pop
+        puts "connect #{opts[:address]}"
         Lumberjack::Socket.new(opts)
-      rescue *[Errno::ECONNREFUSED,SocketError]
+        puts "connected"
+      rescue *[Errno::ECONNREFUSED,SocketError] => e
+        puts e
         retry
       end
     end
@@ -76,7 +79,9 @@ module Lumberjack
       tcp_socket = TCPSocket.new(@opts[:address], @opts[:port])
       openssl_cert = OpenSSL::X509::Certificate.new(File.read(@opts[:ssl_certificate]))
       @socket = OpenSSL::SSL::SSLSocket.new(tcp_socket)
+      puts "socket connecting"
       @socket.connect
+      puts "socket connected"
 
       #if @socket.peer_cert.to_s != openssl_cert.to_s
       #  raise "Client and server certificates do not match."

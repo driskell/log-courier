@@ -20,7 +20,6 @@ type Harvester struct {
   file *os.File /* the file being watched */
 }
 
-
 func NewHarvester(info *ProspectorInfo, fileconfig *FileConfig, offset int64) *Harvester {
   var fileinfo os.FileInfo
   var path string

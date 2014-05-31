@@ -4,6 +4,13 @@ import (
   "os"
 )
 
+type FileState struct {
+  FileStateOS
+  Source *string `json:"source,omitempty"`
+  Offset int64   `json:"offset,omitempty"`
+  TmpOffset int64 `json:"-"`
+}
+
 type FileInfo struct {
   fileinfo    os.FileInfo /* the file info */
 }
