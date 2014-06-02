@@ -36,7 +36,6 @@ type TransportTls struct {
   recv_chan chan interface{}
 
   can_send chan int
-  can_recv chan int
 }
 
 // If tls.Conn.Write ever times out it will permanently break, so we cannot use SetWriteDeadline with it directly
@@ -157,7 +156,6 @@ Connect:
   t.send_chan = make(chan []byte, 1)
   t.recv_chan = make(chan interface{}, 1)
   t.can_send = make(chan int, 1)
-  t.can_recv = make(chan int, 1)
 
   // Start with a send
   t.can_send <- 1
@@ -177,22 +175,23 @@ func (t *TransportTls) sender() {
 SendLoop:
   for {
     select {
-      case <-t.shutdown:
-        // Shutdown
-        break SendLoop
-      case msg := <-t.send_chan:
-        // Write deadline is managed by our net.Conn wrapper that tls will call into
-        _, err := t.socket.Write(msg)
-        if err == nil {
-          t.setChan(t.can_send)
-        } else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
+    case <-t.shutdown:
+      // Shutdown
+      break SendLoop
+    case msg := <-t.send_chan:
+      // Ask for more while we send this
+      t.setChan(t.can_send)
+      // Write deadline is managed by our net.Conn wrapper that tls will call into
+      _, err := t.socket.Write(msg)
+      if err != nil {
+        if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
           // Shutdown will have been received by the wrapper
           break SendLoop
         } else {
           // Pass error back
           t.recv_chan <- err
-          t.setChan(t.can_recv)
         }
+      }
     }
   }
 
@@ -214,26 +213,24 @@ func (t *TransportTls) receiver() {
 
     // Sanity
     if length > 1048576 {
-      t.recv_chan <- errors.New(fmt.Sprintf("Received message too large (%d)", length))
+      err = errors.New(fmt.Sprintf("Received message too large (%d)", length))
+      break
     }
 
-    // Allocate for full message including header
-    message := make([]byte, 8 + length)
-    copy(message, header)
+    // Allocate for full message
+    message := make([]byte, length)
 
-    if err, shutdown = t.receiverRead(message[8:]); err != nil || shutdown {
+    if err, shutdown = t.receiverRead(message); err != nil || shutdown {
       break
     }
 
     // Pass back the message
-    t.recv_chan <- message
-    t.setChan(t.can_recv)
+    t.recv_chan <- [][]byte{header[0:4], message}
   } /* loop until shutdown */
 
   if err != nil {
     // Pass the error back and abort
     t.recv_chan <- err
-    t.setChan(t.can_recv)
   }
 
   t.wait.Done()
@@ -270,19 +267,15 @@ RecvLoop:
   return nil, true
 }
 
-func (t *TransportTls) setChan(set chan int) {
+func (t *TransportTls) setChan(set chan<- int) {
   select {
   case set <- 1:
   default:
   }
 }
 
-func (t *TransportTls) CanSend() chan int {
+func (t *TransportTls) CanSend() <-chan int {
   return t.can_send
-}
-
-func (t *TransportTls) CanRecv() chan int {
-  return t.can_recv
 }
 
 func (t *TransportTls) Write(p []byte) (int, error) {
@@ -295,16 +288,8 @@ func (t *TransportTls) Flush() error {
   return nil
 }
 
-func (t *TransportTls) Read() ([]byte, error) {
-  msg := <-t.recv_chan
-
-  // Error? Or data?
-  switch msg.(type) {
-    case error:
-      return nil, msg.(error)
-    default:
-      return msg.([]byte), nil
-  }
+func (t *TransportTls) Read() <-chan interface{} {
+  return t.recv_chan
 }
 
 func (t *TransportTls) Disconnect() {

@@ -23,8 +23,9 @@ const (
 type PendingPayload struct {
   next       *PendingPayload
   events     []*FileEvent
-  ack_events int
   num_events int
+  ack_events int
+  payload_start int
   payload    []byte
   timeout    time.Time
 }
@@ -33,7 +34,7 @@ type Publisher struct {
   config           *NetworkConfig
   hostname         string
   transport        Transport
-  can_send         chan int
+  can_send         <-chan int
   pending_ping     bool
   pending_payloads map[string]*PendingPayload
   first_payload    *PendingPayload
@@ -83,7 +84,7 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
 
           if len(p.pending_payloads) != 0 {
             oldest_timeout := time.Now()
-
+// TODO DO NOT WORK OFF TIMEOUT - QUEUE COULD TAKE AGES - AS LONG AS ACK COMING IN ITS FINE
             // Do we have a timed out payload we need to retry? Find the oldest
             // TODO: Use another linked list so we can find this instantly
             for nonce, payload := range p.pending_payloads {
@@ -108,6 +109,7 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
               }
 
               oldest_payload.payload = buffer.Bytes()
+              oldest_payload.payload_start = oldest_payload.ack_events
             }
 
             // Send the payload again
@@ -134,7 +136,7 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
           }
 
           // Save pending payload until we receive ack, and discard buffer
-          payload := &PendingPayload{events: events, num_events: len(events), payload: buffer.Bytes(), timeout: time.Now().Add(p.config.timeout)}
+          payload := &PendingPayload{events: events, num_events: len(events), payload_start: 0, payload: buffer.Bytes(), timeout: time.Now().Add(p.config.timeout)}
           p.pending_payloads[nonce] = payload
           if p.first_payload == nil {
             p.first_payload = payload
@@ -156,12 +158,17 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
             // Too many pending payloads, disable send temporarily
             p.can_send = nil
           }
-        case <-p.transport.CanRecv():
+        case data := <-p.transport.Read():
           var signature, message []byte
 
-          // Receive message
-          if signature, message, err = p.readMessage(); err != nil {
-            break SelectLoop
+          // Error? Or data?
+          switch data.(type) {
+            case error:
+              err = data.(error)
+              break SelectLoop
+            default:
+              signature = data.([][]byte)[0]
+              message = data.([][]byte)[1]
           }
 
           switch {
@@ -197,13 +204,15 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
           if err = p.writePing(); err != nil {
             break SelectLoop
           }
+
+          // We may have just filled the send buffer
+          input_toggle = nil
       } /* select */
 
       // Reset the timer
       timer.Reset(keepalive_timeout)
     } /* loop forever, break to reconnect */
 
-    // TODO: change this logic so we fail a specific connection instead of all (specifically for ZMQ)
     log.Printf("Transport error, will reconnect: %s\n", err)
     p.transport.Disconnect()
 
@@ -247,6 +256,8 @@ func (p *Publisher) bufferJdatData(output io.Writer, events []*FileEvent, nonce 
 
   // Append all the events
   for _, event := range events {
+    // Add host field
+    event.Event["host"] = p.hostname
     if err = p.bufferJdatDataEvent(compressor, event); err != nil {
       return
     }
@@ -259,7 +270,7 @@ func (p *Publisher) bufferJdatData(output io.Writer, events []*FileEvent, nonce 
 
 func (p *Publisher) bufferJdatDataEvent(output io.Writer, event *FileEvent) (err error) {
   var value []byte
-  value, err = json.Marshal(*event.Event)
+  value, err = json.Marshal(event.Event)
   if err != nil {
     log.Printf("JSON event encoding error: %s\n", err)
 
@@ -298,20 +309,8 @@ func (p *Publisher) writeJdat(data []byte) (err error) {
   return p.transport.Flush()
 }
 
-func (p *Publisher) readMessage() (signature []byte, message []byte, err error) {
-  var frame []byte
-
-  // Read will return a single frame
-  if frame, err = p.transport.Read(); err != nil {
-    return
-  }
-
-  // Return the signature and the message (ignore length that sits between)
-  return frame[0:4], frame[8:], nil
-}
-
 func (p *Publisher) processPong(message []byte) error {
-  if len(message) > 8 {
+  if len(message) != 0 {
     return errors.New(fmt.Sprintf("PONG message overflow (%d)", len(message)))
   }
 
@@ -336,21 +335,21 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
   // Grab the payload the ACK corresponds to by using nonce
   payload, found := p.pending_payloads[nonce]
   if !found {
-    err = errors.New("ACK for unknown payload received")
+    // Don't fail here in case we had temporary issues and resend a payload, only for us to receive duplicate ACKN
     return
   }
 
   // Full ACK?
   // TODO: Protocol error if sequence is too large?
-  if int(sequence) >= len(payload.events) {
+  if int(sequence) >= payload.num_events - payload.payload_start {
     // No more events left for this payload, free the payload memory
     payload.ack_events = len(payload.events)
     payload.payload = nil
     delete(p.pending_payloads, nonce)
   } else {
     // Only process the ACK if something was actually processed
-    if sequence != 0 {
-      payload.ack_events = int(sequence) - (payload.num_events - len(payload.events))
+    if int(sequence) > payload.num_events - payload.ack_events {
+      payload.ack_events = int(sequence) + payload.payload_start
       // If we need to resend, we'll need to regenerate payload, so free that memory early
       payload.payload = nil
     }
@@ -376,7 +375,9 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
       } else {
         registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events[:payload.ack_events]}}
         payload.events = payload.events[payload.ack_events:]
+        payload.num_events = len(payload.events)
         payload.ack_events = 0
+        payload.payload_start = 0
       }
 
       if payload == nil {

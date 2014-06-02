@@ -7,7 +7,7 @@ type Event map[string]interface{};
 type FileEvent struct {
   ProspectorInfo *ProspectorInfo
   Offset         int64
-  Event          *Event
+  Event          Event
 }
 
 type RegistrarEvent interface {
@@ -34,7 +34,7 @@ type EventsEvent struct {
   Events []*FileEvent
 }
 
-func NewEvent(fields map[string]*string, file *string, offset int64, line uint64, message *string) *Event {
+func NewEvent(fields map[string]*string, file *string, offset int64, line uint64, message *string) Event {
   event := Event{
     "file":    file,
     "offset":  offset,
@@ -43,5 +43,5 @@ func NewEvent(fields map[string]*string, file *string, offset int64, line uint64
   for k, v := range fields {
     event[k] = v
   }
-  return &event
+  return event
 }
