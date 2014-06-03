@@ -27,8 +27,6 @@ type TransportTls struct {
   socket      *tls.Conn
   hostport_re *regexp.Regexp
 
-  write_buffer *bytes.Buffer
-
   wait sync.WaitGroup
   shutdown chan int
 
@@ -58,7 +56,6 @@ func CreateTransportTls(config *NetworkConfig) (*TransportTls, error) {
   ret := &TransportTls{
     config: config,
     hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
-    write_buffer: new(bytes.Buffer),
   }
 
   if len(config.SSLCertificate) > 0 && len(config.SSLKey) > 0 {
@@ -98,8 +95,6 @@ func CreateTransportTls(config *NetworkConfig) (*TransportTls, error) {
 }
 
 func (t *TransportTls) Connect() error {
-  t.write_buffer = new(bytes.Buffer)
-
 Connect:
   for {
     for {
@@ -278,13 +273,23 @@ func (t *TransportTls) CanSend() <-chan int {
   return t.can_send
 }
 
-func (t *TransportTls) Write(p []byte) (int, error) {
-  return t.write_buffer.Write(p)
-}
+func (t *TransportTls) Write(signature string, message []byte) (err error) {
+  var write_buffer *bytes.Buffer
+  write_buffer = bytes.NewBuffer(make([]byte, 0, len(signature) + 4 + len(message)))
 
-func (t *TransportTls) Flush() error {
-  t.send_chan <- t.write_buffer.Bytes()
-  t.write_buffer.Reset()
+  if _, err = write_buffer.Write([]byte(signature)); err != nil {
+    return
+  }
+  if err = binary.Write(write_buffer, binary.BigEndian, uint32(len(message))); err != nil {
+    return
+  }
+  if len(message) != 0 {
+    if _, err = write_buffer.Write(message); err != nil {
+      return
+    }
+  }
+
+  t.send_chan <- write_buffer.Bytes()
   return nil
 }
 
@@ -297,7 +302,6 @@ func (t *TransportTls) Disconnect() {
   close(t.shutdown)
   t.wait.Wait()
   t.socket.Close()
-  t.write_buffer.Reset()
 }
 
 func (w *TransportTlsWrap) Read(b []byte) (int, error) {

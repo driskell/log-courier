@@ -22,6 +22,7 @@ const (
 
 type PendingPayload struct {
   next       *PendingPayload
+  nonce      string
   events     []*FileEvent
   num_events int
   ack_events int
@@ -63,7 +64,7 @@ func (p *Publisher) Init() error {
 
 func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []RegistrarEvent) {
   var input_toggle <-chan []*FileEvent
-  var buffer bytes.Buffer
+  var retry_payload *PendingPayload
   var err error
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
@@ -78,143 +79,106 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
     for {
       // TODO: implement shutdown select
       select {
-        case <-p.can_send:
-          var oldest_nonce *string
-          var oldest_payload *PendingPayload
+      case <-p.can_send:
+        if retry_payload != nil {
+          var buffer bytes.Buffer
 
-          if len(p.pending_payloads) != 0 {
-            oldest_timeout := time.Now()
-// TODO DO NOT WORK OFF TIMEOUT - QUEUE COULD TAKE AGES - AS LONG AS ACK COMING IN ITS FINE
-            // Do we have a timed out payload we need to retry? Find the oldest
-            // TODO: Use another linked list so we can find this instantly
-            for nonce, payload := range p.pending_payloads {
-              if payload.timeout.Before(oldest_timeout) {
-                oldest_nonce = &nonce
-                oldest_payload = payload
-              }
-            }
-          }
-
-          if oldest_payload == nil {
-            // No pending payloads, enable event wait
-            input_toggle = input
-
-            // Continue loop so we don't reset the ping timer - we've not performed any activity just yet
-            continue
-          } else {
-            // Do we need to regenerate the payload? Remember to account for ACK we have but not yet sent to registrar due to out-of-order receive
-            if oldest_payload.payload == nil {
-              if err = p.bufferJdatData(&buffer, oldest_payload.events[oldest_payload.ack_events:], *oldest_nonce); err != nil {
-                break SelectLoop
-              }
-
-              oldest_payload.payload = buffer.Bytes()
-              oldest_payload.payload_start = oldest_payload.ack_events
-            }
-
-            // Send the payload again
-            if err = p.writeJdat(oldest_payload.payload); err != nil {
+          // Do we need to regenerate the payload? Remember to account for ACK we have but not yet sent to registrar due to out-of-order receive
+          if retry_payload.payload == nil {
+            if err = p.bufferJdatData(&buffer, retry_payload.events[retry_payload.ack_events:], retry_payload.nonce); err != nil {
               break SelectLoop
             }
 
-            oldest_payload.timeout = time.Now().Add(p.config.timeout)
-          }
-        case events := <-input_toggle:
-          // Calculate a nonce
-          nonce := p.generateNonce()
-          for {
-            if _, found := p.pending_payloads[nonce]; !found {
-              break
-            }
-            // Collision - generate again - should be extremely rare
-            nonce = p.generateNonce()
+            retry_payload.payload = buffer.Bytes()
+            retry_payload.payload_start = retry_payload.ack_events
           }
 
-          // Generate the data first
-          if err = p.bufferJdatData(&buffer, events, nonce); err != nil {
+          // Send the payload again
+          if err = p.transport.Write("JDAT", retry_payload.payload); err != nil {
             break SelectLoop
           }
 
-          // Save pending payload until we receive ack, and discard buffer
-          payload := &PendingPayload{events: events, num_events: len(events), payload_start: 0, payload: buffer.Bytes(), timeout: time.Now().Add(p.config.timeout)}
-          p.pending_payloads[nonce] = payload
-          if p.first_payload == nil {
-            p.first_payload = payload
-          } else {
-            p.last_payload.next = payload
-          }
-          p.last_payload = payload
-          p.num_payloads++
-          buffer.Reset()
+          retry_payload = retry_payload.next
+          break
+        }
 
-          if err = p.writeJdat(payload.payload); err != nil {
+        // No pending payloads, enable event wait
+        input_toggle = input
+
+        // Continue loop so we don't reset the ping timer - we've not performed any activity just yet
+        continue
+      case events := <-input_toggle:
+        // Send JDAT
+        if err = p.sendJdat(events); err != nil {
+          break SelectLoop
+        }
+
+        // Wait for send signal again
+        input_toggle = nil
+
+        if p.num_payloads >= max_pending_payloads {
+          // Too many pending payloads, disable send temporarily
+          p.can_send = nil
+        }
+      case data := <-p.transport.Read():
+        var signature, message []byte
+
+        // Error? Or data?
+        switch data.(type) {
+          case error:
+            err = data.(error)
             break SelectLoop
-          }
-
-          // Wait for send signal again
-          input_toggle = nil
-
-          if p.num_payloads >= max_pending_payloads {
-            // Too many pending payloads, disable send temporarily
-            p.can_send = nil
-          }
-        case data := <-p.transport.Read():
-          var signature, message []byte
-
-          // Error? Or data?
-          switch data.(type) {
-            case error:
-              err = data.(error)
-              break SelectLoop
-            default:
-              signature = data.([][]byte)[0]
-              message = data.([][]byte)[1]
-          }
-
-          switch {
-          case bytes.Compare(signature, []byte("PONG")) == 0:
-            if err = p.processPong(message); err != nil {
-              break SelectLoop
-            }
-          case bytes.Compare(signature, []byte("ACKN")) == 0:
-            if err = p.processAck(message, registrar_chan); err != nil {
-              break SelectLoop
-            }
           default:
-            err = errors.New(fmt.Sprintf("Unknown message received: % X", signature))
-            break SelectLoop
-          }
-        case <-timer.C:
-          log.Printf("<-timer.C")
-          // If we haven't received a PONG yet this is a timeout
-          if p.pending_ping {
-            err = errors.New("Server did not respond to PING")
-            break SelectLoop
-          }
+            signature = data.([][]byte)[0]
+            message = data.([][]byte)[1]
+        }
 
-          // If the send buffer is full, we should have been receiving ACK by now...
-          if input_toggle == nil {
-            err = errors.New("Server stopped responding")
+        switch {
+        case bytes.Compare(signature, []byte("PONG")) == 0:
+          if err = p.processPong(message); err != nil {
             break SelectLoop
           }
-
-          // Send a ping and expect a pong back (eventually)
-          // If we receive an ACK first, that's fine we'll reset timer
-          // But after those ACKs we should get a PONG
-          if err = p.writePing(); err != nil {
+        case bytes.Compare(signature, []byte("ACKN")) == 0:
+          if err = p.processAck(message, registrar_chan); err != nil {
             break SelectLoop
           }
+        default:
+          err = errors.New(fmt.Sprintf("Unknown message received: % X", signature))
+          break SelectLoop
+        }
+      case <-timer.C:
+        log.Printf("<-timer.C")
+        // If we haven't received a PONG yet this is a timeout
+        if p.pending_ping {
+          err = errors.New("Server did not respond to PING")
+          break SelectLoop
+        }
 
-          // We may have just filled the send buffer
-          input_toggle = nil
+        // If the send buffer is full, we should have been receiving ACK by now...
+        if input_toggle == nil {
+          err = errors.New("Server stopped responding")
+          break SelectLoop
+        }
+
+        // Send a ping and expect a pong back (eventually)
+        // If we receive an ACK first, that's fine we'll reset timer
+        // But after those ACKs we should get a PONG
+        if err = p.transport.Write("PING", nil); err != nil {
+          break SelectLoop
+        }
+
+        // We may have just filled the send buffer
+        input_toggle = nil
       } /* select */
 
       // Reset the timer
       timer.Reset(keepalive_timeout)
     } /* loop forever, break to reconnect */
 
+    // Disconnect and retry payloads
     log.Printf("Transport error, will reconnect: %s\n", err)
     p.transport.Disconnect()
+    retry_payload = p.first_payload
 
     time.Sleep(p.config.reconnect)
   } /* Publish: for loop, break to shutdown */
@@ -229,18 +193,36 @@ func (p *Publisher) generateNonce() string {
   return string(nonce)
 }
 
-func (p *Publisher) writePing() (err error) {
-  if _, err = p.transport.Write([]byte("PING")); err != nil {
-    return err
-  }
-  if err = binary.Write(p.transport, binary.BigEndian, 0); err != nil {
-    return err
+func (p *Publisher) sendJdat(events []*FileEvent) (err error) {
+  var buffer bytes.Buffer
+
+  // Calculate a nonce
+  nonce := p.generateNonce()
+  for {
+    if _, found := p.pending_payloads[nonce]; !found {
+      break
+    }
+    // Collision - generate again - should be extremely rare
+    nonce = p.generateNonce()
   }
 
-  p.pending_ping = true
+  // Generate the data first
+  if err = p.bufferJdatData(&buffer, events, nonce); err != nil {
+    return
+  }
 
-  // Flush the ping frame
-  return p.transport.Flush()
+  // Save pending payload until we receive ack, and discard buffer
+  payload := &PendingPayload{events: events, nonce: nonce, num_events: len(events), payload_start: 0, payload: buffer.Bytes(), timeout: time.Now().Add(p.config.timeout)}
+  p.pending_payloads[nonce] = payload
+  if p.first_payload == nil {
+    p.first_payload = payload
+  } else {
+    p.last_payload.next = payload
+  }
+  p.last_payload = payload
+  p.num_payloads++
+
+  return p.transport.Write("JDAT", payload.payload)
 }
 
 func (p *Publisher) bufferJdatData(output io.Writer, events []*FileEvent, nonce string) (err error) {
@@ -292,21 +274,6 @@ func (p *Publisher) bufferJdatDataEvent(output io.Writer, event *FileEvent) (err
   }
 
   return nil
-}
-
-func (p *Publisher) writeJdat(data []byte) (err error) {
-  if _, err = p.transport.Write([]byte("JDAT")); err != nil {
-    return
-  }
-  if err = binary.Write(p.transport, binary.BigEndian, uint32(len(data))); err != nil {
-    return
-  }
-
-  if _, err = p.transport.Write(data); err != nil {
-    return
-  }
-
-  return p.transport.Flush()
 }
 
 func (p *Publisher) processPong(message []byte) error {

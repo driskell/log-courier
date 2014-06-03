@@ -4,8 +4,7 @@ package main
 type Transport interface {
   Connect() error
   CanSend() <-chan int
-  Write([]byte) (int, error)
-  Flush() error
+  Write(string, []byte) error
   Read() <-chan interface{}
   Disconnect()
 }
