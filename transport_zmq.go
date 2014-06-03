@@ -361,8 +361,8 @@ PollLoop:
             length := binary.BigEndian.Uint32(data[4:8])
             if length > 1048576 {
               log.Printf("Skipping invalid message: data too large (%d)", length)
-            } else if length > uint32(len(data)) - 8 {
-              log.Printf("Skipping invalid message: data has invalid length (%d > %d)", len(data) - 8, length)
+            } else if length != uint32(len(data)) - 8 {
+              log.Printf("Skipping invalid message: data has invalid length (%d != %d)", len(data) - 8, length)
             } else {
               message := [][]byte{data[0:4], data[8:]}
 

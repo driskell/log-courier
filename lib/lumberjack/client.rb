@@ -206,12 +206,12 @@ module Lumberjack
             # Reset keepalive timeout
             keepalive_next = Time.now.to_i + keepalive_timeout
           end
-        rescue ClientProtocolError
+        rescue ClientProtocolError => e
           # Reconnect required due to a protocol error
-          @logger.warn("[LumberjackClient] Protocol error, reconnecting") if not @logger.nil?
+          @logger.warn("[LumberjackClient] Protocol error: #{e}") if not @logger.nil?
         rescue Timeout::Error
           # Reconnect due to timeout
-          @logger.warn("[LumberjackClient] Timeout occurred, reconnecting") if not @logger.nil?
+          @logger.warn("[LumberjackClient] Timeout occurred") if not @logger.nil?
         rescue ClientShutdownSignal
           # Shutdown, break out
           break

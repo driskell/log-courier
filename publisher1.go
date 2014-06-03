@@ -28,7 +28,6 @@ type PendingPayload struct {
   ack_events int
   payload_start int
   payload    []byte
-  timeout    time.Time
 }
 
 type Publisher struct {
@@ -69,6 +68,9 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   timer := time.NewTimer(keepalive_timeout)
+
+  // TODO: We should still obey network timeout if we've sent events and not yet received response
+  //       as its the quickest way to detect a connection problem after idle
 
   for {
     p.transport.Connect()
@@ -212,7 +214,7 @@ func (p *Publisher) sendJdat(events []*FileEvent) (err error) {
   }
 
   // Save pending payload until we receive ack, and discard buffer
-  payload := &PendingPayload{events: events, nonce: nonce, num_events: len(events), payload_start: 0, payload: buffer.Bytes(), timeout: time.Now().Add(p.config.timeout)}
+  payload := &PendingPayload{events: events, nonce: nonce, num_events: len(events), payload_start: 0, payload: buffer.Bytes()}
   p.pending_payloads[nonce] = payload
   if p.first_payload == nil {
     p.first_payload = payload
@@ -320,9 +322,6 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
       // If we need to resend, we'll need to regenerate payload, so free that memory early
       payload.payload = nil
     }
-
-    // Update the retry timeout on the payload
-    payload.timeout = time.Now().Add(p.config.timeout)
   }
 
   // We potentially receive out-of-order ACKs due to payloads distributed across servers
