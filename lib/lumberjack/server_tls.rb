@@ -160,12 +160,12 @@ module Lumberjack
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       # Read errors, only action is to shutdown which we'll do in ensure
       @logger.warn("[LumberjackServerTLS] SSL error on connection from #{@peer}: #{e}") if not @logger.nil?
-    rescue ProtocolError
+    rescue ProtocolError => e
       # Connection abort request due to a protocol error
-      @logger.warn("[LumberjackServerTLS] Protocol error on connection from #{@peer}") if not @logger.nil?
+      @logger.warn("[LumberjackServerTLS] Protocol error on connection from #{@peer}: #{e}") if not @logger.nil?
     rescue ShutdownSignal
       # Shutting down
-      @logger.warn("[LumberjackServerTLS] Closing connecting from #{@peer}: server shutting down") if not @logger.nil?      
+      @logger.warn("[LumberjackServerTLS] Closing connecting from #{@peer}: server shutting down") if not @logger.nil?
     rescue => e
       # Some other unknown problem
       @logger.warn("[LumberjackServerTLS] Unknown error on connection from #{@peer}: #{e}") if not @logger.nil?
@@ -182,7 +182,6 @@ module Lumberjack
       if buffer == nil
         raise EOFError
       elsif buffer.length < need
-        # TODO: log something
         raise ProtocolError
       end
       buffer
@@ -195,7 +194,6 @@ module Lumberjack
       Timeout::timeout(@timeout - Time.now.to_i) do
         written = @fd.write(data)
         if written != data.length
-          # TODO: log something
           raise ProtocolError
         end
       end
