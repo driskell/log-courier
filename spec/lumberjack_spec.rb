@@ -83,10 +83,11 @@ describe "logstash-forwarder" do
   end
 
   it "should follow multiple files and resume them when restarted" do
-    startup
-
     f1 = create_log
     f2 = create_log
+
+    startup
+
     5000.times do
       f1.log
       f2.log
@@ -131,9 +132,9 @@ describe "logstash-forwarder" do
   end
 
   it "should handle incomplete lines in buffered logs by waiting for a line end" do
-    startup
-
     f = create_log
+
+    startup
 
     1000.times do |i|
       if (i + 100) % 500 == 0
@@ -151,9 +152,11 @@ describe "logstash-forwarder" do
   end
 
   it "should handle log rotation and resume correctly" do
+    f1 = create_log
+
     startup
 
-    f1 = create_log.log 100
+    f1.log 100
 
     # Receive and check
     receive_and_check

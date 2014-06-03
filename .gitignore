@@ -8,6 +8,7 @@ pkg
 *.bz2
 *.gz
 src/github.com/alecthomas/gozmq
+vendor/bundle
 vendor/jemalloc/*/
 vendor/libuuid/*/
 vendor/lz4/lz4-r74/
@@ -20,5 +21,6 @@ nacl.secret
 .lumberjack
 .lumberjack.new
 .rbx
-lumberjack
 logstash-forwarder
+.bundle
+.vagrant
