@@ -2,6 +2,7 @@ package main
 
 import (
   "bytes"
+  "encoding/binary"
   "errors"
   "fmt"
   "log"
@@ -9,7 +10,14 @@ import (
   "regexp"
   "runtime"
   "sync"
+  "syscall"
   zmq "github.com/alecthomas/gozmq"
+)
+
+const (
+  zmq_signal_output   = "O"
+  zmq_signal_input    = "I"
+  zmq_signal_shutdown = "S"
 )
 
 type TransportZmq struct {
@@ -17,29 +25,21 @@ type TransportZmq struct {
   context *zmq.Context
   dealer  *zmq.Socket
 
-  write_buffer *bytes.Buffer
-
   wait sync.WaitGroup
 
-  notify_chan chan []byte
+  bridge_chan chan []byte
 
   send_chan chan *ZMQMessage
   recv_chan chan interface{}
+  recv_bridge_chan chan interface{}
 
   can_send chan int
-  can_recv chan int
 }
 
 type ZMQMessage struct {
   part  []byte
   final bool
 }
-
-const (
-  zmq_signal_output   = "O"
-  zmq_signal_input    = "I"
-  zmq_signal_shutdown = "S"
-)
 
 var TransportZmq_Context *zmq.Context
 
@@ -54,19 +54,14 @@ func CreateTransportZmq(config *NetworkConfig) (*TransportZmq, error) {
   return &TransportZmq{config: config, context: TransportZmq_Context}, nil
 }
 
-func (t *TransportZmq) Connect() error {
-  t.write_buffer = new(bytes.Buffer)
-
+func (t *TransportZmq) Connect() (err error) {
   hostport_re := regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`)
   endpoints := 0
 
-  // TODO: check error return
-  t.dealer, _ = t.context.NewSocket(zmq.DEALER)
-
-  // Control sockets that poller will wait on
-  // TODO: check error return
-  notify_in, _ := t.context.NewSocket(zmq.REQ)
-  notify_out, _ := t.context.NewSocket(zmq.REP)
+  // Outbound dealer socket will fair-queue load balance amongst peers
+  if t.dealer, err = t.context.NewSocket(zmq.DEALER); err != nil {
+    return
+  }
 
   // Connect endpoints
   for _, hostport := range t.config.Servers {
@@ -90,6 +85,7 @@ func (t *TransportZmq) Connect() error {
       addressport := net.JoinHostPort(address, port)
 
       log.Printf("Connecting to %s (%s) \n", addressport, host)
+      // TODO: check error
       t.dealer.Connect("tcp://" + addressport)
     }
   }
@@ -98,73 +94,127 @@ func (t *TransportZmq) Connect() error {
     return errors.New("Failed to connect to any of the specified endpoints.")
   }
 
-  notify_in.Bind("inproc://notify")
-  notify_out.Connect("inproc://notify")
+  // Control sockets to connect bridge to poller
+  bridge_in, err := t.context.NewSocket(zmq.PUSH)
+  if err != nil {
+    t.dealer.Close()
+    return
+  }
+  if err = bridge_in.Bind("inproc://notify"); err != nil {
+    t.dealer.Close()
+    bridge_in.Close()
+    return
+  }
+
+  bridge_out, err := t.context.NewSocket(zmq.PULL)
+  if err != nil {
+    t.dealer.Close()
+    bridge_in.Close()
+    return err
+  }
+  if err = bridge_out.Connect("inproc://notify"); err != nil {
+    t.dealer.Close()
+    bridge_in.Close()
+    bridge_out.Close()
+    return
+  }
 
   // Signal channels
-  t.notify_chan = make(chan []byte, 1)
+  t.bridge_chan = make(chan []byte, 1)
   t.send_chan = make(chan *ZMQMessage, 2)
-  t.recv_chan = make(chan interface{}, 2)
+  t.recv_chan = make(chan interface{})
+  t.recv_bridge_chan = make(chan interface{}, 1)
   t.can_send = make(chan int, 1)
-  t.can_recv = make(chan int, 1)
 
   // Waiter we use to wait for shutdown
   t.wait.Add(2)
 
-  // Translator for turning chan receive into a ZeroMQ poll interrupt
-  go t.translateChan(notify_in)
+  // Bridge between channels and ZMQ
+  go t.bridge(bridge_in)
 
   // The poller
-  go t.poller(notify_out)
+  go t.poller(bridge_out)
 
   return nil
 }
 
-func (t *TransportZmq) translateChan(notify_in *zmq.Socket) {
+func (t *TransportZmq) bridge(bridge_in *zmq.Socket) {
   // Wait on channel, passing into socket
   // This keeps the socket in a single thread, otherwise we have to lock the entire publisher
   runtime.LockOSThread()
 
   for {
-    notify := <- t.notify_chan
+    select {
+    case notify := <- t.bridge_chan:
+      bridge_in.Send(notify, 0)
 
-    notify_in.Send(notify, 0)
-
-    // Shutdown?
-    if string(notify) == zmq_signal_shutdown {
-      break
+      // Shutdown?
+      if string(notify) == zmq_signal_shutdown {
+        break
+      }
+    case t.recv_chan <- t.recv_bridge_chan:
+      // Ask for more
+      bridge_in.Send([]byte(zmq_signal_input), 0)
     }
   }
 
   // We should linger by default to ensure shutdown is transmitted
-  notify_in.Close()
+  bridge_in.Close()
   runtime.UnlockOSThread()
   t.wait.Done()
 }
 
-func (t *TransportZmq) poller(notify_out *zmq.Socket) {
+func (t *TransportZmq) poller(bridge_out *zmq.Socket) {
   var pollitems []zmq.PollItem
   var send_stage *ZMQMessage
-  var recv_stage []byte
+  var recv_stage [][]byte
   var recv_body bool
 
+  // ZMQ sockets are not thread-safe, so we have to send/receive on same thread
+  // Thus, we cannot use a sender/receiver thread pair like we can with TLS so we use a single threaded poller instead
+  // In order to asynchronously send and receive we just poll and do necessary actions
+
+  // When data is ready to send we'll get a channel ping, that is bridged to ZMQ so we can then send data
+  // For receiving, we receive here and bridge it to the channels, then receive more once that's through
   runtime.LockOSThread()
 
   pollitems = make([]zmq.PollItem, 2)
-  pollitems[0].Socket = notify_out
+  pollitems[0].Socket = bridge_out
   pollitems[0].Events = zmq.POLLIN | zmq.POLLOUT
   pollitems[1].Socket = t.dealer
 
 PollLoop:
   for {
     // Poll for events
-    // TODO: check return code
-    zmq.Poll(pollitems, -1)
+    if _, err := zmq.Poll(pollitems, -1); err != nil {
+      // Retry on EINTR
+      if err == syscall.EINTR {
+        continue
+      }
+
+      // Failure
+      t.recv_chan <- errors.New(fmt.Sprintf("zmq.Poll failure %s", err))
+      break
+    }
 
     // Process control channel
     if pollitems[0].REvents & zmq.POLLIN != 0 {
-      // TODO: check return code / try again or fail
-      msg, _ := notify_out.Recv(0)
+    RetryControl:
+      msg, err := bridge_out.Recv(zmq.DONTWAIT)
+      if err != nil {
+        switch err {
+        case syscall.EINTR:
+          // Try again
+          goto RetryControl
+        case syscall.EAGAIN:
+          // Poll lied, poll again
+          continue
+        }
+
+        // Failure
+        t.recv_chan <- errors.New(fmt.Sprintf("Pull zmq.Socket.Recv failure %s", err))
+        break
+      }
 
       switch string(msg) {
       case zmq_signal_output:
@@ -186,26 +236,36 @@ PollLoop:
         // Shutdown
         break PollLoop
       }
-    } /* if notify POLLING */
+    }
 
     // Process dealer send
-  PollOut:
-    for pollitems[1].Events & zmq.POLLOUT != 0 {
+    if pollitems[1].Events & zmq.POLLOUT != 0 {
       sent_one := false
 
       // Something in the staging buffer?
       if send_stage != nil {
         var err error
+      RetrySendStage:
         if send_stage.final {
           err = t.dealer.Send(send_stage.part, zmq.DONTWAIT)
         } else {
           err = t.dealer.Send(send_stage.part, zmq.DONTWAIT | zmq.SNDMORE)
         }
-        // If send failed, skip and try again later, means poll lied
         if err != nil {
-          // TODO: report an error? fail completely?
-          break PollOut
+          switch err {
+          case syscall.EINTR:
+            // Try again
+            goto RetrySendStage
+          case syscall.EAGAIN:
+            // Poll lied, poll again
+            continue
+          }
+
+          // Failure
+          t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.Send failure %s", err))
+          break
         }
+
         sent_one = true
       }
 
@@ -214,17 +274,28 @@ PollLoop:
         select {
         case msg := <-t.send_chan:
           var err error
+        RetrySend:
           if msg.final {
             err = t.dealer.Send(msg.part, zmq.DONTWAIT)
           } else {
             err = t.dealer.Send(msg.part, zmq.DONTWAIT | zmq.SNDMORE)
           }
-          // If send failed, buffer
           if err != nil {
-            // TODO: report an error? fail completely if consistently happening?
-            send_stage = msg
-            break PollOut
+            switch err {
+            case syscall.EINTR:
+              // Try again
+              goto RetrySend
+            case syscall.EAGAIN:
+              // Poll lied, poll again after we check others
+              send_stage = msg
+              goto PollRecv
+            }
+
+            // Failure
+            t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.Send failure %s", err))
+            break PollLoop
           }
+
           sent_one = true
         default:
           break
@@ -242,51 +313,88 @@ PollLoop:
       }
 
       pollitems[1].Events = pollitems[1].Events ^ zmq.POLLOUT
-      break
-    } /* for dealer POLLOUT */
+    }
 
     // Process dealer receive
+  PollRecv:
     if pollitems[1].Events & zmq.POLLIN != 0 {
       for {
         // Bring in the messages
-        // TODO: check error return
-        msg, _ := t.dealer.Recv(0)
-        more, _ := t.dealer.RcvMore()
+      RetryRecv:
+        data, err := t.dealer.Recv(0)
+        if err != nil {
+          switch err {
+          case syscall.EINTR:
+            // Try again
+            goto RetryRecv
+          case syscall.EAGAIN:
+            // Poll lied, poll again
+            continue PollLoop
+          }
+
+          // Failure
+          t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.Recv failure %s", err))
+          break PollLoop
+        }
+
+        more, err := t.dealer.RcvMore()
+        if err != nil {
+          // Failure
+          t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.RcvMore failure %s", err))
+          break PollLoop
+        }
+
         // Sanity check, and don't save until empty message
-        if string(msg) == "" && more {
-          // Empty message, start returning
+        if len(data) == 0 && more {
+          // Message separator, start returning
           recv_body = true
           continue
         } else if more {
           // Ignore all but last message
         } else if recv_body {
-          // Last message and receiving, pass to channel
-          select {
-          case t.recv_chan <- msg:
-            recv_body = false
-            t.setChan(t.can_recv)
-          default:
-            // We filled the channel, stop polling until we pull something off of it and stage the recv
-            recv_stage = msg
-            recv_body = false
-            pollitems[1].Events = pollitems[1].Events ^ zmq.POLLIN
-            break
-          }
-        } else {
-          // Hmmm, just discard
           recv_body = false
-        }
+
+          // Last message and receiving, validate it first
+          if len(data) < 8 {
+            log.Printf("Skipping invalid message: not enough data")
+          } else {
+            length := binary.BigEndian.Uint32(data[4:8])
+            if length > 1048576 {
+              log.Printf("Skipping invalid message: data too large (%d)", length)
+            } else if length > uint32(len(data)) - 8 {
+              log.Printf("Skipping invalid message: data has invalid length (%d > %d)", len(data) - 8, length)
+            } else {
+              message := [][]byte{data[0:4], data[8:]}
+
+              // Bridge to channels
+              select {
+              case t.recv_bridge_chan <- message:
+              default:
+                // We filled the channel, stop polling until we pull something off of it and stage the recv
+                recv_stage = message
+                pollitems[1].Events = pollitems[1].Events ^ zmq.POLLIN
+                break
+              }
+            }
+          }
+        } // Hmmm, discard anything else
 
         // Finished receiving?
-        // TODO: Check why Events() is returning uint64 instead of PollEvents
-        if events, _ := t.dealer.Events(); zmq.PollEvents(events) & zmq.POLLIN == 0 {
+        // (Why does Events() return uint64 instead of PollEvents?)
+        events, err := t.dealer.Events()
+        if err != nil {
+          // Failure
+          t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.Events failure %s", err))
+          break PollLoop
+        }
+        if zmq.PollEvents(events) & zmq.POLLIN == 0 {
           break
         }
-      } /* loop forever */
-    } /* if dealer POLLIN */
+      }
+    }
   }
 
-  notify_out.Close()
+  bridge_out.Close()
   runtime.UnlockOSThread()
   t.wait.Done()
 }
@@ -298,52 +406,41 @@ func (t *TransportZmq) setChan(set chan int) {
   }
 }
 
-func (t *TransportZmq) CanRecv() chan int {
-  return t.can_recv
-}
-
-func (t *TransportZmq) CanSend() chan int {
+func (t *TransportZmq) CanSend() <-chan int {
   return t.can_send
 }
 
-func (t *TransportZmq) Write(p []byte) (int, error) {
-  return t.write_buffer.Write(p)
-}
+func (t *TransportZmq) Write(signature string, message []byte) (err error) {
+  var write_buffer *bytes.Buffer
+  write_buffer = bytes.NewBuffer(make([]byte, 0, len(signature) + 4 + len(message)))
 
-func (t *TransportZmq) Flush() error {
+  if _, err = write_buffer.Write([]byte(signature)); err != nil {
+    return
+  }
+  if err = binary.Write(write_buffer, binary.BigEndian, uint32(len(message))); err != nil {
+    return
+  }
+  if len(message) != 0 {
+    if _, err = write_buffer.Write(message); err != nil {
+      return
+    }
+  }
+
   t.send_chan <- &ZMQMessage{part: []byte(""), final: false}
-  t.send_chan <- &ZMQMessage{part: t.write_buffer.Bytes(), final: true}
-  t.write_buffer.Reset()
+  t.send_chan <- &ZMQMessage{part: write_buffer.Bytes(), final: true}
 
   // Ask for send to start
-  t.notify_chan <- []byte(zmq_signal_output)
+  t.bridge_chan <- []byte(zmq_signal_output)
   return nil
 }
 
-func (t *TransportZmq) Read() ([]byte, error) {
-  var msg interface{}
-  select {
-  case msg = <-t.recv_chan:
-    // Ask for more
-    t.notify_chan <- []byte(zmq_signal_input)
-  default:
-    t.notify_chan <- []byte(zmq_signal_input)
-    msg = <-t.recv_chan
-  }
-
-  // Error? Or data?
-  switch msg.(type) {
-    case error:
-      return nil, msg.(error)
-    default:
-      return msg.([]byte), nil
-  }
+func (t *TransportZmq) Read() <-chan interface{} {
+  return t.recv_chan
 }
 
 func (t *TransportZmq) Disconnect() {
   // Send shutdown request
-  t.notify_chan <- []byte(zmq_signal_shutdown)
+  t.bridge_chan <- []byte(zmq_signal_shutdown)
   t.wait.Wait()
   t.dealer.Close()
-  t.write_buffer.Reset()
 }

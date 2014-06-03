@@ -108,7 +108,8 @@ module Lumberjack
 
         if length > 1048576
           # Too big raise error
-          io_control << ["R", nil]
+          @logger.warn("[LumberjackClientTLS] Invalid message: data too big (#{length})") if not @logger.nil?
+          io_control << ["F"]
           break
         end
 

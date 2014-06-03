@@ -21,6 +21,10 @@ import (
 import _ "crypto/sha256"
 import _ "crypto/sha512"
 
+const (
+  socket_interval_seconds = 5
+)
+
 type TransportTls struct {
   config      *NetworkConfig
   tls_config  tls.Config
@@ -45,10 +49,6 @@ type TransportTlsWrap struct {
 
   net.Conn
 }
-
-const (
-  socket_interval_seconds = 5
-)
 
 func CreateTransportTls(config *NetworkConfig) (*TransportTls, error) {
   rand.Seed(time.Now().UnixNano())
@@ -208,7 +208,7 @@ func (t *TransportTls) receiver() {
 
     // Sanity
     if length > 1048576 {
-      err = errors.New(fmt.Sprintf("Received message too large (%d)", length))
+      err = errors.New(fmt.Sprintf("Data too large (%d)", length))
       break
     }
 

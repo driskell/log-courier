@@ -325,7 +325,7 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
     payload.timeout = time.Now().Add(p.config.timeout)
   }
 
-  // We potentially receive out-of-order ACKs due to payloads distributed across servers 
+  // We potentially receive out-of-order ACKs due to payloads distributed across servers
   // This is where we enforce ordering again to ensure registrar receives ACK in order
   if payload == p.first_payload {
     for payload.ack_events != 0 {
