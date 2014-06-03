@@ -127,7 +127,7 @@ module Lumberjack
         begin
           # IO loop
           while true
-            catch :keepalive_and_next do
+            catch :keepalive do
               begin
                 action = Timeout::timeout(keepalive_next) do
                   @io_control.pop
@@ -145,7 +145,7 @@ module Lumberjack
                     @client.send "JDAT", retry_payload.data
 
                     retry_payload = retry_payload.next
-                    throw :keepalive_and_next
+                    throw :keepalive
                   end
 
                   # Ready to send, allow spooler to pass us something
@@ -178,6 +178,9 @@ module Lumberjack
                     # Unknown message - only listener is allowed to respond with a "????" message
                     # TODO: What should we do? Just ignore for now and let timeouts conquer
                   end
+                when "F"
+                  # Reconnect, an error occurred
+                  break
                 end
               rescue Timeout::Error
                 # Keepalive timeout hit, send a PING unless we were awaiting a PONG
@@ -217,6 +220,7 @@ module Lumberjack
           @logger.warn("[LumberjackClient] Unknown error: #{e}") if not @logger.nil?
           @logger.debug("[LumberjackClient] #{e.backtrace}: #{e.message} (#{e.class})") if not @logger.nil? and @logger.debug?
         end
+
 
         # Disconnect and retry payloads
         @client.disconnect
