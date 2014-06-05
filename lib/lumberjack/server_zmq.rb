@@ -2,7 +2,7 @@ require "ffi-rzmq"
 require "timeout"
 
 module Lumberjack
-  class ServerZMQ
+  class ServerZmq
     class ZMQError < StandardError; end
 
     attr_reader :port
@@ -19,15 +19,16 @@ module Lumberjack
       @context = ZMQ::Context.new
       @socket = @context.socket(ZMQ::REP)
 
-      rc = @socket.bind("tcp://" + @options[:address] + (@options[:port] == 0 ? "*" : ":" + @options[:port].to_s))
+      rc = @socket.bind("tcp://" + @options[:address] + (@options[:port] == 0 ? ":*" : ":" + @options[:port].to_s))
       raise ZMQError if !ZMQ::Util.resultcode_ok?(rc)
 
       # Lookup port number that was allocated in case it was set to 0
+      endpoint = ""
       rc = @socket.getsockopt(ZMQ::LAST_ENDPOINT, endpoint)
-      raise ZMQError if !ZMQ::Util.resultcode_ok?(rc) or %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint[0]
+      raise ZMQError if !ZMQ::Util.resultcode_ok?(rc) or not %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
       @port = Integer(endpoint_port)
 
-      # TODO: Implement workers option
+      # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
 
       reset_timeout
     end
@@ -37,6 +38,7 @@ module Lumberjack
         begin
           # If we don't receive anything after the main timeout - something is probably wrong
           data = Timeout::timeout(@timeout - Time.now.to_i) do
+            data = ""
             rc = @socket.recv_string(data)
             raise ZMQError if !ZMQ::Util.resultcode_ok?(rc)
             data
@@ -57,6 +59,16 @@ module Lumberjack
           recv(data, &block)
         end
       end
+    rescue ShutdownSignal
+      # Shutting down
+      @logger.warn("[LumberjackServerZMQ] Server shutting down") if not @logger.nil?
+    rescue => e
+      # Some other unknown problem
+      @logger.warn("[LumberjackServerZMQ] Unknown error: #{e}") if not @logger.nil?
+      @logger.debug("[LumberjackServerZMQ] #{e.backtrace}: #{e.message} (#{e.class})") if not @logger.nil? and @logger.debug?
+    ensure
+      @socket.close
+      @context.close
     end
 
     def recv(data, &block)
@@ -66,16 +78,16 @@ module Lumberjack
       end
 
       # Unpack the header
-      signature, length = message.unpack("A4N")
+      signature, length = data.unpack("A4N")
 
       # Verify length
-      if message.length - 8 != length
-        @logger.warn "[LumberjackServerZMQ] Invalid message: data has invalid length (#{message.length - 8} != #{length})" if not @logger.nil?
+      if data.length - 8 != length
+        @logger.warn "[LumberjackServerZMQ] Invalid message: data has invalid length (#{data.length - 8} != #{length})" if not @logger.nil?
         return
       end
 
       # Yield the parts
-      yield signature, message[8, length], self
+      yield signature, data[8, length], self
     end
 
     def send(signature, message)
