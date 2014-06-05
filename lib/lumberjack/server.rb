@@ -17,8 +17,8 @@ module Lumberjack
 
       @logger = @options[:logger]
 
-      require "lumberjack/server_tls"
-      @server = ServerTls.new(@options)
+      require "lumberjack/server_zmq"
+      @server = ServerZmq.new(@options)
 
       # Grab the port back
       @port = @server.port
@@ -35,15 +35,12 @@ module Lumberjack
         # a timeout wrapper around the &block call but we'd then be generating exceptions in someone else's code
         # So we allow the caller to block us - but only our spooler thread - our other threads are safe and we can use timeout
         spooler_thread = Thread.new do
-          begin
-            while true
-              block.call event_queue.pop
+          while true
+            events = event_queue.pop
+            break if events.nil?
+            events.each do |event|
+              block.call event
             end
-          rescue ShutdownSignal
-            # Flush whatever we have left
-          end
-          while event_queue.length
-            block.call event_queue.pop
           end
         end
 
@@ -64,14 +61,10 @@ module Lumberjack
       ensure
         # Signal the spooler thread to stop
         if not spooler_thread.nil?
-          spooler_thread.raise ShutdownSignal
+          event_queue << nil
           spooler_thread.join
         end
       end
-    end
-
-    def process(message)
-
     end
 
     def process_ping(message, comm)
@@ -108,6 +101,7 @@ module Lumberjack
       # A 0 sequence acknowledgement means we haven't processed any yet
       p = 0
       sequence = 0
+      events = []
       while p < message.length
         if message.length - p < 4
           # TODO: log something
@@ -135,21 +129,21 @@ module Lumberjack
           event = { "message" => data }
         end
 
-        # Queue the event
-        while true
-          begin
-            Timeout::timeout(@ack_timeout - Time.now.to_i) do
-              event_queue << event
-            end
-            break
-          rescue Timeout::Error
-            # Full pipeline, partial ack
-            comm.send("ACKN", [nonce, sequence].pack("A*N"))
-            reset_ack_timeout
-          end
-        end
+        events << event
 
         sequence += 1
+      end
+
+      # Queue the events
+      begin
+        Timeout::timeout(@ack_timeout - Time.now.to_i) do
+          event_queue << events
+        end
+      rescue Timeout::Error
+        # Full pipeline, partial ack
+        comm.send("ACKN", [nonce, sequence].pack("A*N"))
+        reset_ack_timeout
+        retry
       end
 
       # Acknowledge the full message

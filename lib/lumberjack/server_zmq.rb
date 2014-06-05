@@ -68,7 +68,7 @@ module Lumberjack
       @logger.debug("[LumberjackServerZMQ] #{e.backtrace}: #{e.message} (#{e.class})") if not @logger.nil? and @logger.debug?
     ensure
       @socket.close
-      @context.close
+      @context.terminate
     end
 
     def recv(data, &block)
