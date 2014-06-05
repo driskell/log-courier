@@ -52,7 +52,7 @@ func (p *Publisher) Init() error {
   }
 
   // Set up the selected transport (currently only TLS)
-  if p.transport, err = CreateTransportZmq(p.config); err != nil {
+  if p.transport, err = CreateTransportTls(p.config); err != nil {
     return err
   }
 
