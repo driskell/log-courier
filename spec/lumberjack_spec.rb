@@ -9,7 +9,7 @@ describe "logstash-forwarder" do
     startup mode: "w", config: <<-config
     {
       "network": {
-        "servers": [ "127.0.0.1:#{@server.port}" ],
+        "servers": [ "127.0.0.1:#{server_port()}" ],
         "ssl ca": "#{@ssl_cert.path}",
         "timeout": 15,
         "reconnect": 1
