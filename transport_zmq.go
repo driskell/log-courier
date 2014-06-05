@@ -84,9 +84,13 @@ func (t *TransportZmq) Connect() (err error) {
     for _, address := range addresses {
       addressport := net.JoinHostPort(address, port)
 
-      log.Printf("Connecting to %s (%s) \n", addressport, host)
-      // TODO: check error
-      t.dealer.Connect("tcp://" + addressport)
+      if err = t.dealer.Connect("tcp://" + addressport); err != nil {
+        log.Printf("Failed to connect to %s (%s), skipping", addressport, host)
+        continue
+      }
+
+      log.Printf("Connected with %s (%s) \n", addressport, host)
+      endpoints++
     }
   }
 
@@ -122,7 +126,7 @@ func (t *TransportZmq) Connect() (err error) {
   // Signal channels
   t.bridge_chan = make(chan []byte, 1)
   t.send_chan = make(chan *ZMQMessage, 2)
-  t.recv_chan = make(chan interface{})
+  t.recv_chan = make(chan interface{}, 1)
   t.recv_bridge_chan = make(chan interface{}, 1)
   t.can_send = make(chan int, 1)
 
@@ -139,6 +143,8 @@ func (t *TransportZmq) Connect() (err error) {
 }
 
 func (t *TransportZmq) bridge(bridge_in *zmq.Socket) {
+  var message interface{}
+
   // Wait on channel, passing into socket
   // This keeps the socket in a single thread, otherwise we have to lock the entire publisher
   runtime.LockOSThread()
@@ -152,9 +158,19 @@ func (t *TransportZmq) bridge(bridge_in *zmq.Socket) {
       if string(notify) == zmq_signal_shutdown {
         break
       }
-    case t.recv_chan <- t.recv_bridge_chan:
-      // Ask for more
+    case message = <-t.recv_bridge_chan:
+    case func () chan<- interface{} {
+      if message != nil {
+        return t.recv_chan
+      }
+      return nil
+    }() <- message:
+      // The reason we flush recv through the bridge and not directly to recv_chan is so that if
+      // the poller was quick and had to cache a receive as the channel was full, it will stop
+      // polling - flushing through bridge allows us to signal poller to start polling again
+      // It is not the publisher's responsibility to do this, and TLS wouldn't need it
       bridge_in.Send([]byte(zmq_signal_input), 0)
+      message = nil
     }
   }
 
@@ -182,6 +198,7 @@ func (t *TransportZmq) poller(bridge_out *zmq.Socket) {
   pollitems[0].Socket = bridge_out
   pollitems[0].Events = zmq.POLLIN | zmq.POLLOUT
   pollitems[1].Socket = t.dealer
+  pollitems[1].Events = zmq.POLLIN | zmq.POLLOUT
 
 PollLoop:
   for {
@@ -224,13 +241,17 @@ PollLoop:
         // If we staged a receive, process that
         if recv_stage != nil {
           select {
-          case t.recv_chan <- recv_stage:
+          case t.recv_bridge_chan <- recv_stage:
             recv_stage = nil
+
             // Start polling for receive
             pollitems[1].Events = pollitems[1].Events | zmq.POLLIN
           default:
             // Do nothing, we were asked for receive but channel is already full
           }
+        } else {
+          // Start polling for receive
+          pollitems[1].Events = pollitems[1].Events | zmq.POLLIN
         }
       case zmq_signal_shutdown:
         // Shutdown
@@ -239,7 +260,7 @@ PollLoop:
     }
 
     // Process dealer send
-    if pollitems[1].Events & zmq.POLLOUT != 0 {
+    if pollitems[1].REvents & zmq.POLLOUT != 0 {
       sent_one := false
 
       // Something in the staging buffer?
@@ -270,6 +291,7 @@ PollLoop:
       }
 
       // Send messages from channel
+    LoopSend:
       for {
         select {
         case msg := <-t.send_chan:
@@ -298,13 +320,14 @@ PollLoop:
 
           sent_one = true
         default:
-          break
+          break LoopSend
         }
       }
 
       if sent_one {
         // We just sent something, check POLLOUT still active before signalling we can send more
         // TODO: Check why Events() is returning uint64 instead of PollEvents
+        // TODO: This is broken and actually returns an error
         if events, _ := t.dealer.Events(); zmq.PollEvents(events) & zmq.POLLOUT != 0 {
           t.setChan(t.can_send)
         }
@@ -317,11 +340,12 @@ PollLoop:
 
     // Process dealer receive
   PollRecv:
-    if pollitems[1].Events & zmq.POLLIN != 0 {
+    if pollitems[1].REvents & zmq.POLLIN != 0 {
+    LoopRecv:
       for {
         // Bring in the messages
       RetryRecv:
-        data, err := t.dealer.Recv(0)
+        data, err := t.dealer.Recv(zmq.DONTWAIT)
         if err != nil {
           switch err {
           case syscall.EINTR:
@@ -372,24 +396,13 @@ PollLoop:
               default:
                 // We filled the channel, stop polling until we pull something off of it and stage the recv
                 recv_stage = message
-                pollitems[1].Events = pollitems[1].Events ^ zmq.POLLIN
-                break
+                break LoopRecv
               }
             }
           }
         } // Hmmm, discard anything else
 
-        // Finished receiving?
-        // (Why does Events() return uint64 instead of PollEvents?)
-        events, err := t.dealer.Events()
-        if err != nil {
-          // Failure
-          t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.Events failure %s", err))
-          break PollLoop
-        }
-        if zmq.PollEvents(events) & zmq.POLLIN == 0 {
-          break
-        }
+        pollitems[1].Events = pollitems[1].Events ^ zmq.POLLIN
       }
     }
   }
