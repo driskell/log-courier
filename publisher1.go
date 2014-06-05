@@ -52,7 +52,7 @@ func (p *Publisher) Init() error {
   }
 
   // Set up the selected transport (currently only TLS)
-  if p.transport, err = CreateTransportTls(p.config); err != nil {
+  if p.transport, err = CreateTransportZmq(p.config); err != nil {
     return err
   }
 
@@ -73,7 +73,12 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
   //       as its the quickest way to detect a connection problem after idle
 
   for {
-    p.transport.Connect()
+    if err = p.transport.Connect(); err != nil {
+      log.Printf("Connect attempt failed: %s\n", err)
+      // TODO: implement shutdown select
+      time.Sleep(p.config.reconnect)
+      continue
+    }
     p.can_send = p.transport.CanSend()
     input_toggle = nil
 
