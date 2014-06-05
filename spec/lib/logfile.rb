@@ -53,6 +53,10 @@ class LogFile
     self
   end
 
+  def has_pending?
+    @count != 0
+  end
+
   def logged?(event, check_file=true)
     return false if event["host"] != @host
     return false if check_file and event["file"] != @orig_path

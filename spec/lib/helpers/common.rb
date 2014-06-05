@@ -24,22 +24,12 @@ shared_context "Helpers" do
     # When we add a file we log it here, so after we can remove them
     @files = []
 
-    logger = Logger.new(STDOUT)
-    logger.level = Logger::DEBUG
-
-    # Reset server for each test
-    @server = Lumberjack::Server.new(
-      :ssl_certificate => @ssl_cert.path,
-      :ssl_key => @ssl_key.path,
-      :logger => logger
-    )
-
     @event_queue = Queue.new
-    @server_thread = Thread.new do
-      @server.run do |event|
-        @event_queue << event
-      end
-    end
+
+    @servers = Hash.new
+    @server_threads = Hash.new
+
+    start_server '__default__'
   end
 
   after :each do
@@ -49,6 +39,51 @@ shared_context "Helpers" do
     end
 
     @files = []
+
+    shutdown_server
+  end
+
+  # A helper that starts a lumberjack server
+  def start_server(id)
+    logger = Logger.new(STDOUT)
+    logger.progname = "Server #{id}"
+    logger.level = Logger::DEBUG
+
+    # Reset server for each test
+    @servers[id] = Lumberjack::Server.new(
+      :ssl_certificate => @ssl_cert.path,
+      :ssl_key => @ssl_key.path,
+      :logger => logger
+    )
+
+    @server_threads[id] = Thread.new do
+      begin
+        @servers[id].run do |event|
+          @event_queue << event
+        end
+      rescue
+      end
+    end
+  end
+
+  # A helper to shutdown a lumberjack server
+  def shutdown_server(id=nil)
+    if id.nil?
+      id = @servers.keys
+    else
+      id = [id]
+    end
+    id.each do |id|
+      @server_threads[id].raise Lumberjack::ShutdownSignal
+      @server_threads[id].join
+      @server_threads.delete id
+      @servers.delete id
+    end
+  end
+
+  # A helper to get the port a server is bound to
+  def server_port(id='__default__')
+    @servers[id].port
   end
 
   # A helper that creates a new log file
@@ -76,35 +111,34 @@ shared_context "Helpers" do
     create_log(f.class, old_name)
   end
 
-  def wait_for_events(total)
-    waited = 0
-    last_total = 0
-    while @event_queue.length != total and waited < EVENT_WAIT_COUNT
-      if @event_queue.length != last_total
-        waited = 0
-        last_total = @event_queue.length
-      end
-      sleep(EVENT_WAIT_TIME)
-      waited += 1
-    end
-
-    @event_queue.length.should == total
-  end
-
   def receive_and_check(check_file: true)
     # Quick check of the total events we are expecting - but allow time to receive them
     total = @files.inject(0) do |sum, f|
       sum + f.count
     end
 
-    wait_for_events total
-
-    while @event_queue.length > 0
-      e = @event_queue.pop
-      f = @files.find do |f|
-        f.logged?(e, check_file)
+    waited = 0
+    while total > 0 and waited < EVENT_WAIT_COUNT
+      if @event_queue.length != 0
+        waited = 0
+        while @event_queue.length != 0
+          e = @event_queue.pop
+          f = @files.find do |f|
+            if f.has_pending?
+              f.logged?(e, check_file)
+            else
+              false
+            end
+          end
+          f.should_not be_nil, "Event received not recognised: #{e}"
+          total -= 1
+        end
+        next
       end
-      f.should_not be_nil, "Event received not recognised: #{e}"
+      sleep(EVENT_WAIT_TIME)
+      waited += 1
     end
+
+    total.should == 0
   end
 end
