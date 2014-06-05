@@ -46,7 +46,7 @@ module Lumberjack
 
       # Query the port in case the port number is '0'
       # TCPServer#addr == [ address_family, port, address, address ]
-      @port = tcp_server.addr[1]
+      @port = @tcp_server.addr[1]
 
       ssl = OpenSSL::SSL::SSLContext.new
       ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
@@ -69,7 +69,7 @@ module Lumberjack
         ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
       end
 
-      @ssl_server = OpenSSL::SSL::SSLServer.new(tcp_server, ssl)
+      @ssl_server = OpenSSL::SSL::SSLServer.new(@tcp_server, ssl)
     end # def initialize
 
     def run(&block)
