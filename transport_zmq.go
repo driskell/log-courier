@@ -396,16 +396,16 @@ PollLoop:
               default:
                 // We filled the channel, stop polling until we pull something off of it and stage the recv
                 recv_stage = message
+                pollitems[1].Events = pollitems[1].Events ^ zmq.POLLIN
                 break LoopRecv
               }
             }
           }
         } // Hmmm, discard anything else
-
-        pollitems[1].Events = pollitems[1].Events ^ zmq.POLLIN
       }
     }
   }
+  // TODO: Can we tidy the nesting above? :/
 
   bridge_out.Close()
   runtime.UnlockOSThread()
