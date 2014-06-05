@@ -42,7 +42,7 @@ module Lumberjack
         raise "You must specify one of ssl_verify_default_ca and ssl_verify_ca in Lumberjack::Server.new(...) when ssl_verify is true"
       end
 
-      tcp_server = ExtendedTCPServer.new(@options[:port])
+      @tcp_server = ExtendedTCPServer.new(@options[:port])
 
       # Query the port in case the port number is '0'
       # TCPServer#addr == [ address_family, port, address, address ]
@@ -111,6 +111,8 @@ module Lumberjack
       end
 
       client_threads.each &:join
+
+      @tcp_server.close
     end
   end
 
