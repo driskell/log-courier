@@ -4,3 +4,5 @@ gem "insist"
 gem "stud"
 
 gem "jruby-openssl", :platform => :jruby
+
+gem "ffi-rzmq"
