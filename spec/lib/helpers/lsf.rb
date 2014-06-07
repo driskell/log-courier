@@ -22,7 +22,10 @@ shared_context "Helpers_LSF" do
       {
         "network": {
           "servers": [ "127.0.0.1:#{@server.port}" ],
-          "ssl ca": "#{@ssl_cert.path}",
+          "transport": {
+            "name": "tls",
+            "ssl ca": "#{@ssl_cert.path}"
+          }
           "timeout": 15,
           "reconnect": 1
         },
@@ -43,7 +46,7 @@ shared_context "Helpers_LSF" do
     @config.close
 
     # Start LSF
-    @logstash_forwarder = IO.popen("build/bin/logstash-forwarder -config #{@config.path}" + (args.empty? ? "" : " " + args), mode)
+    @logstash_forwarder = IO.popen("bin/logstash-forwarder -config #{@config.path}" + (args.empty? ? "" : " " + args), mode)
 
     # Needs some time to startup - to ensure when we create new files AFTER this, they are not detected during startup
     sleep STARTUP_WAIT_TIME

@@ -11,7 +11,10 @@ describe "logstash-forwarder with multiline codec" do
     {
       "network": {
         "servers": [ "127.0.0.1:#{server_port()}" ],
-        "ssl ca": "#{@ssl_cert.path}",
+        "transport": {
+          "name": "tls",
+          "ssl ca": "#{@ssl_cert.path}"
+        },
         "timeout": 15,
         "reconnect": 1
       },
@@ -42,7 +45,10 @@ describe "logstash-forwarder with multiline codec" do
     {
       "network": {
         "servers": [ "127.0.0.1:#{server_port()}" ],
-        "ssl ca": "#{@ssl_cert.path}",
+        "transport": {
+          "name": "tls",
+          "ssl ca": "#{@ssl_cert.path}"
+        },
         "timeout": 15,
         "reconnect": 1
       },
@@ -73,14 +79,17 @@ describe "logstash-forwarder with multiline codec" do
     {
       "network": {
         "servers": [ "127.0.0.1:#{server_port()}" ],
-        "ssl ca": "#{@ssl_cert.path}",
+        "transport": {
+          "name": "tls",
+          "ssl ca": "#{@ssl_cert.path}"
+        },
         "timeout": 15,
         "reconnect": 1
       },
       "files": [
         {
           "paths": [ "#{TEMP_PATH}/logs/log-*" ],
-          "codec": { "name": "multiline", "what": "previous", "pattern": "^\\\\s", "previous_timeout": "10s" }
+          "codec": { "name": "multiline", "what": "previous", "pattern": "^\\\\s", "previous timeout": "10s" }
         }
       ]
     }
@@ -101,7 +110,10 @@ describe "logstash-forwarder with multiline codec" do
     {
       "network": {
         "servers": [ "127.0.0.1:#{server_port()}" ],
-        "ssl ca": "#{@ssl_cert.path}",
+        "transport": {
+          "name": "tls",
+          "ssl ca": "#{@ssl_cert.path}"
+        },
         "timeout": 15,
         "reconnect": 1
       },
@@ -129,7 +141,10 @@ describe "logstash-forwarder with multiline codec" do
     {
       "network": {
         "servers": [ "127.0.0.1:#{server_port()}" ],
-        "ssl ca": "#{@ssl_cert.path}",
+        "transport": {
+          "name": "tls",
+          "ssl ca": "#{@ssl_cert.path}"
+        },
         "timeout": 15,
         "reconnect": 1
       },

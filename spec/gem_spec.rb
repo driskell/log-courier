@@ -11,10 +11,6 @@ describe "logstash-forwarder gem" do
     @host = Socket.gethostname
   end
 
-  after :each do
-    shutdown
-  end
-
   def startup
     logger = Logger.new(STDOUT)
     logger.level = Logger::DEBUG
@@ -23,7 +19,7 @@ describe "logstash-forwarder gem" do
     @client = Lumberjack::Client.new(
       :ssl_ca => @ssl_cert.path,
       :addresses => ["127.0.0.1"],
-      :port => @server.port,
+      :port => server_port(),
       :logger => logger,
     )
   end
@@ -43,15 +39,14 @@ describe "logstash-forwarder gem" do
     end
 
     # Receive and check
-    wait_for_events 5000
-
     i = 0
-    while @event_queue.length > 0
-      e = @event_queue.pop
-      e["message"].should == "gem line test #{i}"
-      e["host"].should == @host
-      e["file"].should == "gemfile.log"
+    receive_and_check(total: 5000) do |e|
+      expect(e["message"]).to eq "gem line test #{i}"
+      expect(e["host"]).to eq @host
+      expect(e["file"]).to eq "gemfile.log"
       i += 1
     end
+
+    shutdown
   end
 end
