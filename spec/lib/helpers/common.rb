@@ -4,6 +4,8 @@ require "lumberjack/server"
 # Common helpers for testing both ruby client and the forwarder
 shared_context "Helpers" do
   before :all do
+    @transport = "tls"
+
     @ssl_cert = File.open(File.join(TEMP_PATH, "ssl_cert"), "w")
     @ssl_key = File.open(File.join(TEMP_PATH, "ssl_key"), "w")
     @ssl_csr = File.open(File.join(TEMP_PATH, "ssl_csr"), "w")
@@ -29,7 +31,7 @@ shared_context "Helpers" do
     @servers = Hash.new
     @server_threads = Hash.new
 
-    start_server '__default__'
+    start_server
   end
 
   after :each do
@@ -44,13 +46,20 @@ shared_context "Helpers" do
   end
 
   # A helper that starts a lumberjack server
-  def start_server(id)
+  def start_server(id: "__default__", transport: nil)
     logger = Logger.new(STDOUT)
     logger.progname = "Server #{id}"
     logger.level = Logger::DEBUG
 
+    raise "Server already initialised" if @servers.has_key?(id)
+
+    if transport.nil?
+      transport = @transport
+    end
+
     # Reset server for each test
     @servers[id] = Lumberjack::Server.new(
+      :transport => transport,
       :ssl_certificate => @ssl_cert.path,
       :ssl_key => @ssl_key.path,
       :logger => logger
@@ -145,6 +154,6 @@ shared_context "Helpers" do
       waited += 1
     end
 
-    expect(total).to be 0
+    expect(total).to eq 0
   end
 end
