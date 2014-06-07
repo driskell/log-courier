@@ -1,3 +1,5 @@
+// +build zmq
+
 package main
 
 import (
@@ -48,6 +50,10 @@ type TransportZmq struct {
 type ZMQMessage struct {
   part  []byte
   final bool
+}
+
+func init() {
+  NewTransportZmqFactoryIfAvailable = NewTransportZmqFactory
 }
 
 func NewTransportZmqFactory(config_path string, config map[string]interface{}) (TransportFactory, error) {

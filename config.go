@@ -5,7 +5,6 @@ import (
   "encoding/json"
   "errors"
   "fmt"
-  "log"
   "math"
   "os"
   "reflect"
@@ -21,6 +20,8 @@ type Config struct {
   Network NetworkConfig `json:"network"`
   Files   []FileConfig  `json:"files"`
 }
+
+var NewTransportZmqFactoryIfAvailable func(string, map[string]interface{}) (TransportFactory, error)
 
 type TransportConfigStub struct {
   Name string `json:"name"`
@@ -51,19 +52,18 @@ type FileConfig struct {
 func LoadConfig(path string) (config *Config, err error) {
   config_file, err := os.Open(path)
   if err != nil {
-    log.Printf("Failed to open config file '%s': %s\n", path, err)
+    err = errors.New(fmt.Sprintf("Failed to open config file: %s", err))
     return
   }
   defer config_file.Close()
 
   fi, err := config_file.Stat()
   if err != nil {
-    log.Printf("Stat failed for config file: %s\n", err)
+    err = errors.New(fmt.Sprintf("Stat failed for config file: %s", err))
     return
   }
   if fi.Size() > (10 << 20) {
-    err = errors.New("Config file too large?")
-    log.Printf("Config file too large? Aborting, just in case. '%s' is %d bytes\n", path, fi)
+    err = errors.New(fmt.Sprintf("Config file too large (%s)", fi))
     return
   }
 
@@ -75,8 +75,7 @@ func LoadConfig(path string) (config *Config, err error) {
     buffer := make([]byte, fi.Size())
     _, err = config_file.Read(buffer)
     if err != nil {
-      log.Printf("Failed reading config file: %s\n", err)
-      return nil, err
+      return
     }
 
     for p < len(buffer) {
@@ -144,20 +143,17 @@ func LoadConfig(path string) (config *Config, err error) {
       p++
     }
     stripped.Write(buffer[s:p])
-    log.Printf("%s\n", stripped.String())
   }
 
   // Pull the entire structure into config
   raw_config := make(map[string]interface{})
   err = json.Unmarshal(stripped.Bytes(), &raw_config)
   if err != nil {
-    log.Printf("Failed unmarshalling json: %s", err)
     return
   }
 
   config = &Config{}
   if err = PopulateConfig(config, "/", raw_config); err != nil {
-    log.Printf("%s. Please check your configuration", err)
     return
   }
 
@@ -166,20 +162,22 @@ func LoadConfig(path string) (config *Config, err error) {
   }
   transport_name := config.Network.Transport.Name
 
-  // There are no plans for additional transports, so we don't use a factory idiom
   if transport_name == "tls" {
     if config.Network.transport, err = NewTransportTlsFactory("/network/transport/", config.Network.Transport.Unused); err != nil {
-      log.Printf("%s. Please check your configuration", err)
       return
     }
   } else if transport_name == "zmq" {
-    if config.Network.transport, err = NewTransportZmqFactory("/network/transport/", config.Network.Transport.Unused); err != nil {
-      log.Printf("%s. Please check your configuration", err)
+    // TODO: Either make ZMQ compilation mandatory or use a proper factory pattern
+    if NewTransportZmqFactoryIfAvailable == nil {
+      err = errors.New(fmt.Sprintf("This binary was not build with 'zmq' transport support"))
+      return
+    }
+    if config.Network.transport, err = NewTransportZmqFactoryIfAvailable("/network/transport/", config.Network.Transport.Unused); err != nil {
       return
     }
   } else {
-    err = errors.New(fmt.Sprintf("Unrecognised transport '%s'. Please check your configuration", transport_name))
-    log.Printf("%s", err)
+    err = errors.New(fmt.Sprintf("Unrecognised transport '%s'", transport_name))
+
     return
   }
 
@@ -202,12 +200,10 @@ func LoadConfig(path string) (config *Config, err error) {
       if factory != nil {
         config.Files[k].codec = factory
       } else {
-        err = errors.New(fmt.Sprintf("Unrecognised codec '%s'. Please check your configuration.", codec_name))
-        log.Printf("%s", err)
+        err = errors.New(fmt.Sprintf("Unrecognised codec '%s'", codec_name))
         return
       }
     } else {
-      log.Printf("%s. Please check your configuration", err)
       return
     }
 

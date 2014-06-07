@@ -34,7 +34,7 @@ func main() {
 
   config, err := LoadConfig(*config_file)
   if err != nil {
-    return
+    log.Fatalf("%s. Please check your configuration", err)
   }
 
   event_chan := make(chan *FileEvent, 16)
@@ -42,7 +42,7 @@ func main() {
   registrar_chan := make(chan []RegistrarEvent, 16)
 
   if len(config.Files) == 0 {
-    log.Fatalf("No paths given. What files do you want me to watch?\n")
+    log.Fatalf("No paths given. What files do you want to watch?")
   }
 
   // The basic model of execution:
