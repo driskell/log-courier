@@ -4,6 +4,6 @@ bin
 pkg
 spec/tmp
 src/github.com/alecthomas/gozmq
-vendor/zeromq/*/
+vendor
 .bundle
 .vagrant
