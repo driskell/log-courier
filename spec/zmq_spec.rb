@@ -24,7 +24,9 @@ describe "logstash-forwarder with zmq" do
           "127.0.0.1:#{server_port('peer4')}",
           "127.0.0.1:#{server_port('peer5')}"
         ],
-        "ssl ca": "#{@ssl_cert.path}",
+        "transport": {
+          "name": "zmq"
+        },
         "timeout": 15,
         "reconnect": 1
       },

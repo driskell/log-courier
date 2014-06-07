@@ -10,7 +10,10 @@ describe "logstash-forwarder" do
     {
       "network": {
         "servers": [ "127.0.0.1:#{server_port()}" ],
-        "ssl ca": "#{@ssl_cert.path}",
+        "transport": {
+          "name": "tls",
+          "ssl ca": "#{@ssl_cert.path}"
+        },
         "timeout": 15,
         "reconnect": 1
       },
@@ -33,9 +36,9 @@ describe "logstash-forwarder" do
     i = 0
     while @event_queue.length > 0
       e = @event_queue.pop
-      e["message"].should == "stdin line test #{i}"
-      e["host"].should == host
-      e["file"].should == "-"
+      expect(e["message"]).to eq "stdin line test #{i}"
+      expect(e["host"]).to eq host
+      expect(e["file"]).to eq "-"
       i += 1
     end
   end
@@ -280,7 +283,10 @@ describe "logstash-forwarder" do
     {
       "network": {
         "servers": [ "127.0.0.1:#{@server.port}" ],
-        "ssl ca": "#{@ssl_cert.path}",
+        "transport": {
+          "name": "tls",
+          "ssl ca": "#{@ssl_cert.path}"
+        },
         "timeout": 15,
         "reconnect": 1
       },
@@ -314,7 +320,10 @@ describe "logstash-forwarder" do
     {
       "network": {
         "servers": [ "127.0.0.1:#{@server.port}" ],
-        "ssl ca": "#{@ssl_cert.path}",
+        "transport": {
+          "name": "tls",
+          "ssl ca": "#{@ssl_cert.path}"
+        },
         "timeout": 15,
         "reconnect": 1
       },
@@ -345,6 +354,6 @@ describe "logstash-forwarder" do
     sleep 15
 
     # Check new size of registrar state
-    File::Stat.new(".logstash-forwarder").size.should < s
+    expect(File::Stat.new(".logstash-forwarder").size).to be < s
   end
 end
