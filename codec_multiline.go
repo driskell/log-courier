@@ -16,12 +16,12 @@ type CodecMultilineRegistrar struct {
 }
 
 type CodecMultilineFactory struct {
-  pattern          string
-  what             int
-  negate           bool
-  previous_timeout time.Duration
-
+  Pattern          string `json:"pattern"`
   matcher *regexp.Regexp
+  What             string `json:"what"`
+  what             int
+  Negate           bool `json:"negate"`
+  PreviousTimeout  time.Duration `json:"previous timeout"`
 }
 
 type CodecMultiline struct {
@@ -40,59 +40,29 @@ type CodecMultiline struct {
   timer_chan  chan bool
 }
 
-func (r *CodecMultilineRegistrar) NewFactory(config map[string]interface{}) (CodecFactory, error) {
-  var ok bool
+func (r *CodecMultilineRegistrar) NewFactory(config_path string, config map[string]interface{}) (CodecFactory, error) {
+  var err error
+
   result := &CodecMultilineFactory{}
-  for key, value := range config {
-    if key == "name" {
-    } else if key == "pattern" {
-      result.pattern, ok = value.(string)
-      if !ok {
-        return nil, errors.New("Invalid value for 'pattern'. Must be a string.")
-      }
-      var err error
-      result.matcher, err = regexp.Compile(result.pattern)
-      if err != nil {
-        return nil, errors.New(fmt.Sprintf("Failed to compile multiline codec pattern, '%s'.", err))
-      }
-    } else if key == "what" {
-      var what string
-      what, ok = value.(string)
-      if !ok {
-        return nil, errors.New("Invalid value for 'what'. Must be a string.")
-      }
-      if what == "previous" {
-        result.what = codecMultiline_What_Previous
-      } else if what == "next" {
-        result.what = codecMultiline_What_Next
-      } else {
-        return nil, errors.New("Invalid value for 'what'. Must be either 'previous' or 'next'.")
-      }
-    } else if key == "negate" {
-      result.negate, ok = value.(bool)
-      if !ok {
-        return nil, errors.New("Invalid value for 'negate'. Must be true or false.")
-      }
-    } else if key == "previous_timeout" {
-      previous_timeout, ok := value.(string)
-      if !ok {
-        return nil, errors.New("Invalid value for 'previous_timeout'. Must be a string duration.")
-      }
-      var err error
-      result.previous_timeout, err = time.ParseDuration(previous_timeout)
-      if err != nil {
-        return nil, errors.New(fmt.Sprintf("Invalid value for 'previous_timeout'. Failed to parse duration: %s.", err))
-      }
-    } else {
-      return nil, errors.New(fmt.Sprintf("Unknown multiline codec property, '%s'.", key))
-    }
+  if err = PopulateConfig(result, config_path, config); err != nil {
+    return nil, err
   }
-  if result.pattern == "" {
+
+  if result.Pattern == "" {
     return nil, errors.New("Multiline codec pattern must be specified.")
   }
-  if result.what == 0 {
-    result.what = codecMultiline_What_Previous
+
+  result.matcher, err = regexp.Compile(result.Pattern)
+  if err != nil {
+    return nil, errors.New(fmt.Sprintf("Failed to compile multiline codec pattern, '%s'.", err))
   }
+
+  if result.What == "" || result.What == "previous" {
+    result.what = codecMultiline_What_Previous
+  } else if result.What == "next" {
+    result.what = codecMultiline_What_Next
+  }
+
   return result, nil
 }
 
@@ -106,7 +76,8 @@ func (f *CodecMultilineFactory) NewCodec(path string, fileconfig *FileConfig, in
     output: output,
   }
 
-  if f.previous_timeout != 0 {
+  // TODO: Make this more performant - use similiar methodology to Go's internal network deadlines
+  if f.PreviousTimeout != 0 {
     c.timer_lock = new(sync.Mutex)
     c.timer_chan = make(chan bool, 1)
 
@@ -123,7 +94,7 @@ func (f *CodecMultilineFactory) NewCodec(path string, fileconfig *FileConfig, in
             // Shutdown signal so end the routine
             break
           }
-          timer.Reset(c.config.previous_timeout)
+          timer.Reset(c.config.PreviousTimeout)
           active = true
         case <-timer.C:
           if active {
@@ -153,9 +124,9 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64
   // odd incomplete data. It would be a signal from the user, "I will worry about the buffering
   // issues my programs may have - you just make sure to write each event either completely or
   // partially, always with the FIRST line correct (which could be the important one)."
-  match_failed := c.config.negate == c.config.matcher.MatchString(*text)
+  match_failed := c.config.Negate == c.config.matcher.MatchString(*text)
   if c.config.what == codecMultiline_What_Previous {
-    if c.config.previous_timeout != 0 {
+    if c.config.PreviousTimeout != 0 {
       // Prevent a flush happening while we're modifying the stored data
       c.timer_lock.Lock()
     }
@@ -170,7 +141,7 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64
   c.end_offset = end_offset
   c.buffer = append(c.buffer, *text)
   if c.config.what == codecMultiline_What_Previous {
-    if c.config.previous_timeout != 0 {
+    if c.config.PreviousTimeout != 0 {
       // Reset the timer and unlock
       c.timer_chan <- false
       c.timer_lock.Unlock()

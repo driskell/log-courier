@@ -1,7 +1,7 @@
 package main
 
 type CodecRegistrar interface {
-  NewFactory(map[string]interface{}) (CodecFactory, error)
+  NewFactory(string, map[string]interface{}) (CodecFactory, error)
 }
 
 type CodecFactory interface {
@@ -19,9 +19,9 @@ func RegisterCodec(registrar CodecRegistrar, name string) {
   codecRegistry[name] = registrar
 }
 
-func NewCodecFactory(name string, config map[string]interface{}) (CodecFactory, error) {
+func NewCodecFactory(config_path string, name string, config map[string]interface{}) (CodecFactory, error) {
   if registrar, ok := codecRegistry[name]; ok {
-    return registrar.NewFactory(config)
+    return registrar.NewFactory(config_path, config)
   }
   return nil, nil
 }

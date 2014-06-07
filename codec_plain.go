@@ -1,10 +1,5 @@
 package main
 
-import (
-  "errors"
-  "fmt"
-)
-
 type CodecPlainRegistrar struct {
 }
 
@@ -19,12 +14,9 @@ type CodecPlain struct {
   output chan<- *FileEvent
 }
 
-func (r *CodecPlainRegistrar) NewFactory(config map[string]interface{}) (CodecFactory, error) {
-  for key := range config {
-    if key == "name" {
-    } else {
-      return nil, errors.New(fmt.Sprintf("Invalid property for plain codec, '%s'.", key))
-    }
+func (r *CodecPlainRegistrar) NewFactory(config_path string, config map[string]interface{}) (CodecFactory, error) {
+  if err := ReportUnusedConfig(config_path, config); err != nil {
+    return nil, err
   }
   return &CodecPlainFactory{}, nil
 }

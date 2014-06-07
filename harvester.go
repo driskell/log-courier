@@ -83,7 +83,7 @@ func (h *Harvester) Harvest(output chan<- *FileEvent) (int64, bool) {
             h.file.Seek(0, os.SEEK_SET)
             h.offset = 0
             continue
-          } else if age := time.Since(last_read_time); age > h.fileconfig.deadtime {
+          } else if age := time.Since(last_read_time); age > h.fileconfig.DeadTime {
             // if last_read_time was more than dead time, this file is probably dead. Stop watching it.
             log.Printf("Stopping harvest of %s; last change was %v ago\n", h.path, age-(age%time.Second))
             return h.codec.Teardown(), false

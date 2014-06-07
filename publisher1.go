@@ -32,8 +32,8 @@ type PendingPayload struct {
 
 type Publisher struct {
   config           *NetworkConfig
-  hostname         string
   transport        Transport
+  hostname         string
   can_send         <-chan int
   pending_ping     bool
   pending_payloads map[string]*PendingPayload
@@ -52,7 +52,7 @@ func (p *Publisher) Init() error {
   }
 
   // Set up the selected transport (currently only TLS)
-  if p.transport, err = CreateTransportTls(p.config); err != nil {
+  if p.transport, err = p.config.transport.NewTransport(p.config); err != nil {
     return err
   }
 
@@ -76,7 +76,7 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
     if err = p.transport.Connect(); err != nil {
       log.Printf("Connect attempt failed: %s\n", err)
       // TODO: implement shutdown select
-      time.Sleep(p.config.reconnect)
+      time.Sleep(p.config.Reconnect)
       continue
     }
     p.can_send = p.transport.CanSend()
@@ -187,7 +187,7 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
     p.transport.Disconnect()
     retry_payload = p.first_payload
 
-    time.Sleep(p.config.reconnect)
+    time.Sleep(p.config.Reconnect)
   } /* Publish: for loop, break to shutdown */
 } // Publish
 

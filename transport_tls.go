@@ -25,11 +25,19 @@ const (
   socket_interval_seconds = 5
 )
 
-type TransportTls struct {
-  config      *NetworkConfig
-  tls_config  tls.Config
-  socket      *tls.Conn
+type TransportTlsFactory struct {
+  SSLCertificate string   `json:"ssl certificate"`
+  SSLKey         string   `json:"ssl key"`
+  SSLCA          string   `json:"ssl ca"`
+
   hostport_re *regexp.Regexp
+  tls_config  tls.Config
+}
+
+type TransportTls struct {
+  config   *TransportTlsFactory
+  net_config      *NetworkConfig
+  socket      *tls.Conn
 
   wait sync.WaitGroup
   shutdown chan int
@@ -50,28 +58,35 @@ type TransportTlsWrap struct {
   net.Conn
 }
 
-func CreateTransportTls(config *NetworkConfig) (*TransportTls, error) {
+func init() {
   rand.Seed(time.Now().UnixNano())
+}
 
-  ret := &TransportTls{
-    config: config,
+func NewTransportTlsFactory(config_path string, config map[string]interface{}) (TransportFactory, error) {
+  var err error
+
+  ret := &TransportTlsFactory{
     hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
   }
 
-  if len(config.SSLCertificate) > 0 && len(config.SSLKey) > 0 {
-    log.Printf("Loading client ssl certificate: %s and %s\n", config.SSLCertificate, config.SSLKey)
-    cert, err := tls.LoadX509KeyPair(config.SSLCertificate, config.SSLKey)
+  if err = PopulateConfig(ret, config_path, config); err != nil {
+    return nil, err
+  }
+
+  if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
+    log.Printf("Loading client ssl certificate: %s and %s\n", ret.SSLCertificate, ret.SSLKey)
+    cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
     if err != nil {
       return nil, errors.New(fmt.Sprintf("Failed loading client ssl certificate: %s", err))
     }
     ret.tls_config.Certificates = []tls.Certificate{cert}
   }
 
-  if len(config.SSLCA) > 0 {
-    log.Printf("Setting trusted CA from file: %s\n", config.SSLCA)
+  if len(ret.SSLCA) > 0 {
+    log.Printf("Setting trusted CA from file: %s\n", ret.SSLCA)
     ret.tls_config.RootCAs = x509.NewCertPool()
 
-    pemdata, err := ioutil.ReadFile(config.SSLCA)
+    pemdata, err := ioutil.ReadFile(ret.SSLCA)
     if err != nil {
       return nil, errors.New(fmt.Sprintf("Failure reading CA certificate: %s", err))
     }
@@ -81,7 +96,7 @@ func CreateTransportTls(config *NetworkConfig) (*TransportTls, error) {
       return nil, errors.New("Failed to decode CA certificate data")
     }
     if block.Type != "CERTIFICATE" {
-      return nil, errors.New(fmt.Sprintf("Specified CA certificate is not a certificate: %s", config.SSLCA))
+      return nil, errors.New(fmt.Sprintf("Specified CA certificate is not a certificate: %s", ret.SSLCA))
     }
 
     cert, err := x509.ParseCertificate(block.Bytes)
@@ -94,13 +109,17 @@ func CreateTransportTls(config *NetworkConfig) (*TransportTls, error) {
   return ret, nil
 }
 
+func (f *TransportTlsFactory) NewTransport(config *NetworkConfig) (Transport, error) {
+  return &TransportTls{config: f, net_config: config}, nil
+}
+
 func (t *TransportTls) Connect() error {
 Connect:
   for {
     for {
       // Pick a random server from the list.
-      hostport := t.config.Servers[rand.Int()%len(t.config.Servers)]
-      submatch := t.hostport_re.FindSubmatch([]byte(hostport))
+      hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]
+      submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
       if submatch == nil {
         log.Printf("Invalid host:port given: %s\n", hostport)
         break
@@ -121,14 +140,14 @@ Connect:
 
       log.Printf("Connecting to %s (%s) \n", addressport, host)
 
-      tcpsocket, err := net.DialTimeout("tcp", addressport, t.config.timeout)
+      tcpsocket, err := net.DialTimeout("tcp", addressport, t.net_config.Timeout)
       if err != nil {
         log.Printf("Failure connecting to %s: %s\n", address, err)
         break
       }
 
-      t.socket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.tls_config)
-      t.socket.SetDeadline(time.Now().Add(t.config.timeout))
+      t.socket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
+      t.socket.SetDeadline(time.Now().Add(t.net_config.Timeout))
       err = t.socket.Handshake()
       if err != nil {
         t.socket.Close()
@@ -143,7 +162,7 @@ Connect:
 
     } /* for, break for sleep */
 
-    time.Sleep(t.config.reconnect)
+    time.Sleep(t.net_config.Reconnect)
   } /* Connect: for */
 
   // Signal channels

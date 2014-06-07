@@ -20,9 +20,18 @@ const (
   zmq_signal_shutdown = "S"
 )
 
-type TransportZmq struct {
-  config  *NetworkConfig
+type TransportZmqFactory struct {
+  CurveServerPubKey string   `json:"curve server pub key"`
+  CurvePrivKey   string   `json:"curve priv key"`
+  CurvePubKey    string   `json:"curve pub key"`
+
+  hostport_re *regexp.Regexp
   context *zmq.Context
+}
+
+type TransportZmq struct {
+  config *TransportZmqFactory
+  net_config  *NetworkConfig
   dealer  *zmq.Socket
 
   wait sync.WaitGroup
@@ -41,31 +50,40 @@ type ZMQMessage struct {
   final bool
 }
 
-var TransportZmq_Context *zmq.Context
+func NewTransportZmqFactory(config_path string, config map[string]interface{}) (TransportFactory, error) {
+  var err error
 
-func CreateTransportZmq(config *NetworkConfig) (*TransportZmq, error) {
-  if TransportZmq_Context == nil {
-    var err error
-    TransportZmq_Context, err = zmq.NewContext()
-    if err != nil {
-      return nil, errors.New(fmt.Sprintf("Failed to create ZMQ context: %s", err))
-    }
+  ret := &TransportZmqFactory{
+    hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
   }
-  return &TransportZmq{config: config, context: TransportZmq_Context}, nil
+
+  if err = PopulateConfig(ret, config_path, config); err != nil {
+    return nil, err
+  }
+
+  ret.context, err = zmq.NewContext()
+  if err != nil {
+    return nil, errors.New(fmt.Sprintf("Failed to create ZMQ context: %s", err))
+  }
+
+  return ret, nil
+}
+
+func (f *TransportZmqFactory) NewTransport(config *NetworkConfig) (Transport, error) {
+  return &TransportZmq{config: f, net_config: config}, nil
 }
 
 func (t *TransportZmq) Connect() (err error) {
-  hostport_re := regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`)
   endpoints := 0
 
   // Outbound dealer socket will fair-queue load balance amongst peers
-  if t.dealer, err = t.context.NewSocket(zmq.DEALER); err != nil {
+  if t.dealer, err = t.config.context.NewSocket(zmq.DEALER); err != nil {
     return
   }
 
   // Connect endpoints
-  for _, hostport := range t.config.Servers {
-    submatch := hostport_re.FindSubmatch([]byte(hostport))
+  for _, hostport := range t.net_config.Servers {
+    submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
     if submatch == nil {
       log.Printf("Invalid host:port given: %s\n", hostport)
       continue
@@ -99,7 +117,7 @@ func (t *TransportZmq) Connect() (err error) {
   }
 
   // Control sockets to connect bridge to poller
-  bridge_in, err := t.context.NewSocket(zmq.PUSH)
+  bridge_in, err := t.config.context.NewSocket(zmq.PUSH)
   if err != nil {
     t.dealer.Close()
     return
@@ -110,7 +128,7 @@ func (t *TransportZmq) Connect() (err error) {
     return
   }
 
-  bridge_out, err := t.context.NewSocket(zmq.PULL)
+  bridge_out, err := t.config.context.NewSocket(zmq.PULL)
   if err != nil {
     t.dealer.Close()
     bridge_in.Close()

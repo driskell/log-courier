@@ -179,9 +179,9 @@ func (p *Prospector) scan(path string, config *FileConfig, registrar_chan chan<-
         info.file = file
 
         p.registrar_events = append(p.registrar_events, &RenamedEvent{ProspectorInfo: info, Source: file})
-      } else if fileinfo.ModTime().Before(p.lastscan) && time.Since(fileinfo.ModTime()) > config.deadtime {
+      } else if fileinfo.ModTime().Before(p.lastscan) && time.Since(fileinfo.ModTime()) > config.DeadTime {
         // Old file, skip it, but push offset of file size so we start from the end if this file changes and needs picking up
-        log.Printf("Skipping file (older than dead time of %v): %s\n", config.deadtime, file)
+        log.Printf("Skipping file (older than dead time of %v): %s\n", config.DeadTime, file)
         info = NewProspectorInfoFromFileInfo(file, fileinfo)
 
         // Store the offset that we should resume from if we notice a modification

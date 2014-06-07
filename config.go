@@ -6,38 +6,46 @@ import (
   "errors"
   "fmt"
   "log"
+  "math"
   "os"
+  "reflect"
   "time"
 )
 
 const default_NetworkConfig_Timeout int64 = 15
 const default_NetworkConfig_Reconnect int64 = 1
 
-const default_FileConfig_DeadTime string = "24h"
+const default_FileConfig_DeadTime int64 = 86400
 
 type Config struct {
-  Network NetworkConfig `json:network`
-  Files   []FileConfig  `json:files`
+  Network NetworkConfig `json:"network"`
+  Files   []FileConfig  `json:"files"`
+}
+
+type TransportConfigStub struct {
+  Name string `json:"name"`
+  Unused   map[string]interface{}
 }
 
 type NetworkConfig struct {
-  Servers        []string `json:servers`
-  SSLCertificate string   `json:"ssl certificate"`
-  SSLKey         string   `json:"ssl key"`
-  SSLCA          string   `json:"ssl ca"`
-  Timeout        int64    `json:timeout`
-  timeout        time.Duration
-  Reconnect      int64 `json:reconnect`
-  reconnect      time.Duration
+  Servers        []string `json:"servers"`
+  Transport      TransportConfigStub   `json:"transport"`
+  transport      TransportFactory
+  Timeout        time.Duration `json:"timeout"`
+  Reconnect      time.Duration `json:"reconnect"`
+}
+
+type CodecConfigStub struct {
+  Name     string `json:"name"`
+  Unused   map[string]interface{}
 }
 
 type FileConfig struct {
-  Paths    []string               `json:paths`
-  Fields   map[string]*string     `json:fields`
-  Codec    map[string]interface{} `json:codec`
+  Paths    []string               `json:"paths"`
+  Fields   map[string]string     `json:"fields"`
+  Codec    CodecConfigStub       `json:"codec"`
   codec    CodecFactory
-  DeadTime string `json:"dead time"`
-  deadtime time.Duration
+  DeadTime time.Duration `json:"dead time"`
 }
 
 func LoadConfig(path string) (config *Config, err error) {
@@ -103,7 +111,7 @@ func LoadConfig(path string) (config *Config, err error) {
         // End of line comment (#)
         if b == '\r' || b == '\n' {
           state = 0
-          s = p
+          s = p + 1
         }
       } else if state == 4 {
         // Potential start of multiline comment
@@ -139,66 +147,187 @@ func LoadConfig(path string) (config *Config, err error) {
     log.Printf("%s\n", stripped.String())
   }
 
-  config = &Config{}
-  err = json.Unmarshal(stripped.Bytes(), config)
+  // Pull the entire structure into config
+  raw_config := make(map[string]interface{})
+  err = json.Unmarshal(stripped.Bytes(), &raw_config)
   if err != nil {
-    log.Printf("Failed unmarshalling json: %s\n", err)
+    log.Printf("Failed unmarshalling json: %s", err)
     return
   }
 
-  if config.Network.Timeout == 0 {
-    config.Network.Timeout = default_NetworkConfig_Timeout
+  config = &Config{}
+  if err = PopulateConfig(config, "/", raw_config); err != nil {
+    log.Printf("%s. Please check your configuration", err)
+    return
   }
 
-  config.Network.timeout = time.Duration(config.Network.Timeout) * time.Second
+  if config.Network.Transport.Name == "" {
+    config.Network.Transport.Name = "tls"
+  }
+  transport_name := config.Network.Transport.Name
 
-  if config.Network.Reconnect == 0 {
-    config.Network.Reconnect = default_NetworkConfig_Reconnect
+  // There are no plans for additional transports, so we don't use a factory idiom
+  if transport_name == "tls" {
+    if config.Network.transport, err = NewTransportTlsFactory("/network/transport/", config.Network.Transport.Unused); err != nil {
+      log.Printf("%s. Please check your configuration", err)
+      return
+    }
+  } else if transport_name == "zmq" {
+    if config.Network.transport, err = NewTransportZmqFactory("/network/transport/", config.Network.Transport.Unused); err != nil {
+      log.Printf("%s. Please check your configuration", err)
+      return
+    }
+  } else {
+    err = errors.New(fmt.Sprintf("Unrecognised transport '%s'. Please check your configuration", transport_name))
+    log.Printf("%s", err)
+    return
   }
 
-  config.Network.reconnect = time.Duration(config.Network.Reconnect) * time.Second
+  if config.Network.Timeout == time.Duration(0) {
+    config.Network.Timeout = time.Duration(default_NetworkConfig_Timeout)
+  }
+
+  if config.Network.Reconnect == time.Duration(0) {
+    config.Network.Reconnect = time.Duration(default_NetworkConfig_Reconnect)
+  }
 
   for k := range config.Files {
-    var codec_name string
-
-    if config.Files[k].Codec != nil {
-      var ok bool
-      codec_name, ok = config.Files[k].Codec["name"].(string)
-      if !ok {
-        err = errors.New("The name of the codec must be specified.")
-        log.Printf(fmt.Sprint(err))
-        return
-      }
-    } else {
-      config.Files[k].Codec = make(map[string]interface{}, 1)
-      config.Files[k].Codec["name"] = "plain"
-      codec_name = "plain"
+    if config.Files[k].Codec.Name == "" {
+      config.Files[k].Codec.Name = "plain"
     }
+    codec_name := config.Files[k].Codec.Name
 
     var factory CodecFactory;
-    if factory, err = NewCodecFactory(codec_name, config.Files[k].Codec); err == nil {
+    if factory, err = NewCodecFactory(fmt.Sprintf("/files[%d]/codec/", k), codec_name, config.Files[k].Codec.Unused); err == nil {
       if factory != nil {
         config.Files[k].codec = factory
       } else {
-        err = errors.New(fmt.Sprintf("Unrecognised codec '%s'. Please check your configuration.\n", codec_name))
+        err = errors.New(fmt.Sprintf("Unrecognised codec '%s'. Please check your configuration.", codec_name))
         log.Printf("%s", err)
         return
       }
     } else {
-      log.Printf("%s", err)
+      log.Printf("%s. Please check your configuration", err)
       return
     }
 
-    if config.Files[k].DeadTime == "" {
-      config.Files[k].DeadTime = default_FileConfig_DeadTime
-    }
-
-    config.Files[k].deadtime, err = time.ParseDuration(config.Files[k].DeadTime)
-    if err != nil {
-      log.Printf("Failed to parse dead time duration '%s'. Error was: %s\n", config.Files[k].DeadTime, err)
-      return
+    if config.Files[k].DeadTime == time.Duration(0) {
+      config.Files[k].DeadTime = time.Duration(default_FileConfig_DeadTime) * time.Second
     }
   }
 
+  return
+}
+
+// TODO: This should be pushed to a wrapper or module
+//       It populated dynamic configuration, automatically converting time.Duration etc.
+//       Any config entries not found in the structure are moved to an "Unused" field if it exists
+//       or an error is reported if "Unused" is not available
+//       We can then take the unused configuration dynamically at runtime based on another value
+func PopulateConfig(config interface{}, config_path string, raw_config map[string]interface{}) (err error) {
+  vconfig := reflect.ValueOf(config).Elem()
+  for i := 0; i < vconfig.NumField(); i++ {
+    field := vconfig.Field(i)
+    if !field.CanSet() {
+      continue
+    }
+    fieldtype := vconfig.Type().Field(i)
+    name := fieldtype.Name
+    if name == "Unused" {
+      continue
+    }
+    tag := fieldtype.Tag.Get("json")
+    if tag == "" {
+      tag = name
+    }
+    if _, ok := raw_config[tag]; ok {
+      if field.Kind() == reflect.Struct {
+        if reflect.TypeOf(raw_config[tag]).Kind() == reflect.Map {
+          if err = PopulateConfig(field.Addr().Interface(), fmt.Sprintf("%s%s/", config_path, tag), raw_config[tag].(map[string]interface{})); err != nil {
+            return
+          }
+          delete(raw_config, tag)
+          continue
+        } else {
+          err = errors.New(fmt.Sprintf("Option %s%s must be a hash", config_path, tag))
+          return
+        }
+      }
+      value := reflect.ValueOf(raw_config[tag])
+      if value.Type().AssignableTo(field.Type()) {
+        field.Set(value)
+      } else if value.Kind() == reflect.Slice && field.Kind() == reflect.Slice {
+        elemtype := field.Type().Elem()
+        if elemtype.Kind() == reflect.Struct {
+          for j := 0; j < value.Len(); j++ {
+            item := reflect.New(elemtype)
+            if err = PopulateConfig(item.Interface(), fmt.Sprintf("%s%s[%d]/", config_path, tag, j), value.Index(j).Elem().Interface().(map[string]interface{})); err != nil {
+              return
+            }
+            field.Set(reflect.Append(field, item.Elem()))
+          }
+        } else {
+          for j := 0; j < value.Len(); j++ {
+            field.Set(reflect.Append(field, value.Index(j).Elem()))
+          }
+        }
+      } else if value.Kind() == reflect.Map && field.Kind() == reflect.Map {
+        if field.IsNil() {
+          field.Set(reflect.MakeMap(field.Type()))
+        }
+        for _, j := range value.MapKeys() {
+          item := value.MapIndex(j)
+          if item.Elem().Type().AssignableTo(field.Type().Elem()) {
+            field.SetMapIndex(j, item.Elem())
+          } else {
+            err = errors.New(fmt.Sprintf("Option %s%s[%s] must be %s or similar", config_path, tag, j, field.Type().Elem()))
+            return
+          }
+        }
+      } else if field.Type().String() == "time.Duration" {
+        var duration float64
+        vduration := reflect.ValueOf(duration)
+        if value.Type().AssignableTo(vduration.Type()) {
+          duration = value.Float()
+          if duration < math.MinInt64 || duration > math.MaxInt64 {
+            err = errors.New(fmt.Sprintf("Option %s%s is not a valid numeric or string duration", config_path, tag))
+            return
+          }
+          field.Set(reflect.ValueOf(time.Duration(int64(duration)) * time.Second))
+        } else if value.Kind() == reflect.String {
+          var tduration time.Duration
+          if tduration, err = time.ParseDuration(value.String()); err != nil {
+            err = errors.New(fmt.Sprintf("Option %s%s is not a valid numeric or string duration: %s", config_path, tag, err))
+            return
+          }
+          field.Set(reflect.ValueOf(tduration))
+        } else {
+          err = errors.New(fmt.Sprintf("Option %s%s must be %s or similar", config_path, tag, vduration.Type()))
+          return
+        }
+      } else {
+        err = errors.New(fmt.Sprintf("Option %s%s must be %s or similar", config_path, tag, field.Type()))
+        return
+      }
+      delete(raw_config, tag)
+    }
+  }
+  if unused := vconfig.FieldByName("Unused"); unused.IsValid() {
+    if unused.IsNil() {
+      unused.Set(reflect.MakeMap(unused.Type()))
+    }
+    for k, v := range raw_config {
+      unused.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(v))
+    }
+    return
+  }
+  return ReportUnusedConfig(config_path, raw_config)
+}
+
+func ReportUnusedConfig(config_path string, raw_config map[string]interface{}) (err error) {
+  for k := range raw_config {
+    err = errors.New(fmt.Sprintf("Option %s%s is not available", config_path, k))
+    return
+  }
   return
 }
