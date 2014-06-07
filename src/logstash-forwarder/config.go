@@ -169,7 +169,7 @@ func LoadConfig(path string) (config *Config, err error) {
   } else if transport_name == "zmq" {
     // TODO: Either make ZMQ compilation mandatory or use a proper factory pattern
     if NewTransportZmqFactoryIfAvailable == nil {
-      err = errors.New(fmt.Sprintf("This binary was not build with 'zmq' transport support"))
+      err = errors.New(fmt.Sprintf("This binary was not built with 'zmq' transport support"))
       return
     }
     if config.Network.transport, err = NewTransportZmqFactoryIfAvailable("/network/transport/", config.Network.Transport.Unused); err != nil {
