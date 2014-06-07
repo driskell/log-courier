@@ -32,6 +32,14 @@ func main() {
     }()
   }
 
+  if *use_syslog {
+    configureSyslog()
+  } else {
+    log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+  }
+
+  log.Printf("Logstash-forwarder starting up")
+
   config, err := LoadConfig(*config_file)
   if err != nil {
     log.Fatalf("%s. Please check your configuration", err)
@@ -53,11 +61,6 @@ func main() {
   // - registrar: records positions of files read
   // Finally, prospector uses the registrar information, on restart, to
   // determine where in each file to resume a harvester.
-
-  log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-  if *use_syslog {
-    configureSyslog()
-  }
 
   // Load the previous log file locations now, for use in prospector
   load_resume := make(map[string]*FileState)
