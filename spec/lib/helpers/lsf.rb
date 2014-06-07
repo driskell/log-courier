@@ -21,11 +21,11 @@ shared_context "Helpers_LSF" do
       config = <<-config
       {
         "network": {
-          "servers": [ "127.0.0.1:#{@server.port}" ],
+          "servers": [ "127.0.0.1:#{server_port()}" ],
           "transport": {
             "name": "tls",
             "ssl ca": "#{@ssl_cert.path}"
-          }
+          },
           "timeout": 15,
           "reconnect": 1
         },
@@ -37,6 +37,8 @@ shared_context "Helpers_LSF" do
       }
       config
     end
+
+    puts "Starting with configuration:\n#{config}"
 
     if @config.closed?
       # Reopen the config and rewrite it
