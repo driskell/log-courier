@@ -30,12 +30,9 @@ describe "logstash-forwarder" do
     end
 
     # Receive and check
-    wait_for_events 5000
-
-    host = Socket.gethostname
     i = 0
-    while @event_queue.length > 0
-      e = @event_queue.pop
+    host = Socket.gethostname
+    receive_and_check(total: 5000) do |e|
       expect(e["message"]).to eq "stdin line test #{i}"
       expect(e["host"]).to eq host
       expect(e["file"]).to eq "-"
@@ -282,7 +279,7 @@ describe "logstash-forwarder" do
     startup config: <<-config
     {
       "network": {
-        "servers": [ "127.0.0.1:#{@server.port}" ],
+        "servers": [ "127.0.0.1:#{server_port()}" ],
         "transport": {
           "name": "tls",
           "ssl ca": "#{@ssl_cert.path}"
@@ -319,7 +316,7 @@ describe "logstash-forwarder" do
     startup config: <<-config
     {
       "network": {
-        "servers": [ "127.0.0.1:#{@server.port}" ],
+        "servers": [ "127.0.0.1:#{server_port()}" ],
         "transport": {
           "name": "tls",
           "ssl ca": "#{@ssl_cert.path}"
