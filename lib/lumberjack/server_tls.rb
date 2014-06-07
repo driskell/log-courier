@@ -104,9 +104,11 @@ module Lumberjack
     	  # Reset client so if ssl_server.accept fails, we don't close the previous connection within rescue
     	  client = nil
       end
+    rescue ShutdownSignal
+      # Capture shutting down signal
     ensure
       # Raise shutdown in all client threads and join then
-      client_threads.each do |thr|
+      client_threads.each do |client, thr|
         thr.raise ShutdownSignal
       end
 
