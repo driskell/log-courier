@@ -6,4 +6,5 @@ spec/tmp
 src/github.com/alecthomas/gozmq
 vendor
 .bundle
+.logstash-forwarder
 .vagrant
