@@ -13,12 +13,21 @@ module Lumberjack
     def initialize(options={})
       @options = {
         :logger => nil,
+        :transport => "tls",
       }.merge(options)
 
       @logger = @options[:logger]
 
-      require "lumberjack/server_zmq"
-      @server = ServerZmq.new(@options)
+      case @options[:transport]
+      when "tls"
+        require "lumberjack/server_tls"
+        @server = ServerTls.new(@options)
+      when "zmq"
+        require "lumberjack/server_zmq"
+        @server = ServerZmq.new(@options)
+      else
+        raise "Transport must be either tls or zmq in Lumberjack::Server.new(...)"
+      end
 
       # Grab the port back
       @port = @server.port

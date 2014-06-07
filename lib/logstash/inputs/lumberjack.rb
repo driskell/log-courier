@@ -16,6 +16,9 @@ class LogStash::Inputs::Lumberjack < LogStash::Inputs::Base
   # The port to listen on
   config :port, :validate => :number, :required => true
 
+  # The transport type to use
+  config :transport, :validate => :string, :default => "tls"
+
   # SSL certificate to use
   config :ssl_certificate, :validate => :path, :required => true
 
@@ -43,6 +46,7 @@ class LogStash::Inputs::Lumberjack < LogStash::Inputs::Base
       :logger                => @logger,
       :address               => @host,
       :port                  => @port,
+      :transport             => @transport,
       :ssl_certificate       => @ssl_certificate,
       :ssl_key               => @ssl_key,
       :ssl_key_passphrase    => @ssl_key_passphrase,
