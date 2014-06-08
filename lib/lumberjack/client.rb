@@ -1,13 +1,14 @@
-require "json"
-require "thread"
-require "timeout"
-require "zlib"
+require 'json'
+require 'thread'
+require 'timeout'
+require 'zlib'
 
 module Lumberjack
   # TODO: Make these shared
   class ClientShutdownSignal < StandardError; end
   class ClientProtocolError < StandardError; end
 
+  # Describes a pending payload
   class PendingPayload
     attr_accessor :ack_events
     attr_accessor :events
@@ -17,31 +18,32 @@ module Lumberjack
     attr_accessor :previous
     attr_accessor :next
 
-    def initialize(options={})
+    def initialize(options = {})
       @ack_events = 0
 
       options.each do |k, v|
-        raise ArgumentError if not self.respond_to?(k)
+        raise ArgumentError unless self.respond_to?(k)
         instance_variable_set "@#{k}", v
       end
     end
   end
 
+  # Implementation of a single client connection
   class Client
-    def initialize(options={})
+    def initialize(options = {})
       @options = {
         :logger       => nil,
         :spool_size   => 1024,
-        :idle_timeout => 5,
+        :idle_timeout => 5
       }.merge(options)
 
       @logger = @options[:logger]
 
-      require "lumberjack/client_tls"
+      require 'lumberjack/client_tls'
       @client = ClientTls.new(@options)
 
       @event_queue = SizedQueue.new @options[:spool_size]
-      @pending_payloads = Hash.new
+      @pending_payloads = {}
       @first_payload = nil
       @last_payload = nil
 
@@ -76,14 +78,14 @@ module Lumberjack
     end
 
     def run_spooler
-      while true
+      loop do
         spooled = []
         next_flush = Time.now.to_i + @options[:idle_timeout]
 
         # The spooler loop
         begin
-          while true
-            event = Timeout::timeout(next_flush - Time.now.to_i) do
+          loop do
+            event = Timeout.timeout(next_flush - Time.now.to_i) do
               @event_queue.pop
             end
             spooled.push(event)
@@ -96,15 +98,14 @@ module Lumberjack
 
         # Pass through to io_control but only if we're ready to send
         @send_mutex.synchronize do
-          if not @send_ready
-            @send_cond.wait(@send_mutex)
-          end
+          @send_cond.wait(@send_mutex) unless @send_ready
           @send_ready = false
-          @io_control << ["E", spooled]
+          @io_control << ['E', spooled]
         end
       end
     rescue ClientShutdownSignal
       # Just shutdown
+      0
     end
 
     def run_io
@@ -119,30 +120,30 @@ module Lumberjack
 
       can_send = true
 
-      while true
+      loop do
         # Reconnect loop
         @client.connect @io_control
 
         # Capture send exceptions
         begin
           # IO loop
-          while true
+          loop do
             catch :keepalive do
               begin
-                action = Timeout::timeout(keepalive_next) do
+                action = Timeout.timeout(keepalive_next) do
                   @io_control.pop
                 end
 
                 # Process the action
                 case action[0]
-                when "S"
+                when 'S'
                   # If we're flushing through the pending, pick from there
-                  if not retry_payload.nil?
+                  unless retry_payload.nil?
                     # Regenerate data if we need to
                     retry_payload.data = buffer_jdat_data(retry_payload.events, retry_payload.nonce) if retry_payload.data == nil
 
                     # Send and move onto next
-                    @client.send "JDAT", retry_payload.data
+                    @client.send 'JDAT', retry_payload.data
 
                     retry_payload = retry_payload.next
                     throw :keepalive
@@ -155,7 +156,7 @@ module Lumberjack
                   end
 
                   can_send = true
-                when "E"
+                when 'E'
                   # If we have too many pending payloads, pause the IO
                   if @pending_payloads.length + 1 >= max_pending_payloads
                     @client.pause_send
@@ -166,19 +167,19 @@ module Lumberjack
 
                   # The send action will trigger another "S" if we have more send buffer
                   can_send = false
-                when "R"
+                when 'R'
                   # Received a message
                   signature, message = action[1..2]
                   case signature
-                  when "PONG"
+                  when 'PONG'
                     process_pong message
-                  when "ACKN"
+                  when 'ACKN'
                     process_ackn message
                   else
                     # Unknown message - only listener is allowed to respond with a "????" message
                     # TODO: What should we do? Just ignore for now and let timeouts conquer
                   end
-                when "F"
+                when 'F'
                   # Reconnect, an error occurred
                   break
                 end
@@ -190,10 +191,8 @@ module Lumberjack
                 end
 
                 # Is send full? can_send will be false if so
-                if !can_send
-                  # We should've started receiving ACK by now so time out
-                  raise Timeout::Error
-                end
+                # We should've started receiving ACK by now so time out
+                raise Timeout::Error unless can_send
 
                 # Send PING
                 send_ping
@@ -208,19 +207,18 @@ module Lumberjack
           end
         rescue ClientProtocolError => e
           # Reconnect required due to a protocol error
-          @logger.warn("[LumberjackClient] Protocol error: #{e}") if not @logger.nil?
+          @logger.warn("[LumberjackClient] Protocol error: #{e}") unless @logger.nil?
         rescue Timeout::Error
           # Reconnect due to timeout
-          @logger.warn("[LumberjackClient] Timeout occurred") if not @logger.nil?
+          @logger.warn('[LumberjackClient] Timeout occurred') unless @logger.nil?
         rescue ClientShutdownSignal
           # Shutdown, break out
           break
         rescue => e
           # Unknown error occurred
-          @logger.warn("[LumberjackClient] Unknown error: #{e}") if not @logger.nil?
-          @logger.debug("[LumberjackClient] #{e.backtrace}: #{e.message} (#{e.class})") if not @logger.nil? and @logger.debug?
+          @logger.warn("[LumberjackClient] Unknown error: #{e}") unless @logger.nil?
+          @logger.debug("[LumberjackClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
         end
-
 
         # Disconnect and retry payloads
         @client.disconnect
@@ -239,10 +237,10 @@ module Lumberjack
 
     def send_ping
       # Send it
-      @client.send "PING", ""
+      @client.send 'PING', ''
     end
 
-    def send_jdat(events, is_shutdown=false)
+    def send_jdat(events)
       # Generate the JSON payload and compress it
       nonce = generate_nonce
       data = buffer_jdat_data(events, nonce)
@@ -265,11 +263,11 @@ module Lumberjack
       end
 
       # Send it
-      @client.send "JDAT", payload.data
+      @client.send 'JDAT', payload.data
     end
 
     def buffer_jdat_data(events, nonce)
-      buffer = Zlib::Deflate.new()
+      buffer = Zlib::Deflate.new
 
       # Write each event in JSON format
       events.each do |event|
@@ -284,7 +282,7 @@ module Lumberjack
       json_data = event.to_json
 
       # Add length and then the data
-      buffer << [json_data.length].pack("N") << json_data
+      buffer << [json_data.length].pack('N') << json_data
     end
 
     def process_pong(message)
@@ -306,21 +304,17 @@ module Lumberjack
       end
 
       # Grab nonce
-      sequence, nonce = message[0...4].unpack("N").first, message[4..-1]
+      sequence, nonce = message[0...4].unpack('N').first, message[4..-1]
 
-      # Find the payload
-      if !@pending_payloads.has_key?(nonce)
-        # Don't error here as we may have had timeout issues and resent a payload only to receive ACKN twice
-        return
-      end
+      # Find the payload - skip if we couldn't as it will just a duplicated ACK
+      return unless @pending_payloads.key?(nonce)
+
       payload = @pending_payloads[nonce]
 
       # Full ACK?
       # TODO: protocol error if sequence too large?
       if sequence >= payload.events.length
-        if @client.send_paused?
-          @client.resume_send
-        end
+        @client.resume_send if @client.send_paused?
 
         @pending_payloads.delete nonce
         payload.previous.next = payload.next

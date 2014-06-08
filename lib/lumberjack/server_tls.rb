@@ -1,7 +1,7 @@
-require "socket"
-require "thread"
-require "timeout"
-require "openssl"
+require 'socket'
+require 'thread'
+require 'timeout'
+require 'openssl'
 
 module Lumberjack
   # Wrap around TCPServer to grab last error for use in reporting which peer had an error
@@ -15,21 +15,22 @@ module Lumberjack
     end
   end
 
+  # TLS transport implementation for server
   class ServerTls
     attr_reader :port
 
     # Create a new TLS transport endpoint
-    def initialize(options={})
+    def initialize(options = {})
       @options = {
         :logger                => nil,
         :port                  => 0,
-        :address               => "0.0.0.0",
+        :address               => '0.0.0.0',
         :ssl_certificate       => nil,
         :ssl_key               => nil,
         :ssl_key_passphrase    => nil,
         :ssl_verify            => false,
         :ssl_verify_default_ca => false,
-        :ssl_verify_ca         => nil,
+        :ssl_verify_ca         => nil
       }.merge(options)
 
       @logger = @options[:logger]
@@ -38,8 +39,8 @@ module Lumberjack
         raise "You must specify #{k} in Lumberjack::Server.new(...)" if @options[k].nil?
       end
 
-      if @options[:ssl_verify] and (not @options[:ssl_verify_default_ca] and @options[:ssl_verify_ca].nil?)
-        raise "You must specify one of ssl_verify_default_ca and ssl_verify_ca in Lumberjack::Server.new(...) when ssl_verify is true"
+      if @options[:ssl_verify] and (not @options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
+        raise 'You must specify one of ssl_verify_default_ca and ssl_verify_ca in Lumberjack::Server.new(...) when ssl_verify is true'
       end
 
       @tcp_server = ExtendedTCPServer.new(@options[:port])
@@ -66,58 +67,57 @@ module Lumberjack
 
         ssl.cert_store = cert_store
 
-        ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER|OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+        ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
       end
 
       @ssl_server = OpenSSL::SSL::SSLServer.new(@tcp_server, ssl)
     end # def initialize
 
     def run(&block)
-      client_threads = Hash.new
+      client_threads = {}
 
-      while true
+      loop do
         # This means ssl accepting is single-threaded.
         begin
           client = @ssl_server.accept
         rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
           # Handshake failure or other issue
-          peer = Thread.current["LumberjackPeer"] || "unknown"
-          @logger.warn "[LumberjackServerTLS] Connection from #{peer} failed to initialise: #{e}" if not @logger.nil?
+          peer = Thread.current['LumberjackPeer'] || 'unknown'
+          @logger.warn "[LumberjackServerTLS] Connection from #{peer} failed to initialise: #{e}" unless @logger.nil?
           client.close rescue nil
           next
         end
 
-        peer = Thread.current["LumberjackPeer"] || "unknown"
+        peer = Thread.current['LumberjackPeer'] || 'unknown'
 
-    	  @logger.info "[LumberjackServerTLS] New connection from #{peer}" if not @logger.nil?
+    	  @logger.info "[LumberjackServerTLS] New connection from #{peer}" unless @logger.nil?
 
         # Clear up finished threads
-        client_threads.delete_if do |k, thr|
-          not thr.alive?
+        client_threads.delete_if do |_, thr|
+          !thr.alive?
         end
 
         # Start a new connection thread
-        client_threads[client] = Thread.new(client, peer) do |client, peer|
-          ConnectionTls.new(@logger, client, peer).run &block
+        client_threads[client] = Thread.new(client, peer) do |client_copy, peer_copy|
+          ConnectionTls.new(@logger, client_copy, peer_copy).run(&block)
         end
-
-    	  # Reset client so if ssl_server.accept fails, we don't close the previous connection within rescue
-    	  client = nil
       end
     rescue ShutdownSignal
       # Capture shutting down signal
+      0
     ensure
       # Raise shutdown in all client threads and join then
-      client_threads.each do |client, thr|
+      client_threads.each do |_, thr|
         thr.raise ShutdownSignal
       end
 
-      client_threads.each &:join
+      client_threads.each(&:join)
 
       @tcp_server.close
     end
   end
 
+  # Representation of a single connected client
   class ConnectionTls
     attr_accessor :peer
 
@@ -129,16 +129,16 @@ module Lumberjack
     end
 
     def run
-      while true
+      loop do
         # Read messages
         # Each message begins with a header
         # 4 byte signature
         # 4 byte length
         # Normally we would not parse this inside transport, but for TLS we have to in order to locate frame boundaries
-        signature, length = recv(8).unpack("A4N")
+        signature, length = recv(8).unpack('A4N')
 
         # Sanity
-        if length > 1048576
+        if length > 1_048_576
           # TODO: log something
           raise ProtocolError
         end
@@ -154,36 +154,36 @@ module Lumberjack
       end
     rescue Timeout::Error
       # Timeout of the connection, we were idle too long without a ping/pong
-      @logger.warn("[LumberjackServerTLS] Connection from #{@peer} timed out") if not @logger.nil?
+      @logger.warn("[LumberjackServerTLS] Connection from #{@peer} timed out") unless @logger.nil?
     rescue EOFError
       if @in_progress
-        @logger.warn("[LumberjackServerTLS] Premature connection close on connection from #{@peer}") if not @logger.nil?
+        @logger.warn("[LumberjackServerTLS] Premature connection close on connection from #{@peer}") unless @logger.nil?
       else
-        @logger.info("[LumberjackServerTLS] Connection from #{@peer} closed") if not @logger.nil?
+        @logger.info("[LumberjackServerTLS] Connection from #{@peer} closed") unless @logger.nil?
       end
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       # Read errors, only action is to shutdown which we'll do in ensure
-      @logger.warn("[LumberjackServerTLS] SSL error on connection from #{@peer}: #{e}") if not @logger.nil?
+      @logger.warn("[LumberjackServerTLS] SSL error on connection from #{@peer}: #{e}") unless @logger.nil?
     rescue ProtocolError => e
       # Connection abort request due to a protocol error
-      @logger.warn("[LumberjackServerTLS] Protocol error on connection from #{@peer}: #{e}") if not @logger.nil?
+      @logger.warn("[LumberjackServerTLS] Protocol error on connection from #{@peer}: #{e}") unless @logger.nil?
     rescue ShutdownSignal
       # Shutting down
-      @logger.warn("[LumberjackServerTLS] Closing connecting from #{@peer}: server shutting down") if not @logger.nil?
+      @logger.warn("[LumberjackServerTLS] Closing connecting from #{@peer}: server shutting down") unless @logger.nil?
     rescue => e
       # Some other unknown problem
-      @logger.warn("[LumberjackServerTLS] Unknown error on connection from #{@peer}: #{e}") if not @logger.nil?
-      @logger.debug("[LumberjackServerTLS] #{e.backtrace}: #{e.message} (#{e.class})") if not @logger.nil? and @logger.debug?
+      @logger.warn("[LumberjackServerTLS] Unknown error on connection from #{@peer}: #{e}") unless @logger.nil?
+      @logger.debug("[LumberjackServerTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
     ensure
       @fd.close rescue nil
     end
 
     def recv(need)
       reset_timeout
-      buffer = Timeout::timeout(@timeout - Time.now.to_i) do
+      buffer = Timeout.timeout(@timeout - Time.now.to_i) do
         @fd.read need
       end
-      if buffer == nil
+      if buffer.nil?
         raise EOFError
       elsif buffer.length < need
         raise ProtocolError
@@ -194,18 +194,16 @@ module Lumberjack
     def send(signature, message)
       reset_timeout
 
-      data = signature + [message.length].pack("N") + message
-      Timeout::timeout(@timeout - Time.now.to_i) do
+      data = signature + [message.length].pack('N') + message
+      Timeout.timeout(@timeout - Time.now.to_i) do
         written = @fd.write(data)
-        if written != data.length
-          raise ProtocolError
-        end
+        raise ProtocolError if written != data.length
       end
     end
 
     def reset_timeout
       # TODO: Make configurable
-      @timeout = Time.now.to_i + 1800
+      @timeout = Time.now.to_i + 1_800
     end
   end
 end
