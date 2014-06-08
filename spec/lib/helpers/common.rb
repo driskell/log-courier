@@ -29,6 +29,7 @@ shared_context "Helpers" do
     @event_queue = Queue.new
 
     @servers = Hash.new
+    @server_counts = Hash.new
     @server_threads = Hash.new
 
     start_server
@@ -65,9 +66,11 @@ shared_context "Helpers" do
       :logger => logger
     )
 
+    @server_counts[id] = 0
     @server_threads[id] = Thread.new do
       begin
         @servers[id].run do |event|
+          @server_counts[id] += 1
           @event_queue << event
         end
       rescue
@@ -86,6 +89,7 @@ shared_context "Helpers" do
       @server_threads[id].raise Lumberjack::ShutdownSignal
       @server_threads[id].join
       @server_threads.delete id
+      @server_counts.delete id
       @servers.delete id
     end
   end
@@ -93,6 +97,11 @@ shared_context "Helpers" do
   # A helper to get the port a server is bound to
   def server_port(id='__default__')
     @servers[id].port
+  end
+
+  # A helper to get number of events received on the server
+  def server_count(id='__default__')
+    @server_counts[id]
   end
 
   # A helper that creates a new log file

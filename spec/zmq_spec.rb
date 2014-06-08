@@ -50,6 +50,13 @@ describe "logstash-forwarder with zmq" do
 
     # Receive and check
     receive_and_check check_order: false
+
+    # Make sure we received on ALL endpoints
+    expect(server_count).to be > 0
+    expect(server_count('peer2')).to be > 0
+    expect(server_count('peer3')).to be > 0
+    expect(server_count('peer4')).to be > 0
+    expect(server_count('peer5')).to be > 0
   end
 
   it "should distribute events to multiple peers and manage send failures" do
