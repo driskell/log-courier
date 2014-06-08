@@ -173,6 +173,7 @@ func (t *TransportZmq) bridge(bridge_in *zmq.Socket) {
   // This keeps the socket in a single thread, otherwise we have to lock the entire publisher
   runtime.LockOSThread()
 
+BridgeLoop:
   for {
     select {
     case notify := <- t.bridge_chan:
@@ -180,7 +181,7 @@ func (t *TransportZmq) bridge(bridge_in *zmq.Socket) {
 
       // Shutdown?
       if string(notify) == zmq_signal_shutdown {
-        break
+        break BridgeLoop
       }
     case message = <-t.recv_bridge_chan:
     case func () chan<- interface{} {
