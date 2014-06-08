@@ -1,28 +1,28 @@
-require "lib/common"
-require "lib/helpers/lsf"
+require 'lib/common'
+require 'lib/helpers/lsf'
 
-describe "logstash-forwarder with zmq" do
-  include_context "Helpers"
-  include_context "Helpers_LSF"
+describe 'logstash-forwarder with zmq' do
+  include_context 'Helpers'
+  include_context 'Helpers_LSF'
 
   before :all do
-    @transport = "zmq"
+    @transport = 'zmq'
   end
 
-  it "should distribute events to multiple peers" do
+  it 'should distribute events to multiple peers' do
     # Start another 4 peers
-    start_server id: "peer2"
-    start_server id: "peer3"
-    start_server id: "peer4"
-    start_server id: "peer5"
+    start_server id: 'peer2'
+    start_server id: 'peer3'
+    start_server id: 'peer4'
+    start_server id: 'peer5'
 
-    f = create_log()
+    f = create_log
 
     startup config: <<-config
     {
       "network": {
         "servers": [
-          "127.0.0.1:#{server_port()}",
+          "127.0.0.1:#{server_port}",
           "127.0.0.1:#{server_port('peer2')}",
           "127.0.0.1:#{server_port('peer3')}",
           "127.0.0.1:#{server_port('peer4')}",
@@ -43,8 +43,9 @@ describe "logstash-forwarder with zmq" do
     config
 
     # Send LOTS of lines but don't overdo it
-    # If Ruby gets too busy receiving them we might duplicate a payload and the test will fail
-    100000.times do |i|
+    # If Ruby gets too busy receiving them we might duplicate a payload and
+    # the test will fail
+    100_000.times do
       f.log
     end
 
@@ -59,20 +60,20 @@ describe "logstash-forwarder with zmq" do
     expect(server_count('peer5')).to be > 0
   end
 
-  it "should distribute events to multiple peers and manage send failures" do
+  it 'should distribute events to multiple peers and manage send failures' do
     # Start another 4 peers, 1 of which is TLS so it'll act like a dead endpoint
-    start_server id: "peer2"
-    start_server id: "peer3", transport: "tls"
-    start_server id: "peer4"
-    start_server id: "peer5"
+    start_server id: 'peer2'
+    start_server id: 'peer3', transport: 'tls'
+    start_server id: 'peer4'
+    start_server id: 'peer5'
 
-    f = create_log()
+    f = create_log
 
     startup config: <<-config
     {
       "network": {
         "servers": [
-          "127.0.0.1:#{server_port()}",
+          "127.0.0.1:#{server_port}",
           "127.0.0.1:#{server_port('peer2')}",
           "127.0.0.1:#{server_port('peer3')}",
           "127.0.0.1:#{server_port('peer4')}",
@@ -93,7 +94,7 @@ describe "logstash-forwarder with zmq" do
     config
 
     # Send lines - just enough for all 5 endpoints
-    6000.times do |i|
+    6_000.times do
       f.log
     end
 

@@ -1,11 +1,11 @@
-require "logger"
-require "timeout"
-require "lib/common"
+require 'logger'
+require 'timeout'
+require 'lib/common'
 
-require "lumberjack/client"
+require 'lumberjack/client'
 
-describe "logstash-forwarder gem" do
-  include_context "Helpers"
+describe 'logstash-forwarder gem' do
+  include_context 'Helpers'
 
   before :all do
     @host = Socket.gethostname
@@ -18,9 +18,9 @@ describe "logstash-forwarder gem" do
     # Reset server for each test
     @client = Lumberjack::Client.new(
       :ssl_ca => @ssl_cert.path,
-      :addresses => ["127.0.0.1"],
-      :port => server_port(),
-      :logger => logger,
+      :addresses => ['127.0.0.1'],
+      :port => server_port,
+      :logger => logger
     )
   end
 
@@ -28,22 +28,22 @@ describe "logstash-forwarder gem" do
     @client.shutdown
   end
 
-  it "should send and receive events" do
+  it 'should send and receive events' do
     startup
 
     # Allow 60 seconds
-    Timeout::timeout(60) do
-      5000.times do |i|
-        @client.publish "message" => "gem line test #{i}", "host" => @host, "file" => "gemfile.log"
+    Timeout.timeout(60) do
+      5_000.times do |i|
+        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'file' => 'gemfile.log'
       end
     end
 
     # Receive and check
     i = 0
-    receive_and_check(total: 5000) do |e|
-      expect(e["message"]).to eq "gem line test #{i}"
-      expect(e["host"]).to eq @host
-      expect(e["file"]).to eq "gemfile.log"
+    receive_and_check(total: 5_000) do |e|
+      expect(e['message']).to eq "gem line test #{i}"
+      expect(e['host']).to eq @host
+      expect(e['file']).to eq 'gemfile.log'
       i += 1
     end
 

@@ -1,16 +1,16 @@
-require "lib/common"
-require "lib/helpers/lsf"
-require "lib/logfile/multiline"
+require 'lib/common'
+require 'lib/helpers/lsf'
+require 'lib/logfile/multiline'
 
-describe "logstash-forwarder with multiline codec" do
-  include_context "Helpers"
-  include_context "Helpers_LSF"
+describe 'logstash-forwarder with multiline codec' do
+  include_context 'Helpers'
+  include_context 'Helpers_LSF'
 
-  it "should combine multiple events with what=previous" do
+  it 'should combine multiple events with what=previous' do
     startup config: <<-config
     {
       "network": {
-        "servers": [ "127.0.0.1:#{server_port()}" ],
+        "servers": [ "127.0.0.1:#{server_port}" ],
         "transport": {
           "name": "tls",
           "ssl ca": "#{@ssl_cert.path}"

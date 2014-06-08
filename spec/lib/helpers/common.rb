@@ -1,14 +1,14 @@
-require "logger"
-require "lumberjack/server"
+require 'logger'
+require 'lumberjack/server'
 
 # Common helpers for testing both ruby client and the forwarder
-shared_context "Helpers" do
+shared_context 'Helpers' do
   before :all do
-    @transport = "tls"
+    @transport = 'tls'
 
-    @ssl_cert = File.open(File.join(TEMP_PATH, "ssl_cert"), "w")
-    @ssl_key = File.open(File.join(TEMP_PATH, "ssl_key"), "w")
-    @ssl_csr = File.open(File.join(TEMP_PATH, "ssl_csr"), "w")
+    @ssl_cert = File.open(File.join(TEMP_PATH, 'ssl_cert'), 'w')
+    @ssl_key = File.open(File.join(TEMP_PATH, 'ssl_key'), 'w')
+    @ssl_csr = File.open(File.join(TEMP_PATH, 'ssl_csr'), 'w')
 
     # Generate the ssl key
     system("openssl genrsa -out #{@ssl_key.path} 1024")
@@ -18,7 +18,7 @@ shared_context "Helpers" do
 
   after :all do
     [@ssl_cert, @ssl_key, @ssl_csr].each do |f|
-      File.unlink(f.path) if File.exists?(f.path)
+      File.unlink(f.path) if File.file?(f.path)
     end
   end
 
@@ -47,16 +47,14 @@ shared_context "Helpers" do
   end
 
   # A helper that starts a lumberjack server
-  def start_server(id: "__default__", transport: nil)
+  def start_server(id: '__default__', transport: nil)
     logger = Logger.new(STDOUT)
     logger.progname = "Server #{id}"
     logger.level = Logger::DEBUG
 
-    raise "Server already initialised" if @servers.has_key?(id)
+    raise 'Server already initialised' if @servers.key?(id)
 
-    if transport.nil?
-      transport = @transport
-    end
+    transport = @transport if transport.nil?
 
     # Reset server for each test
     @servers[id] = Lumberjack::Server.new(
@@ -73,19 +71,20 @@ shared_context "Helpers" do
           @server_counts[id] += 1
           @event_queue << event
         end
-      rescue
+      rescue Lumberjack::ShutdownSignal
+        0
       end
     end
   end
 
   # A helper to shutdown a lumberjack server
-  def shutdown_server(id=nil)
-    if id.nil?
-      id = @servers.keys
+  def shutdown_server(which = nil)
+    if which.nil?
+      which = @servers.keys
     else
-      id = [id]
+      which = [which]
     end
-    id.each do |id|
+    which.each do |id|
       @server_threads[id].raise Lumberjack::ShutdownSignal
       @server_threads[id].join
       @server_threads.delete id
@@ -95,33 +94,33 @@ shared_context "Helpers" do
   end
 
   # A helper to get the port a server is bound to
-  def server_port(id='__default__')
+  def server_port(id = '__default__')
     @servers[id].port
   end
 
   # A helper to get number of events received on the server
-  def server_count(id='__default__')
+  def server_count(id = '__default__')
     @server_counts[id]
   end
 
   # A helper that creates a new log file
-  def create_log(type=LogFile, path=nil)
-    path ||= File.join(TEMP_PATH, "logs", "log-" + @files.length.to_s)
+  def create_log(type = LogFile, path = nil)
+    path ||= File.join(TEMP_PATH, 'logs', 'log-' + @files.length.to_s)
 
     # Return a new file for testing, and log it for cleanup afterwards
     f = type.new(path)
     @files.push(f)
-    return f
+    f
   end
 
   # Rename a log file and create a new one in its place
-  def rotate(f, prefix="")
+  def rotate(f, prefix = '')
     old_name = f.path
 
-    if prefix == ""
-      new_name = f.path + "r"
+    if prefix == ''
+      new_name = f.path + 'r'
     else
-      new_name = File.join(File.dirname(f.path), prefix + File.basename(f.path) + "r")
+      new_name = File.join(File.dirname(f.path), prefix + File.basename(f.path) + 'r')
     end
 
     f.rename new_name
@@ -132,13 +131,13 @@ shared_context "Helpers" do
   def receive_and_check(total: nil, check_file: true, check_order: true, &block)
     # Quick check of the total events we are expecting - but allow time to receive them
     if total.nil?
-      total = @files.inject(0) do |sum, f|
+      total = @files.reduce(0) do |sum, f|
         sum + f.count
       end
     end
 
     waited = 0
-    while total > 0 and waited < EVENT_WAIT_COUNT
+    while total > 0 && waited < EVENT_WAIT_COUNT
       if @event_queue.length == 0
         sleep(EVENT_WAIT_TIME)
         waited += 1
@@ -148,17 +147,14 @@ shared_context "Helpers" do
       waited = 0
       while @event_queue.length != 0
         e = @event_queue.pop
-        if block != nil
-          block.call e
-        else
-          f = @files.find do |f|
-            if f.has_pending?
-              f.logged?(event: e, check_file: check_file, check_order: check_order)
-            else
-              false
-            end
+        if block.nil?
+          found = @files.find do |f|
+            next unless f.pending?
+            f.logged?(event: e, check_file: check_file, check_order: check_order)
           end
-          expect(f).to_not be_nil, "Event received not recognised: #{e}"
+          expect(found).to_not be_nil, "Event received not recognised: #{e}"
+        else
+          block.call e
         end
         total -= 1
       end
