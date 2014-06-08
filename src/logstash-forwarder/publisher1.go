@@ -28,6 +28,7 @@ type PendingPayload struct {
   ack_events int
   payload_start int
   payload    []byte
+  timeout    *time.Time
 }
 
 type Publisher struct {
@@ -40,6 +41,77 @@ type Publisher struct {
   first_payload    *PendingPayload
   last_payload     *PendingPayload
   num_payloads     int
+  out_of_sync      int
+}
+
+func NewPendingPayload(events []*FileEvent, nonce string, hostname string) (*PendingPayload, error) {
+  payload := &PendingPayload{
+    events: events,
+    nonce: nonce,
+    num_events: len(events),
+  }
+
+  if err := payload.Generate(hostname); err != nil {
+    return nil, err
+  }
+
+  return payload, nil
+}
+
+func (pp *PendingPayload) Generate(hostname string) (err error) {
+  var buffer bytes.Buffer
+
+  // Begin with the nonce
+  if _, err = buffer.Write([]byte(pp.nonce)); err != nil {
+    return
+  }
+
+  var compressor *zlib.Writer
+  if compressor, err = zlib.NewWriterLevel(&buffer, 3); err != nil {
+    return
+  }
+
+  // Append all the events
+  for _, event := range pp.events[pp.ack_events:] {
+    // Add host field
+    event.Event["host"] = hostname
+    if err = pp.bufferJdatDataEvent(compressor, event); err != nil {
+      return
+    }
+  }
+
+  compressor.Close()
+
+  pp.payload = buffer.Bytes()
+  pp.payload_start = pp.ack_events
+
+  return
+}
+
+func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *FileEvent) (err error) {
+  var value []byte
+  value, err = json.Marshal(event.Event)
+  if err != nil {
+    log.Printf("JSON event encoding error: %s\n", err)
+
+    if err = binary.Write(output, binary.BigEndian, 2); err != nil {
+      return
+    }
+    if _, err = output.Write([]byte("{}")); err != nil {
+      return
+    }
+
+    return
+  }
+
+  if err = binary.Write(output, binary.BigEndian, uint32(len(value))); err != nil {
+    return
+  }
+  if _, err = output.Write(value); err != nil {
+    return
+  }
+
+  return nil
 }
 
 func (p *Publisher) Init() error {
@@ -87,18 +159,17 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
       // TODO: implement shutdown select
       select {
       case <-p.can_send:
+        // Resend payloads from full retry first
         if retry_payload != nil {
-          var buffer bytes.Buffer
-
-          // Do we need to regenerate the payload? Remember to account for ACK we have but not yet sent to registrar due to out-of-order receive
+          // Do we need to regenerate the payload?
           if retry_payload.payload == nil {
-            if err = p.bufferJdatData(&buffer, retry_payload.events[retry_payload.ack_events:], retry_payload.nonce); err != nil {
+            if err = retry_payload.Generate(p.hostname); err != nil {
               break SelectLoop
             }
-
-            retry_payload.payload = buffer.Bytes()
-            retry_payload.payload_start = retry_payload.ack_events
           }
+
+          // Reset timeout
+          retry_payload.timeout = nil
 
           // Send the payload again
           if err = p.transport.Write("JDAT", retry_payload.payload); err != nil {
@@ -106,17 +177,30 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
           }
 
           retry_payload = retry_payload.next
+
+          // Expect an ACK within network timeout
+          if p.first_payload.timeout != nil {
+            timer.Reset(p.first_payload.timeout.Sub(time.Now()))
+          } else {
+            timer.Reset(p.config.Timeout)
+          }
           break
+        } else if p.out_of_sync != 0 {
+          var resent bool
+          if resent, err = p.checkResend(); err != nil {
+            break SelectLoop
+          } else if resent {
+            // Expect an ACK within network timeout
+            timer.Reset(p.config.Timeout)
+            break
+          }
         }
 
         // No pending payloads, enable event wait
         input_toggle = input
-
-        // Continue loop so we don't reset the ping timer - we've not performed any activity just yet
-        continue
       case events := <-input_toggle:
-        // Send JDAT
-        if err = p.sendJdat(events); err != nil {
+        // Send
+        if err = p.sendNewPayload(events); err != nil {
           break SelectLoop
         }
 
@@ -126,6 +210,13 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
         if p.num_payloads >= max_pending_payloads {
           // Too many pending payloads, disable send temporarily
           p.can_send = nil
+        }
+
+        // Expect an ACK within network timeout
+        if p.first_payload.timeout != nil {
+          timer.Reset(p.first_payload.timeout.Sub(time.Now()))
+        } else {
+          timer.Reset(p.config.Timeout)
         }
       case data := <-p.transport.Read():
         var signature, message []byte
@@ -153,17 +244,37 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
           err = errors.New(fmt.Sprintf("Unknown message received: % X", signature))
           break SelectLoop
         }
+
+        // If no more pending payloads, set keepalive, otherwise reset to network timeout
+        if p.num_payloads == 0 {
+          timer.Reset(keepalive_timeout)
+        } else if p.first_payload.timeout != nil {
+          timer.Reset(p.first_payload.timeout.Sub(time.Now()))
+        } else {
+          timer.Reset(p.config.Timeout)
+        }
       case <-timer.C:
-        log.Printf("<-timer.C")
-        // If we haven't received a PONG yet this is a timeout
-        if p.pending_ping {
-          err = errors.New("Server did not respond to PING")
+        // Do we need to resend first payload?
+        if p.out_of_sync != 0 {
+          var resent bool
+          if resent, err = p.checkResend(); err != nil {
+            break SelectLoop
+          } else if resent {
+            // Expect an ACK within network timeout
+            timer.Reset(p.config.Timeout)
+            break
+          }
+        }
+
+        // If we have pending payloads, we should've received something by now
+        if p.num_payloads != 0 || input_toggle == nil {
+          err = errors.New("Server did not respond within network timeout")
           break SelectLoop
         }
 
-        // If the send buffer is full, we should have been receiving ACK by now...
-        if input_toggle == nil {
-          err = errors.New("Server stopped responding")
+        // If we haven't received a PONG yet this is a timeout
+        if p.pending_ping {
+          err = errors.New("Server did not respond to PING")
           break SelectLoop
         }
 
@@ -176,20 +287,48 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
 
         // We may have just filled the send buffer
         input_toggle = nil
-      } /* select */
 
-      // Reset the timer
-      timer.Reset(keepalive_timeout)
-    } /* loop forever, break to reconnect */
+        // Allow network timeout to receive something
+        timer.Reset(p.config.Timeout)
+      }
+    }
 
     // Disconnect and retry payloads
     log.Printf("Transport error, will reconnect: %s\n", err)
     p.transport.Disconnect()
+
     retry_payload = p.first_payload
+    p.out_of_sync = 0
 
     time.Sleep(p.config.Reconnect)
-  } /* Publish: for loop, break to shutdown */
-} // Publish
+  }
+}
+
+func (p *Publisher) checkResend() (bool, error) {
+  // We're out of sync (received ACKs for later payloads but not earlier ones)
+  // Check timeouts of earlier payloads and resend if necessary
+  if payload := p.first_payload; payload.timeout.Before(time.Now()) {
+    // Do we need to regenerate the payload?
+    if payload.payload == nil {
+      if err := payload.Generate(p.hostname); err != nil {
+        return false, err
+      }
+    }
+
+    // Update timeout
+    timeout := time.Now().Add(p.config.Timeout)
+    payload.timeout = &timeout
+
+    // Send the payload again
+    if err := p.transport.Write("JDAT", payload.payload); err != nil {
+      return false, err
+    }
+
+    return true, nil
+  }
+
+  return false, nil
+}
 
 func (p *Publisher) generateNonce() string {
   // This could maybe be made a bit more efficient
@@ -200,9 +339,7 @@ func (p *Publisher) generateNonce() string {
   return string(nonce)
 }
 
-func (p *Publisher) sendJdat(events []*FileEvent) (err error) {
-  var buffer bytes.Buffer
-
+func (p *Publisher) sendNewPayload(events []*FileEvent) (err error) {
   // Calculate a nonce
   nonce := p.generateNonce()
   for {
@@ -213,13 +350,12 @@ func (p *Publisher) sendJdat(events []*FileEvent) (err error) {
     nonce = p.generateNonce()
   }
 
-  // Generate the data first
-  if err = p.bufferJdatData(&buffer, events, nonce); err != nil {
+  var payload *PendingPayload
+  if payload, err = NewPendingPayload(events, nonce, p.hostname); err != nil {
     return
   }
 
   // Save pending payload until we receive ack, and discard buffer
-  payload := &PendingPayload{events: events, nonce: nonce, num_events: len(events), payload_start: 0, payload: buffer.Bytes()}
   p.pending_payloads[nonce] = payload
   if p.first_payload == nil {
     p.first_payload = payload
@@ -232,56 +368,7 @@ func (p *Publisher) sendJdat(events []*FileEvent) (err error) {
   return p.transport.Write("JDAT", payload.payload)
 }
 
-func (p *Publisher) bufferJdatData(output io.Writer, events []*FileEvent, nonce string) (err error) {
-  // Begin with the nonce
-  if _, err = output.Write([]byte(nonce)); err != nil {
-    return
-  }
 
-  var compressor *zlib.Writer
-  if compressor, err = zlib.NewWriterLevel(output, 3); err != nil {
-    return
-  }
-
-  // Append all the events
-  for _, event := range events {
-    // Add host field
-    event.Event["host"] = p.hostname
-    if err = p.bufferJdatDataEvent(compressor, event); err != nil {
-      return
-    }
-  }
-
-  compressor.Close()
-
-  return nil
-}
-
-func (p *Publisher) bufferJdatDataEvent(output io.Writer, event *FileEvent) (err error) {
-  var value []byte
-  value, err = json.Marshal(event.Event)
-  if err != nil {
-    log.Printf("JSON event encoding error: %s\n", err)
-
-    if err = binary.Write(output, binary.BigEndian, 2); err != nil {
-      return
-    }
-    if _, err = output.Write([]byte("{}")); err != nil {
-      return
-    }
-
-    return
-  }
-
-  if err = binary.Write(output, binary.BigEndian, uint32(len(value))); err != nil {
-    return
-  }
-  if _, err = output.Write(value); err != nil {
-    return
-  }
-
-  return nil
-}
 
 func (p *Publisher) processPong(message []byte) error {
   if len(message) != 0 {
@@ -313,6 +400,8 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
     return
   }
 
+  ack_events := payload.ack_events
+
   // Full ACK?
   // TODO: Protocol error if sequence is too large?
   if int(sequence) >= payload.num_events - payload.payload_start {
@@ -332,29 +421,42 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
   // We potentially receive out-of-order ACKs due to payloads distributed across servers
   // This is where we enforce ordering again to ensure registrar receives ACK in order
   if payload == p.first_payload {
+    out_of_sync := p.out_of_sync + 1
     for payload.ack_events != 0 {
-      if payload.ack_events == len(payload.events) {
-        registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events}}
-        payload = payload.next
-        p.first_payload = payload
-        p.num_payloads--
-
-        // Resume sending if we stopped due to excessive pending payload count
-        if p.can_send == nil {
-          p.can_send = p.transport.CanSend()
-        }
-      } else {
+      if payload.ack_events != len(payload.events) {
         registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events[:payload.ack_events]}}
         payload.events = payload.events[payload.ack_events:]
         payload.num_events = len(payload.events)
         payload.ack_events = 0
         payload.payload_start = 0
+        break
+      }
+
+      registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events}}
+      payload = payload.next
+      p.first_payload = payload
+      p.num_payloads--
+      out_of_sync--
+      p.out_of_sync = out_of_sync
+
+      // Resume sending if we stopped due to excessive pending payload count
+      if p.can_send == nil {
+        p.can_send = p.transport.CanSend()
       }
 
       if payload == nil {
         break
       }
     }
+  } else if ack_events == 0 {
+    // Mark out of sync so we resend earlier packets in case they were lost
+    p.out_of_sync++
+  }
+
+  // Set a timeout of the first payload if out of sync as we should be expecting it any time
+  if p.out_of_sync != 0 && p.first_payload.timeout == nil {
+    timeout := time.Now().Add(p.config.Timeout)
+    p.first_payload.timeout = &timeout
   }
 
   return
