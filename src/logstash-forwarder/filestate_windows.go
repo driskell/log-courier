@@ -4,7 +4,6 @@ import (
   "log"
   "os"
   "reflect"
-  "syscall"
 )
 
 type FileStateOS struct {

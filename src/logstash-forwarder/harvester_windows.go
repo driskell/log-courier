@@ -2,6 +2,7 @@ package main
 
 import (
   "os"
+  "syscall"
 )
 
 func (h *Harvester) openFile(path string) (*os.File, error) {
