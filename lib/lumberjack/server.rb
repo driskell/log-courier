@@ -1,32 +1,33 @@
-require "thread"
-require "timeout"
-require "zlib"
-require "json"
+require 'thread'
+require 'timeout'
+require 'zlib'
+require 'json'
 
 module Lumberjack
   class ShutdownSignal < StandardError; end
   class ProtocolError < StandardError; end
 
+  # Implementation of the server
   class Server
     attr_reader :port
 
-    def initialize(options={})
+    def initialize(options = {})
       @options = {
         :logger => nil,
-        :transport => "tls",
+        :transport => 'tls'
       }.merge(options)
 
       @logger = @options[:logger]
 
       case @options[:transport]
-      when "tls"
-        require "lumberjack/server_tls"
+      when 'tls'
+        require 'lumberjack/server_tls'
         @server = ServerTls.new(@options)
-      when "zmq"
-        require "lumberjack/server_zmq"
+      when 'zmq'
+        require 'lumberjack/server_zmq'
         @server = ServerZmq.new(@options)
       else
-        raise "Transport must be either tls or zmq in Lumberjack::Server.new(...)"
+        raise 'Transport must be either tls or zmq in Lumberjack::Server.new(...)'
       end
 
       # Grab the port back
@@ -44,7 +45,7 @@ module Lumberjack
         # a timeout wrapper around the &block call but we'd then be generating exceptions in someone else's code
         # So we allow the caller to block us - but only our spooler thread - our other threads are safe and we can use timeout
         spooler_thread = Thread.new do
-          while true
+          loop do
             events = event_queue.pop
             break if events.nil?
             events.each do |event|
@@ -56,20 +57,20 @@ module Lumberjack
         # Receive messages and process them
         @server.run do |signature, message, comm|
           case signature
-          when "PING"
+          when 'PING'
             process_ping message, comm
-          when "JDAT"
+          when 'JDAT'
             process_jdat message, comm, event_queue
           else
-            @logger.warn("[LumberjackServer] Unknown message received from #{comm.peer}") if not @logger.nil?
+            @logger.warn("[LumberjackServer] Unknown message received from #{comm.peer}") unless @logger.nil?
             # Don't kill a client that sends a bad message
             # Just reject it and let it send it again, potentially to another server
-            comm.send "????", ""
+            comm.send '????', ''
           end
         end
       ensure
         # Signal the spooler thread to stop
-        if not spooler_thread.nil?
+        unless spooler_thread.nil?
           event_queue << nil
           spooler_thread.join
         end
@@ -84,7 +85,7 @@ module Lumberjack
       end
 
       # PONG!
-      comm.send "PONG", ""
+      comm.send 'PONG', ''
     end
 
     def process_jdat(message, comm, event_queue)
@@ -117,7 +118,7 @@ module Lumberjack
           raise ProtocolError
         end
 
-        length = message[p...p+4].unpack("N").first
+        length = message[p...p + 4].unpack('N').first
         p += 4
 
         # Check length is valid
@@ -127,15 +128,15 @@ module Lumberjack
         end
 
         # Extract message, and force UTF-8 to ensure we don't break anything, replacing invalid sequences
-        data = message[p...p+length].encode("utf-8", "binary", :invalid => :replace, :undef => :replace, :replace => "?").force_encoding("UTF-8")
+        data = message[p...p + length].encode('utf-8', 'binary', :invalid => :replace, :undef => :replace, :replace => '?').force_encoding('UTF-8')
         p += length
 
         # Decode the JSON
         begin
           event = JSON.parse(data)
         rescue JSON::ParserError => e
-          @logger.warn("[LumberjackServer] JSON parse failure. Falling back to plain-text", :error => e, :data => data) if not @logger.nil?
-          event = { "message" => data }
+          @logger.warn("[LumberjackServer] JSON parse failure, falling back to plain-text: #{e}") unless @logger.nil?
+          event = { 'message' => data }
         end
 
         events << event
@@ -145,21 +146,21 @@ module Lumberjack
 
       # Queue the events
       begin
-        Timeout::timeout(@ack_timeout - Time.now.to_i) do
+        Timeout.timeout(@ack_timeout - Time.now.to_i) do
           event_queue << events
         end
       rescue Timeout::Error
         # Full pipeline, partial ack
-        comm.send("ACKN", [nonce, sequence].pack("A*N"))
+        comm.send('ACKN', [nonce, sequence].pack('A*N'))
         reset_ack_timeout
         retry
       end
 
       # Acknowledge the full message
-      comm.send("ACKN", [nonce, sequence].pack("A*N"))
+      comm.send('ACKN', [nonce, sequence].pack('A*N'))
     end
 
-    def reset_ack_timeout()
+    def reset_ack_timeout
       # TODO: Make a constant or configurable
       @ack_timeout = Time.now.to_i + 5
     end
