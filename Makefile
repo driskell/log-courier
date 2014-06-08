@@ -24,3 +24,4 @@ bin/%: src/%/*.go | go-check
 
 clean:
 	go clean -i ./...
+	rm -rf vendor/bundle
