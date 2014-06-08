@@ -151,11 +151,9 @@ func (p *Prospector) scan(path string, config *FileConfig, registrar_chan chan<-
 
   // Check any matched files to see if we need to start a harvester
   for _, file := range matches {
-    // Stat the file, following any symlinks.
-    // TODO: Somehow trigger loadFileId on Windows since it does not load file
-    //       ID by default. This will also fix the possible Windows-only race
-    //       condition in Harvester caused by its use of this same os.FileInfo
-    //       to validate it starts on the same file
+    // Stat the file, following any symlinks
+    // TODO: Low priority. Trigger loadFileId here for Windows instead of
+    //       waiting for Harvester or Registrar to do it
     fileinfo, err := os.Stat(file)
     if err != nil {
       log.Printf("stat(%s) failed: %s\n", file, err)
