@@ -28,9 +28,9 @@ shared_context 'Helpers' do
 
     @event_queue = Queue.new
 
-    @servers = Hash.new
-    @server_counts = Hash.new
-    @server_threads = Hash.new
+    @servers = {}
+    @server_counts = {}
+    @server_threads = {}
 
     start_server
   end
