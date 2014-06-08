@@ -26,7 +26,7 @@ module Lumberjack
       endpoint = ""
       rc = @socket.getsockopt(ZMQ::LAST_ENDPOINT, endpoint)
       raise ZMQError if !ZMQ::Util.resultcode_ok?(rc) or not %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
-      @port = Integer(endpoint_port)
+      @port = endpoint_port.to_i
 
       # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
 

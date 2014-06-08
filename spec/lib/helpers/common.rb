@@ -120,7 +120,7 @@ shared_context "Helpers" do
     create_log(f.class, old_name)
   end
 
-  def receive_and_check(total: nil, check_file: true, &block)
+  def receive_and_check(total: nil, check_file: true, check_order: true, &block)
     # Quick check of the total events we are expecting - but allow time to receive them
     if total.nil?
       total = @files.inject(0) do |sum, f|
@@ -130,28 +130,29 @@ shared_context "Helpers" do
 
     waited = 0
     while total > 0 and waited < EVENT_WAIT_COUNT
-      if @event_queue.length != 0
-        waited = 0
-        while @event_queue.length != 0
-          e = @event_queue.pop
-          if block != nil
-            block.call e
-          else
-            f = @files.find do |f|
-              if f.has_pending?
-                f.logged?(e, check_file)
-              else
-                false
-              end
-            end
-            expect(f).to_not be_nil, "Event received not recognised: #{e}"
-          end
-          total -= 1
-        end
+      if @event_queue.length == 0
+        sleep(EVENT_WAIT_TIME)
+        waited += 1
         next
       end
-      sleep(EVENT_WAIT_TIME)
-      waited += 1
+
+      waited = 0
+      while @event_queue.length != 0
+        e = @event_queue.pop
+        if block != nil
+          block.call e
+        else
+          f = @files.find do |f|
+            if f.has_pending?
+              f.logged?(event: e, check_file: check_file, check_order: check_order)
+            else
+              false
+            end
+          end
+          expect(f).to_not be_nil, "Event received not recognised: #{e}"
+        end
+        total -= 1
+      end
     end
 
     expect(total).to eq 0

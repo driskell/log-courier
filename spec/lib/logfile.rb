@@ -11,6 +11,7 @@ class LogFile
 
     @host = Socket.gethostname
     @next = 1
+    @gaps = Hash.new
   end
 
   def close
@@ -54,13 +55,64 @@ class LogFile
   end
 
   def has_pending?
-    @count != 0
+    @count != 0 || !@gaps.empty?
   end
 
-  def logged?(event, check_file=true)
+  def logged?(event: event, check_file: true, check_order: true)
     return false if event["host"] != @host
     return false if check_file and event["file"] != @orig_path
-    return false if event["message"] != @orig_path + " test event #{@next}"
+
+    if check_order
+      # Regular simple test that follows the event number
+      return false if event["message"] != @orig_path + " test event #{@next}"
+    else
+      # For when the numbers might not be in order
+      if event["message"] != @orig_path + " test event #{@next}"
+        match = %r{\A#{Regexp.escape(@orig_path)} test event (?<number>\d+)\z}.match(event["message"])
+        return false if match.nil?
+        number = match["number"].to_i
+        return false if number >= @next + count
+        if @gaps.has_key?(number)
+          if @gaps[number] != number
+            @gaps[number + 1] = @gaps[number]
+          end
+          @gaps.delete number
+          return true
+        end
+        fs = nil
+        fe = nil
+        @gaps.each do |s, e|
+          if number >= s && number <= e
+            fs = s
+            fe = e
+            break
+          end
+        end
+        if not fs.nil?
+          if number == fs && number == fe
+            @gaps.delete number
+          elsif number == fs
+            @gaps[fs + 1] = fe
+            @gaps.delete fs
+          elsif number == fe
+            @gaps[fs] = fe - 1
+          else
+            @gaps[fs] = number - 1
+            @gaps[number + 1] = fe
+          end
+          return true
+        end
+        if number < @next
+          return false
+        end
+        @gaps[@next] = number - 1
+        @count -= (number + 1) - @next
+        @next = number + 1
+        return true
+      end
+    end
+
+    # Count and return
     @count -= 1
     @next += 1
     true
