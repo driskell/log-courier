@@ -73,10 +73,13 @@ describe 'logstash-forwarder' do
       f.log 50
 
       # Start fast, then go slower after 80% of the events
-      if i > 80
-        sleep 0.2
-      end
+      # Total sleep becomes 20 seconds
+      sleep 1 if i > 80
     end
+
+    # Quickly test we received at least 90% already
+    # If not, then the 5 second idle_timeout has been ignored and test fails
+    expect(@event_queue.length).to be >= 4_500
 
     # Receive and check
     receive_and_check
