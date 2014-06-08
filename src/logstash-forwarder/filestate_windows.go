@@ -23,6 +23,7 @@ func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
   // info is os.FileInfo which is an interface to a
   // - *os.fileStat (holding methods) which is a pointer to a
   // - os.fileStat (holding data)
+  // ValueOf will pick up the interface contents immediately, so we need a single Elem()
 
   // Ensure that the numbers are loaded by calling os.SameFile
   // os.SameFile will call sameFile (types_windows.go) which will call *os.fileStat's loadFileId
@@ -40,7 +41,7 @@ func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
   }()
 
   // Following makes fstat hold os.fileStat
-  fstat := reflect.ValueOf(info).Elem().Elem()
+  fstat := reflect.ValueOf(info).Elem()
 
   // To get the data, we need the os.fileStat that fstat points to, so one more Elem()
   fs.Vol = uint32(fstat.FieldByName("vol").Uint())
