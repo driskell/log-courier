@@ -25,6 +25,9 @@ func NewHarvester(info *ProspectorInfo, fileconfig *FileConfig, offset int64) *H
   var path string
   if info != nil {
     // Grab now so we can safely use them even if prospector changes them
+    // TODO: We're copying os.FileInfo interface, which could be a pointer - is this thread-safe?
+    //       Specifically, on Windows we know os.FileInfo changes itself on loadFileId
+    //       and due to Prospector not triggering it this WILL change on Windows
     fileinfo = info.identity.Stat()
     path = info.file
   } else {
