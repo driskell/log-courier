@@ -102,6 +102,7 @@ module Lumberjack
       while true
         # Grab a header
         header = @ssl_client.read(8)
+        raise EOFError if header.nil?
 
         # Decode signature and length
         signature, length = header.unpack("A4N")
@@ -121,6 +122,9 @@ module Lumberjack
       end
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       @logger.warn("[LumberjackClientTLS] SSL read error: #{e}") if not @logger.nil?
+      io_control << ["F"]
+    rescue EOFError
+      @logger.warn("[LumberjackClientTLS] Connection closed by server") if not @logger.nil?
       io_control << ["F"]
     rescue ClientShutdownSignal
       # Just shutdown
