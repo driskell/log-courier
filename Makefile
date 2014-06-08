@@ -6,9 +6,13 @@ TAGS := 'zmq zmq_4_x'
 
 all: bin/logstash-forwarder bin/genkey
 
-test: all
-	bundle install --path vendor/bundle
+test: all vendor/bundle/.GemfileModT
 	bundle exec rspec
+
+# Only update bundle if Gemfile changes
+vendor/bundle/.GemfileModT: Gemfile
+	bundle install --path vendor/bundle
+	touch $@
 
 go-check:
 	@go version > /dev/null || (echo "Go not found. You need to install go: http://golang.org/doc/install"; false)
