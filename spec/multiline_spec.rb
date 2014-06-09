@@ -10,11 +10,8 @@ describe 'logstash-forwarder with multiline codec' do
     startup config: <<-config
     {
       "network": {
+        "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ],
-        "transport": {
-          "name": "tls",
-          "ssl ca": "#{@ssl_cert.path}"
-        },
         "timeout": 15,
         "reconnect": 1
       },
@@ -44,11 +41,8 @@ describe 'logstash-forwarder with multiline codec' do
     startup config: <<-config
     {
       "network": {
+        "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port()}" ],
-        "transport": {
-          "name": "tls",
-          "ssl ca": "#{@ssl_cert.path}"
-        },
         "timeout": 15,
         "reconnect": 1
       },

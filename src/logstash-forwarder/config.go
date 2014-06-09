@@ -23,17 +23,13 @@ type Config struct {
 
 var NewTransportZmqFactoryIfAvailable func(string, map[string]interface{}) (TransportFactory, error)
 
-type TransportConfigStub struct {
-  Name string `json:"name"`
-  Unused   map[string]interface{}
-}
-
 type NetworkConfig struct {
-  Servers        []string `json:"servers"`
-  Transport      TransportConfigStub   `json:"transport"`
+  Transport      string   `json:"transport"`
   transport      TransportFactory
+  Servers        []string `json:"servers"`
   Timeout        time.Duration `json:"timeout"`
   Reconnect      time.Duration `json:"reconnect"`
+  Unused   map[string]interface{}
 }
 
 type CodecConfigStub struct {
@@ -152,18 +148,19 @@ func LoadConfig(path string) (config *Config, err error) {
     return
   }
 
+  // Populate configuration - reporting errors on spelling mistakes etc
   config = &Config{}
   if err = PopulateConfig(config, "/", raw_config); err != nil {
     return
   }
 
-  if config.Network.Transport.Name == "" {
-    config.Network.Transport.Name = "tls"
+  if config.Network.Transport == "" {
+    config.Network.Transport = "tls"
   }
-  transport_name := config.Network.Transport.Name
+  transport_name := config.Network.Transport
 
   if transport_name == "tls" {
-    if config.Network.transport, err = NewTransportTlsFactory("/network/transport/", config.Network.Transport.Unused); err != nil {
+    if config.Network.transport, err = NewTransportTlsFactory("/network/transport/", config.Network.Unused); err != nil {
       return
     }
   } else if transport_name == "zmq" {
@@ -172,7 +169,7 @@ func LoadConfig(path string) (config *Config, err error) {
       err = errors.New(fmt.Sprintf("This binary was not built with 'zmq' transport support"))
       return
     }
-    if config.Network.transport, err = NewTransportZmqFactoryIfAvailable("/network/transport/", config.Network.Transport.Unused); err != nil {
+    if config.Network.transport, err = NewTransportZmqFactoryIfAvailable("/network/transport/", config.Network.Unused); err != nil {
       return
     }
   } else {
