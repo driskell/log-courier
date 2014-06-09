@@ -136,6 +136,8 @@ shared_context 'Helpers' do
       end
     end
 
+    orig_total = total
+
     waited = 0
     while total > 0 && waited < EVENT_WAIT_COUNT
       if @event_queue.length == 0
@@ -160,6 +162,7 @@ shared_context 'Helpers' do
       end
     end
 
-    expect(total).to eq 0
+    # Fancy calculation to give a nice "expected" output of expected num of events
+    expect(orig_total - total).to eq orig_total
   end
 end
