@@ -6,9 +6,8 @@ import (
 
 type FileState struct {
   FileStateOS
-  Source    *string `json:"source,omitempty"`
-  Offset    int64   `json:"offset,omitempty"`
-  TmpOffset int64   `json:"-"`
+  Source *string `json:"source,omitempty"`
+  Offset int64   `json:"offset,omitempty"`
 }
 
 type FileInfo struct {
