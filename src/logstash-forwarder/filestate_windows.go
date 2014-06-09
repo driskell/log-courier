@@ -7,9 +7,9 @@ import (
 )
 
 type FileStateOS struct {
-  Vol    uint32  `json:"vol,omitempty"`
-  IdxHi  uint32  `json:"idxhi,omitempty"`
-  IdxLo  uint32  `json:"idxlo,omitempty"`
+  Vol   uint32 `json:"vol,omitempty"`
+  IdxHi uint32 `json:"idxhi,omitempty"`
+  IdxLo uint32 `json:"idxlo,omitempty"`
 }
 
 func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {

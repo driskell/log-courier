@@ -3,8 +3,8 @@ package main
 import (
   "flag"
   "fmt"
-  "syscall"
   zmq "github.com/alecthomas/gozmq"
+  "syscall"
 )
 
 /*
@@ -86,21 +86,21 @@ func CurveKeyPair() (string, string, error) {
 type zmqErrno syscall.Errno
 
 func (e zmqErrno) Error() string {
-	return C.GoString(C.zmq_strerror(C.int(e)))
+  return C.GoString(C.zmq_strerror(C.int(e)))
 }
 
 func casterr(fromcgo error) error {
-	errno, ok := fromcgo.(syscall.Errno)
-	if !ok {
-		return fromcgo
-	}
-	zmqerrno := zmqErrno(errno)
-	switch zmqerrno {
-	case zmq.ENOTSOCK:
-		return zmqerrno
-	}
-	if zmqerrno >= C.ZMQ_HAUSNUMERO {
-		return zmqerrno
-	}
-	return errno
+  errno, ok := fromcgo.(syscall.Errno)
+  if !ok {
+    return fromcgo
+  }
+  zmqerrno := zmqErrno(errno)
+  switch zmqerrno {
+  case zmq.ENOTSOCK:
+    return zmqerrno
+  }
+  if zmqerrno >= C.ZMQ_HAUSNUMERO {
+    return zmqerrno
+  }
+  return errno
 }

@@ -15,20 +15,20 @@ import (
 )
 
 const (
-  default_publisher_hostname string = "localhost.localdomain"
+  default_publisher_hostname string        = "localhost.localdomain"
   keepalive_timeout          time.Duration = 900 * time.Second
-  max_pending_payloads       int = 100
+  max_pending_payloads       int           = 100
 )
 
 type PendingPayload struct {
-  next       *PendingPayload
-  nonce      string
-  events     []*FileEvent
-  num_events int
-  ack_events int
+  next          *PendingPayload
+  nonce         string
+  events        []*FileEvent
+  num_events    int
+  ack_events    int
   payload_start int
-  payload    []byte
-  timeout    *time.Time
+  payload       []byte
+  timeout       *time.Time
 }
 
 type Publisher struct {
@@ -46,8 +46,8 @@ type Publisher struct {
 
 func NewPendingPayload(events []*FileEvent, nonce string, hostname string) (*PendingPayload, error) {
   payload := &PendingPayload{
-    events: events,
-    nonce: nonce,
+    events:     events,
+    nonce:      nonce,
     num_events: len(events),
   }
 
@@ -223,12 +223,12 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
 
         // Error? Or data?
         switch data.(type) {
-          case error:
-            err = data.(error)
-            break SelectLoop
-          default:
-            signature = data.([][]byte)[0]
-            message = data.([][]byte)[1]
+        case error:
+          err = data.(error)
+          break SelectLoop
+        default:
+          signature = data.([][]byte)[0]
+          message = data.([][]byte)[1]
         }
 
         switch {
@@ -368,8 +368,6 @@ func (p *Publisher) sendNewPayload(events []*FileEvent) (err error) {
   return p.transport.Write("JDAT", payload.payload)
 }
 
-
-
 func (p *Publisher) processPong(message []byte) error {
   if len(message) != 0 {
     return errors.New(fmt.Sprintf("PONG message overflow (%d)", len(message)))
@@ -404,14 +402,14 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
 
   // Full ACK?
   // TODO: Protocol error if sequence is too large?
-  if int(sequence) >= payload.num_events - payload.payload_start {
+  if int(sequence) >= payload.num_events-payload.payload_start {
     // No more events left for this payload, free the payload memory
     payload.ack_events = len(payload.events)
     payload.payload = nil
     delete(p.pending_payloads, nonce)
   } else {
     // Only process the ACK if something was actually processed
-    if int(sequence) > payload.num_events - payload.ack_events {
+    if int(sequence) > payload.num_events-payload.ack_events {
       payload.ack_events = int(sequence) + payload.payload_start
       // If we need to resend, we'll need to regenerate payload, so free that memory early
       payload.payload = nil

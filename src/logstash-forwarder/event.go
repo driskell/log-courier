@@ -2,7 +2,7 @@ package main
 
 import "os"
 
-type Event map[string]interface{};
+type Event map[string]interface{}
 
 type FileEvent struct {
   ProspectorInfo *ProspectorInfo

@@ -7,11 +7,11 @@ type CodecPlainFactory struct {
 }
 
 type CodecPlain struct {
-  path string
-  fileconfig *FileConfig
-  info *ProspectorInfo
+  path        string
+  fileconfig  *FileConfig
+  info        *ProspectorInfo
   last_offset int64
-  output chan<- *FileEvent
+  output      chan<- *FileEvent
 }
 
 func (r *CodecPlainRegistrar) NewFactory(config_path string, config map[string]interface{}) (CodecFactory, error) {
@@ -23,11 +23,11 @@ func (r *CodecPlainRegistrar) NewFactory(config_path string, config map[string]i
 
 func (f *CodecPlainFactory) NewCodec(path string, fileconfig *FileConfig, info *ProspectorInfo, offset int64, output chan<- *FileEvent) Codec {
   return &CodecPlain{
-    path: path,
-    fileconfig: fileconfig,
-    info: info,
+    path:        path,
+    fileconfig:  fileconfig,
+    info:        info,
     last_offset: offset,
-    output: output,
+    output:      output,
   }
 }
 

@@ -24,23 +24,23 @@ type Config struct {
 var NewTransportZmqFactoryIfAvailable func(string, map[string]interface{}) (TransportFactory, error)
 
 type NetworkConfig struct {
-  Transport      string   `json:"transport"`
-  transport      TransportFactory
-  Servers        []string `json:"servers"`
-  Timeout        time.Duration `json:"timeout"`
-  Reconnect      time.Duration `json:"reconnect"`
-  Unused   map[string]interface{}
+  Transport string `json:"transport"`
+  transport TransportFactory
+  Servers   []string      `json:"servers"`
+  Timeout   time.Duration `json:"timeout"`
+  Reconnect time.Duration `json:"reconnect"`
+  Unused    map[string]interface{}
 }
 
 type CodecConfigStub struct {
-  Name     string `json:"name"`
-  Unused   map[string]interface{}
+  Name   string `json:"name"`
+  Unused map[string]interface{}
 }
 
 type FileConfig struct {
-  Paths    []string               `json:"paths"`
-  Fields   map[string]string     `json:"fields"`
-  Codec    CodecConfigStub       `json:"codec"`
+  Paths    []string          `json:"paths"`
+  Fields   map[string]string `json:"fields"`
+  Codec    CodecConfigStub   `json:"codec"`
   codec    CodecFactory
   DeadTime time.Duration `json:"dead time"`
 }
@@ -192,7 +192,7 @@ func LoadConfig(path string) (config *Config, err error) {
     }
     codec_name := config.Files[k].Codec.Name
 
-    var factory CodecFactory;
+    var factory CodecFactory
     if factory, err = NewCodecFactory(fmt.Sprintf("/files[%d]/codec/", k), codec_name, config.Files[k].Codec.Unused); err == nil {
       if factory != nil {
         config.Files[k].codec = factory

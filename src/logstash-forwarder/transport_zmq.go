@@ -7,13 +7,13 @@ import (
   "encoding/binary"
   "errors"
   "fmt"
+  zmq "github.com/alecthomas/gozmq"
   "log"
   "net"
   "regexp"
   "runtime"
   "sync"
   "syscall"
-  zmq "github.com/alecthomas/gozmq"
 )
 
 const (
@@ -23,25 +23,25 @@ const (
 )
 
 type TransportZmqFactory struct {
-  CurveServerkey string   `json:"curve server key"`
-  CurvePublickey    string   `json:"curve public key"`
-  CurveSecretkey   string   `json:"curve secret key"`
+  CurveServerkey string `json:"curve server key"`
+  CurvePublickey string `json:"curve public key"`
+  CurveSecretkey string `json:"curve secret key"`
 
   hostport_re *regexp.Regexp
-  context *zmq.Context
+  context     *zmq.Context
 }
 
 type TransportZmq struct {
-  config *TransportZmqFactory
-  net_config  *NetworkConfig
-  dealer  *zmq.Socket
+  config     *TransportZmqFactory
+  net_config *NetworkConfig
+  dealer     *zmq.Socket
 
   wait sync.WaitGroup
 
   bridge_chan chan []byte
 
-  send_chan chan *ZMQMessage
-  recv_chan chan interface{}
+  send_chan        chan *ZMQMessage
+  recv_chan        chan interface{}
   recv_bridge_chan chan interface{}
 
   can_send chan int
@@ -203,7 +203,7 @@ func (t *TransportZmq) bridge(bridge_in *zmq.Socket) {
 BridgeLoop:
   for {
     select {
-    case notify := <- t.bridge_chan:
+    case notify := <-t.bridge_chan:
       bridge_in.Send(notify, 0)
 
       // Shutdown?
@@ -211,7 +211,7 @@ BridgeLoop:
         break BridgeLoop
       }
     case message = <-t.recv_bridge_chan:
-    case func () chan<- interface{} {
+    case func() chan<- interface{} {
       if message != nil {
         return t.recv_chan
       }
@@ -267,7 +267,7 @@ PollLoop:
     }
 
     // Process control channel
-    if pollitems[0].REvents & zmq.POLLIN != 0 {
+    if pollitems[0].REvents&zmq.POLLIN != 0 {
     RetryControl:
       msg, err := bridge_out.Recv(zmq.DONTWAIT)
       if err != nil {
@@ -312,7 +312,7 @@ PollLoop:
     }
 
     // Process dealer send
-    if pollitems[1].REvents & zmq.POLLOUT != 0 {
+    if pollitems[1].REvents&zmq.POLLOUT != 0 {
       sent_one := false
 
       // Something in the staging buffer?
@@ -322,7 +322,7 @@ PollLoop:
         if send_stage.final {
           err = t.dealer.Send(send_stage.part, zmq.DONTWAIT)
         } else {
-          err = t.dealer.Send(send_stage.part, zmq.DONTWAIT | zmq.SNDMORE)
+          err = t.dealer.Send(send_stage.part, zmq.DONTWAIT|zmq.SNDMORE)
         }
         if err != nil {
           switch err {
@@ -352,7 +352,7 @@ PollLoop:
           if msg.final {
             err = t.dealer.Send(msg.part, zmq.DONTWAIT)
           } else {
-            err = t.dealer.Send(msg.part, zmq.DONTWAIT | zmq.SNDMORE)
+            err = t.dealer.Send(msg.part, zmq.DONTWAIT|zmq.SNDMORE)
           }
           if err != nil {
             switch err {
@@ -380,7 +380,7 @@ PollLoop:
         // We just sent something, check POLLOUT still active before signalling we can send more
         // TODO: Check why Events() is returning uint64 instead of PollEvents
         // TODO: This is broken and actually returns an error
-        if events, _ := t.dealer.Events(); zmq.PollEvents(events) & zmq.POLLOUT != 0 {
+        if events, _ := t.dealer.Events(); zmq.PollEvents(events)&zmq.POLLOUT != 0 {
           t.setChan(t.can_send)
         }
       } else {
@@ -392,7 +392,7 @@ PollLoop:
 
     // Process dealer receive
   PollRecv:
-    if pollitems[1].REvents & zmq.POLLIN != 0 {
+    if pollitems[1].REvents&zmq.POLLIN != 0 {
     LoopRecv:
       for {
         // Bring in the messages
@@ -437,8 +437,8 @@ PollLoop:
             length := binary.BigEndian.Uint32(data[4:8])
             if length > 1048576 {
               log.Printf("Skipping invalid message: data too large (%d)", length)
-            } else if length != uint32(len(data)) - 8 {
-              log.Printf("Skipping invalid message: data has invalid length (%d != %d)", len(data) - 8, length)
+            } else if length != uint32(len(data))-8 {
+              log.Printf("Skipping invalid message: data has invalid length (%d != %d)", len(data)-8, length)
             } else {
               message := [][]byte{data[0:4], data[8:]}
 
@@ -477,7 +477,7 @@ func (t *TransportZmq) CanSend() <-chan int {
 
 func (t *TransportZmq) Write(signature string, message []byte) (err error) {
   var write_buffer *bytes.Buffer
-  write_buffer = bytes.NewBuffer(make([]byte, 0, len(signature) + 4 + len(message)))
+  write_buffer = bytes.NewBuffer(make([]byte, 0, len(signature)+4+len(message)))
 
   if _, err = write_buffer.Write([]byte(signature)); err != nil {
     return

@@ -13,7 +13,7 @@ type Codec interface {
   Event(int64, int64, uint64, *string)
 }
 
-var codecRegistry map[string]CodecRegistrar = make(map[string]CodecRegistrar);
+var codecRegistry map[string]CodecRegistrar = make(map[string]CodecRegistrar)
 
 func RegisterCodec(registrar CodecRegistrar, name string) {
   codecRegistry[name] = registrar

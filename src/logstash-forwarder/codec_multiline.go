@@ -16,28 +16,28 @@ type CodecMultilineRegistrar struct {
 }
 
 type CodecMultilineFactory struct {
-  Pattern          string `json:"pattern"`
-  matcher *regexp.Regexp
-  What             string `json:"what"`
-  what             int
-  Negate           bool `json:"negate"`
-  PreviousTimeout  time.Duration `json:"previous timeout"`
+  Pattern         string `json:"pattern"`
+  matcher         *regexp.Regexp
+  What            string `json:"what"`
+  what            int
+  Negate          bool          `json:"negate"`
+  PreviousTimeout time.Duration `json:"previous timeout"`
 }
 
 type CodecMultiline struct {
   config      *CodecMultilineFactory
-  path string
-  fileconfig *FileConfig
-  info *ProspectorInfo
+  path        string
+  fileconfig  *FileConfig
+  info        *ProspectorInfo
   last_offset int64
-  output chan<- *FileEvent
+  output      chan<- *FileEvent
 
-  end_offset    int64
-  start_offset      int64
-  line        uint64
-  buffer      []string
-  timer_lock  *sync.Mutex
-  timer_chan  chan bool
+  end_offset   int64
+  start_offset int64
+  line         uint64
+  buffer       []string
+  timer_lock   *sync.Mutex
+  timer_chan   chan bool
 }
 
 func (r *CodecMultilineRegistrar) NewFactory(config_path string, config map[string]interface{}) (CodecFactory, error) {
@@ -68,12 +68,12 @@ func (r *CodecMultilineRegistrar) NewFactory(config_path string, config map[stri
 
 func (f *CodecMultilineFactory) NewCodec(path string, fileconfig *FileConfig, info *ProspectorInfo, offset int64, output chan<- *FileEvent) Codec {
   c := &CodecMultiline{
-    config: f,
-    path: path,
-    fileconfig: fileconfig,
-    info: info,
+    config:      f,
+    path:        path,
+    fileconfig:  fileconfig,
+    info:        info,
     last_offset: offset,
-    output: output,
+    output:      output,
   }
 
   // TODO: Make this more performant - use similiar methodology to Go's internal network deadlines

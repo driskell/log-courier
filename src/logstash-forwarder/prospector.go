@@ -8,12 +8,12 @@ import (
 )
 
 type ProspectorInfo struct {
-  file string
-  identity FileIdentity
-  last_seen uint32
-  harvester_cb chan int64
-  status int
-  running    bool
+  file          string
+  identity      FileIdentity
+  last_seen     uint32
+  harvester_cb  chan int64
+  status        int
+  running       bool
   finish_offset int64
 }
 
@@ -25,30 +25,30 @@ const (
 
 func NewProspectorInfoFromFileState(file string, filestate *FileState) *ProspectorInfo {
   return &ProspectorInfo{
-    file: file,
-    identity: filestate,
-    harvester_cb: make(chan int64, 1),
-    running: false,
-    status: Status_Resume,
+    file:          file,
+    identity:      filestate,
+    harvester_cb:  make(chan int64, 1),
+    running:       false,
+    status:        Status_Resume,
     finish_offset: filestate.Offset,
   }
 }
 
 func NewProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *ProspectorInfo {
   return &ProspectorInfo{
-    file: file,
-    identity: &FileInfo{fileinfo: fileinfo},
+    file:         file,
+    identity:     &FileInfo{fileinfo: fileinfo},
     harvester_cb: make(chan int64, 1),
-    running: false,
+    running:      false,
   }
 }
 
 func (pi *ProspectorInfo) IsRunning() bool {
   if pi.running {
     select {
-      case pi.finish_offset = <-pi.harvester_cb:
-        pi.running = false
-      default:
+    case pi.finish_offset = <-pi.harvester_cb:
+      pi.running = false
+    default:
     }
   }
   return pi.running

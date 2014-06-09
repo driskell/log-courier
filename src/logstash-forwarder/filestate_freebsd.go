@@ -6,8 +6,8 @@ import (
 )
 
 type FileStateOS struct {
-  Inode  uint32  `json:"inode,omitempty"`
-  Device uint32  `json:"device,omitempty"`
+  Inode  uint32 `json:"inode,omitempty"`
+  Device uint32 `json:"device,omitempty"`
 }
 
 func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {

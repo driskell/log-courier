@@ -26,20 +26,20 @@ const (
 )
 
 type TransportTlsFactory struct {
-  SSLCertificate string   `json:"ssl certificate"`
-  SSLKey         string   `json:"ssl key"`
-  SSLCA          string   `json:"ssl ca"`
+  SSLCertificate string `json:"ssl certificate"`
+  SSLKey         string `json:"ssl key"`
+  SSLCA          string `json:"ssl ca"`
 
   hostport_re *regexp.Regexp
   tls_config  tls.Config
 }
 
 type TransportTls struct {
-  config   *TransportTlsFactory
-  net_config      *NetworkConfig
-  socket      *tls.Conn
+  config     *TransportTlsFactory
+  net_config *NetworkConfig
+  socket     *tls.Conn
 
-  wait sync.WaitGroup
+  wait     sync.WaitGroup
   shutdown chan int
 
   send_chan chan []byte
@@ -294,7 +294,7 @@ func (t *TransportTls) CanSend() <-chan int {
 
 func (t *TransportTls) Write(signature string, message []byte) (err error) {
   var write_buffer *bytes.Buffer
-  write_buffer = bytes.NewBuffer(make([]byte, 0, len(signature) + 4 + len(message)))
+  write_buffer = bytes.NewBuffer(make([]byte, 0, len(signature)+4+len(message)))
 
   if _, err = write_buffer.Write([]byte(signature)); err != nil {
     return
