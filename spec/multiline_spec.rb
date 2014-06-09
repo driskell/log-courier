@@ -37,12 +37,12 @@ describe 'logstash-forwarder with multiline codec' do
     receive_and_check
   end
 
-  it "should combine multiple events with what=previous and negate" do
+  it 'should combine multiple events with what=previous and negate' do
     startup config: <<-config
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
-        "servers": [ "127.0.0.1:#{server_port()}" ],
+        "servers": [ "127.0.0.1:#{server_port}" ],
         "timeout": 15,
         "reconnect": 1
       },
@@ -57,7 +57,7 @@ describe 'logstash-forwarder with multiline codec' do
 
     f = create_log(LogFile::Multiline)
 
-    5000.times do |i|
+    5_000.times do
       f.log
     end
 
@@ -68,15 +68,12 @@ describe 'logstash-forwarder with multiline codec' do
     receive_and_check
   end
 
-  it "should combine multiple events with what=previous and previous_timeout" do
+  it 'should combine multiple events with what=previous and previous_timeout' do
     startup config: <<-config
     {
       "network": {
-        "servers": [ "127.0.0.1:#{server_port()}" ],
-        "transport": {
-          "name": "tls",
-          "ssl ca": "#{@ssl_cert.path}"
-        },
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ],
         "timeout": 15,
         "reconnect": 1
       },
@@ -91,7 +88,7 @@ describe 'logstash-forwarder with multiline codec' do
 
     f = create_log(LogFile::Multiline)
 
-    5000.times do |i|
+    5_000.times do
       f.log
     end
 
@@ -99,15 +96,12 @@ describe 'logstash-forwarder with multiline codec' do
     receive_and_check
   end
 
-  it "should combine multiple events with what=next" do
+  it 'should combine multiple events with what=next' do
     startup config: <<-config
     {
       "network": {
-        "servers": [ "127.0.0.1:#{server_port()}" ],
-        "transport": {
-          "name": "tls",
-          "ssl ca": "#{@ssl_cert.path}"
-        },
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ],
         "timeout": 15,
         "reconnect": 1
       },
@@ -122,7 +116,7 @@ describe 'logstash-forwarder with multiline codec' do
 
     f = create_log(LogFile::Multiline)
 
-    5000.times do |i|
+    5_000.times do
       f.log
     end
 
@@ -130,15 +124,12 @@ describe 'logstash-forwarder with multiline codec' do
     receive_and_check
   end
 
-  it "should combine multiple events with what=next and negate" do
+  it 'should combine multiple events with what=next and negate' do
     startup config: <<-config
     {
       "network": {
-        "servers": [ "127.0.0.1:#{server_port()}" ],
-        "transport": {
-          "name": "tls",
-          "ssl ca": "#{@ssl_cert.path}"
-        },
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ],
         "timeout": 15,
         "reconnect": 1
       },
@@ -153,7 +144,7 @@ describe 'logstash-forwarder with multiline codec' do
 
     f = create_log(LogFile::Multiline)
 
-    5000.times do |i|
+    5_000.times do
       f.log
     end
 
