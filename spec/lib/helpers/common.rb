@@ -58,10 +58,11 @@ shared_context 'Helpers' do
 
     # Reset server for each test
     @servers[id] = Lumberjack::Server.new(
-      :transport => transport,
-      :ssl_certificate => @ssl_cert.path,
-      :ssl_key => @ssl_key.path,
-      :logger => logger
+      :transport        => transport,
+      :ssl_certificate  => @ssl_cert.path,
+      :ssl_key          => @ssl_key.path,
+      :curve_secret_key => '1XQgjDjkw?YP=$f61HKe%g+AEbe<VZt%{#8).G0j',
+      :logger           => logger
     )
 
     @server_counts[id] = 0

@@ -23,9 +23,9 @@ const (
 )
 
 type TransportZmqFactory struct {
-  CurveServerPubKey string   `json:"curve server pub key"`
-  CurvePrivKey   string   `json:"curve priv key"`
-  CurvePubKey    string   `json:"curve pub key"`
+  CurveServerkey string   `json:"curve server key"`
+  CurvePublickey    string   `json:"curve public key"`
+  CurveSecretkey   string   `json:"curve secret key"`
 
   hostport_re *regexp.Regexp
   context *zmq.Context
@@ -67,6 +67,22 @@ func NewTransportZmqFactory(config_path string, config map[string]interface{}) (
     return nil, err
   }
 
+  if len(ret.CurveServerkey) == 0 {
+    return nil, errors.New(fmt.Sprintf("Option %scurve server key is required", config_path))
+  } else if len(ret.CurveServerkey) != 40 || !Z85Validate(ret.CurveServerkey) {
+    return nil, errors.New(fmt.Sprintf("Option %scurve server key must be a valid 40 character Z85 encoded string", config_path))
+  }
+  if len(ret.CurvePublickey) == 0 {
+    return nil, errors.New(fmt.Sprintf("Option %scurve public key is required", config_path))
+  } else if len(ret.CurvePublickey) != 40 || !Z85Validate(ret.CurvePublickey) {
+    return nil, errors.New(fmt.Sprintf("Option %scurve public key must be a valid 40 character Z85 encoded string", config_path))
+  }
+  if len(ret.CurveSecretkey) == 0 {
+    return nil, errors.New(fmt.Sprintf("Option %scurve secret key is required", config_path))
+  } else if len(ret.CurveSecretkey) != 40 || !Z85Validate(ret.CurveSecretkey) {
+    return nil, errors.New(fmt.Sprintf("Option %scurve secret key must be a valid 40 character Z85 encoded string", config_path))
+  }
+
   ret.context, err = zmq.NewContext()
   if err != nil {
     return nil, errors.New(fmt.Sprintf("Failed to create ZMQ context: %s", err))
@@ -84,6 +100,17 @@ func (t *TransportZmq) Connect() (err error) {
 
   // Outbound dealer socket will fair-queue load balance amongst peers
   if t.dealer, err = t.config.context.NewSocket(zmq.DEALER); err != nil {
+    return
+  }
+
+  // Configure CurveMQ security
+  if err = t.dealer.SetCurveServerkey(t.config.CurveServerkey); err != nil {
+    return
+  }
+  if err = t.dealer.SetCurvePublickey(t.config.CurvePublickey); err != nil {
+    return
+  }
+  if err = t.dealer.SetCurveSecretkey(t.config.CurveSecretkey); err != nil {
     return
   }
 

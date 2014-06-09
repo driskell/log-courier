@@ -10,28 +10,52 @@ module Lumberjack
 
     def initialize(options = {})
       @options = {
-        :logger  => nil,
-        :port    => 0,
-        :address => '0.0.0.0'
+        :logger           => nil,
+        :port             => 0,
+        :address          => '0.0.0.0',
+        :curve_secret_key => nil
       }.merge(options)
 
       @logger = @options[:logger]
 
-      @context = ZMQ::Context.new
-      @socket = @context.socket(ZMQ::REP)
+      raise '[LumberjackZMQ] \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
 
-      rc = @socket.bind('tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s))
-      raise ZMQError unless ZMQ::Util.resultcode_ok?(rc)
+      raise '[LumberjackZMQ] \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
 
-      # Lookup port number that was allocated in case it was set to 0
-      endpoint = ''
-      rc = @socket.getsockopt(ZMQ::LAST_ENDPOINT, endpoint)
-      raise ZMQError unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
-      @port = endpoint_port.to_i
+      begin
+        @context = ZMQ::Context.new
+        @socket = @context.socket(ZMQ::REP)
+
+        rc = @socket.setsockopt(ZMQ::CURVE_SERVER, 1)
+        raise ZMQError, 'setsockopt CURVE_SERVER failure' unless ZMQ::Util.resultcode_ok?(rc)
+
+        rc = @socket.setsockopt(ZMQ::CURVE_SECRETKEY, @options[:curve_secret_key])
+        raise ZMQError, 'setsockopt CURVE_SECRETKEY failure' unless ZMQ::Util.resultcode_ok?(rc)
+
+        rc = @socket.bind('tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s))
+        raise ZMQError, 'bind failure' unless ZMQ::Util.resultcode_ok?(rc)
+
+        # Lookup port number that was allocated in case it was set to 0
+        endpoint = ''
+        rc = @socket.getsockopt(ZMQ::LAST_ENDPOINT, endpoint)
+        raise ZMQError, 'getsockopt LAST_ENDPOINT failure' unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
+        @port = endpoint_port.to_i
+      rescue => e
+        raise "[LumberjackZMQ] Failed to initialise: #{e}"
+      end
 
       # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
 
       reset_timeout
+    end
+
+    def z85validate(z85)
+      # ffi-rzmq does not implement decode - but we want to validate during startup
+      decoded = FFI::MemoryPointer.from_string(' ' * (8 * z85.length / 10))
+      ret = LibZMQ.zmq_z85_decode decoded, z85
+      return false if ret.nil?
+
+      true
     end
 
     def run(&block)
