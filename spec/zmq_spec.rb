@@ -21,6 +21,7 @@ describe 'logstash-forwarder with zmq' do
     startup config: <<-config
     {
       "network": {
+        "transport": "zmq",
         "servers": [
           "127.0.0.1:#{server_port}",
           "127.0.0.1:#{server_port('peer2')}",
@@ -28,9 +29,6 @@ describe 'logstash-forwarder with zmq' do
           "127.0.0.1:#{server_port('peer4')}",
           "127.0.0.1:#{server_port('peer5')}"
         ],
-        "transport": {
-          "name": "zmq"
-        },
         "timeout": 15,
         "reconnect": 1
       },
@@ -72,6 +70,7 @@ describe 'logstash-forwarder with zmq' do
     startup config: <<-config
     {
       "network": {
+        "transport": "zmq",
         "servers": [
           "127.0.0.1:#{server_port}",
           "127.0.0.1:#{server_port('peer2')}",
@@ -79,9 +78,6 @@ describe 'logstash-forwarder with zmq' do
           "127.0.0.1:#{server_port('peer4')}",
           "127.0.0.1:#{server_port('peer5')}"
         ],
-        "transport": {
-          "name": "zmq"
-        },
         "timeout": 15,
         "reconnect": 1
       },
