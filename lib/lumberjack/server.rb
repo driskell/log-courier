@@ -27,7 +27,7 @@ module Lumberjack
         require 'lumberjack/server_zmq'
         @server = ServerZmq.new(@options)
       else
-        raise 'Transport must be either tls or zmq in Lumberjack::Server.new(...)'
+        raise '[Lumberjack] \'transport\' must be either tls or zmq'
       end
 
       # Grab the port back

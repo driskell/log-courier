@@ -22,6 +22,9 @@ describe 'logstash-forwarder with zmq' do
     {
       "network": {
         "transport": "zmq",
+        "curve server key": "i@tV)lm/:sbI-ODWpD[*7kn2[19[DcUBWnZ2)LJ>",
+        "curve public key": "6aoJA{jXq[j8y>mTE:&XkW3kUD]8zK&SiVv]KJ?j",
+        "curve secret key": "Z8U#fkH%z1e9lJLIuQ=P(mC)8GJQ?sdcGxi*l(5W",
         "servers": [
           "127.0.0.1:#{server_port}",
           "127.0.0.1:#{server_port('peer2')}",
@@ -71,6 +74,9 @@ describe 'logstash-forwarder with zmq' do
     {
       "network": {
         "transport": "zmq",
+        "curve server key": "i@tV)lm/:sbI-ODWpD[*7kn2[19[DcUBWnZ2)LJ>",
+        "curve public key": "6aoJA{jXq[j8y>mTE:&XkW3kUD]8zK&SiVv]KJ?j",
+        "curve secret key": "Z8U#fkH%z1e9lJLIuQ=P(mC)8GJQ?sdcGxi*l(5W",
         "servers": [
           "127.0.0.1:#{server_port}",
           "127.0.0.1:#{server_port('peer2')}",

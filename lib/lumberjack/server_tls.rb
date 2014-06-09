@@ -36,41 +36,45 @@ module Lumberjack
       @logger = @options[:logger]
 
       [:ssl_certificate, :ssl_key].each do |k|
-        raise "You must specify #{k} in Lumberjack::Server.new(...)" if @options[k].nil?
+        raise "[LumberjackTLS] '#{k}' is required" if @options[k].nil?
       end
 
       if @options[:ssl_verify] and (not @options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
-        raise 'You must specify one of ssl_verify_default_ca and ssl_verify_ca in Lumberjack::Server.new(...) when ssl_verify is true'
+        raise '[LumberjackTLS] Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
       end
 
-      @tcp_server = ExtendedTCPServer.new(@options[:port])
+      begin
+        @tcp_server = ExtendedTCPServer.new(@options[:port])
 
-      # Query the port in case the port number is '0'
-      # TCPServer#addr == [ address_family, port, address, address ]
-      @port = @tcp_server.addr[1]
+        # Query the port in case the port number is '0'
+        # TCPServer#addr == [ address_family, port, address, address ]
+        @port = @tcp_server.addr[1]
 
-      ssl = OpenSSL::SSL::SSLContext.new
-      ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
-      ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
+        ssl = OpenSSL::SSL::SSLContext.new
+        ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
+        ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
 
-      if @options[:ssl_verify]
-        cert_store = OpenSSL::X509::Store.new
+        if @options[:ssl_verify]
+          cert_store = OpenSSL::X509::Store.new
 
-        # Load the system default certificate path to the store
-        cert_store.set_default_paths if @options[:ssl_verify_default_ca]
+          # Load the system default certificate path to the store
+          cert_store.set_default_paths if @options[:ssl_verify_default_ca]
 
-        if File.directory?(@options[:ssl_verify_ca])
-          cert_store.add_path(@options[:ssl_verify_ca])
-        else
-          cert_store.add_file(@options[:ssl_verify_ca])
+          if File.directory?(@options[:ssl_verify_ca])
+            cert_store.add_path(@options[:ssl_verify_ca])
+          else
+            cert_store.add_file(@options[:ssl_verify_ca])
+          end
+
+          ssl.cert_store = cert_store
+
+          ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
         end
 
-        ssl.cert_store = cert_store
-
-        ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+        @ssl_server = OpenSSL::SSL::SSLServer.new(@tcp_server, ssl)
+      rescue => e
+        raise "[LumberjackTLS] Failed to initialise: #{e}"
       end
-
-      @ssl_server = OpenSSL::SSL::SSLServer.new(@tcp_server, ssl)
     end # def initialize
 
     def run(&block)
