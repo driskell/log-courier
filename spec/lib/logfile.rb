@@ -20,7 +20,10 @@ class LogFile
   end
 
   def rename(dst)
+    # Close first and then rename, then reopen, so we work on Windows
+    @file.close
     File.rename @path, dst
+    @file.reopen dst, 'a+'
     @path = dst
   end
 
