@@ -44,7 +44,7 @@ module Lumberjack
       end
 
       begin
-        @tcp_server = ExtendedTCPServer.new(@options[:port])
+        @tcp_server = ExtendedTCPServer.new(@options[:address], @options[:port])
 
         # Query the port in case the port number is '0'
         # TCPServer#addr == [ address_family, port, address, address ]
