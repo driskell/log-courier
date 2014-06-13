@@ -198,11 +198,11 @@ func LoadConfig(path string) (config *Config, err error) {
   }
 
   if config.Network.Timeout == time.Duration(0) {
-    config.Network.Timeout = time.Duration(default_NetworkConfig_Timeout)
+    config.Network.Timeout = time.Duration(default_NetworkConfig_Timeout) * time.Second
   }
 
   if config.Network.Reconnect == time.Duration(0) {
-    config.Network.Reconnect = time.Duration(default_NetworkConfig_Reconnect)
+    config.Network.Reconnect = time.Duration(default_NetworkConfig_Reconnect) * time.Second
   }
 
   for k := range config.Files {
