@@ -13,12 +13,12 @@
 # limitations under the License.
 
 require 'lib/common'
-require 'lib/helpers/lsf'
+require 'lib/helpers/log-courier'
 require 'lib/logfile/multiline'
 
-describe 'logstash-forwarder with multiline codec' do
+describe 'log-courier with multiline codec' do
   include_context 'Helpers'
-  include_context 'Helpers_LSF'
+  include_context 'Helpers_Log_Courier'
 
   it 'should combine multiple events with what=previous' do
     startup config: <<-config

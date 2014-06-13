@@ -6,5 +6,5 @@ spec/tmp
 src/github.com
 vendor
 .bundle
-.logstash-forwarder
+.log-courier
 .vagrant

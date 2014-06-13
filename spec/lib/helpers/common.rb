@@ -15,7 +15,7 @@
 require 'logger'
 require 'lumberjack/server'
 
-# Common helpers for testing both ruby client and the forwarder
+# Common helpers for testing both ruby client and the courier
 shared_context 'Helpers' do
   before :all do
     @transport = 'tls'

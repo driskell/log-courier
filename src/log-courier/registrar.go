@@ -77,6 +77,6 @@ func Registrar(state map[*ProspectorInfo]*FileState, registrar <-chan []Registra
       state_json[*value.Source] = value
     }
 
-    WriteRegistry(state_json, ".logstash-forwarder")
+    WriteRegistry(state_json, ".log-courier")
   }
 }

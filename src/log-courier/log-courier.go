@@ -57,7 +57,7 @@ func main() {
     log.SetFlags(log.LstdFlags | log.Lmicroseconds)
   }
 
-  log.Printf("Logstash-forwarder starting up")
+  log.Printf("Log Courier starting up")
 
   config, err := LoadConfig(*config_file)
   if err != nil {
@@ -83,13 +83,13 @@ func main() {
 
   // Load the previous log file locations now, for use in prospector
   load_resume := make(map[string]*FileState)
-  history, err := os.Open(".logstash-forwarder")
+  history, err := os.Open(".log-courier")
   if err == nil {
     wd, err := os.Getwd()
     if err != nil {
       wd = ""
     }
-    log.Printf("Loading registrar data from %s/.logstash-forwarder\n", wd)
+    log.Printf("Loading registrar data from %s/.log-courier\n", wd)
 
     decoder := json.NewDecoder(history)
     decoder.Decode(&load_resume)

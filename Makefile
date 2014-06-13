@@ -4,10 +4,10 @@ export GOPATH := ${PWD}
 
 ifeq ($(with),zmq)
 	TAGS := zmq zmq_4_x
-	BINS := bin/logstash-forwarder bin/genkey
+	BINS := bin/log-courier bin/genkey
 else
 	TAGS :=
-	BINS := bin/logstash-forwarder
+	BINS := bin/log-courier
 endif
 
 all: $(BINS)

@@ -52,7 +52,7 @@ func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
   // If any of the following fails, report the library has changed and recover and return 0s
   defer func() {
     if r := recover(); r != nil {
-      log.Printf("WARNING: File rotations that occur while LogStash Forwarder is not running will NOT be detected due to an incompatible change to the Go library used for compiling. This is a bug, please report it.\n")
+      log.Printf("WARNING: File rotations that occur while Log Courier is not running will NOT be detected due to an incompatible change to the Go library used for compiling. This is a bug, please report it.\n")
       fs.Vol = 0
       fs.IdxHi = 0
       fs.IdxLo = 0

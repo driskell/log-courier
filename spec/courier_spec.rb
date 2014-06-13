@@ -13,11 +13,11 @@
 # limitations under the License.
 
 require 'lib/common'
-require 'lib/helpers/lsf'
+require 'lib/helpers/log-courier'
 
-describe 'logstash-forwarder' do
+describe 'log-courier' do
   include_context 'Helpers'
-  include_context 'Helpers_LSF'
+  include_context 'Helpers_Log_Courier'
 
   it 'should follow stdin' do
     startup mode: 'w', config: <<-config
@@ -37,7 +37,7 @@ describe 'logstash-forwarder' do
     config
 
     5_000.times do |i|
-      @logstash_forwarder.puts "stdin line test #{i}"
+      @log_courier.puts "stdin line test #{i}"
     end
 
     # Receive and check
@@ -350,7 +350,7 @@ describe 'logstash-forwarder' do
 
     # Grab size of the saved state - sleep to ensure it was saved
     sleep 1
-    s = File::Stat.new('.logstash-forwarder').size
+    s = File::Stat.new('.log-courier').size
 
     # Close and delete one of the files
     f1.close
@@ -359,6 +359,6 @@ describe 'logstash-forwarder' do
     sleep 15
 
     # Check new size of registrar state
-    expect(File::Stat.new('.logstash-forwarder').size).to be < s
+    expect(File::Stat.new('.log-courier').size).to be < s
   end
 end

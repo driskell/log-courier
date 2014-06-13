@@ -27,7 +27,7 @@ import (
 )
 
 func configureSyslog() {
-  writer, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "logstash-forwarder")
+  writer, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "log-courier")
   if err != nil {
     log.Fatalf("Failed to open syslog: %s\n", err)
     return

@@ -2,28 +2,28 @@
 	# The network section covers network configuration :)
 	"network": {
 		# A list of downstream servers listening for our messages.
-		# logstash-forwarder will pick one at random and only switch if
+		# Log Courier will pick one at random and only switch if
 		# the selected one appears to be dead or unresponsive
 		"servers": [ "localhost:5043" ],
 
 		# The path to your client ssl certificate (optional)
-		"ssl certificate": "./logstash-forwarder.crt",
+		"ssl certificate": "./courier.cer",
 		# The path to your client ssl key (optional)
-		"ssl key": "./logstash-forwarder.key",
+		"ssl key": "./courier.key",
 
 		# The path to your trusted ssl CA file. This is used
 		# to authenticate your downstream server.
-		"ssl ca": "./logstash-forwarder.crt",
+		"ssl ca": "./logstash.cer",
 
 		# Network timeout in seconds. This is most important for
-		# logstash-forwarder determining whether to stop waiting for an
+		# Log Courier determining whether to stop waiting for an
 		# acknowledgement from the downstream server. If an timeout is reached,
-		# logstash-forwarder will assume the connection or server is bad and
+		# Log Courier will assume the connection or server is bad and
 		# will connect to a server chosen at random from the servers list.
 		"timeout": 15,
 
 		# Reconnect time in seconds. If a connection fails due to an error
-		# or due to the timeout configured above, logstash forwarder will
+		# or due to the timeout configured above, Log Courier will
 		# wait this many seconds before attempting to reconnect to another
 		# server from the servers list.
 		"reconnect": 1

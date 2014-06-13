@@ -5,5 +5,5 @@
 Sorry! I'm still working on this.
 
 For now, take a look at
-[logstash-forwarder.conf.example](logstash-forwarder.conf.example) that this
+[log-courier.conf.example](log-courier.conf.example) that this
 page will eventually replace.

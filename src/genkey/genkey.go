@@ -75,12 +75,12 @@ func main() {
     return
   }
 
-  fmt.Println("Copy and paste the following into your fmtstash-forwarder configuration(s):")
+  fmt.Println("Copy and paste the following into your Log Courier configuration:")
   fmt.Println("    \"curve server key\": \"", server_pub, "\",")
   fmt.Println("    \"curve public key\": \"", client_pub, "\",")
   fmt.Println("    \"curve secret key\": \"", client_priv, "\",")
   fmt.Println("")
-  fmt.Println("Copy and paste the following into your fmtstash configuration:")
+  fmt.Println("Copy and paste the following into your LogStash configuration:")
   fmt.Println("    curve_secret_key => \"", server_priv, "\",")
 }
 
