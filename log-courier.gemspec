@@ -1,21 +1,21 @@
 Gem::Specification.new do |gem|
-  gem.authors       = ["Jordan Sissel"]
-  gem.email         = ["jls@semicomplete.com"]
-  gem.description   = "lumberjack log transport library"
+  gem.authors       = ['Jason Woods']
+  gem.email         = ['devel@jasonwoods.me.uk']
+  gem.description   = 'Log Courier library'
   gem.summary       = gem.description
-  gem.homepage      = "https://github.com/jordansissel/lumberjack"
+  gem.homepage      = 'https://github.com/driskell/log-courier'
 
   gem.files = %w{
-    lib/lumberjack/server.rb
-    lib/lumberjack/client.rb
+    (lib/log-courier/server.rb)
+    (lib/log-courier/server_tls.rb)
+    (lib/log-courier/server_zmq.rb)
+    (lib/log-courier/client.rb)
+    (lib/log-courier/client_tls.rb)
   }
-    #lib/lumberjack/server2.rb
 
-  gem.test_files    = []
-  gem.name          = "jls-lumberjack"
-  gem.require_paths = ["lib"]
-  gem.version       = "0.0.21"
+  gem.name          = 'log-courier'
+  gem.require_paths = ['lib']
+  gem.version       = '0.9'
 
-  # This isn't used yet because the new protocol isn't ready
-  #gem.add_runtime_dependency "ffi-rzmq", "~> 1.0.0"
+  gem.add_runtime_dependency 'ffi-rzmq'
 end
