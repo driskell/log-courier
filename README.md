@@ -47,42 +47,10 @@ Otherwise, simply run make standalone, as follows.
     cd log-courier
     make
 
-## Configuration
+The log-courier program can then be found in the 'bin' folder.
 
-Before you can start log-courier you will need to create a configuration file.
-
-Configuration is in standard JSON format with the exception that comments are
-allowed. A pound sign (#) designates a comment until the end of that line.
-A multiline comment can also be started using /* and ended using */.
-
-Full documentation of all of the available configuration options can be found on
-the [Configuration page](docs/Configuration.md). A brief example is shown below
-to get you started.
-
-    /*
-      This is a brief example configuration
-      for log-courier to get you started
-    */
-    {
-      "network": {
-        "servers": [ "logstash.example.com:5000" ],
-        "ssl certificate": "./courier.cer",
-        "ssl key": "./courier.key",
-        "ssl ca": "./logstash.cer"
-      },
-      "files": [
-        {
-          "paths": [
-            "/var/log/*.log",
-            "/var/log/messages"
-          ],
-          "fields": { "type": "syslog", "tags": [ "system", "dba" ] }
-        }, {
-          "paths": [ "/var/log/httpd/access.log" ],
-          "fields": { "type": "apache" }
-        }
-      ]
-    }
+A genkey utility can also be found in 'bin' when ZMQ support is built. This
+utility will generate CurveZMQ key pair configurations for you.
 
 ### LogStash 1.4.x Integration
 
@@ -149,6 +117,43 @@ be used at the moment)
 flushing anyway (default 5)
 
 NOTE: The ZMQ transport is not implemented in the output plugin at this time.
+
+## Configuration
+
+Before you can start log-courier you will need to create a configuration file.
+
+Configuration is in standard JSON format with the exception that comments are
+allowed. A pound sign (#) designates a comment until the end of that line.
+A multiline comment can also be started using /* and ended using */.
+
+Full documentation of all of the available configuration options can be found on
+the [Configuration page](docs/Configuration.md). A brief example is shown below
+to get you started.
+
+    /*
+      This is a brief example configuration
+      for log-courier to get you started
+    */
+    {
+      "network": {
+        "servers": [ "logstash.example.com:5000" ],
+        "ssl certificate": "./courier.cer",
+        "ssl key": "./courier.key",
+        "ssl ca": "./logstash.cer"
+      },
+      "files": [
+        {
+          "paths": [
+            "/var/log/*.log",
+            "/var/log/messages"
+          ],
+          "fields": { "type": "syslog", "tags": [ "system", "dba" ] }
+        }, {
+          "paths": [ "/var/log/httpd/access.log" ],
+          "fields": { "type": "apache" }
+        }
+      ]
+    }
 
 ## Command Line Options
 
