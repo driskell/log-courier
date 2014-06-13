@@ -20,7 +20,7 @@ require 'thread'
 require 'timeout'
 require 'zlib'
 
-module Lumberjack
+module LogCourier
   # TODO: Make these shared
   class ClientShutdownSignal < StandardError; end
   class ClientProtocolError < StandardError; end
@@ -56,7 +56,7 @@ module Lumberjack
 
       @logger = @options[:logger]
 
-      require 'lumberjack/client_tls'
+      require 'log-courier/client_tls'
       @client = ClientTls.new(@options)
 
       @event_queue = SizedQueue.new @options[:spool_size]
@@ -224,17 +224,17 @@ module Lumberjack
           end
         rescue ClientProtocolError => e
           # Reconnect required due to a protocol error
-          @logger.warn("[LumberjackClient] Protocol error: #{e}") unless @logger.nil?
+          @logger.warn("[LogCourierClient] Protocol error: #{e}") unless @logger.nil?
         rescue Timeout::Error
           # Reconnect due to timeout
-          @logger.warn('[LumberjackClient] Timeout occurred') unless @logger.nil?
+          @logger.warn('[LogCourierClient] Timeout occurred') unless @logger.nil?
         rescue ClientShutdownSignal
           # Shutdown, break out
           break
         rescue => e
           # Unknown error occurred
-          @logger.warn("[LumberjackClient] Unknown error: #{e}") unless @logger.nil?
-          @logger.debug("[LumberjackClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+          @logger.warn("[LogCourierClient] Unknown error: #{e}") unless @logger.nil?
+          @logger.debug("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
         end
 
         # Disconnect and retry payloads

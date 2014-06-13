@@ -19,13 +19,13 @@ require 'socket'
 require 'thread'
 require 'openssl'
 
-module Lumberjack
+module LogCourier
   # TLS transport implementation
   class ClientTls
     def initialize(options = {})
       @options = {
         :logger             => nil,
-        :port               => 0,
+        :port               => nil,
         :addresses          => [],
         :ssl_ca             => nil,
         :ssl_certificate    => nil,
@@ -35,15 +35,18 @@ module Lumberjack
 
       @logger = @options[:logger]
 
+      [:port, :ssl_ca].each do |k|
+        raise "[LogCourierClientTLS] '#{k}' is required" if @options[k].nil?
+      end
+
+      raise '[LogCourierClientTLS] \'addresses\' must contain at least one address' @options[:addresses].empty?
+
       c = 0
       [:ssl_certificate, :ssl_key].each do
-        c = c + 1
+        c += 1
       end
-      raise 'You must specify both ssl_certificate and ssl_key if either is specified in Lumberjack::Client.new(...)' if c == 1
 
-      raise 'You must specify a port in Lumberjack::Client.new(...)' if @options[:port] == 0
-      raise 'You must specify at least one address in Lumberjack::Client.new(...)' if @options[:addresses].empty? == 0
-      raise 'You must specity the ssl ca certificate in Lumberjack::Client.new(...)' if @options[:ssl_ca].nil?
+      raise '[LogCourierClientTLS] \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
     end
 
     def connect(io_control)
@@ -104,13 +107,13 @@ module Lumberjack
         end
       end
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-      @logger.warn("[LumberjackClientTLS] SSL write error: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierClientTLS] SSL write error: #{e}") unless @logger.nil?
       io_control << ['F']
     rescue ClientShutdownSignal
       # Just shutdown
     rescue => e
-      @logger.warn("[LumberjackClientTLS] Unknown SSL write error: #{e}") unless @logger.nil?
-      @logger.debug("[LumberjackClientTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierClientTLS] Unknown SSL write error: #{e}") unless @logger.nil?
+      @logger.debug("[LogCourierClientTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
       io_control << ['F']
     end
 
@@ -125,7 +128,7 @@ module Lumberjack
 
         if length > 1048576
           # Too big raise error
-          @logger.warn("[LumberjackClientTLS] Invalid message: data too big (#{length})") unless @logger.nil?
+          @logger.warn("[LogCourierClientTLS] Invalid message: data too big (#{length})") unless @logger.nil?
           io_control << ['F']
           break
         end
@@ -137,16 +140,16 @@ module Lumberjack
         io_control << ['R', signature, message]
       end
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-      @logger.warn("[LumberjackClientTLS] SSL read error: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierClientTLS] SSL read error: #{e}") unless @logger.nil?
       io_control << ['F']
     rescue EOFError
-      @logger.warn("[LumberjackClientTLS] Connection closed by server") unless @logger.nil?
+      @logger.warn("[LogCourierClientTLS] Connection closed by server") unless @logger.nil?
       io_control << ['F']
     rescue ClientShutdownSignal
       # Just shutdown
     rescue => e
-      @logger.warn("[LumberjackClientTLS] Unknown SSL read error: #{e}") unless @logger.nil?
-      @logger.debug("[LumberjackClientTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierClientTLS] Unknown SSL read error: #{e}") unless @logger.nil?
+      @logger.debug("[LogCourierClientTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
       io_control << ['F']
     end
 
@@ -173,7 +176,7 @@ module Lumberjack
     end
 
     def tls_connect
-      @logger.info("[LumberjackClientTLS] Connecting to #{@options[:addresses][0]}:#{@options[:port]}") unless @logger.nil?
+      @logger.info("[LogCourierClientTLS] Connecting to #{@options[:addresses][0]}:#{@options[:port]}") unless @logger.nil?
       tcp_socket = TCPSocket.new(@options[:addresses][0], @options[:port])
 
       ssl = OpenSSL::SSL::SSLContext.new
@@ -191,17 +194,17 @@ module Lumberjack
       @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
 
       socket = @ssl_client.connect
-      @logger.info("[LumberjackClientTLS] Connected successfully") unless @logger.nil?
+      @logger.info("[LogCourierClientTLS] Connected successfully") unless @logger.nil?
 
       socket
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-      @logger.warn("[LumberjackClientTLS] Connection to #{@options[:addresses][0]}:#{@options[:port]} failed: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierClientTLS] Connection to #{@options[:addresses][0]}:#{@options[:port]} failed: #{e}") unless @logger.nil?
     rescue ClientShutdownSignal
       # Just shutdown
       0
     rescue => e
-      @logger.warn("[LumberjackClientTLS] Unknown connection failure to #{@options[:addresses][0]}:#{@options[:port]}: #{e}") unless @logger.nil?
-      @logger.debug("[LumberjackClientTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierClientTLS] Unknown connection failure to #{@options[:addresses][0]}:#{@options[:port]}: #{e}") unless @logger.nil?
+      @logger.debug("[LogCourierClientTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
     end
   end
 end

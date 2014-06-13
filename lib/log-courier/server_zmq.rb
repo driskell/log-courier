@@ -15,7 +15,7 @@
 require 'ffi-rzmq'
 require 'timeout'
 
-module Lumberjack
+module LogCourier
   # ZMQ transport implementation for the server
   class ServerZmq
     class ZMQError < StandardError; end
@@ -32,9 +32,9 @@ module Lumberjack
 
       @logger = @options[:logger]
 
-      raise '[LumberjackZMQ] \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
+      raise '[LogCourierServerZMQ] \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
 
-      raise '[LumberjackZMQ] \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
+      raise '[LogCourierServerZMQ] \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
 
       begin
         @context = ZMQ::Context.new
@@ -55,7 +55,7 @@ module Lumberjack
         raise ZMQError, 'getsockopt LAST_ENDPOINT failure' unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
         @port = endpoint_port.to_i
       rescue => e
-        raise "[LumberjackZMQ] Failed to initialise: #{e}"
+        raise "[LogCourierServerZMQ] Failed to initialise: #{e}"
       end
 
       # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
@@ -83,7 +83,7 @@ module Lumberjack
             data
           end
         rescue ZMQError => e
-          @logger.warn "[LumberjackServerZMQ] ZMQ recv_string failed: #{e}" unless @logger.nil?
+          @logger.warn "[LogCourierServerZMQ] ZMQ recv_string failed: #{e}" unless @logger.nil?
         rescue Timeout::Error
           # We'll let ZeroMQ manage reconnections and new connections
           # There is no point in us doing any form of reconnect ourselves
@@ -93,18 +93,18 @@ module Lumberjack
         end
         # We only work with one part messages at the moment
         if @socket.more_parts?
-          @logger.warn '[LumberjackServerZMQ] Invalid message: multipart unexpected' unless @logger.nil?
+          @logger.warn '[LogCourierServerZMQ] Invalid message: multipart unexpected' unless @logger.nil?
         else
           recv(data, &block)
         end
       end
     rescue ShutdownSignal
       # Shutting down
-      @logger.warn('[LumberjackServerZMQ] Server shutting down') unless @logger.nil?
+      @logger.warn('[LogCourierServerZMQ] Server shutting down') unless @logger.nil?
     rescue => e
       # Some other unknown problem
-      @logger.warn("[LumberjackServerZMQ] Unknown error: #{e}") unless @logger.nil?
-      @logger.debug("[LumberjackServerZMQ] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierServerZMQ] Unknown error: #{e}") unless @logger.nil?
+      @logger.debug("[LogCourierServerZMQ] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
     ensure
       @socket.close
       @context.terminate
@@ -112,7 +112,7 @@ module Lumberjack
 
     def recv(data)
       if data.length < 8
-        @logger.warn '[LumberjackServerZMQ] Invalid message: not enough data' unless @logger.nil?
+        @logger.warn '[LogCourierServerZMQ] Invalid message: not enough data' unless @logger.nil?
         return
       end
 
@@ -121,7 +121,7 @@ module Lumberjack
 
       # Verify length
       if data.length - 8 != length
-        @logger.warn "[LumberjackServerZMQ] Invalid message: data has invalid length (#{data.length - 8} != #{length})" unless @logger.nil?
+        @logger.warn "[LogCourierServerZMQ] Invalid message: data has invalid length (#{data.length - 8} != #{length})" unless @logger.nil?
         return
       end
 
@@ -135,7 +135,7 @@ module Lumberjack
       Timeout.timeout(@timeout - Time.now.to_i) do
         rc = @socket.send_string(data)
         unless ZMQ::Util.resultcode_ok?(rc)
-          @logger.warn "[LumberjackServerZMQ] Message send failed: #{rc}" unless @logger.nil?
+          @logger.warn "[LogCourierServerZMQ] Message send failed: #{rc}" unless @logger.nil?
           return
         end
       end

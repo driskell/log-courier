@@ -20,14 +20,14 @@ require 'thread'
 require 'timeout'
 require 'openssl'
 
-module Lumberjack
+module LogCourier
   # Wrap around TCPServer to grab last error for use in reporting which peer had an error
   class ExtendedTCPServer < TCPServer
     # Yield the peer
     def accept
       sock = super
       peer = sock.peeraddr(:numeric)
-      Thread.current["LumberjackPeer"] = "#{peer[2]}:#{peer[1]}"
+      Thread.current['LogCourierPeer'] = "#{peer[2]}:#{peer[1]}"
       return sock
     end
   end
@@ -53,11 +53,11 @@ module Lumberjack
       @logger = @options[:logger]
 
       [:ssl_certificate, :ssl_key].each do |k|
-        raise "[LumberjackTLS] '#{k}' is required" if @options[k].nil?
+        raise "[LogCourierServerTLS] '#{k}' is required" if @options[k].nil?
       end
 
       if @options[:ssl_verify] and (not @options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
-        raise '[LumberjackTLS] Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
+        raise '[LogCourierServerTLS] Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
       end
 
       begin
@@ -90,7 +90,7 @@ module Lumberjack
 
         @ssl_server = OpenSSL::SSL::SSLServer.new(@tcp_server, ssl)
       rescue => e
-        raise "[LumberjackTLS] Failed to initialise: #{e}"
+        raise "[LogCourierServerTLS] Failed to initialise: #{e}"
       end
     end # def initialize
 
@@ -103,15 +103,15 @@ module Lumberjack
           client = @ssl_server.accept
         rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
           # Handshake failure or other issue
-          peer = Thread.current['LumberjackPeer'] || 'unknown'
-          @logger.warn "[LumberjackServerTLS] Connection from #{peer} failed to initialise: #{e}" unless @logger.nil?
+          peer = Thread.current['LogCourierPeer'] || 'unknown'
+          @logger.warn "[LogCourierServerTLS] Connection from #{peer} failed to initialise: #{e}" unless @logger.nil?
           client.close rescue nil
           next
         end
 
-        peer = Thread.current['LumberjackPeer'] || 'unknown'
+        peer = Thread.current['LogCourierPeer'] || 'unknown'
 
-    	  @logger.info "[LumberjackServerTLS] New connection from #{peer}" unless @logger.nil?
+    	  @logger.info "[LogCourierServerTLS] New connection from #{peer}" unless @logger.nil?
 
         # Clear up finished threads
         client_threads.delete_if do |_, thr|
@@ -175,26 +175,26 @@ module Lumberjack
       end
     rescue Timeout::Error
       # Timeout of the connection, we were idle too long without a ping/pong
-      @logger.warn("[LumberjackServerTLS] Connection from #{@peer} timed out") unless @logger.nil?
+      @logger.warn("[LogCourierServerTLS] Connection from #{@peer} timed out") unless @logger.nil?
     rescue EOFError
       if @in_progress
-        @logger.warn("[LumberjackServerTLS] Premature connection close on connection from #{@peer}") unless @logger.nil?
+        @logger.warn("[LogCourierServerTLS] Premature connection close on connection from #{@peer}") unless @logger.nil?
       else
-        @logger.info("[LumberjackServerTLS] Connection from #{@peer} closed") unless @logger.nil?
+        @logger.info("[LogCourierServerTLS] Connection from #{@peer} closed") unless @logger.nil?
       end
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       # Read errors, only action is to shutdown which we'll do in ensure
-      @logger.warn("[LumberjackServerTLS] SSL error on connection from #{@peer}: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierServerTLS] SSL error on connection from #{@peer}: #{e}") unless @logger.nil?
     rescue ProtocolError => e
       # Connection abort request due to a protocol error
-      @logger.warn("[LumberjackServerTLS] Protocol error on connection from #{@peer}: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierServerTLS] Protocol error on connection from #{@peer}: #{e}") unless @logger.nil?
     rescue ShutdownSignal
       # Shutting down
-      @logger.warn("[LumberjackServerTLS] Closing connecting from #{@peer}: server shutting down") unless @logger.nil?
+      @logger.warn("[LogCourierServerTLS] Closing connecting from #{@peer}: server shutting down") unless @logger.nil?
     rescue => e
       # Some other unknown problem
-      @logger.warn("[LumberjackServerTLS] Unknown error on connection from #{@peer}: #{e}") unless @logger.nil?
-      @logger.debug("[LumberjackServerTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierServerTLS] Unknown error on connection from #{@peer}: #{e}") unless @logger.nil?
+      @logger.debug("[LogCourierServerTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
     ensure
       @fd.close rescue nil
     end
