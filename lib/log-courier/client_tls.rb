@@ -39,7 +39,7 @@ module LogCourier
         raise "[LogCourierClientTLS] '#{k}' is required" if @options[k].nil?
       end
 
-      raise '[LogCourierClientTLS] \'addresses\' must contain at least one address' @options[:addresses].empty?
+      raise '[LogCourierClientTLS] \'addresses\' must contain at least one address' if @options[:addresses].empty?
 
       c = 0
       [:ssl_certificate, :ssl_key].each do
