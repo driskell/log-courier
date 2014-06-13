@@ -13,11 +13,11 @@
 # limitations under the License.
 
 require 'lib/common'
-require 'lib/helpers/lsf'
+require 'lib/helpers/log-courier'
 
-describe 'logstash-forwarder with zmq' do
+describe 'log-courier with zmq' do
   include_context 'Helpers'
-  include_context 'Helpers_LSF'
+  include_context 'Helpers_Log_Courier'
 
   before :all do
     @transport = 'zmq'

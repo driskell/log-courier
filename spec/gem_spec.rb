@@ -16,9 +16,9 @@ require 'logger'
 require 'timeout'
 require 'lib/common'
 
-require 'lumberjack/client'
+require 'log-courier/client'
 
-describe 'logstash-forwarder gem' do
+describe 'log-courier gem' do
   include_context 'Helpers'
 
   before :all do
