@@ -1,25 +1,92 @@
-/*
-  This is an example configuration file for logstash-forwarder
-  Configuration is JSON encoded with comments such as this allowed
-  Comments prefixed by a hash are also allowed
-*/
 {
-  "network": {
-    "servers": [ "localhost:5043" ],
-    "ssl certificate": "./lumberjack.crt",
-    "ssl key": "./lumberjack.key",
-    "ssl ca": "./lumberjack_ca.crt"
-  },
-  "files": [
-    {
-      "paths": [ 
-        "/var/log/*.log",
-        "/var/log/messages"
-      ],
-      "fields": { "type": "syslog" }
-    }, {
-      "paths": [ "/var/log/apache2/access.log" ],
-      "fields": { "type": "apache" }
-    }
-  ]
+	# The network section covers network configuration :)
+	"network": {
+		# A list of downstream servers listening for our messages.
+		# logstash-forwarder will pick one at random and only switch if
+		# the selected one appears to be dead or unresponsive
+		"servers": [ "localhost:5043" ],
+
+		# The path to your client ssl certificate (optional)
+		"ssl certificate": "./logstash-forwarder.crt",
+		# The path to your client ssl key (optional)
+		"ssl key": "./logstash-forwarder.key",
+
+		# The path to your trusted ssl CA file. This is used
+		# to authenticate your downstream server.
+		"ssl ca": "./logstash-forwarder.crt",
+
+		# Network timeout in seconds. This is most important for
+		# logstash-forwarder determining whether to stop waiting for an
+		# acknowledgement from the downstream server. If an timeout is reached,
+		# logstash-forwarder will assume the connection or server is bad and
+		# will connect to a server chosen at random from the servers list.
+		"timeout": 15,
+
+		# Reconnect time in seconds. If a connection fails due to an error
+		# or due to the timeout configured above, logstash forwarder will
+		# wait this many seconds before attempting to reconnect to another
+		# server from the servers list.
+		"reconnect": 1
+	},
+	# The list of files configurations
+	"files": [
+		# An array of hashes. Each hash tells what paths to watch and
+		# what fields to annotate on events from those paths.
+		{
+			"paths": [
+				# single paths are fine
+				"/var/log/messages",
+				# globs are fine too, they will be periodically evaluated
+				# to see if any new files match the wildcard.
+				"/var/log/*.log"
+			],
+
+			# A hash of fields to annotate on each event.
+			"fields": { "type": "syslog" }
+		}, {
+			# A path of "-" means stdin.
+			"paths": [ "-" ],
+
+			# Fields can also contain arrays (useful for LogStash tags)
+			"fields": { "type": "stdin", "tags": [ "stdin", "system" ] }
+		}, {
+			"paths": [
+				"/var/log/apache/httpd-*.log"
+			],
+
+			# Fields can even contain nested hashes
+			"fields": { "type": "apache", "host": { "ip": "127.0.0.1", "port": 80 } },
+
+			# You can also set a time period after which inactive files will be closed (the default is 24h)
+			"dead time": "1h"
+		}, {
+			"paths": [
+				"/var/log/apache/error.log"
+			],
+
+			"fields": { "type": "apache", "tags": [ "multiline" ] },
+
+			# You can also use a multiline codec like Logstash
+			# Remember to escape the regex sequence in the pattern string, so ^\s would be "^\\s"
+			# The what option is the same as Logstash:
+			#   previous: Matched lines belong to the previous line (the default)
+			#   next:     Matched lines belong to the next line
+			# In other words:
+			#   previous: When matching stops, the line signifies the start of the next multiline, flush previous lines
+			#   next:     When matching stops, the line is the last line of the multiline, flush previous lines and this line
+			# NOTE: As you can imagine, when using "previous" the multiline block cannot be flushed until the
+			#       first line of the next multiline block appears. To get around this you can use the "previous_timeout" option
+			#       to set a maximum time to wait for the next multiline block before flushing what is buffered.
+			#       Be warned that if the multiline event is not complete because the logging program has buffered some of it
+			#       then once the remainder of the event is written to the file, it will be seen and forwarded as the next
+			#       multiline event. This partial event could be filtered on the Logstash indexer if it poses problems.
+			"codec": {
+				"name": "multiline",
+				"pattern": "^\\[[0-9]+",
+				"what": previous,
+				"negate": false,
+				"previous_timeout": "15s"
+			}
+		}
+	]
 }

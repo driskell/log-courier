@@ -2,9 +2,15 @@
 
 export GOPATH := ${PWD}
 
-TAGS := 'zmq zmq_4_x'
+ifeq ($(with),zmq)
+	TAGS := zmq zmq_4_x
+	BINS := bin/logstash-forwarder bin/genkey
+else
+	TAGS :=
+	BINS := bin/logstash-forwarder
+endif
 
-all: bin/logstash-forwarder bin/genkey
+all: $(BINS)
 
 test: all vendor/bundle/.GemfileModT
 	bundle exec rspec
@@ -19,8 +25,8 @@ go-check:
 	@go version | grep -q 'go version go1.[12]' || (echo "Go version 1.1.x or 1.2.x required, you have a version of go that is not supported."; false)
 
 bin/%: src/%/*.go | go-check
-	go get -d -tags $(TAGS) $*
-	go install -tags $(TAGS) $*
+	go get -d -tags "$(TAGS)" $*
+	go install -tags "$(TAGS)" $*
 
 clean:
 	go clean -i ./...
