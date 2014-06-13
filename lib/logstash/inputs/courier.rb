@@ -83,12 +83,10 @@ module LogStash
         # TODO: How do we handle Logstash shutdown? An unknown exception raised
         #       in run will trigger it but what waits for it?
         # TODO: Check this is correct with the new protocol results
-        @log_courier.run do |e|
-          # TODO: Should we even bother with line?
-          @codec.decode(e.delete('line')) do |event|
-            decorate event
-            output_queue << event
-          end
+        @log_courier.run do |event|
+          event = LogStash::Event.new(event)
+          decorate event
+          output_queue << event
         end
       end
     end

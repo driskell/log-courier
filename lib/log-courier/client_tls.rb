@@ -176,6 +176,7 @@ module LogCourier
     end
 
     def tls_connect
+      # TODO: Implement random selection - and don't use separate :port
       @logger.info("[LogCourierClientTLS] Connecting to #{@options[:addresses][0]}:#{@options[:port]}") unless @logger.nil?
       tcp_socket = TCPSocket.new(@options[:addresses][0], @options[:port])
 

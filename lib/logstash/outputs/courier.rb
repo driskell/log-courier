@@ -39,6 +39,9 @@ module LogStash
       # Client SSL key to use
       config :ssl_key, :validate => :path
 
+      # SSL key passphrase to use
+      config :ssl_key_passphrase, :validate => :password
+
       # Maximum number of events to spool before forcing a flush
       config :spool_size, :validate => :number, :default => 1024
 
@@ -56,13 +59,10 @@ module LogStash
           :ssl_ca             => @ssl_ca,
           :ssl_certificate    => @ssl_certificate,
           :ssl_key            => @ssl_key,
+          :ssl_key_passphrase => @ssl_key_passphrase,
           :spool_size         => @spool_size,
           :idle_timeout       => @idle_timeout
         )
-
-        @codec.on_event do |event|
-          @client.publish event
-        end
       end
 
       public
@@ -74,7 +74,7 @@ module LogStash
           finished
           return
         end
-        @codec.encode event
+        @client.publish event.to_hash
       end
     end
   end
