@@ -9,5 +9,4 @@ install:
   - bundle install
 
 script:
-  - make
-  - bundle exec rspec
+  - make with=zmq test

@@ -2,18 +2,20 @@
 
 export GOPATH := ${PWD}
 
+TAGS :=
+BINS := bin/log-courier
+TESTS := spec/courier_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
+
 ifeq ($(with),zmq)
-	TAGS := zmq zmq_4_x
-	BINS := bin/log-courier bin/genkey
-else
-	TAGS :=
-	BINS := bin/log-courier
+	TAGS := $(TAGS) zmq zmq_4_x
+	BINS := $(BINS) bin/genkey
+	TESTS := $(TESTS) spec/zmq_spec.rb
 endif
 
 all: $(BINS)
 
 test: all vendor/bundle/.GemfileModT
-	bundle exec rspec
+	bundle exec rspec $(TESTS)
 
 # Only update bundle if Gemfile changes
 vendor/bundle/.GemfileModT: Gemfile
