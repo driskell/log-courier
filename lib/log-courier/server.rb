@@ -20,7 +20,7 @@ require 'timeout'
 require 'zlib'
 require 'json'
 
-module Lumberjack
+module LogCourier
   class ShutdownSignal < StandardError; end
   class ProtocolError < StandardError; end
 
@@ -38,13 +38,13 @@ module Lumberjack
 
       case @options[:transport]
       when 'tls'
-        require 'lumberjack/server_tls'
+        require 'log-courier/server_tls'
         @server = ServerTls.new(@options)
       when 'zmq'
-        require 'lumberjack/server_zmq'
+        require 'log-courier/server_zmq'
         @server = ServerZmq.new(@options)
       else
-        raise '[Lumberjack] \'transport\' must be either tls or zmq'
+        raise '[LogCourierServer] \'transport\' must be either tls or zmq'
       end
 
       # Grab the port back
@@ -79,7 +79,7 @@ module Lumberjack
           when 'JDAT'
             process_jdat message, comm, event_queue
           else
-            @logger.warn("[LumberjackServer] Unknown message received from #{comm.peer}") unless @logger.nil?
+            @logger.warn("[LogCourierServer] Unknown message received from #{comm.peer}") unless @logger.nil?
             # Don't kill a client that sends a bad message
             # Just reject it and let it send it again, potentially to another server
             comm.send '????', ''
@@ -152,7 +152,7 @@ module Lumberjack
         begin
           event = JSON.parse(data)
         rescue JSON::ParserError => e
-          @logger.warn("[LumberjackServer] JSON parse failure, falling back to plain-text: #{e}") unless @logger.nil?
+          @logger.warn("[LogCourierServer] JSON parse failure, falling back to plain-text: #{e}") unless @logger.nil?
           event = { 'message' => data }
         end
 

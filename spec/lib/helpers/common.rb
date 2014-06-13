@@ -13,7 +13,7 @@
 # limitations under the License.
 
 require 'logger'
-require 'lumberjack/server'
+require 'log-courier/server'
 
 # Common helpers for testing both ruby client and the courier
 shared_context 'Helpers' do
@@ -60,7 +60,7 @@ shared_context 'Helpers' do
     shutdown_server
   end
 
-  # A helper that starts a lumberjack server
+  # A helper that starts a Log Courier server
   def start_server(id: '__default__', transport: nil)
     logger = Logger.new(STDOUT)
     logger.progname = "Server #{id}"
@@ -71,7 +71,7 @@ shared_context 'Helpers' do
     transport = @transport if transport.nil?
 
     # Reset server for each test
-    @servers[id] = Lumberjack::Server.new(
+    @servers[id] = LogCourier::Server.new(
       :transport        => transport,
       :ssl_certificate  => @ssl_cert.path,
       :ssl_key          => @ssl_key.path,
@@ -86,13 +86,13 @@ shared_context 'Helpers' do
           @server_counts[id] += 1
           @event_queue << event
         end
-      rescue Lumberjack::ShutdownSignal
+      rescue LogCourier::ShutdownSignal
         0
       end
     end
   end
 
-  # A helper to shutdown a lumberjack server
+  # A helper to shutdown a Log Courier server
   def shutdown_server(which = nil)
     if which.nil?
       which = @servers.keys
@@ -100,7 +100,7 @@ shared_context 'Helpers' do
       which = [which]
     end
     which.each do |id|
-      @server_threads[id].raise Lumberjack::ShutdownSignal
+      @server_threads[id].raise LogCourier::ShutdownSignal
       @server_threads[id].join
       @server_threads.delete id
       @server_counts.delete id

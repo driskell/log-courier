@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Common helpers for testing the forwarder
-shared_context 'Helpers_LSF' do
+# Common helpers for testing the courier
+shared_context 'Helpers_Log_Courier' do
   before :each do
     @config = File.open(File.join(TEMP_PATH, 'config'), 'w')
 
-    @logstash_forwarder = nil
+    @log_courier = nil
   end
 
   after :each do
@@ -26,7 +26,7 @@ shared_context 'Helpers_LSF' do
     File.unlink(@config.path) if File.file?(@config.path)
 
     # This is important or the state will not be clean for the following test
-    File.unlink('.logstash-forwarder') if File.file?('.logstash-forwarder')
+    File.unlink('.log-courier') if File.file?('.log-courier')
   end
 
   def startup(config: nil, args: '', mode: 'r')
@@ -59,17 +59,17 @@ shared_context 'Helpers_LSF' do
     @config.close
 
     # Start LSF
-    @logstash_forwarder = IO.popen("bin/logstash-forwarder -config #{@config.path}" + (args.empty? ? '' : ' ' + args), mode)
+    @log_courier = IO.popen("bin/log-courier -config #{@config.path}" + (args.empty? ? '' : ' ' + args), mode)
 
     # Needs some time to startup - to ensure when we create new files AFTER this, they are not detected during startup
     sleep STARTUP_WAIT_TIME
   end
 
   def shutdown
-    return if @logstash_forwarder.nil?
+    return if @log_courier.nil?
     # When shutdown is implemented this becomes TERM/QUIT
-    Process.kill('KILL', @logstash_forwarder.pid)
-    Process.wait(@logstash_forwarder.pid)
-    @logstash_forwarder = nil
+    Process.kill('KILL', @log_courier.pid)
+    Process.wait(@log_courier.pid)
+    @log_courier = nil
   end
 end

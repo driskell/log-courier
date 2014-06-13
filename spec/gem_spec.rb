@@ -30,7 +30,7 @@ describe 'log-courier gem' do
     logger.level = Logger::DEBUG
 
     # Reset server for each test
-    @client = Lumberjack::Client.new(
+    @client = LogCourier::Client.new(
       :ssl_ca => @ssl_cert.path,
       :addresses => ['127.0.0.1'],
       :port => server_port,
