@@ -9,4 +9,4 @@ install:
   - bundle install
 
 script:
-  - make with=zmq test
+  - make test
