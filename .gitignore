@@ -3,7 +3,7 @@ build
 bin
 pkg
 spec/tmp
-src/github.com/alecthomas/gozmq
+src/github.com
 vendor
 .bundle
 .logstash-forwarder
