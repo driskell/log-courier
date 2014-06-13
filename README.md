@@ -1,4 +1,4 @@
-# Log Courier [[!Build Status](https://travis-ci.org/driskell/log-courier.svg)](https://travis-ci.org/driskell/log-courier)
+# Log Courier [![Build Status](https://travis-ci.org/driskell/log-courier.svg)](https://travis-ci.org/driskell/log-courier)
 
 Log Courier is a tool created to transmit log files speedily and securely to
 remote [LogStash](http://logstash.net) instances for processing whilst using
