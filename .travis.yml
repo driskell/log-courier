@@ -5,8 +5,7 @@ go:
   - 1.2
 
 install:
-  - rvm use 1.9.3
-  - bundle install
+  - rvm use 2.0.0
 
 script:
   - make test
