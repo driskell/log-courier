@@ -79,6 +79,8 @@ Now install the LogStash plugins.
     cd <log-courier-source>
     cp -rvf lib/logstash /opt/logstash/lib
 
+### LogStash Configuration
+
 The 'courier' input and output plugins will now be available. An example
 configuration for the input plugin follows.
 

@@ -1,12 +1,15 @@
 language: go
 
+# Test on 1.1 and 1.2, our supported versions
 go:
   - 1.1
   - 1.2
 
+# https://github.com/travis-ci/travis-ci/issues/2220
+# Tests require ruby
 install:
-  - rvm install 2.0.0
-  - rvm use 2.0.0
+  - rvm use 2.0 --install --binary --fuzzy
 
+# Make will compile, download bundles and run tests
 script:
   - make test
