@@ -162,7 +162,6 @@ to get you started.
     -config="": The config file to load
     -cpuprofile="": write cpu profile to file
     -from-beginning=false: Read new files from the beginning, instead of the end
-    -idle-flush-time=5s: Maximum time to wait for a full spool before flushing
-    anyway
+    -idle-flush-time=5s: Maximum time to wait for a full spool before flushing anyway
     -log-to-syslog=false: Log to syslog instead of stdout
     -spool-size=1024: Maximum number of events to spool before a flush is forced
