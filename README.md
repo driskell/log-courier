@@ -2,9 +2,9 @@
 
 Log Courier is a tool created to transmit log files speedily and securely to
 remote [LogStash](http://logstash.net) instances for processing whilst using
-small amounts of local resources. The project is an enhanced fork of the
-[Logstash Forwarder](https://github.com/elasticsearch/logstash-forwarder)
-project with many enhancements and behavioural improvements.
+small amounts of local resources. The project is an enhanced fork of
+[Logstash Forwarder](https://github.com/elasticsearch/logstash-forwarder) 0.3.1
+with many enhancements and behavioural improvements.
 
 ## Features
 
