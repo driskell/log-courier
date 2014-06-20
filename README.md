@@ -1,7 +1,7 @@
 # Log Courier [![Build Status](https://travis-ci.org/driskell/log-courier.svg)](https://travis-ci.org/driskell/log-courier)
 
 Log Courier is a tool created to transmit log files speedily and securely to
-remote [LogStash](http://logstash.net) instances for processing whilst using
+remote [Logstash](http://logstash.net) instances for processing whilst using
 small amounts of local resources. The project is an enhanced fork of
 [Logstash Forwarder](https://github.com/elasticsearch/logstash-forwarder) 0.3.1
 with many enhancements and behavioural improvements.
@@ -10,21 +10,17 @@ with many enhancements and behavioural improvements.
 
 Log Courier implements the following features:
 
-* Tail text log files, following rotations and resuming at the last offset on
+* Tail log files, following rotations and resuming at the last offset on
 restart
-* Listen to standard input at the end of a shell pipeline
-* Extra fields can be tagged onto events on a per file basis containing simple
-strings and numbers or deep arrays and hashes
+* Read from standard input for lightweight shipping of a program's output
+* Extra event fields, arrays and hashes on a per file basis
 * Fast and secure transmission of logs using TLS with both server and client
 certificate verification
-* Transmission of logs via CurveZMQ to multiple LogStash receivers
-simultaneously (optional, requires ZeroMQ 4+)
-* Multiline codec to simplify the LogStash configuration and improve indexing
-speeds
-* Multiline timeout to ensure events are transmitted without waiting for the
-next
-* Fast and secure transmission of logs between LogStash instances over TLS using
-the log-courier ruby gem
+* Multiline codec to combine multiple lines into single events prior to shipping
+* A ruby gem to enable fast and secure transmission of logs between Logstash
+instances
+* Transmission of logs via CurveZMQ to multiple receivers simultaneously
+(optional, requires ZeroMQ 4+)
 
 ## Installation
 
@@ -52,13 +48,13 @@ The log-courier program can then be found in the 'bin' folder.
 A genkey utility can also be found in 'bin' when ZMQ support is built. This
 utility will generate CurveZMQ key pair configurations for you.
 
-### LogStash 1.4.x Integration
+### Logstash 1.4.x Integration
 
-To enable communication with LogStash the ruby gem needs to be installed into
-the LogStash installation, and then the input and output plugins.
+To enable communication with Logstash the ruby gem needs to be installed into
+the Logstash installation, and then the input and output plugins.
 
-The following instructions assume you are using the tar.gz or packaged LogStash
-installations and that LogStash is installed to /opt/logstash. You should change
+The following instructions assume you are using the tar.gz or packaged Logstash
+installations and that Logstash is installed to /opt/logstash. You should change
 this path if yours is different.
 
 First build the gem. This will generate a file called log-courier-X.X.gem.
@@ -67,19 +63,19 @@ First build the gem. This will generate a file called log-courier-X.X.gem.
     cd log-courier
     gem build
 
-Then switch to the LogStash installation directory and install it. Note that
+Then switch to the Logstash installation directory and install it. Note that
 because this is JRuby it may take a minute to finish the install.
 
     cd /opt/logstash
     export GEM_HOME=vendor/bundle/jruby/1.9
     java -jar vendor/jar/jruby-complete-1.7.11.jar -S gem install <path-to-gem>
 
-Now install the LogStash plugins.
+Now install the Logstash plugins.
 
     cd <log-courier-source>
     cp -rvf lib/logstash /opt/logstash/lib
 
-### LogStash Configuration
+### Logstash Configuration
 
 The 'courier' input and output plugins will now be available. An example
 configuration for the input plugin follows.
