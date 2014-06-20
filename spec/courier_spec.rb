@@ -116,8 +116,6 @@ describe 'log-courier' do
     # From beginning makes testing this easier - without it we'd need to create lines inbetween shutdown and start and verify them which is more work
     startup args: '-from-beginning=true'
 
-    f1 = create_log
-    f2 = create_log
     5_000.times do
       f1.log
       f2.log
