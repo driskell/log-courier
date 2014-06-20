@@ -35,17 +35,19 @@ the log-courier ruby gem
 
 ### Building
 
-To build with the optional ZMQ support, use the following.
+To build with the optional ZMQ support use the following.
 
     git clone https://github.com/driskell/log-courier
     cd log-courier
     make with=zmq
 
-Otherwise, simply run make standalone, as follows.
+Otherwise, simply run make standalone as follows.
 
     git clone https://github.com/driskell/log-courier
     cd log-courier
     make
+
+(If you receive errors, try using gmake instead.)
 
 The log-courier program can then be found in the 'bin' folder.
 
