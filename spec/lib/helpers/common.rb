@@ -25,9 +25,8 @@ shared_context 'Helpers' do
     @ssl_csr = File.open(File.join(TEMP_PATH, 'ssl_csr'), 'w')
 
     # Generate the ssl key
-    system("openssl genrsa -out #{@ssl_key.path} 1024")
-    system("openssl req -config spec/lib/openssl.cnf -new -key #{@ssl_key.path} -batch -out #{@ssl_csr.path}")
-    system("openssl x509 -req -days 365 -in #{@ssl_csr.path} -signkey #{@ssl_key.path} -out #{@ssl_cert.path}")
+    system("openssl req -config spec/lib/openssl.cnf -new -batch -keyout #{@ssl_key.path} -out #{@ssl_csr.path}")
+    system("openssl x509 -extfile spec/lib/openssl.cnf -extensions extensions_section -req -days 365 -in #{@ssl_csr.path} -signkey #{@ssl_key.path} -out #{@ssl_cert.path}")
   end
 
   after :all do
