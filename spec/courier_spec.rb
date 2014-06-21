@@ -372,11 +372,11 @@ describe 'log-courier' do
       },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
-        "servers": [ "127.0.0.1:#{server_port}" ],
+        "servers": [ "127.0.0.1:#{server_port}" ]
       },
       "files": [
         {
-          "paths": [ "#{TEMP_PATH}/logs/log-*" ],
+          "paths": [ "#{TEMP_PATH}/logs/log-*" ]
         }
       ]
     }
