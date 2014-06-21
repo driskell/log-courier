@@ -395,11 +395,13 @@ describe 'log-courier' do
     # Write some more
     f.log 5_000
 
-    # Receive and check - but not file as it will be different now
-    receive_and_check check_file: false
+    # Receive and check
+    receive_and_check
 
     # We have to clean up ourselves here since .log-courer is elsewhere
+    # Do some checks to ensure we used a different location though
     shutdown
+    expect(File.file?(".log-courier")).to be false
     expect(File.file?("#{TEMP_PATH}/.log-courier")).to be true
     File.unlink("#{TEMP_PATH}/.log-courier")
   end
