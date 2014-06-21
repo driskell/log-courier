@@ -30,14 +30,23 @@ import (
   "time"
 )
 
-const default_NetworkConfig_Timeout int64 = 15
-const default_NetworkConfig_Reconnect int64 = 1
-
-const default_FileConfig_DeadTime int64 = 86400
+const (
+  default_GeneralConfig_PersistDir       string = "."
+  default_GeneralConfig_ProspectInterval int64  = 10
+  default_NetworkConfig_Timeout          int64  = 15
+  default_NetworkConfig_Reconnect        int64  = 1
+  default_FileConfig_DeadTime            int64  = 86400
+)
 
 type Config struct {
+  General GeneralConfig `json:"general"`
   Network NetworkConfig `json:"network"`
   Files   []FileConfig  `json:"files"`
+}
+
+type GeneralConfig struct {
+  PersistDir       string        `json:"persist directory"`
+  ProspectInterval time.Duration `json:"prospect interval"`
 }
 
 var NewTransportZmqFactoryIfAvailable func(string, map[string]interface{}) (TransportFactory, error)
@@ -173,6 +182,15 @@ func LoadConfig(path string) (config *Config, err error) {
     return
   }
 
+  // Fill in defaults for GeneralConfig
+  if config.General.PersistDir == "" {
+    config.General.PersistDir = default_GeneralConfig_PersistDir
+  }
+  if config.General.ProspectInterval == time.Duration(0) {
+    config.General.ProspectInterval = time.Duration(default_GeneralConfig_ProspectInterval) * time.Second
+  }
+
+  // Process through NetworkConfig
   if config.Network.Transport == "" {
     config.Network.Transport = "tls"
   }

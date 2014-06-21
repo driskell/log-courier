@@ -105,12 +105,14 @@ func main() {
   }
 
   // Initialise structures
-  prospector := &Prospector{FileConfigs: config.Files}
+  prospector := NewProspector(config)
 
   publisher := &Publisher{config: &config.Network}
   if err := publisher.Init(); err != nil {
     log.Fatalf("The publisher failed to initialise: %s\n", err)
   }
+
+  registrar := NewRegistrar(config.General.PersistDir)
 
   // Start the pipeline
   go prospector.Prospect(prospector_resume, registrar_chan, event_chan)
@@ -119,5 +121,5 @@ func main() {
 
   go publisher.Publish(publisher_chan, registrar_chan)
 
-  Registrar(registrar_persist, registrar_chan)
+  registrar.Registrar(registrar_persist, registrar_chan)
 } /* main */

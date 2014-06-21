@@ -361,4 +361,41 @@ describe 'log-courier' do
     # Check new size of registrar state
     expect(File::Stat.new('.log-courier').size).to be < s
   end
+
+  it 'should allow use of a custom persist directory' do
+    f = create_log
+
+    startup config: <<-config
+    {
+      "general": {
+        "persist directory": "#{TEMP_PATH}"
+      },
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ],
+      },
+      "files": [
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-*" ],
+        }
+      ]
+    }
+    config
+
+    # Write logs
+    f.log 5_000
+
+    # Receive and check
+    receive_and_check
+
+    # Restart
+    shutdown
+    startup
+
+    # Write some more
+    f.log 5_000
+
+    # Receive and check - but not file as it will be different now
+    receive_and_check check_file: false
+  end
 end

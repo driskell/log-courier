@@ -80,7 +80,8 @@ func (pi *ProspectorInfo) Update(fileinfo os.FileInfo, iteration uint32) {
 }
 
 type Prospector struct {
-  FileConfigs      []FileConfig
+  generalconfig    *GeneralConfig
+  fileconfigs      []FileConfig
   prospectorinfo   map[string]*ProspectorInfo
   orphanedinfo     map[*ProspectorInfo]*ProspectorInfo
   from_beginning   bool
@@ -89,13 +90,20 @@ type Prospector struct {
   registrar_events []RegistrarEvent
 }
 
+func NewProspector(config *Config) *Prospector {
+  return &Prospector{
+    generalconfig: &config.General,
+    fileconfigs: config.Files,
+  }
+}
+
 func (p *Prospector) Prospect(resume map[string]*ProspectorInfo, registrar_chan chan<- []RegistrarEvent, output chan<- *FileEvent) {
   // Pre-populate prospectorinfo with what we had previously
   p.prospectorinfo = resume
 
   // Handle any "-" (stdin) paths - but only once
   stdin_started := false
-  for _, config := range p.FileConfigs {
+  for _, config := range p.fileconfigs {
     for i, path := range config.Paths {
       if path == "-" {
         if !stdin_started {
@@ -124,7 +132,7 @@ func (p *Prospector) Prospect(resume map[string]*ProspectorInfo, registrar_chan 
     newlastscan := time.Now()
     p.iteration++ // Overflow is allowed
 
-    for _, config := range p.FileConfigs {
+    for _, config := range p.fileconfigs {
       for _, path := range config.Paths {
         // Scan - flag false so new files always start at beginning
         p.scan(path, &config, registrar_chan, output)
@@ -156,7 +164,7 @@ func (p *Prospector) Prospect(resume map[string]*ProspectorInfo, registrar_chan 
     p.registrar_events = make([]RegistrarEvent, 0)
 
     // Defer next scan for a bit.
-    time.Sleep(10 * time.Second) // TODO: Make this tunable
+    time.Sleep(p.generalconfig.ProspectInterval)
   }
 }
 
