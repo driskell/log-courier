@@ -51,17 +51,6 @@ The log-courier program can then be found in the 'bin' folder.
 A genkey utility can also be found in the 'bin' folder when ZMQ support is
 built. This utility will generate CurveZMQ key pair configurations for you.
 
-## Logstash Integration
-
-Full documentation on how to install and configure Logstash for use with Log
-Courier can be found on the
-[Logstash Integration page](docs/LogstashIntegration.md).
-
-## Configuration
-
-Full documentation of all of the available Log Courier configuration options
-can be found on the [Configuration page](docs/Configuration.md).
-
 ## Command Line Options
 
 The log-courier command accepts the following command line options.
@@ -72,3 +61,9 @@ The log-courier command accepts the following command line options.
     -idle-flush-time=5s: Maximum time to wait for a full spool before flushing anyway
     -log-to-syslog=false: Log to syslog instead of stdout
     -spool-size=1024: Maximum number of events to spool before a flush is forced
+
+## Documentation
+
+* [Logstash Integration](docs/LogstashIntegration.md)
+* [Configuration](docs/Configuration.md)
+* [Change Log](docs/ChangeLog.md)
