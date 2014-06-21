@@ -365,7 +365,7 @@ describe 'log-courier' do
   it 'should allow use of a custom persist directory' do
     f = create_log
 
-    startup config: <<-config
+    config = <<-config
     {
       "general": {
         "persist directory": "#{TEMP_PATH}"
@@ -382,15 +382,17 @@ describe 'log-courier' do
     }
     config
 
+    startup config: config
+
     # Write logs
     f.log 5_000
 
     # Receive and check
     receive_and_check
 
-    # Restart
+    # Restart - use from-beginning so we fail if we don't resume
     shutdown
-    startup
+    startup config: config, args: '-from-beginning=true'
 
     # Write some more
     f.log 5_000
