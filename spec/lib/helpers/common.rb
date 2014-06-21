@@ -26,7 +26,7 @@ shared_context 'Helpers' do
 
     # Generate the ssl key
     system("openssl genrsa -out #{@ssl_key.path} 1024")
-    system("openssl req -new -key #{@ssl_key.path} -batch -out #{@ssl_csr.path}")
+    system("openssl req -config spec/lib/openssl.cnf -new -key #{@ssl_key.path} -batch -out #{@ssl_csr.path}")
     system("openssl x509 -req -days 365 -in #{@ssl_csr.path} -signkey #{@ssl_key.path} -out #{@ssl_cert.path}")
   end
 
