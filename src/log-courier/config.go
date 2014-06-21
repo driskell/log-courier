@@ -58,7 +58,7 @@ type CodecConfigStub struct {
 
 type FileConfig struct {
   Paths    []string          `json:"paths"`
-  Fields   map[string]string `json:"fields"`
+  Fields   map[string]interface{} `json:"fields"`
   Codec    CodecConfigStub   `json:"codec"`
   codec    CodecFactory
   DeadTime time.Duration `json:"dead time"`

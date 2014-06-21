@@ -50,7 +50,7 @@ type EventsEvent struct {
   Events []*FileEvent
 }
 
-func NewEvent(fields map[string]string, file *string, offset int64, line uint64, message *string) Event {
+func NewEvent(fields map[string]interface{}, file *string, offset int64, line uint64, message *string) Event {
   event := Event{
     "file":    file,
     "offset":  offset,
