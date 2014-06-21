@@ -116,8 +116,6 @@ describe 'log-courier' do
     # From beginning makes testing this easier - without it we'd need to create lines inbetween shutdown and start and verify them which is more work
     startup args: '-from-beginning=true'
 
-    f1 = create_log
-    f2 = create_log
     5_000.times do
       f1.log
       f2.log
@@ -360,5 +358,73 @@ describe 'log-courier' do
 
     # Check new size of registrar state
     expect(File::Stat.new('.log-courier').size).to be < s
+  end
+
+  it 'should allow arrays inside field configuration' do
+    startup mode: 'w', config: <<-config
+    {
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ]
+      },
+      "files": [
+        {
+          "paths": [ "-" ],
+          "fields": { "array": [ 1, 2 ] }
+        }
+      ]
+    }
+    config
+
+    5_000.times do |i|
+      @log_courier.puts "stdin line test #{i}"
+    end
+
+    # Receive and check
+    i = 0
+    host = Socket.gethostname
+    receive_and_check(total: 5_000) do |e|
+      expect(e['message']).to eq "stdin line test #{i}"
+      expect(e['array']).to be_kind_of Array
+      expect(e['array'][0]).to eq 1
+      expect(e['array'][1]).to eq 2
+      expect(e['host']).to eq host
+      expect(e['file']).to eq '-'
+      i += 1
+    end
+  end
+
+  it 'should allow dictionaries inside field configuration' do
+    startup mode: 'w', config: <<-config
+    {
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ]
+      },
+      "files": [
+        {
+          "paths": [ "-" ],
+          "fields": { "dict": { "first": "first", "second": 5 } }
+        }
+      ]
+    }
+    config
+
+    5_000.times do |i|
+      @log_courier.puts "stdin line test #{i}"
+    end
+
+    # Receive and check
+    i = 0
+    host = Socket.gethostname
+    receive_and_check(total: 5_000) do |e|
+      expect(e['message']).to eq "stdin line test #{i}"
+      expect(e['dict']).to be_kind_of Hash
+      expect(e['dict']['first']).to eq 'first'
+      expect(e['dict']['second']).to eq 5
+      expect(e['host']).to eq host
+      expect(e['file']).to eq '-'
+      i += 1
+    end
   end
 end
