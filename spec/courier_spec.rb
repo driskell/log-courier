@@ -360,6 +360,52 @@ describe 'log-courier' do
     expect(File::Stat.new('.log-courier').size).to be < s
   end
 
+  it 'should allow use of a custom persist directory' do
+    f = create_log
+
+    config = <<-config
+    {
+      "general": {
+        "persist directory": "#{TEMP_PATH}"
+      },
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ]
+      },
+      "files": [
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-*" ]
+        }
+      ]
+    }
+    config
+
+    startup config: config
+
+    # Write logs
+    f.log 5_000
+
+    # Receive and check
+    receive_and_check
+
+    # Restart - use from-beginning so we fail if we don't resume
+    shutdown
+    startup config: config, args: '-from-beginning=true'
+
+    # Write some more
+    f.log 5_000
+
+    # Receive and check
+    receive_and_check
+
+    # We have to clean up ourselves here since .log-courer is elsewhere
+    # Do some checks to ensure we used a different location though
+    shutdown
+    expect(File.file?(".log-courier")).to be false
+    expect(File.file?("#{TEMP_PATH}/.log-courier")).to be true
+    File.unlink("#{TEMP_PATH}/.log-courier")
+  end
+
   it 'should allow multiple fields to be configured' do
     startup mode: 'w', config: <<-config
     {
