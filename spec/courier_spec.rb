@@ -360,6 +360,39 @@ describe 'log-courier' do
     expect(File::Stat.new('.log-courier').size).to be < s
   end
 
+  it 'should allow multiple fields to be configured' do
+    startup mode: 'w', config: <<-config
+    {
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ]
+      },
+      "files": [
+        {
+          "paths": [ "-" ],
+          "fields": { "first": "value", "second": "more" }
+        }
+      ]
+    }
+    config
+
+    5_000.times do |i|
+      @log_courier.puts "stdin line test #{i}"
+    end
+
+    # Receive and check
+    i = 0
+    host = Socket.gethostname
+    receive_and_check(total: 5_000) do |e|
+      expect(e['message']).to eq "stdin line test #{i}"
+      expect(e['first']).to eq "value"
+      expect(e['second']).to eq "more"
+      expect(e['host']).to eq host
+      expect(e['file']).to eq '-'
+      i += 1
+    end
+  end
+
   it 'should allow arrays inside field configuration' do
     startup mode: 'w', config: <<-config
     {

@@ -56,8 +56,8 @@ func NewEvent(fields map[string]interface{}, file *string, offset int64, line ui
     "offset":  offset,
     "message": message,
   }
-  for k, v := range fields {
-    event[k] = &v
+  for k := range fields {
+    event[k] = fields[k]
   }
   return event
 }
