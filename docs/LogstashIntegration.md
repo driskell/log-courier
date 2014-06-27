@@ -16,7 +16,7 @@ First build the gem. This will generate a file called log-courier-X.X.gem.
 
 		git clone https://github.com/driskell/log-courier
 		cd log-courier
-		gem build
+		gem build log-courier.gemspec
 
 Then switch to the Logstash installation directory and install it. Note that
 because this is JRuby it may take a minute to finish the install.
