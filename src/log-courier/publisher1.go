@@ -50,19 +50,6 @@ type PendingPayload struct {
   timeout       *time.Time
 }
 
-type Publisher struct {
-  config           *NetworkConfig
-  transport        Transport
-  hostname         string
-  can_send         <-chan int
-  pending_ping     bool
-  pending_payloads map[string]*PendingPayload
-  first_payload    *PendingPayload
-  last_payload     *PendingPayload
-  num_payloads     int
-  out_of_sync      int
-}
-
 func NewPendingPayload(events []*FileEvent, nonce string, hostname string) (*PendingPayload, error) {
   payload := &PendingPayload{
     events:     events,
@@ -133,6 +120,27 @@ func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *FileEvent
   return nil
 }
 
+type Publisher struct {
+  shutdown         *LogCourierShutdown
+  config           *NetworkConfig
+  transport        Transport
+  hostname         string
+  can_send         <-chan int
+  pending_ping     bool
+  pending_payloads map[string]*PendingPayload
+  first_payload    *PendingPayload
+  last_payload     *PendingPayload
+  num_payloads     int
+  out_of_sync      int
+}
+
+func NewPublisher(config *NetworkConfig, shutdown *LogCourierShutdown) *Publisher {
+  return &Publisher{
+    shutdown: shutdown,
+    config: config,
+  }
+}
+
 func (p *Publisher) Init() error {
   var err error
 
@@ -152,10 +160,18 @@ func (p *Publisher) Init() error {
   return nil
 }
 
-func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []RegistrarEvent) {
+func (p *Publisher) Publish(input <-chan []*FileEvent, registrar *Registrar) {
+  defer func() {
+    p.shutdown.Done()
+  }()
+
   var input_toggle <-chan []*FileEvent
   var retry_payload *PendingPayload
   var err error
+  var shutdown bool
+
+  // Connect to registrar
+  registrar_chan := registrar.Connect()
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   timer := time.NewTimer(keepalive_timeout)
@@ -163,12 +179,22 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
   // TODO: We should still obey network timeout if we've sent events and not yet received response
   //       as its the quickest way to detect a connection problem after idle
 
+PublishLoop:
   for {
     if err = p.transport.Connect(); err != nil {
       log.Printf("Connect attempt failed: %s\n", err)
       // TODO: implement shutdown select
-      time.Sleep(p.config.Reconnect)
-      continue
+      select {
+      case <-time.After(p.config.Reconnect):
+        continue
+      case <-p.shutdown.Signal():
+        // TODO: Persist pending payloads and resume? Quicker shutdown
+        if p.num_payloads == 0 {
+          break PublishLoop
+        }
+
+        shutdown = true
+      }
     }
     p.can_send = p.transport.CanSend()
     input_toggle = nil
@@ -195,7 +221,13 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
             break SelectLoop
           }
 
-          retry_payload = retry_payload.next
+          // Move to next non-empty payload
+          for {
+            retry_payload = retry_payload.next
+            if retry_payload == nil || retry_payload.ack_events != len(retry_payload.events) {
+              break
+            }
+          }
 
           // Expect an ACK within network timeout
           if p.first_payload.timeout != nil {
@@ -215,7 +247,12 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
           }
         }
 
-        // No pending payloads, enable event wait
+        // No pending payloads, are we shutting down? Skip if so
+        if shutdown {
+          break
+        }
+
+        // Enable event wait
         input_toggle = input
       case events := <-input_toggle:
         // Send
@@ -266,6 +303,10 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
 
         // If no more pending payloads, set keepalive, otherwise reset to network timeout
         if p.num_payloads == 0 {
+          // Handle shutdown
+          if shutdown {
+            break PublishLoop
+          }
           timer.Reset(keepalive_timeout)
         } else if p.first_payload.timeout != nil {
           timer.Reset(p.first_payload.timeout.Sub(time.Now()))
@@ -309,6 +350,15 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
 
         // Allow network timeout to receive something
         timer.Reset(p.config.Timeout)
+      case <-p.shutdown.Signal():
+        // If no pending payloads, simply end
+        // TODO: Persist pending payloads and resume? Quicker shutdown
+        if p.num_payloads == 0 {
+          break PublishLoop
+        }
+
+        // Flag shutdown for when we finish pending payloads
+        shutdown = true
       }
     }
 
@@ -317,10 +367,16 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar_chan chan<- []R
     p.transport.Disconnect()
 
     retry_payload = p.first_payload
-    p.out_of_sync = 0
 
     time.Sleep(p.config.Reconnect)
   }
+
+  p.transport.Disconnect()
+
+  // Disconnect from registrar
+  registrar.Disconnect()
+
+  log.Printf("Publisher shutdown complete\n")
 }
 
 func (p *Publisher) checkResend() (bool, error) {

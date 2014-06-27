@@ -25,7 +25,7 @@ import (
   "os"
 )
 
-func WriteRegistry(state map[string]*FileState, path string) {
+func (r *Registrar) WriteRegistry(state map[string]*FileState, path string) {
   tmp := path + ".new"
   file, err := os.Create(tmp)
   if err != nil {

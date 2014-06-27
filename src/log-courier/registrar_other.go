@@ -27,7 +27,7 @@ import (
   "os"
 )
 
-func WriteRegistry(state map[string]*FileState, path string) {
+func (r *Registrar) WriteRegistry(state map[string]*FileState, path string) {
   // Open tmp file, write, flush, rename
   file, err := os.Create(".log-courier.new")
   if err != nil {

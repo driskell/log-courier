@@ -20,15 +20,35 @@
 package main
 
 import (
+  "log"
   "time"
 )
 
-func Spool(input <-chan *FileEvent, output chan<- []*FileEvent, max_size uint64, idle_timeout time.Duration) {
+type Spooler struct {
+  shutdown     *LogCourierShutdown
+  max_size     uint64
+  idle_timeout time.Duration
+}
+
+func NewSpooler(max_size uint64, idle_timeout time.Duration, shutdown *LogCourierShutdown) *Spooler {
+  return &Spooler{
+    shutdown: shutdown,
+    max_size: max_size,
+    idle_timeout: idle_timeout,
+  }
+}
+
+func (s *Spooler) Spool(input <-chan *FileEvent, output chan<- []*FileEvent) {
+  defer func() {
+    s.shutdown.Done()
+  }()
+
   // Slice for spooling into
-  spool := make([]*FileEvent, 0, max_size)
+  spool := make([]*FileEvent, 0, s.max_size)
 
-  timer := time.NewTimer(idle_timeout)
+  timer := time.NewTimer(s.idle_timeout)
 
+SpoolerLoop:
   for {
     select {
     case event := <-input:
@@ -37,17 +57,21 @@ func Spool(input <-chan *FileEvent, output chan<- []*FileEvent, max_size uint64,
       // Flush if full
       if len(spool) == cap(spool) {
         output <- spool
-        spool = make([]*FileEvent, 0, max_size)
-        timer.Reset(idle_timeout)
+        spool = make([]*FileEvent, 0, s.max_size)
+        timer.Reset(s.idle_timeout)
       }
     case <-timer.C:
       // Flush what we have, if anything
       if len(spool) > 0 {
         output <- spool
-        spool = make([]*FileEvent, 0, max_size)
+        spool = make([]*FileEvent, 0, s.max_size)
       }
 
-      timer.Reset(idle_timeout)
+      timer.Reset(s.idle_timeout)
+    case <-s.shutdown.Signal():
+      break SpoolerLoop
     }
   }
+
+  log.Printf("Spooler shutdown complete\n")
 }

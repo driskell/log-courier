@@ -41,7 +41,8 @@ import _ "crypto/sha256"
 import _ "crypto/sha512"
 
 const (
-  socket_interval_seconds = 5
+  // Essentially, this is how often we should check for disconnect/shutdown during socket reads
+  socket_interval_seconds = 1
 )
 
 type TransportTlsFactory struct {
@@ -133,56 +134,41 @@ func (f *TransportTlsFactory) NewTransport(config *NetworkConfig) (Transport, er
 }
 
 func (t *TransportTls) Connect() error {
-Connect:
-  for {
-    for {
-      // Pick a random server from the list.
-      hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]
-      submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
-      if submatch == nil {
-        log.Printf("Invalid host:port given: %s\n", hostport)
-        break
-      }
+  // Pick a random server from the list.
+  hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]
+  submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
+  if submatch == nil {
+    return fmt.Errorf("Invalid host:port given: %s", hostport)
+  }
 
-      // Lookup the server in DNS (if this is IP it will implicitly return)
-      host := string(submatch[1])
-      port := string(submatch[2])
-      addresses, err := net.LookupHost(host)
-      if err != nil {
-        log.Printf("DNS lookup failure \"%s\": %s\n", host, err)
-        break
-      }
+  // Lookup the server in DNS (if this is IP it will implicitly return)
+  host := string(submatch[1])
+  port := string(submatch[2])
+  addresses, err := net.LookupHost(host)
+  if err != nil {
+    return fmt.Errorf("DNS lookup failure \"%s\": %s", host, err)
+  }
 
-      // Select a random address from the pool of addresses provided by DNS
-      address := addresses[rand.Int()%len(addresses)]
-      addressport := net.JoinHostPort(address, port)
+  // Select a random address from the pool of addresses provided by DNS
+  address := addresses[rand.Int()%len(addresses)]
+  addressport := net.JoinHostPort(address, port)
 
-      log.Printf("Connecting to %s (%s) \n", addressport, host)
+  log.Printf("Connecting to %s (%s) \n", addressport, host)
 
-      tcpsocket, err := net.DialTimeout("tcp", addressport, t.net_config.Timeout)
-      if err != nil {
-        log.Printf("Failure connecting to %s: %s\n", address, err)
-        break
-      }
+  tcpsocket, err := net.DialTimeout("tcp", addressport, t.net_config.Timeout)
+  if err != nil {
+    return fmt.Errorf("Failure connecting to %s: %s", address, err)
+  }
 
-      t.socket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
-      t.socket.SetDeadline(time.Now().Add(t.net_config.Timeout))
-      err = t.socket.Handshake()
-      if err != nil {
-        t.socket.Close()
-        log.Printf("TLS Handshake failure with %s: %s\n", address, err)
-        break
-      }
+  t.socket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
+  t.socket.SetDeadline(time.Now().Add(t.net_config.Timeout))
+  err = t.socket.Handshake()
+  if err != nil {
+    t.socket.Close()
+    return fmt.Errorf("TLS Handshake failure with %s: %s", address, err)
+  }
 
-      log.Printf("Connected with %s\n", address)
-
-      // Connected, let's rock and roll.
-      break Connect
-
-    } /* for, break for sleep */
-
-    time.Sleep(t.net_config.Reconnect)
-  } /* Connect: for */
+  log.Printf("Connected with %s\n", address)
 
   // Signal channels
   t.shutdown = make(chan int, 1)
@@ -336,6 +322,10 @@ func (t *TransportTls) Read() <-chan interface{} {
 }
 
 func (t *TransportTls) Disconnect() {
+  if t.shutdown == nil {
+    return
+  }
+
   // Send shutdown request
   close(t.shutdown)
   t.wait.Wait()

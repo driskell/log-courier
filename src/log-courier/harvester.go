@@ -84,7 +84,16 @@ func (h *Harvester) Harvest(output chan<- *FileEvent) (int64, bool) {
 
   var read_timeout = 10 * time.Second
   last_read_time := time.Now()
+
+ReadLoop:
   for {
+    // Check shutdown
+    select {
+    case <-h.info.ShutdownSignal():
+      break ReadLoop
+    default:
+    }
+
     text, bytesread, err := h.readline(reader, buffer, read_timeout)
 
     if err != nil {
@@ -107,6 +116,7 @@ func (h *Harvester) Harvest(output chan<- *FileEvent) (int64, bool) {
             log.Printf("Stopping harvest of %s; last change was %v ago\n", h.path, age-(age%time.Second))
             return h.codec.Teardown(), false
           }
+
           continue
         } else {
           log.Printf("Unexpected error checking status of %s: %s\n", h.path, err)
@@ -124,7 +134,10 @@ func (h *Harvester) Harvest(output chan<- *FileEvent) (int64, bool) {
 
     // Codec is last - it saves harvester state for us such as offset for resume
     h.codec.Event(line_offset, h.offset, line, text)
-  } /* forever */
+  }
+
+  log.Printf("Harvester shutdown for %s complete\n", h.path)
+  return h.codec.Teardown(), false
 }
 
 func (h *Harvester) prepareHarvester() bool {
@@ -179,7 +192,12 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer, eof_tim
 
     if err != nil {
       if err == io.EOF && is_partial {
-        time.Sleep(1 * time.Second) // TODO(sissel): Implement backoff
+        // Backoff
+        select {
+        case <-h.info.ShutdownSignal():
+          return nil, 0, err
+        case <-time.After(1 * time.Second):
+        }
 
         // Give up waiting for data after a certain amount of time.
         // If we time out, return the error (eof)

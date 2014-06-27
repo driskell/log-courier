@@ -24,7 +24,9 @@ import (
   "flag"
   "log"
   "os"
+  "os/signal"
   "runtime/pprof"
+  "sync"
   "time"
 )
 
@@ -34,6 +36,17 @@ var idle_timeout = flag.Duration("idle-flush-time", 5*time.Second, "Maximum time
 var config_file = flag.String("config", "", "The config file to load")
 var use_syslog = flag.Bool("log-to-syslog", false, "Log to syslog instead of stdout")
 var from_beginning = flag.Bool("from-beginning", false, "Read new files from the beginning, instead of the end")
+
+var shutdown_signals []os.Signal
+
+func init() {
+  // All systems support os.Interrupt, so add to shutdown signals
+  RegisterShutdownSignal(os.Interrupt)
+}
+
+func RegisterShutdownSignal(signal os.Signal) {
+  shutdown_signals = append(shutdown_signals, signal)
+}
 
 func main() {
   flag.Parse()
@@ -57,29 +70,79 @@ func main() {
     log.SetFlags(log.LstdFlags | log.Lmicroseconds)
   }
 
-  log.Printf("Log Courier starting up")
+  log.Printf("Log Courier starting up\n")
 
-  config, err := LoadConfig(*config_file)
+  shutdown := make(chan os.Signal, 1)
+  signal.Notify(shutdown, shutdown_signals...)
+
+  logcourier := NewLogCourier()
+  logcourier.StartCourier(*config_file)
+
+  select {
+    case <-shutdown:
+      log.Printf("Log Courier shutting down\n")
+      logcourier.Shutdown()
+  }
+}
+
+type LogCourierShutdown struct {
+  signal chan interface{}
+  group sync.WaitGroup
+}
+
+func NewLogCourierShutdown() *LogCourierShutdown {
+  return &LogCourierShutdown{
+    signal: make(chan interface{}),
+  }
+}
+
+func (lcs *LogCourierShutdown) Signal() <-chan interface{} {
+  return lcs.signal
+}
+
+func (lcs *LogCourierShutdown) Shutdown() {
+  close(lcs.signal)
+}
+
+func (lcs *LogCourierShutdown) Done() {
+  lcs.group.Done()
+}
+
+func (lcs *LogCourierShutdown) Add() *LogCourierShutdown {
+  lcs.group.Add(1)
+  return lcs
+}
+
+func (lcs *LogCourierShutdown) Wait() {
+  lcs.group.Wait()
+}
+
+type LogCourier struct {
+  shutdown *LogCourierShutdown
+  config   *Config
+}
+
+func NewLogCourier() *LogCourier {
+  ret := &LogCourier{
+    shutdown: NewLogCourierShutdown(),
+  }
+  return ret
+}
+
+func (lc *LogCourier) StartCourier(config_file string) {
+  var err error
+
+  lc.config, err = LoadConfig(config_file)
   if err != nil {
     log.Fatalf("%s. Please check your configuration", err)
   }
 
   event_chan := make(chan *FileEvent, 16)
   publisher_chan := make(chan []*FileEvent, 1)
-  registrar_chan := make(chan []RegistrarEvent, 16)
 
-  if len(config.Files) == 0 {
+  if len(lc.config.Files) == 0 {
     log.Fatalf("No paths given. What files do you want to watch?")
   }
-
-  // The basic model of execution:
-  // - prospector: finds files in paths/globs to harvest, starts harvesters
-  // - harvester: reads a file, sends events to the spooler
-  // - spooler: buffers events until ready to flush to the publisher
-  // - publisher: writes to the network, notifies registrar
-  // - registrar: records positions of files read
-  // Finally, prospector uses the registrar information, on restart, to
-  // determine where in each file to resume a harvester.
 
   // Load the previous log file locations now, for use in prospector
   load_resume := make(map[string]*FileState)
@@ -104,20 +167,29 @@ func main() {
     registrar_persist[prospector_resume[file]] = filestate
   }
 
-  // Initialise structures
-  prospector := &Prospector{FileConfigs: config.Files}
+  // Initialise pipeline
+  prospector := NewProspector(lc.config.Files, lc.shutdown.Add())
 
-  publisher := &Publisher{config: &config.Network}
+  spooler := NewSpooler(*spool_size, *idle_timeout, lc.shutdown.Add())
+
+  publisher := NewPublisher(&lc.config.Network, lc.shutdown.Add())
   if err := publisher.Init(); err != nil {
     log.Fatalf("The publisher failed to initialise: %s\n", err)
   }
 
+  registrar := NewRegistrar(lc.shutdown.Add())
+
   // Start the pipeline
-  go prospector.Prospect(prospector_resume, registrar_chan, event_chan)
+  go prospector.Prospect(prospector_resume, registrar, event_chan)
 
-  go Spool(event_chan, publisher_chan, *spool_size, *idle_timeout)
+  go spooler.Spool(event_chan, publisher_chan)
 
-  go publisher.Publish(publisher_chan, registrar_chan)
+  go publisher.Publish(publisher_chan, registrar)
 
-  Registrar(registrar_persist, registrar_chan)
-} /* main */
+  go registrar.Register(registrar_persist)
+}
+
+func (lc *LogCourier) Shutdown() {
+  lc.shutdown.Shutdown()
+  lc.shutdown.Wait()
+}

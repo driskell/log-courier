@@ -66,8 +66,40 @@ func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
   }
 }
 
-func Registrar(state map[*ProspectorInfo]*FileState, registrar <-chan []RegistrarEvent) {
-  for events := range registrar {
+type Registrar struct {
+  shutdown       *LogCourierShutdown
+  registrar_chan chan []RegistrarEvent
+  references     int
+}
+
+func NewRegistrar(shutdown *LogCourierShutdown) *Registrar {
+  return &Registrar{
+    shutdown: shutdown,
+    registrar_chan: make(chan []RegistrarEvent, 16),
+  }
+}
+
+func (r *Registrar) Connect() chan<- []RegistrarEvent {
+  // TODO: Is there a better way to do this?
+  r.references++
+  return r.registrar_chan
+}
+
+func (r *Registrar) Disconnect() {
+  r.references--
+  if r.references == 0 {
+    // Shutdown registrar, all references are closed
+    close(r.registrar_chan)
+  }
+}
+
+func (r *Registrar) Register(state map[*ProspectorInfo]*FileState) {
+  defer func() {
+    r.shutdown.Done()
+  }()
+
+  // Ignore shutdown channel - wait for registrar to close
+  for events := range r.registrar_chan {
     for _, event := range events {
       event.Process(state)
     }
@@ -77,6 +109,8 @@ func Registrar(state map[*ProspectorInfo]*FileState, registrar <-chan []Registra
       state_json[*value.Source] = value
     }
 
-    WriteRegistry(state_json, ".log-courier")
+    r.WriteRegistry(state_json, ".log-courier")
   }
+
+  log.Printf("Registrar shutdown complete\n")
 }
