@@ -51,16 +51,16 @@ The log-courier program can then be found in the 'bin' folder.
 
 ### Generating Certificates and Keys
 
-To quickly create a self-signed SSL certificate to test with, run `make
-selfsigned`. This will prompt for some information; most of which can be
-anything you want or left as the default, just remember to set the
-"Common Name" field to the exact same hostname you will use in log-courier's
-"servers" configuration so that certificate validation passes successfully. You
-will find the generated .key and .crt files inside the "bin" folder.
+To quickly create a self-signed SSL certificate, run `make selfsigned`. This
+will prompt for the certificate information; most of which can be anything or
+left as the default except 'Common Name', that should be set to the exact same
+hostname you will use in log-courier's 'servers' configuration. This ensures
+that certificate validation passes successfully. You will find the generated
+`.key` and `.crt` files inside the 'bin' folder.
 
-*If you are going to connect via IP address, the certificate needs extra
+*If you will be connecting via IP address, the certificate will need extra
 information to pass validation. Open spec/lib/openssl.cnf in your favourite
-editor and look for "#subjectAltName = IP:1.1.1.1", remove the pound prefix,
+editor and look for `#subjectAltName = IP:1.1.1.1`, remove the pound prefix,
 set the IP address, and run `make selfsigned` again.*
 
 A genkey utility can also be found in 'bin' when ZMQ support is built. This
