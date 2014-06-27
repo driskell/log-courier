@@ -67,9 +67,10 @@ shared_context 'Helpers_Log_Courier' do
 
   def shutdown
     return if @log_courier.nil?
-    # When shutdown is implemented this becomes TERM/QUIT
-    Process.kill('KILL', @log_courier.pid)
-    Process.wait(@log_courier.pid)
+    # Send SIGTERM
+    Process.kill('TERM', @log_courier.pid)
+    # Close appears to implicitly wait too
+    @log_courier.close
     @log_courier = nil
   end
 end
