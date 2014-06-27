@@ -83,13 +83,10 @@ func main() {
 
   // Load the previous log file locations now, for use in prospector
   load_resume := make(map[string]*FileState)
-  history, err := os.Open(".log-courier")
+  state_path := config.General.PersistDir + string(os.PathSeparator) + ".log-courier"
+  history, err := os.Open(state_path)
   if err == nil {
-    wd, err := os.Getwd()
-    if err != nil {
-      wd = ""
-    }
-    log.Printf("Loading registrar data from %s/.log-courier\n", wd)
+    log.Printf("Loading registrar data from %s\n", state_path)
 
     decoder := json.NewDecoder(history)
     decoder.Decode(&load_resume)
@@ -105,12 +102,14 @@ func main() {
   }
 
   // Initialise structures
-  prospector := &Prospector{FileConfigs: config.Files}
+  prospector := NewProspector(config)
 
   publisher := &Publisher{config: &config.Network}
   if err := publisher.Init(); err != nil {
     log.Fatalf("The publisher failed to initialise: %s\n", err)
   }
+
+  registrar := NewRegistrar(config.General.PersistDir)
 
   // Start the pipeline
   go prospector.Prospect(prospector_resume, registrar_chan, event_chan)
@@ -119,5 +118,5 @@ func main() {
 
   go publisher.Publish(publisher_chan, registrar_chan)
 
-  Registrar(registrar_persist, registrar_chan)
+  registrar.Registrar(registrar_persist, registrar_chan)
 } /* main */

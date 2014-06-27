@@ -23,6 +23,18 @@ import (
   "log"
 )
 
+type Registrar struct {
+  persistdir string
+  statefile  string
+}
+
+func NewRegistrar(persistdir string) *Registrar {
+  return &Registrar{
+    persistdir: persistdir,
+    statefile:  ".log-courier",
+  }
+}
+
 func (e *NewFileEvent) Process(state map[*ProspectorInfo]*FileState) {
   // A new file we need to save offset information for so we can resume
   state[e.ProspectorInfo] = &FileState{
@@ -66,7 +78,7 @@ func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
   }
 }
 
-func Registrar(state map[*ProspectorInfo]*FileState, registrar <-chan []RegistrarEvent) {
+func (r *Registrar) Registrar(state map[*ProspectorInfo]*FileState, registrar <-chan []RegistrarEvent) {
   for events := range registrar {
     for _, event := range events {
       event.Process(state)
@@ -77,6 +89,6 @@ func Registrar(state map[*ProspectorInfo]*FileState, registrar <-chan []Registra
       state_json[*value.Source] = value
     }
 
-    WriteRegistry(state_json, ".log-courier")
+    r.WriteRegistry(state_json)
   }
 }
