@@ -62,8 +62,7 @@ func (c *CodecPlain) Event(start_offset int64, end_offset int64, line uint64, te
   }
 }
 
-// Register the codec as default
+// Register the codec
 func init() {
-  RegisterCodec(&CodecPlainRegistrar{}, "")
   RegisterCodec(&CodecPlainRegistrar{}, "plain")
 }

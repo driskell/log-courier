@@ -45,7 +45,12 @@ const (
   socket_interval_seconds = 1
 )
 
+type TransportTlsRegistrar struct {
+}
+
 type TransportTlsFactory struct {
+  transport string
+
   SSLCertificate string `json:"ssl certificate"`
   SSLKey         string `json:"ssl key"`
   SSLCA          string `json:"ssl ca"`
@@ -57,7 +62,8 @@ type TransportTlsFactory struct {
 type TransportTls struct {
   config     *TransportTlsFactory
   net_config *NetworkConfig
-  socket     *tls.Conn
+  socket     net.Conn
+  tlssocket  *tls.Conn
 
   wait     sync.WaitGroup
   shutdown chan int
@@ -82,48 +88,56 @@ func init() {
   rand.Seed(time.Now().UnixNano())
 }
 
-func NewTransportTlsFactory(config_path string, config map[string]interface{}) (TransportFactory, error) {
+func (r *TransportTlsRegistrar) NewFactory(name string, config_path string, config map[string]interface{}) (TransportFactory, error) {
   var err error
 
   ret := &TransportTlsFactory{
+    transport: name,
     hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
   }
 
-  if err = PopulateConfig(ret, config_path, config); err != nil {
-    return nil, err
-  }
-
-  if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
-    log.Printf("Loading client ssl certificate: %s and %s\n", ret.SSLCertificate, ret.SSLKey)
-    cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
-    if err != nil {
-      return nil, errors.New(fmt.Sprintf("Failed loading client ssl certificate: %s", err))
-    }
-    ret.tls_config.Certificates = []tls.Certificate{cert}
-  }
-
-  if len(ret.SSLCA) > 0 {
-    log.Printf("Setting trusted CA from file: %s\n", ret.SSLCA)
-    ret.tls_config.RootCAs = x509.NewCertPool()
-
-    pemdata, err := ioutil.ReadFile(ret.SSLCA)
-    if err != nil {
-      return nil, errors.New(fmt.Sprintf("Failure reading CA certificate: %s", err))
+  // Only allow SSL configurations if this is "tls"
+  if name == "tls" {
+    if err = PopulateConfig(ret, config_path, config); err != nil {
+      return nil, err
     }
 
-    block, _ := pem.Decode(pemdata)
-    if block == nil {
-      return nil, errors.New("Failed to decode CA certificate data")
-    }
-    if block.Type != "CERTIFICATE" {
-      return nil, errors.New(fmt.Sprintf("Specified CA certificate is not a certificate: %s", ret.SSLCA))
+    if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
+      log.Printf("Loading client ssl certificate: %s and %s\n", ret.SSLCertificate, ret.SSLKey)
+      cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
+      if err != nil {
+        return nil, errors.New(fmt.Sprintf("Failed loading client ssl certificate: %s", err))
+      }
+      ret.tls_config.Certificates = []tls.Certificate{cert}
     }
 
-    cert, err := x509.ParseCertificate(block.Bytes)
-    if err != nil {
-      return nil, errors.New(fmt.Sprintf("Failed to parse CA certificate: %s", err))
+    if len(ret.SSLCA) > 0 {
+      log.Printf("Setting trusted CA from file: %s\n", ret.SSLCA)
+      ret.tls_config.RootCAs = x509.NewCertPool()
+
+      pemdata, err := ioutil.ReadFile(ret.SSLCA)
+      if err != nil {
+        return nil, errors.New(fmt.Sprintf("Failure reading CA certificate: %s", err))
+      }
+
+      block, _ := pem.Decode(pemdata)
+      if block == nil {
+        return nil, errors.New("Failed to decode CA certificate data")
+      }
+      if block.Type != "CERTIFICATE" {
+        return nil, errors.New(fmt.Sprintf("Specified CA certificate is not a certificate: %s", ret.SSLCA))
+      }
+
+      cert, err := x509.ParseCertificate(block.Bytes)
+      if err != nil {
+        return nil, errors.New(fmt.Sprintf("Failed to parse CA certificate: %s", err))
+      }
+      ret.tls_config.RootCAs.AddCert(cert)
     }
-    ret.tls_config.RootCAs.AddCert(cert)
+  } else {
+    if err := ReportUnusedConfig(config_path, config); err != nil {
+      return nil, err
+    }
   }
 
   return ret, nil
@@ -160,15 +174,23 @@ func (t *TransportTls) Connect() error {
     return fmt.Errorf("Failure connecting to %s: %s", address, err)
   }
 
-  // Set the tlsconfig server name for server validation (since Go 1.3)
-  t.config.tls_config.ServerName = host
+  // Now wrap in TLS if this is the "tls" transport
+  if t.config.transport == "tls" {
+    // Set the tlsconfig server name for server validation (since Go 1.3)
+    t.config.tls_config.ServerName = host
 
-  t.socket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
-  t.socket.SetDeadline(time.Now().Add(t.net_config.Timeout))
-  err = t.socket.Handshake()
-  if err != nil {
-    t.socket.Close()
-    return fmt.Errorf("TLS Handshake failure with %s: %s", address, err)
+    t.tlssocket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
+    t.tlssocket.SetDeadline(time.Now().Add(t.net_config.Timeout))
+    err = t.tlssocket.Handshake()
+    if err != nil {
+      t.tlssocket.Close()
+      tcpsocket.Close()
+      return fmt.Errorf("TLS Handshake failure with %s: %s", address, err)
+    }
+
+    t.socket = t.tlssocket
+  } else {
+    t.socket = tcpsocket
   }
 
   log.Printf("Connected with %s\n", address)
@@ -332,6 +354,12 @@ func (t *TransportTls) Disconnect() {
   // Send shutdown request
   close(t.shutdown)
   t.wait.Wait()
+
+  // If tls, shutdown tls socket first
+  if t.config.transport == "tls" {
+    t.tlssocket.Close()
+  }
+
   t.socket.Close()
 }
 
@@ -388,4 +416,10 @@ func (w *TransportTlsWrap) SetReadDeadline(t time.Time) error {
 
 func (w *TransportTlsWrap) SetWriteDeadline(t time.Time) error {
   return w.tcpsocket.SetWriteDeadline(t)
+}
+
+// Register the transports
+func init() {
+  RegisterTransport(&TransportTlsRegistrar{}, "tcp")
+  RegisterTransport(&TransportTlsRegistrar{}, "tls")
 }

@@ -35,6 +35,14 @@ func RegisterCodec(registrar CodecRegistrar, name string) {
   codecRegistry[name] = registrar
 }
 
+func AvailableCodecs() (ret []string) {
+  ret = make([]string, 0, len(codecRegistry))
+  for k := range codecRegistry {
+    ret = append(ret, k)
+  }
+  return
+}
+
 func NewCodecFactory(config_path string, name string, config map[string]interface{}) (CodecFactory, error) {
   if registrar, ok := codecRegistry[name]; ok {
     return registrar.NewFactory(config_path, config)

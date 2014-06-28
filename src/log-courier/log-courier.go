@@ -49,7 +49,24 @@ func RegisterShutdownSignal(signal os.Signal) {
 }
 
 func main() {
+  var list_supported bool
+
+  flag.BoolVar(&list_supported, "list-supported", false, "List supported transports and codecs")
+
   flag.Parse()
+
+  if list_supported {
+    log.Printf("Available transports:\n")
+    for _, transport := range AvailableTransports() {
+      log.Printf("\t%s", transport)
+    }
+
+    log.Printf("Available codecs:\n")
+    for _, codec := range AvailableCodecs() {
+      log.Printf("\t%s", codec)
+    }
+    return
+  }
 
   if *cpuprofile != "" {
     f, err := os.Create(*cpuprofile)

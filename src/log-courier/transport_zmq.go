@@ -39,6 +39,8 @@ const (
 )
 
 type TransportZmqFactory struct {
+  transport string
+
   CurveServerkey string `json:"curve server key"`
   CurvePublickey string `json:"curve public key"`
   CurveSecretkey string `json:"curve secret key"`
@@ -68,35 +70,41 @@ type ZMQMessage struct {
   final bool
 }
 
-func init() {
-  NewTransportZmqFactoryIfAvailable = NewTransportZmqFactory
+type TransportZmqRegistrar struct {
 }
 
-func NewTransportZmqFactory(config_path string, config map[string]interface{}) (TransportFactory, error) {
+func (r *TransportZmqRegistrar) NewFactory(name string, config_path string, config map[string]interface{}) (TransportFactory, error) {
   var err error
 
   ret := &TransportZmqFactory{
+    transport: name,
     hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
   }
 
-  if err = PopulateConfig(ret, config_path, config); err != nil {
-    return nil, err
-  }
+  if name == "curvezmq" {
+    if err = PopulateConfig(ret, config_path, config); err != nil {
+      return nil, err
+    }
 
-  if len(ret.CurveServerkey) == 0 {
-    return nil, errors.New(fmt.Sprintf("Option %scurve server key is required", config_path))
-  } else if len(ret.CurveServerkey) != 40 || !Z85Validate(ret.CurveServerkey) {
-    return nil, errors.New(fmt.Sprintf("Option %scurve server key must be a valid 40 character Z85 encoded string", config_path))
-  }
-  if len(ret.CurvePublickey) == 0 {
-    return nil, errors.New(fmt.Sprintf("Option %scurve public key is required", config_path))
-  } else if len(ret.CurvePublickey) != 40 || !Z85Validate(ret.CurvePublickey) {
-    return nil, errors.New(fmt.Sprintf("Option %scurve public key must be a valid 40 character Z85 encoded string", config_path))
-  }
-  if len(ret.CurveSecretkey) == 0 {
-    return nil, errors.New(fmt.Sprintf("Option %scurve secret key is required", config_path))
-  } else if len(ret.CurveSecretkey) != 40 || !Z85Validate(ret.CurveSecretkey) {
-    return nil, errors.New(fmt.Sprintf("Option %scurve secret key must be a valid 40 character Z85 encoded string", config_path))
+    if len(ret.CurveServerkey) == 0 {
+      return nil, errors.New(fmt.Sprintf("Option %scurve server key is required", config_path))
+    } else if len(ret.CurveServerkey) != 40 || !Z85Validate(ret.CurveServerkey) {
+      return nil, errors.New(fmt.Sprintf("Option %scurve server key must be a valid 40 character Z85 encoded string", config_path))
+    }
+    if len(ret.CurvePublickey) == 0 {
+      return nil, errors.New(fmt.Sprintf("Option %scurve public key is required", config_path))
+    } else if len(ret.CurvePublickey) != 40 || !Z85Validate(ret.CurvePublickey) {
+      return nil, errors.New(fmt.Sprintf("Option %scurve public key must be a valid 40 character Z85 encoded string", config_path))
+    }
+    if len(ret.CurveSecretkey) == 0 {
+      return nil, errors.New(fmt.Sprintf("Option %scurve secret key is required", config_path))
+    } else if len(ret.CurveSecretkey) != 40 || !Z85Validate(ret.CurveSecretkey) {
+      return nil, errors.New(fmt.Sprintf("Option %scurve secret key must be a valid 40 character Z85 encoded string", config_path))
+    }
+  } else {
+    if err := ReportUnusedConfig(config_path, config); err != nil {
+      return nil, err
+    }
   }
 
   ret.context, err = zmq.NewContext()
@@ -119,14 +127,7 @@ func (t *TransportZmq) Connect() (err error) {
     return
   }
 
-  // Configure CurveMQ security
-  if err = t.dealer.SetCurveServerkey(t.config.CurveServerkey); err != nil {
-    return
-  }
-  if err = t.dealer.SetCurvePublickey(t.config.CurvePublickey); err != nil {
-    return
-  }
-  if err = t.dealer.SetCurveSecretkey(t.config.CurveSecretkey); err != nil {
+  if err = ZMQConfigureSocket(t.dealer, t.config); err != nil {
     return
   }
 
@@ -524,4 +525,9 @@ func (t *TransportZmq) Disconnect() {
   t.bridge_chan <- []byte(zmq_signal_shutdown)
   t.wait.Wait()
   t.dealer.Close()
+}
+
+// Register the transport
+func init() {
+  RegisterTransport(&TransportZmqRegistrar{}, "zmq")
 }

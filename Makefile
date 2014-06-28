@@ -6,7 +6,12 @@ TAGS :=
 BINS := bin/log-courier
 TESTS := spec/courier_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
 
-ifeq ($(with),zmq)
+ifeq ($(with),zmq3)
+TAGS := $(TAGS) zmq zmq_3_x
+BINS := $(BINS) bin/genkey
+TESTS := $(TESTS) spec/zmq_spec.rb
+endif
+ifeq ($(with),zmq4)
 TAGS := $(TAGS) zmq zmq_4_x
 BINS := $(BINS) bin/genkey
 TESTS := $(TESTS) spec/zmq_spec.rb
