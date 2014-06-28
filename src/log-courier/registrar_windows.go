@@ -25,11 +25,12 @@ import (
   "os"
 )
 
-func (r *Registrar) WriteRegistry(state map[string]*FileState, path string) {
-  tmp := path + ".new"
-  file, err := os.Create(tmp)
+func (r *Registrar) WriteRegistry(state map[string]*FileState) {
+  fname := r.persistdir + string(os.PathSeparator) + r.statefile
+  tname := fname + ".new"
+  file, err := os.Create(tname)
   if err != nil {
-    log.Printf("Failed to open .log-courier.new for writing: %s\n", err)
+    log.Printf("Failed to open %s for writing: %s\n", tname, err)
     return
   }
 
@@ -37,25 +38,15 @@ func (r *Registrar) WriteRegistry(state map[string]*FileState, path string) {
   encoder.Encode(state)
   file.Close()
 
-  old := path + ".old"
-
-  if _, err = os.Stat(old); err != nil && os.IsNotExist(err) {
+  if _, err = os.Stat(fname); err != nil && os.IsNotExist(err) {
   } else {
-    err = os.Remove(old)
+    err = os.Remove(fname)
     if err != nil {
-      log.Printf("Registrar save problem: Failed to delete backup file: %s\n", err)
+      log.Printf("Registrar save problem: Failed to delete previous file: %s\n", err)
     }
   }
 
-  if _, err = os.Stat(path); err != nil && os.IsNotExist(err) {
-  } else {
-    err = os.Rename(path, old)
-    if err != nil {
-      log.Printf("Registrar save problem: Failed to perform backup: %s\n", err)
-    }
-  }
-
-  err = os.Rename(tmp, path)
+  err = os.Rename(tname, fname)
   if err != nil {
     log.Printf("Registrar save problem: Failed to move the new file into place: %s\n", err)
   }

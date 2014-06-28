@@ -109,6 +109,7 @@ func (pi *ProspectorInfo) Update(fileinfo os.FileInfo, iteration uint32) {
 
 type Prospector struct {
   shutdown         *LogCourierShutdown
+  generalconfig    *GeneralConfig
   fileconfigs      []FileConfig
   prospectorindex  map[string]*ProspectorInfo
   prospectors      map[*ProspectorInfo]*ProspectorInfo
@@ -118,10 +119,11 @@ type Prospector struct {
   registrar_events []RegistrarEvent
 }
 
-func NewProspector(fileconfigs []FileConfig, shutdown *LogCourierShutdown) *Prospector {
+func NewProspector(config *Config, shutdown *LogCourierShutdown) *Prospector {
   return &Prospector{
     shutdown: shutdown,
-    fileconfigs: fileconfigs,
+    generalconfig: &config.General,
+    fileconfigs: config.Files,
     from_beginning: *from_beginning,
     registrar_events: make([]RegistrarEvent, 0),
   }
@@ -215,7 +217,7 @@ ProspectLoop:
 
     // Defer next scan for a bit
     select {
-      case <-time.After(10 * time.Second): // TODO: Make this tunable
+      case <-time.After(p.generalconfig.ProspectInterval):
       case <-p.shutdown.Signal():
         break ProspectLoop
     }

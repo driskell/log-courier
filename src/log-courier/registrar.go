@@ -70,12 +70,16 @@ type Registrar struct {
   shutdown       *LogCourierShutdown
   registrar_chan chan []RegistrarEvent
   references     int
+  persistdir     string
+  statefile      string
 }
 
-func NewRegistrar(shutdown *LogCourierShutdown) *Registrar {
+func NewRegistrar(persistdir string, shutdown *LogCourierShutdown) *Registrar {
   return &Registrar{
     shutdown: shutdown,
     registrar_chan: make(chan []RegistrarEvent, 16),
+    persistdir: persistdir,
+    statefile:  ".log-courier",
   }
 }
 
@@ -109,7 +113,7 @@ func (r *Registrar) Register(state map[*ProspectorInfo]*FileState) {
       state_json[*value.Source] = value
     }
 
-    r.WriteRegistry(state_json, ".log-courier")
+    r.WriteRegistry(state_json)
   }
 
   log.Printf("Registrar shutdown complete\n")

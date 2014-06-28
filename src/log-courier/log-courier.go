@@ -145,14 +145,12 @@ func (lc *LogCourier) StartCourier(config_file string) {
   }
 
   // Load the previous log file locations now, for use in prospector
+  // TODO: Should this be part of Registrar? We pass registrar into Prospector
   load_resume := make(map[string]*FileState)
-  history, err := os.Open(".log-courier")
+  state_path := lc.config.General.PersistDir + string(os.PathSeparator) + ".log-courier"
+  history, err := os.Open(state_path)
   if err == nil {
-    wd, err := os.Getwd()
-    if err != nil {
-      wd = ""
-    }
-    log.Printf("Loading registrar data from %s/.log-courier\n", wd)
+    log.Printf("Loading registrar data from %s\n", state_path)
 
     decoder := json.NewDecoder(history)
     decoder.Decode(&load_resume)
@@ -168,7 +166,7 @@ func (lc *LogCourier) StartCourier(config_file string) {
   }
 
   // Initialise pipeline
-  prospector := NewProspector(lc.config.Files, lc.shutdown.Add())
+  prospector := NewProspector(lc.config, lc.shutdown.Add())
 
   spooler := NewSpooler(*spool_size, *idle_timeout, lc.shutdown.Add())
 
@@ -177,7 +175,7 @@ func (lc *LogCourier) StartCourier(config_file string) {
     log.Fatalf("The publisher failed to initialise: %s\n", err)
   }
 
-  registrar := NewRegistrar(lc.shutdown.Add())
+  registrar := NewRegistrar(lc.config.General.PersistDir, lc.shutdown.Add())
 
   // Start the pipeline
   go prospector.Prospect(prospector_resume, registrar, event_chan)

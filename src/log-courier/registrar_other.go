@@ -27,11 +27,13 @@ import (
   "os"
 )
 
-func (r *Registrar) WriteRegistry(state map[string]*FileState, path string) {
+func (r *Registrar) WriteRegistry(state map[string]*FileState) {
   // Open tmp file, write, flush, rename
-  file, err := os.Create(".log-courier.new")
+  fname := r.persistdir + string(os.PathSeparator) + r.statefile
+  tname := fname + ".new"
+  file, err := os.Create(tname)
   if err != nil {
-    log.Printf("Failed to open .log-courier.new for writing: %s\n", err)
+    log.Printf("Failed to open %s for writing: %s\n", tname, err)
     return
   }
   defer file.Close()
@@ -39,7 +41,7 @@ func (r *Registrar) WriteRegistry(state map[string]*FileState, path string) {
   encoder := json.NewEncoder(file)
   encoder.Encode(state)
 
-  err = os.Rename(".log-courier.new", path)
+  err = os.Rename(tname, fname)
   if err != nil {
     log.Printf("Registrar save problem: Failed to move the new file into place: %s\n", err)
   }
