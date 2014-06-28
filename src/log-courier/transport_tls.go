@@ -160,6 +160,9 @@ func (t *TransportTls) Connect() error {
     return fmt.Errorf("Failure connecting to %s: %s", address, err)
   }
 
+  // Set the tlsconfig server name for server validation (since Go 1.3)
+  t.config.tls_config.ServerName = host
+
   t.socket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
   t.socket.SetDeadline(time.Now().Add(t.net_config.Timeout))
   err = t.socket.Handshake()

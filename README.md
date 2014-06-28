@@ -44,7 +44,28 @@ Otherwise, simply run make standalone as follows.
     cd log-courier
     make
 
-(If you receive errors, try using gmake instead.)
+The log-courier program can then be found in the 'bin' folder.
+
+*If you receive errors, try using `gmake` instead.*
+
+### Generating Certificates and Keys
+
+To quickly create a self-signed SSL certificate, run `make selfsigned`. This
+will prompt for the certificate information; most of which can be anything or
+left as the default except 'Common Name', that should be set to the exact same
+hostname you will use in log-courier's 'servers' configuration. This ensures
+that certificate validation passes successfully. You will find the generated
+`.key` and `.crt` files inside the 'bin' folder.
+
+*If you will be connecting via IP address, the certificate will need extra
+information to pass validation. Open spec/lib/openssl.cnf in your favourite
+editor and look for `#subjectAltName = IP:1.1.1.1`, remove the pound prefix,
+set the IP address, and run `make selfsigned` again.*
+
+A genkey utility can also be found in 'bin' when ZMQ support is built. This
+utility will generate CurveZMQ key pair configurations for you.
+
+### LogStash 1.4.x Integration
 
 The log-courier program can then be found in the 'bin' folder.
 

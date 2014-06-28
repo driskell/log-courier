@@ -1,4 +1,4 @@
-.PHONY: all test go-check clean
+.PHONY: go-check all test clean selfsigned
 
 export GOPATH := ${PWD}
 
@@ -25,6 +25,10 @@ all: $(BINS)
 test: all vendor/bundle/.GemfileModT
 	bundle exec rspec $(TESTS)
 
+selfsigned:
+	openssl req -config spec/lib/openssl.cnf -new -keyout bin/selfsigned.key -out bin/selfsigned.csr
+	openssl x509 -extfile spec/lib/openssl.cnf -extensions extensions_section -req -days 365 -in bin/selfsigned.csr -signkey bin/selfsigned.key -out bin/selfsigned.crt
+
 # Only update bundle if Gemfile changes
 vendor/bundle/.GemfileModT: Gemfile
 	bundle install --path vendor/bundle
@@ -32,7 +36,7 @@ vendor/bundle/.GemfileModT: Gemfile
 
 go-check:
 	@go version > /dev/null || (echo "Go not found. You need to install go: http://golang.org/doc/install"; false)
-	@go version | grep -q 'go version go1.[12]' || (echo "Go version 1.1.x or 1.2.x required, you have a version of go that is not supported."; false)
+	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.1.x, 1.2.x or 1.3.x required, you have a version of go that is not supported."; false)
 
 clean:
 	go clean -i ./...
