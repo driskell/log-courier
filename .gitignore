@@ -5,6 +5,7 @@ pkg
 spec/tmp
 src/github.com
 vendor
+.Makefile.tags
 .bundle
 .log-courier
 .vagrant
