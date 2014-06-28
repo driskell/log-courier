@@ -6,6 +6,7 @@ Gem::Specification.new do |gem|
   gem.homepage          = 'https://github.com/driskell/log-courier'
   gem.authors           = ['Jason Woods']
   gem.email             = ['devel@jasonwoods.me.uk']
+  gem.licenses          = ['Apache']
   gem.rubyforge_project = 'nowarning'
   gem.require_paths     = ['lib']
   gem.files             = %w(
