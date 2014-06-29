@@ -46,7 +46,15 @@ Otherwise, simply run make standalone as follows.
 
 The log-courier program can then be found in the 'bin' folder.
 
+A genkey utility can also be found in 'bin' when ZMQ support is built. This
+utility will generate CurveZMQ key pair configurations for you.
+
 *If you receive errors, try using `gmake` instead.*
+
+### Logstash Integration
+
+Details instructions on how to integrate with Logstash can be found on the
+[Logstash Integration](docs/LogstashIntegration.md) page.
 
 ### Generating Certificates and Keys
 
@@ -62,16 +70,6 @@ information to pass validation. Open spec/lib/openssl.cnf in your favourite
 editor and look for `#subjectAltName = IP:1.1.1.1`, remove the pound prefix,
 set the IP address, and run `make selfsigned` again.*
 
-A genkey utility can also be found in 'bin' when ZMQ support is built. This
-utility will generate CurveZMQ key pair configurations for you.
-
-### LogStash 1.4.x Integration
-
-The log-courier program can then be found in the 'bin' folder.
-
-A genkey utility can also be found in the 'bin' folder when ZMQ support is
-built. This utility will generate CurveZMQ key pair configurations for you.
-
 ## Command Line Options
 
 The log-courier command accepts the following command line options.
@@ -85,6 +83,5 @@ The log-courier command accepts the following command line options.
 
 ## Documentation
 
-* [Logstash Integration](docs/LogstashIntegration.md)
 * [Configuration](docs/Configuration.md)
 * [Change Log](docs/ChangeLog.md)
