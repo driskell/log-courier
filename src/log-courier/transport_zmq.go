@@ -127,7 +127,7 @@ func (t *TransportZmq) Connect() (err error) {
     return
   }
 
-  if err = ZMQConfigureSocket(t.dealer, t.config); err != nil {
+  if err = t.configureSocket(); err != nil {
     return
   }
 

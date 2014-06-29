@@ -2,18 +2,16 @@
 
 package main
 
-import zmq "github.com/alecthomas/gozmq"
-
-func ZMQConfigureSocket(dealer *zmq.Socket, config *TransportZmqFactory) (err error) {
-  if config.transport == "curvezmq" {
+func (t *TransportZmq) configureSocket() (err error) {
+  if t.config.transport == "curvezmq" {
     // Configure CurveMQ security
-    if err = dealer.SetCurveServerkey(config.CurveServerkey); err != nil {
+    if err = t.dealer.SetCurveServerkey(t.config.CurveServerkey); err != nil {
       return
     }
-    if err = dealer.SetCurvePublickey(config.CurvePublickey); err != nil {
+    if err = t.dealer.SetCurvePublickey(t.config.CurvePublickey); err != nil {
       return
     }
-    if err = dealer.SetCurveSecretkey(config.CurveSecretkey); err != nil {
+    if err = t.dealer.SetCurveSecretkey(t.config.CurveSecretkey); err != nil {
       return
     }
   }
