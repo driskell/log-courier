@@ -40,6 +40,7 @@ module LogCourier
     def initialize(options = {})
       @options = {
         :logger                => nil,
+        :transport             => 'tls',
         :port                  => 0,
         :address               => '0.0.0.0',
         :ssl_certificate       => nil,
@@ -52,12 +53,14 @@ module LogCourier
 
       @logger = @options[:logger]
 
-      [:ssl_certificate, :ssl_key].each do |k|
-        raise "[LogCourierServerTLS] '#{k}' is required" if @options[k].nil?
-      end
+      if @options[:transport] == 'tls'
+        [:ssl_certificate, :ssl_key].each do |k|
+          raise "[LogCourierServerTLS] '#{k}' is required" if @options[k].nil?
+        end
 
-      if @options[:ssl_verify] and (not @options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
-        raise '[LogCourierServerTLS] Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
+        if @options[:ssl_verify] and (not @options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
+          raise '[LogCourierServerTLS] Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
+        end
       end
 
       begin
@@ -67,28 +70,32 @@ module LogCourier
         # TCPServer#addr == [ address_family, port, address, address ]
         @port = @tcp_server.addr[1]
 
-        ssl = OpenSSL::SSL::SSLContext.new
-        ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
-        ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
+        if @options[:transport] == 'tls'
+          ssl = OpenSSL::SSL::SSLContext.new
+          ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
+          ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
 
-        if @options[:ssl_verify]
-          cert_store = OpenSSL::X509::Store.new
+          if @options[:ssl_verify]
+            cert_store = OpenSSL::X509::Store.new
 
-          # Load the system default certificate path to the store
-          cert_store.set_default_paths if @options[:ssl_verify_default_ca]
+            # Load the system default certificate path to the store
+            cert_store.set_default_paths if @options[:ssl_verify_default_ca]
 
-          if File.directory?(@options[:ssl_verify_ca])
-            cert_store.add_path(@options[:ssl_verify_ca])
-          else
-            cert_store.add_file(@options[:ssl_verify_ca])
+            if File.directory?(@options[:ssl_verify_ca])
+              cert_store.add_path(@options[:ssl_verify_ca])
+            else
+              cert_store.add_file(@options[:ssl_verify_ca])
+            end
+
+            ssl.cert_store = cert_store
+
+            ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
           end
 
-          ssl.cert_store = cert_store
-
-          ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+          @server = OpenSSL::SSL::SSLServer.new(@tcp_server, ssl)
+        else
+          @server = @tcp_server
         end
-
-        @ssl_server = OpenSSL::SSL::SSLServer.new(@tcp_server, ssl)
       rescue => e
         raise "[LogCourierServerTLS] Failed to initialise: #{e}"
       end
@@ -100,7 +107,7 @@ module LogCourier
       loop do
         # This means ssl accepting is single-threaded.
         begin
-          client = @ssl_server.accept
+          client = @server.accept
         rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
           # Handshake failure or other issue
           peer = Thread.current['LogCourierPeer'] || 'unknown'
