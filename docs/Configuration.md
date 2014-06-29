@@ -243,3 +243,20 @@ options can be provided if the specified codec allows.
 A single codec is available at this time.
 
 * [Multiline](codecs/Multiline.md)
+
+## `"includes"`
+
+*Array of Fileglobs. Optional*
+
+Includes should be an array of additional file group configuration files to
+read. Each configuration file should follow the format of the `"files"` section.
+
+	"includes": [ "/etc/log-courier/conf.d/*.conf" ]
+
+A file at `/etc/log-courier/conf.d/apache.conf` could then contain the
+following.
+
+	[ {
+		"paths": [ "/var/log/httpd/access.log" ],
+		"fields": [ "type": "access_log" ]
+	} ]
