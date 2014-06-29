@@ -27,6 +27,11 @@ RSpec.configure do |config|
     FileUtils.rm_r(TEMP_PATH) if File.directory?(TEMP_PATH)
     Dir.mkdir(TEMP_PATH)
     Dir.mkdir(File.join(TEMP_PATH, 'logs'))
+    puts "\n\n"
+  end
+
+  config.after :all do
+    FileUtils.rm_r(TEMP_PATH) if File.directory?(TEMP_PATH)
   end
 
   config.before :each do
@@ -34,10 +39,6 @@ RSpec.configure do |config|
   end
 
   config.after :each do
-    puts "\n\n"
-  end
-
-  config.before :all do
     puts "\n\n"
   end
 end
