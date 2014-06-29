@@ -506,4 +506,56 @@ describe 'log-courier' do
       i += 1
     end
   end
+
+  it 'should accept globs of configuration files to include' do
+    # Create a set of files
+    f1 = create_log
+    f2 = create_log
+    f3 = create_log
+
+    config = <<-config
+    {
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ]
+      },
+      "files": [
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-0" ]
+        }
+      ],
+      "includes": [ "#{TEMP_PATH}/include-*" ]
+    }
+    config
+
+    includes = []
+
+    begin
+      [1,2].each do |i|
+        include_file = File.open(File.join(TEMP_PATH, 'include-' + i.to_s), 'w')
+        includes.push include_file.path
+        include_file.puts <<-config
+        [
+          {
+            "paths": [ "#{TEMP_PATH}/logs/log-#{i.to_s}" ]
+          }
+        ]
+        config
+        include_file.close
+      end
+
+      startup config: config
+
+      f1.log 5_000
+      f2.log 5_000
+      f3.log 5_000
+
+      # Receive and check
+      receive_and_check
+    ensure
+      includes.each do |include_file|
+        File.unlink(include_file) if File.file?(include_file)
+      end
+    end
+  end
 end
