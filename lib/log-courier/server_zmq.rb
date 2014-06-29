@@ -25,6 +25,7 @@ module LogCourier
     def initialize(options = {})
       @options = {
         :logger           => nil,
+        :transport        => 'zmq',
         :port             => 0,
         :address          => '0.0.0.0',
         :curve_secret_key => nil
@@ -32,19 +33,23 @@ module LogCourier
 
       @logger = @options[:logger]
 
-      raise '[LogCourierServerZMQ] \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
+      if @options[:transport] == 'zmq'
+        raise '[LogCourierServerZMQ] \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
 
-      raise '[LogCourierServerZMQ] \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
+        raise '[LogCourierServerZMQ] \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
+      end
 
       begin
         @context = ZMQ::Context.new
         @socket = @context.socket(ZMQ::REP)
 
-        rc = @socket.setsockopt(ZMQ::CURVE_SERVER, 1)
-        raise ZMQError, 'setsockopt CURVE_SERVER failure' unless ZMQ::Util.resultcode_ok?(rc)
+        if @options[:transport] == 'zmq'
+          rc = @socket.setsockopt(ZMQ::CURVE_SERVER, 1)
+          raise ZMQError, 'setsockopt CURVE_SERVER failure' unless ZMQ::Util.resultcode_ok?(rc)
 
-        rc = @socket.setsockopt(ZMQ::CURVE_SECRETKEY, @options[:curve_secret_key])
-        raise ZMQError, 'setsockopt CURVE_SECRETKEY failure' unless ZMQ::Util.resultcode_ok?(rc)
+          rc = @socket.setsockopt(ZMQ::CURVE_SECRETKEY, @options[:curve_secret_key])
+          raise ZMQError, 'setsockopt CURVE_SECRETKEY failure' unless ZMQ::Util.resultcode_ok?(rc)
+        end
 
         rc = @socket.bind('tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s))
         raise ZMQError, 'bind failure' unless ZMQ::Util.resultcode_ok?(rc)

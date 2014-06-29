@@ -37,14 +37,14 @@ module LogCourier
       @logger = @options[:logger]
 
       case @options[:transport]
-      when 'tls'
+      when 'tcp', 'tls'
         require 'log-courier/server_tls'
         @server = ServerTls.new(@options)
-      when 'zmq'
+      when 'plainzmq', 'zmq'
         require 'log-courier/server_zmq'
         @server = ServerZmq.new(@options)
       else
-        raise '[LogCourierServer] \'transport\' must be either tls or zmq'
+        raise '[LogCourierServer] \'transport\' must be tcp, tls, plainzmq or zmq'
       end
 
       # Grab the port back
