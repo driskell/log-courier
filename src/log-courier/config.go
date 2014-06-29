@@ -39,9 +39,10 @@ const (
 )
 
 type Config struct {
-  General GeneralConfig `json:"general"`
-  Network NetworkConfig `json:"network"`
-  Files   []FileConfig  `json:"files"`
+  General  GeneralConfig `json:"general"`
+  Network  NetworkConfig `json:"network"`
+  Files    []FileConfig  `json:"files"`
+  Includes []string      `json:"includes"`
 }
 
 type GeneralConfig struct {
@@ -73,31 +74,32 @@ type FileConfig struct {
   DeadTime time.Duration `json:"dead time"`
 }
 
-func LoadConfig(path string) (config *Config, err error) {
-  config_file, err := os.Open(path)
-  if err != nil {
-    err = errors.New(fmt.Sprintf("Failed to open config file: %s", err))
-    return
-  }
-  defer config_file.Close()
+func ReadConfig(path string) (stripped *bytes.Buffer, err error) {
+  stripped = new(bytes.Buffer)
 
-  fi, err := config_file.Stat()
+  file, err := os.Open(path)
   if err != nil {
-    err = errors.New(fmt.Sprintf("Stat failed for config file: %s", err))
+    err = fmt.Errorf("Failed to open config file: %s", err)
     return
   }
-  if fi.Size() > (10 << 20) {
-    err = errors.New(fmt.Sprintf("Config file too large (%s)", fi))
+  defer file.Close()
+
+  stat, err := file.Stat()
+  if err != nil {
+    err = fmt.Errorf("Stat failed for config file: %s", err)
+    return
+  }
+  if stat.Size() > (10 << 20) {
+    err = fmt.Errorf("Config file too large (%s)", stat.Size())
     return
   }
 
   // Strip comments and read config into stripped
   var s, p, state int
-  var stripped bytes.Buffer
   {
     // Pull the config file into memory
-    buffer := make([]byte, fi.Size())
-    _, err = config_file.Read(buffer)
+    buffer := make([]byte, stat.Size())
+    _, err = file.Read(buffer)
     if err != nil {
       return
     }
@@ -169,17 +171,47 @@ func LoadConfig(path string) (config *Config, err error) {
     stripped.Write(buffer[s:p])
   }
 
-  // Pull the entire structure into config
-  raw_config := make(map[string]interface{})
-  err = json.Unmarshal(stripped.Bytes(), &raw_config)
-  if err != nil {
+  return
+}
+
+func LoadConfig(path string) (config *Config, err error) {
+  var data *bytes.Buffer
+
+  // Read the main config file
+  if data, err = ReadConfig(path); err != nil {
     return
   }
 
-  // Populate configuration - reporting errors on spelling mistakes etc
+  // Pull the entire structure into raw_config
+  raw_config := make(map[string]interface{})
+  if err = json.Unmarshal(data.Bytes(), &raw_config); err != nil {
+    return
+  }
+
+  // Populate configuration - reporting errors on spelling mistakes etc.
   config = &Config{}
   if err = PopulateConfig(config, "/", raw_config); err != nil {
     return
+  }
+
+  // Iterate includes
+  // TODO: Parse includes as Globs, not as individual files
+  for _, include := range config.Includes {
+    // Read the include
+    if data, err = ReadConfig(include); err != nil {
+      return
+    }
+
+    // Pull the structure into raw_include
+    raw_include := make([]interface{}, 0)
+    if err = json.Unmarshal(data.Bytes(), &raw_include); err != nil {
+      return
+    }
+
+    // Append to configuration
+    if err = PopulateConfigSlice(reflect.ValueOf(config).Elem().FieldByName("Files"), fmt.Sprintf("%s/", include), raw_include); err != nil {
+      return
+    }
   }
 
   // Fill in defaults for GeneralConfig
@@ -287,19 +319,8 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
       if value.Type().AssignableTo(field.Type()) {
         field.Set(value)
       } else if value.Kind() == reflect.Slice && field.Kind() == reflect.Slice {
-        elemtype := field.Type().Elem()
-        if elemtype.Kind() == reflect.Struct {
-          for j := 0; j < value.Len(); j++ {
-            item := reflect.New(elemtype)
-            if err = PopulateConfig(item.Interface(), fmt.Sprintf("%s%s[%d]/", config_path, tag, j), value.Index(j).Elem().Interface().(map[string]interface{})); err != nil {
-              return
-            }
-            field.Set(reflect.Append(field, item.Elem()))
-          }
-        } else {
-          for j := 0; j < value.Len(); j++ {
-            field.Set(reflect.Append(field, value.Index(j).Elem()))
-          }
+        if err = PopulateConfigSlice(field, fmt.Sprintf("%s%s/", config_path, tag), raw_config[tag].([]interface{})); err != nil {
+          return
         }
       } else if value.Kind() == reflect.Map && field.Kind() == reflect.Map {
         if field.IsNil() {
@@ -352,6 +373,24 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
     return
   }
   return ReportUnusedConfig(config_path, raw_config)
+}
+
+func PopulateConfigSlice(field reflect.Value, config_path string, raw_config []interface{}) (err error) {
+  elemtype := field.Type().Elem()
+  if elemtype.Kind() == reflect.Struct {
+    for j := 0; j < len(raw_config); j++ {
+      item := reflect.New(elemtype)
+      if err = PopulateConfig(item.Interface(), fmt.Sprintf("%s[%d]/", config_path, j), raw_config[j].(map[string]interface{})); err != nil {
+        return
+      }
+      field.Set(reflect.Append(field, item.Elem()))
+    }
+  } else {
+    for j := 0; j < len(raw_config); j++ {
+      field.Set(reflect.Append(field, reflect.ValueOf(raw_config[j])))
+    }
+  }
+  return
 }
 
 func ReportUnusedConfig(config_path string, raw_config map[string]interface{}) (err error) {
