@@ -132,8 +132,8 @@ func NewLogCourier() *LogCourier {
 func (lc *LogCourier) StartCourier(config_file string) {
   var err error
 
-  lc.config, err = LoadConfig(config_file)
-  if err != nil {
+  lc.config = NewConfig()
+  if err = lc.config.Load(config_file); err != nil {
     log.Fatalf("%s. Please check your configuration", err)
   }
 

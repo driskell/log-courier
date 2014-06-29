@@ -26,6 +26,7 @@ import (
   "fmt"
   "math"
   "os"
+  "path/filepath"
   "reflect"
   "time"
 )
@@ -74,7 +75,11 @@ type FileConfig struct {
   DeadTime time.Duration `json:"dead time"`
 }
 
-func ReadConfig(path string) (stripped *bytes.Buffer, err error) {
+func NewConfig() *Config {
+  return &Config{}
+}
+
+func (c *Config) loadFile(path string) (stripped *bytes.Buffer, err error) {
   stripped = new(bytes.Buffer)
 
   file, err := os.Open(path)
@@ -174,11 +179,13 @@ func ReadConfig(path string) (stripped *bytes.Buffer, err error) {
   return
 }
 
-func LoadConfig(path string) (config *Config, err error) {
+// TODO: Change (config *Config) to (c *Config) - not done yet to prevent
+//       feature merge conflicts
+func (config *Config) Load(path string) (err error) {
   var data *bytes.Buffer
 
   // Read the main config file
-  if data, err = ReadConfig(path); err != nil {
+  if data, err = config.loadFile(path); err != nil {
     return
   }
 
@@ -189,28 +196,34 @@ func LoadConfig(path string) (config *Config, err error) {
   }
 
   // Populate configuration - reporting errors on spelling mistakes etc.
-  config = &Config{}
   if err = PopulateConfig(config, "/", raw_config); err != nil {
     return
   }
 
   // Iterate includes
-  // TODO: Parse includes as Globs, not as individual files
-  for _, include := range config.Includes {
-    // Read the include
-    if data, err = ReadConfig(include); err != nil {
+  for _, glob := range config.Includes {
+    // Glob the path
+    var matches []string
+    if matches, err = filepath.Glob(glob); err != nil {
       return
     }
 
-    // Pull the structure into raw_include
-    raw_include := make([]interface{}, 0)
-    if err = json.Unmarshal(data.Bytes(), &raw_include); err != nil {
-      return
-    }
+    for _, include := range matches {
+      // Read the include
+      if data, err = config.loadFile(include); err != nil {
+        return
+      }
 
-    // Append to configuration
-    if err = PopulateConfigSlice(reflect.ValueOf(config).Elem().FieldByName("Files"), fmt.Sprintf("%s/", include), raw_include); err != nil {
-      return
+      // Pull the structure into raw_include
+      raw_include := make([]interface{}, 0)
+      if err = json.Unmarshal(data.Bytes(), &raw_include); err != nil {
+        return
+      }
+
+      // Append to configuration
+      if err = PopulateConfigSlice(reflect.ValueOf(config).Elem().FieldByName("Files"), fmt.Sprintf("%s/", include), raw_include); err != nil {
+        return
+      }
     }
   }
 
@@ -280,6 +293,9 @@ func LoadConfig(path string) (config *Config, err error) {
 
   return
 }
+
+// TODO: The below to be combined into (c *Config) - not done yet to prevent
+//       conflicts during pending feature merges
 
 // TODO: This should be pushed to a wrapper or module
 //       It populated dynamic configuration, automatically converting time.Duration etc.
