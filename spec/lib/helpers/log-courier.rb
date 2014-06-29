@@ -59,6 +59,7 @@ shared_context 'Helpers_Log_Courier' do
     @config.close
 
     # Start LSF
+    # NOTE: What happens to stdout since we don't read it? Or does Go log go to stderr?
     @log_courier = IO.popen("bin/log-courier -config #{@config.path}" + (args.empty? ? '' : ' ' + args), mode)
 
     # Needs some time to startup - to ensure when we create new files AFTER this, they are not detected during startup
@@ -67,10 +68,22 @@ shared_context 'Helpers_Log_Courier' do
 
   def shutdown
     return if @log_courier.nil?
+    terminated = false
     # Send SIGTERM
     Process.kill('TERM', @log_courier.pid)
-    # Close appears to implicitly wait too
-    @log_courier.close
+    begin
+      Timeout.timeout(30) do
+        # Close will wait for the process to terminate
+        @log_courier.close
+      end
+      terminated = true
+    rescue Timeout::Error
+      puts "Log-courier hung during shutdown, sending KILL signal"
+    end
+    unless terminated
+      Process.kill('KILL', @log_courier.pid)
+      @log_courier.close
+    end
     @log_courier = nil
   end
 end
