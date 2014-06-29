@@ -114,6 +114,10 @@ ReadLoop:
           } else if age := time.Since(last_read_time); age > h.fileconfig.DeadTime {
             // if last_read_time was more than dead time, this file is probably dead. Stop watching it.
             log.Printf("Stopping harvest of %s; last change was %v ago\n", h.path, age-(age%time.Second))
+            // TODO: We should return a Stat() from before we attempted to read
+            // In prospector we use that for comparison to resume
+            // This prevents a potential race condition if we stop just as the
+            // file is modified with extra lines...
             return h.codec.Teardown(), false
           }
 
