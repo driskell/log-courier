@@ -1,5 +1,23 @@
 # Change Log
 
+## 0.10
+
+*29th June 2014*
+
+* Support for Go 1.3 (#3)
+* Additional configuration files can be imported by the main configuration file
+using the new `"includes"` section which is an array of Fileglobs. (#5)
+* Added `make selfsigned` to allow quick generation of SSL certificates for
+testing
+* A `"general"` section has been added to the configuration file
+* The directory to store the .log-courier persistence file can now be
+configured under `"general"/"persist directory"`.
+* How often the filesystem is examined for log file appearances or movements
+can now be configured under `"general"/"prospect interval"`.
+* Fix gem build instructions (#6)
+* Fix instances where a file entry has multiple `"fields"` entries results in
+all fields having the same value as the first field. (#4)
+
 ## 0.9
 
 *14th June 2014*

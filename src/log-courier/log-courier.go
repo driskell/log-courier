@@ -49,7 +49,16 @@ func RegisterShutdownSignal(signal os.Signal) {
 }
 
 func main() {
+  var flag_version bool
+
+  flag.BoolVar(&flag_version, "version", false, "show version information")
+
   flag.Parse()
+
+  if flag_version {
+    log.Printf("Log Courier version 0.10\n")
+    return
+  }
 
   if *cpuprofile != "" {
     f, err := os.Create(*cpuprofile)
