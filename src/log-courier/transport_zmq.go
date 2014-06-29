@@ -81,7 +81,7 @@ func (r *TransportZmqRegistrar) NewFactory(name string, config_path string, conf
     hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
   }
 
-  if name == "curvezmq" {
+  if name == "zmq" {
     if err = PopulateConfig(ret, config_path, config); err != nil {
       return nil, err
     }
@@ -529,5 +529,5 @@ func (t *TransportZmq) Disconnect() {
 
 // Register the transport
 func init() {
-  RegisterTransport(&TransportZmqRegistrar{}, "zmq")
+  RegisterTransport(&TransportZmqRegistrar{}, "plainzmq")
 }

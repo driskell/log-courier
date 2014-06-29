@@ -89,15 +89,27 @@ what transport and security to use.
 ### `"transport"`
 
 *String. Optional. Default: "tls"  
-Available values: "tls", "zmq"*
+Available values: "tcp", "tls", "plainzmq", "zmq"*
+
+*Depending on how log-courier was built, some transports may not be available.
+Run `log-courer -list-supported` to see the list of transports available in
+a specific build of log-courier.*
 
 Sets the transport to use when sending logs to the servers. "tls" is recommended
 for most users and connects to a single server at random, reconnecting to a
-different server at random each time the connection fails. "zmq" connects to all
-specified servers and load balances events across them.
+different server at random each time the connection fails. "curvezmq" connects
+to all specified servers and load balances events across them.
 
-"zmq" is only available if Log Courier was compiled with the "with=zmq" option, which
-requires ZeroMQ >= 4.0.0 to be installed.
+"tcp" and "plainzmq" are **insecure** equivalents to "tls" and "zmq"
+respectively that do not encrypt traffic or authenticate the identity of
+servers. These should only be used on trusted internal networks. If in doubt,
+use the secure authenticating transports "tls" and "zmq".
+
+"plainzmq" is only available if Log Courier was compiled with the "with=zmq3" or
+"with=zmq4" options.
+
+"zmq" is only available if Log Courier was compiled with the "with=zmq4"
+option.
 
 ### `"servers"`
 
@@ -109,39 +121,40 @@ used.
 
 ### `"ssl ca"`
 
-*Filepath. Required with "transport" = "tls". Ignored otherwise*
+*Filepath. Required with "transport" = "tls". Not allowed otherwise*
 
 Path to a PEM encoded certificate file to use to verify the connected server.
 
 ### `"ssl certificate"`
 
-*Filepath. Optional with "transport" = "tls". Ignored otherwise*
+*Filepath. Optional with "transport" = "tls". Not allowed otherwise*
 
 Path to a PEM encoded certificate file to use as the client certificate.
 
 ### `"ssl key"`
 
-*Filepath. Required with "ssl certificate". Ignored when "transport" != "tls"*
+*Filepath. Required with "ssl certificate". Not allowed when "transport" !=
+"tls"*
 
 Path to a PEM encoded private key to use with the client certificate.
 
 ### `"curve server key"`
 
-*String. Required with "transport" = "zmq". Ignored otherwise*
+*String. Required with "transport" = "zmq". Not allowed otherwise*
 
 The Z85-encoded public key that corresponds to the server(s) secret key. Used
 to verify the server(s) identity. This can be generated using the Genkey tool.
 
 ### `"curve public key"`
 
-*String. Required with "transport" = "zmq". Ignored otherwise*
+*String. Required with "transport" = "zmq". Not allowed otherwise*
 
 The Z85-encoded public key for this client. This can be generated using the
 Genkey tool.
 
 ### `"curve secret key"`
 
-*String. Required with "transport" = "zmq". Ignored otherwise*
+*String. Required with "transport" = "zmq". Not allowed otherwise*
 
 The Z85-encoded secret key for this client. This can be generated using the
 Genkey tool.
@@ -229,6 +242,10 @@ ensure old log files are not kept open preventing deletion.
 ### `"codec"`
 
 *Codec configuration. Optional. Default: `{ "name": "plain" }`*
+
+*Depending on how log-courier was built, some codecs may not be available. Run
+`log-courer -list-supported` to see the list of codecs available in a specific
+build of log-courier.*
 
 The specified codec will receive the lines read from the log stream and perform
 any decoding necessary to generate events. The plain codec does nothing and

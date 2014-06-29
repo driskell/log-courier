@@ -3,7 +3,7 @@
 package main
 
 func (t *TransportZmq) configureSocket() (err error) {
-  if t.config.transport == "curvezmq" {
+  if t.config.transport == "zmq" {
     // Configure CurveMQ security
     if err = t.dealer.SetCurveServerkey(t.config.CurveServerkey); err != nil {
       return
@@ -20,5 +20,5 @@ func (t *TransportZmq) configureSocket() (err error) {
 
 // Register the transport
 func init() {
-  RegisterTransport(&TransportZmqRegistrar{}, "curvezmq")
+  RegisterTransport(&TransportZmqRegistrar{}, "zmq")
 }
