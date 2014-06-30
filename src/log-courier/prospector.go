@@ -203,8 +203,8 @@ ProspectLoop:
           continue
         }
         delete(p.prospectorindex, info.file)
+        p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
       }
-      p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
     }
 
     // Flush the accumulated registrar events
@@ -301,6 +301,9 @@ func (p *Prospector) scan(path string, config *FileConfig, registrar_chan chan<-
       if !info.identity.SameAs(fileinfo) {
         // Keep the old file in case we find it again shortly
         info.orphaned = true
+
+        // Remove the orphan from registrar to prevent its updated overwriting saved state of this new file
+        p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
 
         if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
           // This file was renamed from another file we know - link the same harvester channel as the old file
