@@ -146,7 +146,7 @@ func (p *Prospector) Prospect(resume map[string]*ProspectorInfo, registrar *Regi
 
   // Handle any "-" (stdin) paths - but only once
   stdin_started := false
-  for _, config := range p.fileconfigs {
+  for config_k, config := range p.fileconfigs {
     for i, path := range config.Paths {
       if path == "-" {
         if !stdin_started {
@@ -165,7 +165,7 @@ func (p *Prospector) Prospect(resume map[string]*ProspectorInfo, registrar *Regi
           p.prospectors[info] = info
 
           // Start the harvester
-          p.startHarvesterWithOffset(info, output, &config, 0)
+          p.startHarvesterWithOffset(info, output, &p.fileconfigs[config_k], 0)
 
           stdin_started = true
         }
@@ -182,10 +182,10 @@ ProspectLoop:
     newlastscan := time.Now()
     p.iteration++ // Overflow is allowed
 
-    for _, config := range p.fileconfigs {
+    for config_k, config := range p.fileconfigs {
       for _, path := range config.Paths {
         // Scan - flag false so new files always start at beginning
-        p.scan(path, &config, registrar_chan, output)
+        p.scan(path, &p.fileconfigs[config_k], registrar_chan, output)
       }
     }
 
