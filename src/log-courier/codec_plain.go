@@ -51,15 +51,22 @@ func (c *CodecPlain) Teardown() int64 {
   return c.last_offset
 }
 
-func (c *CodecPlain) Event(start_offset int64, end_offset int64, line uint64, text *string) {
+func (c *CodecPlain) Event(start_offset int64, end_offset int64, line uint64, text *string) bool {
   c.last_offset = end_offset
 
   // Ship downstream
-  c.output <- &FileEvent{
+  event := &FileEvent{
     ProspectorInfo: c.info,
     Offset:         end_offset,
     Event:          NewEvent(c.fileconfig.Fields, &c.path, start_offset, line, text),
   }
+  select {
+  case <-c.info.ShutdownSignal():
+    return false
+  case c.output <- event:
+  }
+
+  return true
 }
 
 // Register the codec as default

@@ -137,7 +137,9 @@ ReadLoop:
     h.offset += int64(bytesread)
 
     // Codec is last - it saves harvester state for us such as offset for resume
-    h.codec.Event(line_offset, h.offset, line, text)
+    if !h.codec.Event(line_offset, h.offset, line, text) {
+      break
+    }
   }
 
   log.Printf("Harvester shutdown for %s complete\n", h.path)

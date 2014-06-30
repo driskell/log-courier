@@ -26,7 +26,7 @@ type CodecFactory interface {
 
 type Codec interface {
   Teardown() int64
-  Event(int64, int64, uint64, *string)
+  Event(int64, int64, uint64, *string) bool
 }
 
 var codecRegistry map[string]CodecRegistrar = make(map[string]CodecRegistrar)
