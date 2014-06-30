@@ -60,7 +60,7 @@ type TransportTls struct {
   socket     *tls.Conn
 
   wait     sync.WaitGroup
-  shutdown chan int
+  shutdown chan interface{}
 
   send_chan chan []byte
   recv_chan chan interface{}
@@ -174,9 +174,11 @@ func (t *TransportTls) Connect() error {
   log.Printf("Connected with %s\n", address)
 
   // Signal channels
-  t.shutdown = make(chan int, 1)
+  t.shutdown = make(chan interface{}, 1)
   t.send_chan = make(chan []byte, 1)
-  t.recv_chan = make(chan interface{}, 1)
+  // Buffer of two for recv_chan since both routines may send an error to it
+  // First error we get back initiates disconnect, thus we must not block routines
+  t.recv_chan = make(chan interface{}, 2)
   t.can_send = make(chan int, 1)
 
   // Start with a send
