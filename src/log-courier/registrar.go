@@ -110,6 +110,9 @@ func (r *Registrar) Register(state map[*ProspectorInfo]*FileState) {
 
     state_json := make(map[string]*FileState, len(state))
     for _, value := range state {
+      //if _, ok := state_json[*value.Source]; ok {
+        // Panic? We should never allow this
+      //}
       state_json[*value.Source] = value
     }
 
