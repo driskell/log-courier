@@ -393,27 +393,30 @@ describe 'log-courier' do
       },
       "files": [
         {
-          "paths": [ "-" ],
+          "paths": [ "#{TEMP_PATH}/logs/log-0" ],
           "fields": { "first": "value", "second": "more" }
+        },
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-1" ],
+          "fields": { "first": "different", "second": "something" }
         }
       ]
     }
     config
 
-    5_000.times do |i|
-      @log_courier.puts "stdin line test #{i}"
-    end
+    f1 = create_log.log 5_000
+    f2 = create_log.log 5_000
 
     # Receive and check
-    i = 0
-    host = Socket.gethostname
-    receive_and_check(total: 5_000) do |e|
-      expect(e['message']).to eq "stdin line test #{i}"
-      expect(e['first']).to eq "value"
-      expect(e['second']).to eq "more"
-      expect(e['host']).to eq host
-      expect(e['file']).to eq '-'
-      i += 1
+    receive_and_check(total: 10_000) do |e|
+      if e['file'] == "#{TEMP_PATH}/logs/log-0"
+        expect(e['first']).to eq "value"
+        expect(e['second']).to eq "more"
+      else
+        expect(e['file']).to eq "#{TEMP_PATH}/logs/log-1"
+        expect(e['first']).to eq "different"
+        expect(e['second']).to eq "something"
+      end
     end
   end
 
