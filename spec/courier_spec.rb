@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'rbconfig'
 require 'lib/common'
 require 'lib/helpers/log-courier'
 
@@ -195,70 +196,47 @@ describe 'log-courier' do
     receive_and_check check_file: false
   end
 
-  it 'should handle log rotation and resume correctly even if rotated file moves out of scope' do
-    startup
+  it 'should handle log rotation and resume correctly with symlinked log files', :unless => RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/ do
+    config = <<-config
+    {
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ]
+      },
+      "files": [
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log" ],
+          "dead time": "15s"
+        }
+      ]
+    }
+    config
+
+    startup config: config
 
     f1 = create_log.log 100
+    File.symlink f1.path, "#{TEMP_PATH}/logs/log"
 
-    # Receive and check
-    receive_and_check
-
-    # Rotate f1 - this renames it and returns a new file same name as original f1
-    # But prefix it so it moves out of scope
-    f2 = rotate(f1, 'r')
-
-    # Write to both - but a bit more to the out of scope
-    f1.log 5_000
-    f2.log 5_000
-    f1.log 5_000
-
-    # Receive and check
-    receive_and_check
-
-    # Restart
-    shutdown
-    startup
-
-    # Write some more but remember f1 should be out of scope
-    f1.log(5000).skip 5000
-    f2.log 5000
-
-    # Receive and check - but not file as it will be different now
+    # Receive and check, but do not check file due to symlink
     receive_and_check check_file: false
-  end
 
-  it 'should handle log rotation and resume correctly even if rotated file updated' do
-    startup
-
-    f1 = create_log.log 100
-
-    # Receive and check
-    receive_and_check
-
-    # Rotate f1 - this renames it and returns a new file same name as original f1
-    f2 = rotate(f1)
-
-    # Write to both
-    f1.log 5_000
-    f2.log 5_000
-
-    # Make the last update go to f1 (the rotated file)
-    # This can throw up an edge case we used to fail
-    sleep 10
-    f1.log 5_000
-
-    # Receive and check
-    receive_and_check
+    4.times do
+      f2 = rotate(f1)
+      f1 = f2
+      f2.log 1_024
+      sleep 10
+      f1.log 1_024
+      receive_and_check check_file: false
+    end
 
     # Restart
     shutdown
-    startup
+    startup config: config, args: '-from-beginning=true'
 
     # Write some more
-    f1.log 5_000
-    f2.log 5_000
+    f1.log 1_000
 
-    # Receive and check - but not file as it will be different now
+    # Receive and check
     receive_and_check check_file: false
   end
 
