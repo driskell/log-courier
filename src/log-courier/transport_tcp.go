@@ -45,10 +45,10 @@ const (
   socket_interval_seconds = 1
 )
 
-type TransportTlsRegistrar struct {
+type TransportTcpRegistrar struct {
 }
 
-type TransportTlsFactory struct {
+type TransportTcpFactory struct {
   transport string
 
   SSLCertificate string `json:"ssl certificate"`
@@ -59,8 +59,8 @@ type TransportTlsFactory struct {
   tls_config  tls.Config
 }
 
-type TransportTls struct {
-  config     *TransportTlsFactory
+type TransportTcp struct {
+  config     *TransportTcpFactory
   net_config *NetworkConfig
   socket     net.Conn
   tlssocket  *tls.Conn
@@ -77,8 +77,8 @@ type TransportTls struct {
 // If tls.Conn.Write ever times out it will permanently break, so we cannot use SetWriteDeadline with it directly
 // So we wrap the given tcpsocket and handle the SetWriteDeadline there and check shutdown signal and loop
 // Inside tls.Conn the Write blocks until it finishes and everyone is happy
-type TransportTlsWrap struct {
-  transport *TransportTls
+type TransportTcpWrap struct {
+  transport *TransportTcp
   tcpsocket net.Conn
 
   net.Conn
@@ -88,10 +88,10 @@ func init() {
   rand.Seed(time.Now().UnixNano())
 }
 
-func (r *TransportTlsRegistrar) NewFactory(name string, config_path string, config map[string]interface{}) (TransportFactory, error) {
+func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, config map[string]interface{}) (TransportFactory, error) {
   var err error
 
-  ret := &TransportTlsFactory{
+  ret := &TransportTcpFactory{
     transport: name,
     hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
   }
@@ -143,11 +143,11 @@ func (r *TransportTlsRegistrar) NewFactory(name string, config_path string, conf
   return ret, nil
 }
 
-func (f *TransportTlsFactory) NewTransport(config *NetworkConfig) (Transport, error) {
-  return &TransportTls{config: f, net_config: config}, nil
+func (f *TransportTcpFactory) NewTransport(config *NetworkConfig) (Transport, error) {
+  return &TransportTcp{config: f, net_config: config}, nil
 }
 
-func (t *TransportTls) Connect() error {
+func (t *TransportTcp) Connect() error {
   // Pick a random server from the list.
   hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]
   submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
@@ -179,7 +179,7 @@ func (t *TransportTls) Connect() error {
     // Set the tlsconfig server name for server validation (since Go 1.3)
     t.config.tls_config.ServerName = host
 
-    t.tlssocket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
+    t.tlssocket = tls.Client(&TransportTcpWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
     t.tlssocket.SetDeadline(time.Now().Add(t.net_config.Timeout))
     err = t.tlssocket.Handshake()
     if err != nil {
@@ -215,7 +215,7 @@ func (t *TransportTls) Connect() error {
   return nil
 }
 
-func (t *TransportTls) sender() {
+func (t *TransportTcp) sender() {
 SendLoop:
   for {
     select {
@@ -242,7 +242,7 @@ SendLoop:
   t.wait.Done()
 }
 
-func (t *TransportTls) receiver() {
+func (t *TransportTcp) receiver() {
   var err error
   var shutdown bool
   header := make([]byte, 8)
@@ -280,7 +280,7 @@ func (t *TransportTls) receiver() {
   t.wait.Done()
 }
 
-func (t *TransportTls) receiverRead(data []byte) (error, bool) {
+func (t *TransportTcp) receiverRead(data []byte) (error, bool) {
   received := 0
 
 RecvLoop:
@@ -311,18 +311,18 @@ RecvLoop:
   return nil, true
 }
 
-func (t *TransportTls) setChan(set chan<- int) {
+func (t *TransportTcp) setChan(set chan<- int) {
   select {
   case set <- 1:
   default:
   }
 }
 
-func (t *TransportTls) CanSend() <-chan int {
+func (t *TransportTcp) CanSend() <-chan int {
   return t.can_send
 }
 
-func (t *TransportTls) Write(signature string, message []byte) (err error) {
+func (t *TransportTcp) Write(signature string, message []byte) (err error) {
   var write_buffer *bytes.Buffer
   write_buffer = bytes.NewBuffer(make([]byte, 0, len(signature)+4+len(message)))
 
@@ -342,11 +342,11 @@ func (t *TransportTls) Write(signature string, message []byte) (err error) {
   return nil
 }
 
-func (t *TransportTls) Read() <-chan interface{} {
+func (t *TransportTcp) Read() <-chan interface{} {
   return t.recv_chan
 }
 
-func (t *TransportTls) Disconnect() {
+func (t *TransportTcp) Disconnect() {
   if t.shutdown == nil {
     return
   }
@@ -363,11 +363,11 @@ func (t *TransportTls) Disconnect() {
   t.socket.Close()
 }
 
-func (w *TransportTlsWrap) Read(b []byte) (int, error) {
+func (w *TransportTcpWrap) Read(b []byte) (int, error) {
   return w.tcpsocket.Read(b)
 }
 
-func (w *TransportTlsWrap) Write(b []byte) (n int, err error) {
+func (w *TransportTcpWrap) Write(b []byte) (n int, err error) {
   length := 0
 
 RetrySend:
@@ -394,32 +394,32 @@ RetrySend:
   } /* loop forever */
 }
 
-func (w *TransportTlsWrap) Close() error {
+func (w *TransportTcpWrap) Close() error {
   return w.tcpsocket.Close()
 }
 
-func (w *TransportTlsWrap) LocalAddr() net.Addr {
+func (w *TransportTcpWrap) LocalAddr() net.Addr {
   return w.tcpsocket.LocalAddr()
 }
 
-func (w *TransportTlsWrap) RemoteAddr() net.Addr {
+func (w *TransportTcpWrap) RemoteAddr() net.Addr {
   return w.tcpsocket.RemoteAddr()
 }
 
-func (w *TransportTlsWrap) SetDeadline(t time.Time) error {
+func (w *TransportTcpWrap) SetDeadline(t time.Time) error {
   return w.tcpsocket.SetDeadline(t)
 }
 
-func (w *TransportTlsWrap) SetReadDeadline(t time.Time) error {
+func (w *TransportTcpWrap) SetReadDeadline(t time.Time) error {
   return w.tcpsocket.SetReadDeadline(t)
 }
 
-func (w *TransportTlsWrap) SetWriteDeadline(t time.Time) error {
+func (w *TransportTcpWrap) SetWriteDeadline(t time.Time) error {
   return w.tcpsocket.SetWriteDeadline(t)
 }
 
 // Register the transports
 func init() {
-  RegisterTransport(&TransportTlsRegistrar{}, "tcp")
-  RegisterTransport(&TransportTlsRegistrar{}, "tls")
+  RegisterTransport(&TransportTcpRegistrar{}, "tcp")
+  RegisterTransport(&TransportTcpRegistrar{}, "tls")
 }

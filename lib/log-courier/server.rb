@@ -38,8 +38,8 @@ module LogCourier
 
       case @options[:transport]
       when 'tcp', 'tls'
-        require 'log-courier/server_tls'
-        @server = ServerTls.new(@options)
+        require 'log-courier/server_tcp'
+        @server = ServerTcp.new(@options)
       when 'plainzmq', 'zmq'
         require 'log-courier/server_zmq'
         @server = ServerZmq.new(@options)
