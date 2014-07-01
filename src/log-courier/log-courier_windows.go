@@ -1,4 +1,4 @@
-// +build !windows
+// +build windows
 
 /*
 * Copyright 2014 Jason Woods.
@@ -25,9 +25,8 @@ import (
 )
 
 func (lc *LogCourier) registerSignals() {
-	// *nix systems support SIGTERM so handle shutdown on that too
-	signal.Notify(lc.shutdown_chan, os.Interrupt, syscall.SIGTERM)
+	// Windows onyl supports os.Interrupt
+	signal.Notify(lc.shutdown_chan, os.Interrupt)
 
-	// *nix has SIGHUP for reload
-	signal.Notify(lc.reload_chan, syscall.SIGHUP)
+	// No reload signal for Windows - implementation will have to wait
 }

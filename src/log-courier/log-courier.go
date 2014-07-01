@@ -24,74 +24,14 @@ import (
   "flag"
   "log"
   "os"
-  "os/signal"
   "runtime/pprof"
   "sync"
   "time"
 )
 
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-var spool_size = flag.Uint64("spool-size", 1024, "Maximum number of events to spool before a flush is forced.")
-var idle_timeout = flag.Duration("idle-flush-time", 5*time.Second, "Maximum time to wait for a full spool before flushing anyway")
-var config_file = flag.String("config", "", "The config file to load")
-var use_syslog = flag.Bool("log-to-syslog", false, "Log to syslog instead of stdout")
-var from_beginning = flag.Bool("from-beginning", false, "Read new files from the beginning, instead of the end")
-
-var shutdown_signals []os.Signal
-
-func init() {
-  // All systems support os.Interrupt, so add to shutdown signals
-  RegisterShutdownSignal(os.Interrupt)
-}
-
-func RegisterShutdownSignal(signal os.Signal) {
-  shutdown_signals = append(shutdown_signals, signal)
-}
-
 func main() {
-  var flag_version bool
-
-  flag.BoolVar(&flag_version, "version", false, "show version information")
-
-  flag.Parse()
-
-  if flag_version {
-    log.Printf("Log Courier version 0.10\n")
-    return
-  }
-
-  if *cpuprofile != "" {
-    f, err := os.Create(*cpuprofile)
-    if err != nil {
-      log.Fatal(err)
-    }
-    pprof.StartCPUProfile(f)
-    go func() {
-      time.Sleep(60 * time.Second)
-      pprof.StopCPUProfile()
-      panic("done")
-    }()
-  }
-
-  if *use_syslog {
-    configureSyslog()
-  } else {
-    log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-  }
-
-  log.Printf("Log Courier starting up\n")
-
-  shutdown := make(chan os.Signal, 1)
-  signal.Notify(shutdown, shutdown_signals...)
-
   logcourier := NewLogCourier()
-  logcourier.StartCourier(*config_file)
-
-  select {
-    case <-shutdown:
-      log.Printf("Log Courier shutting down\n")
-      logcourier.Shutdown()
-  }
+  logcourier.Run()
 }
 
 type LogCourierShutdown struct {
@@ -127,8 +67,14 @@ func (lcs *LogCourierShutdown) Wait() {
 }
 
 type LogCourier struct {
-  shutdown *LogCourierShutdown
-  config   *Config
+  shutdown       *LogCourierShutdown
+  config         *Config
+  shutdown_chan  chan os.Signal
+  reload_chan    chan os.Signal
+  spool_size     uint64
+  idle_timeout   time.Duration
+  config_file    string
+  from_beginning bool
 }
 
 func NewLogCourier() *LogCourier {
@@ -138,20 +84,19 @@ func NewLogCourier() *LogCourier {
   return ret
 }
 
-func (lc *LogCourier) StartCourier(config_file string) {
+func (lc *LogCourier) Run() {
   var err error
 
-  lc.config = NewConfig()
-  if err = lc.config.Load(config_file); err != nil {
-    log.Fatalf("%s. Please check your configuration", err)
+  lc.parseFlags()
+
+  log.Printf("Log Courier starting up\n")
+
+  if !lc.loadConfig() {
+    log.Fatalf("Startup failed. Please check the configuration.\n")
   }
 
   event_chan := make(chan *FileEvent, 16)
   publisher_chan := make(chan []*FileEvent, 1)
-
-  if len(lc.config.Files) == 0 {
-    log.Fatalf("No paths given. What files do you want to watch?")
-  }
 
   // Load the previous log file locations now, for use in prospector
   // TODO: Should this be part of Registrar? We pass registrar into Prospector
@@ -175,9 +120,9 @@ func (lc *LogCourier) StartCourier(config_file string) {
   }
 
   // Initialise pipeline
-  prospector := NewProspector(lc.config, lc.shutdown.Add())
+  prospector := NewProspector(lc.config, lc.from_beginning, lc.shutdown.Add())
 
-  spooler := NewSpooler(*spool_size, *idle_timeout, lc.shutdown.Add())
+  spooler := NewSpooler(lc.spool_size, lc.idle_timeout, lc.shutdown.Add())
 
   publisher := NewPublisher(&lc.config.Network, lc.shutdown.Add())
   if err := publisher.Init(); err != nil {
@@ -194,9 +139,91 @@ func (lc *LogCourier) StartCourier(config_file string) {
   go publisher.Publish(publisher_chan, registrar)
 
   go registrar.Register(registrar_persist)
+
+  lc.shutdown_chan = make(chan os.Signal, 1)
+  lc.reload_chan = make(chan os.Signal, 1)
+  lc.registerSignals()
+
+  select {
+    case <-lc.shutdown_chan:
+      log.Printf("Log Courier shutting down\n")
+      lc.cleanShutdown()
+    case <-lc.reload_chan:
+      lc.reloadConfig()
+  }
 }
 
-func (lc *LogCourier) Shutdown() {
+func (lc *LogCourier) parseFlags() {
+  var version bool
+  var config_test bool
+  var cpu_profile string
+  var syslog bool
+
+  flag.BoolVar(&version, "version", false, "show version information")
+  flag.BoolVar(&config_test, "config-test", false, "Test the configuration")
+  flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
+  flag.BoolVar(&syslog, "log-to-syslog", false, "Log to syslog instead of stdout")
+
+  // TODO - These should be in the configuration file
+  flag.Uint64Var(&lc.spool_size, "spool-size", 1024, "Maximum number of events to spool before a flush is forced.")
+  flag.DurationVar(&lc.idle_timeout, "idle-flush-time", 5*time.Second, "Maximum time to wait for a full spool before flushing anyway")
+  flag.StringVar(&lc.config_file, "config", "", "The config file to load")
+  flag.BoolVar(&lc.from_beginning, "from-beginning", false, "Read new files from the beginning, instead of the end")
+
+  flag.Parse()
+
+  if version {
+    log.Fatalf("Log Courier version 0.10\n")
+  }
+
+  if config_test {
+    if lc.loadConfig() {
+      log.Fatalf("Configuration OK\n")
+    }
+    log.Fatalf("Configuration test failed!\n")
+  }
+
+  if syslog {
+    lc.configureSyslog()
+  } else {
+    log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+  }
+
+  if cpu_profile != "" {
+    log.Printf("Starting CPU profiler\n")
+    f, err := os.Create(cpu_profile)
+    if err != nil {
+      log.Fatal(err)
+    }
+    pprof.StartCPUProfile(f)
+    go func() {
+      time.Sleep(60 * time.Second)
+      pprof.StopCPUProfile()
+      panic("CPU profile completed")
+    }()
+  }
+}
+
+func (lc *LogCourier) loadConfig() bool {
+  lc.config = NewConfig()
+  if err := lc.config.Load(lc.config_file); err != nil {
+    log.Printf("%s\n", err)
+    return false
+  }
+
+  if len(lc.config.Files) == 0 {
+    log.Printf("No file groups were found in the configuration.\n")
+    return false
+  }
+
+  return true
+}
+
+func (lc *LogCourier) reloadConfig() {
+
+}
+
+func (lc *LogCourier) cleanShutdown() {
   lc.shutdown.Shutdown()
   lc.shutdown.Wait()
 }

@@ -119,12 +119,12 @@ type Prospector struct {
   registrar_events []RegistrarEvent
 }
 
-func NewProspector(config *Config, shutdown *LogCourierShutdown) *Prospector {
+func NewProspector(config *Config, from_beginning bool, shutdown *LogCourierShutdown) *Prospector {
   return &Prospector{
     shutdown: shutdown,
     generalconfig: &config.General,
     fileconfigs: config.Files,
-    from_beginning: *from_beginning,
+    from_beginning: from_beginning,
     registrar_events: make([]RegistrarEvent, 0),
   }
 }
