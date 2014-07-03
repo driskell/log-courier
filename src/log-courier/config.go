@@ -241,22 +241,15 @@ func (config *Config) Load(path string) (err error) {
   }
   transport_name := config.Network.Transport
 
-  if transport_name == "tls" {
-    if config.Network.transport, err = NewTransportTlsFactory("/network/transport/", config.Network.Unused); err != nil {
-      return
-    }
-  } else if transport_name == "zmq" {
-    // TODO: Either make ZMQ compilation mandatory or use a proper factory pattern
-    if NewTransportZmqFactoryIfAvailable == nil {
-      err = errors.New(fmt.Sprintf("This binary was not built with 'zmq' transport support"))
-      return
-    }
-    if config.Network.transport, err = NewTransportZmqFactoryIfAvailable("/network/transport/", config.Network.Unused); err != nil {
+  var factory TransportFactory
+  if factory, err = NewTransportFactory("/network/", transport_name, config.Network.Unused); err == nil {
+    if factory != nil {
+      config.Network.transport = factory
+    } else {
+      err = errors.New(fmt.Sprintf("Unrecognised transport '%s'", transport_name))
       return
     }
   } else {
-    err = errors.New(fmt.Sprintf("Unrecognised transport '%s'", transport_name))
-
     return
   }
 

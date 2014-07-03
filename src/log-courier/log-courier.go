@@ -195,12 +195,14 @@ SignalLoop:
 
 func (lc *LogCourier) parseFlags() {
   var version bool
+  var list_supported bool
   var config_test bool
   var cpu_profile string
   var syslog bool
 
   flag.BoolVar(&version, "version", false, "show version information")
   flag.BoolVar(&config_test, "config-test", false, "Test the configuration")
+  flag.BoolVar(&list_supported, "list-supported", false, "List supported transports and codecs")
   flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
   flag.BoolVar(&syslog, "log-to-syslog", false, "Log to syslog instead of stdout")
 
@@ -221,6 +223,19 @@ func (lc *LogCourier) parseFlags() {
       log.Fatalf("Configuration OK\n")
     }
     log.Fatalf("Configuration test failed!\n")
+  }
+
+  if list_supported {
+    log.Printf("Available transports:\n")
+    for _, transport := range AvailableTransports() {
+      log.Printf("\t%s", transport)
+    }
+
+    log.Printf("Available codecs:\n")
+    for _, codec := range AvailableCodecs() {
+      log.Printf("\t%s", codec)
+    }
+    return
   }
 
   if syslog {

@@ -4,18 +4,23 @@ export GOPATH := ${PWD}
 
 TAGS :=
 BINS := bin/log-courier
-TESTS := spec/courier_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
+TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
 
-ifeq ($(with),zmq)
+ifeq ($(with),zmq3)
+TAGS := $(TAGS) zmq zmq_3_x
+BINS := $(BINS) bin/genkey
+TESTS := $(TESTS) spec/plainzmq_spec.rb
+endif
+ifeq ($(with),zmq4)
 TAGS := $(TAGS) zmq zmq_4_x
 BINS := $(BINS) bin/genkey
-TESTS := $(TESTS) spec/zmq_spec.rb
+TESTS := $(TESTS) spec/plainzmq_spec.rb spec/zmq_spec.rb
 endif
 
-ifneq ($(skiptags),yes)
+ifneq ($(implyclean),yes)
 LASTTAGS := $(shell cat .Makefile.tags 2>/dev/null)
 ifneq ($(LASTTAGS),$(TAGS))
-IMPLYCLEAN := $(shell $(MAKE) skiptags=yes clean)
+IMPLYCLEAN := $(shell $(MAKE) implyclean=yes clean)
 SAVETAGS := $(shell echo "$(TAGS)" >.Makefile.tags)
 endif
 endif
@@ -40,7 +45,9 @@ go-check:
 
 clean:
 	go clean -i ./...
+ifneq ($(implyclean),yes)
 	rm -rf vendor/bundle
+endif
 
 .SECONDEXPANSION:
 bin/%: $$(wildcard src/%/*.go) | go-check
