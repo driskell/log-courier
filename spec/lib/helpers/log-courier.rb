@@ -51,12 +51,7 @@ shared_context 'Helpers_Log_Courier' do
 
     puts "Starting with configuration:\n#{config}"
 
-    if @config.closed?
-      # Reopen the config and rewrite it
-      @config.reopen(@config.path, 'w')
-    end
-    @config.puts config
-    @config.close
+    _write_config config
 
     # Start LSF
     # NOTE: What happens to stdout since we don't read it? Or does Go log go to stderr?
@@ -64,6 +59,22 @@ shared_context 'Helpers_Log_Courier' do
 
     # Needs some time to startup - to ensure when we create new files AFTER this, they are not detected during startup
     sleep STARTUP_WAIT_TIME
+  end
+
+  def reload(config)
+    puts "Reloading with configuration:\n#{config}"
+    _write_config config
+
+    Process.kill('HUP', @log_courier.pid)
+  end
+
+  def _write_config(config)
+    if @config.closed?
+      # Reopen the config and rewrite it
+      @config.reopen(@config.path, 'w')
+    end
+    @config.puts config
+    @config.close
   end
 
   def shutdown

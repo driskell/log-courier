@@ -338,6 +338,55 @@ describe 'log-courier' do
     expect(File::Stat.new('.log-courier').size).to be < s
   end
 
+  it 'should response to SIGHUP by reloading configuration', :unless => RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/ do
+    f1 = create_log
+    f2 = create_log
+
+    startup config: <<-config
+    {
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ]
+      },
+      "files": [
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-0" ]
+        }
+      ]
+    }
+    config
+
+    # Write logs
+    f1.log 5_000
+
+    # Receive and check
+    receive_and_check
+
+    # Extra lines for the next file
+    f2.log 5_000
+
+    # Reload configuration
+    reload <<-config
+    {
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ]
+      },
+      "files": [
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-0" ]
+        },
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-1" ]
+        }
+      ]
+    }
+    config
+
+    # Receive and check
+    receive_and_check
+  end
+
   it 'should allow use of a custom persist directory' do
     f = create_log
 
