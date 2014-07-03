@@ -36,6 +36,7 @@ func NewSpooler(max_size uint64, idle_timeout time.Duration, shutdown *LogCourie
     shutdown: shutdown,
     max_size: max_size,
     idle_timeout: idle_timeout,
+    spool: make([]*FileEvent, 0, max_size),
   }
 }
 
