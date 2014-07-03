@@ -16,12 +16,17 @@ restart
 * Extra event fields, arrays and hashes on a per file basis
 * Fast and secure transmission of logs using TLS with both server and client
 certificate verification
-* Multiline codec to combine multiple lines into single events prior to shipping
-* Reload configuration without restarting
-* A ruby gem to enable fast and secure transmission of logs between Logstash
-instances
-* Transmission of logs via CurveZMQ to multiple receivers simultaneously
+* Secure transmission of logs via CurveZMQ to multiple receivers simultaneously
 (optional, requires ZeroMQ 4+)
+* Plaintext transmission over plain ZMQ and TCP when security is not required
+* Multiline codec to combine multiple lines into single events prior to shipping
+* Load multiple configuration files from a directory for ease of use with
+configuration management
+* Reload the configuration without restarting
+
+Log Courier integrates with Logstash using an event receiver ruby gem. An event
+sender ruby gem is also available to allow fast and secure transmission between
+two Logstash instances.
 
 ## Installation
 
