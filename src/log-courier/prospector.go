@@ -221,6 +221,7 @@ ProspectLoop:
       case <-p.control.ShutdownSignal():
         break ProspectLoop
       case config := <-p.control.RecvConfig():
+        p.generalconfig = &config.General
         p.fileconfigs = config.Files
     }
   }
