@@ -12,6 +12,9 @@ to be ignored until an asterisk followed by a forwarder slash is encountered.
 
 ```
 {
+	"general": {
+		# General configuration here
+	},
 	"network": {
 		# Network configuration here
 	}, # (these are end-of-line comments)
@@ -21,6 +24,23 @@ to be ignored until an asterisk followed by a forwarder slash is encountered.
 	}
 }
 ```
+
+## Reloading
+
+Log Courier can reload its configuration without the need for a restart. It will
+do this upon receiving the SIGHUP signal. To send this signal, run the following
+command replacing 1234 with the Process ID of Log Courier.
+
+	kill -HUP 1234
+
+Please note that files Log Courier has already started harvesting will continue
+to harvest after the reload until their dead time is reached. The reload process
+will only affect the scanning of new files and the network configuration. In the
+case of a network configuration change, Log Courier will disconnect and
+reconnect at the earliest opportunity.
+
+*Configuration reload is not currently available on Windows builds of Log
+Courier.*
 
 ## Examples
 
@@ -80,6 +100,32 @@ character-range:
 * `"/var/log/program/log_????.log"`
 * `"/var/log/httpd/access.log"`
 * `"/var/log/httpd/access.log.[0-9]"`
+
+## `"general"`
+
+The general configuration affects the general behaviour of Log Courier, such
+as where to store its persistence data or how often to scan for the appearence
+of new log files.
+
+### `"persist directory"`
+
+*String. Optional. Default: "."*
+
+The directory that Log Courier should store its persistence data in. The default
+is the current working directory of Log Courier which is specified using the
+path, `"."`.
+
+At the time of writing, the only file saved here is `.log-courier` that
+contains the offset in the file that Log Courier needs to resume from after a
+graceful restart or server crash. The offset is only updated when the remote
+server acknowledges receipt of the events.
+
+### `"prospect interval"`
+
+*Duration. Optional. Default: 10*
+
+How often Log Courier should check for changes on the filesystem, such as the
+appearance of new log files, rotations and deletions.
 
 ## `"network"`
 

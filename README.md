@@ -17,6 +17,7 @@ restart
 * Fast and secure transmission of logs using TLS with both server and client
 certificate verification
 * Multiline codec to combine multiple lines into single events prior to shipping
+* Reload configuration without restarting
 * A ruby gem to enable fast and secure transmission of logs between Logstash
 instances
 * Transmission of logs via CurveZMQ to multiple receivers simultaneously
@@ -34,15 +35,15 @@ instances
 
 To build with the optional ZMQ support use the following.
 
-    git clone https://github.com/driskell/log-courier
-    cd log-courier
-    make with=zmq
+	git clone https://github.com/driskell/log-courier
+	cd log-courier
+	make with=zmq
 
 Otherwise, simply run make standalone as follows.
 
-    git clone https://github.com/driskell/log-courier
-    cd log-courier
-    make
+	git clone https://github.com/driskell/log-courier
+	cd log-courier
+	make
 
 The log-courier program can then be found in the 'bin' folder.
 
@@ -74,12 +75,15 @@ set the IP address, and run `make selfsigned` again.*
 
 The log-courier command accepts the following command line options.
 
-    -config="": The config file to load
-    -cpuprofile="": write cpu profile to file
-    -from-beginning=false: Read new files from the beginning, instead of the end
-    -idle-flush-time=5s: Maximum time to wait for a full spool before flushing anyway
-    -log-to-syslog=false: Log to syslog instead of stdout
-    -spool-size=1024: Maximum number of events to spool before a flush is forced
+	-config="": The config file to load
+	-config-test=false: Test the configuration specified by -config and exit
+	-cpuprofile="": write cpu profile to file
+	-from-beginning=false: Read new files from the beginning, instead of the end
+	-idle-flush-time=5s: Maximum time to wait for a full spool before flushing anyway
+	-list-supported=false: List supported transports and codecs
+	-log-to-syslog=false: Log to syslog instead of stdout
+	-spool-size=1024: Maximum number of events to spool before a flush is forced.
+	-version=false: show version information
 
 ## Documentation
 
