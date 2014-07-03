@@ -121,7 +121,7 @@ func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *FileEvent
 }
 
 type Publisher struct {
-  shutdown         *LogCourierShutdown
+  control          *LogCourierControl
   config           *NetworkConfig
   transport        Transport
   hostname         string
@@ -134,9 +134,9 @@ type Publisher struct {
   out_of_sync      int
 }
 
-func NewPublisher(config *NetworkConfig, shutdown *LogCourierShutdown) *Publisher {
+func NewPublisher(config *NetworkConfig, control *LogCourierMasterControl) *Publisher {
   return &Publisher{
-    shutdown: shutdown,
+    control: control.Register(),
     config: config,
   }
 }
@@ -162,7 +162,7 @@ func (p *Publisher) Init() error {
 
 func (p *Publisher) Publish(input <-chan []*FileEvent, registrar *Registrar) {
   defer func() {
-    p.shutdown.Done()
+    p.control.Done()
   }()
 
   var input_toggle <-chan []*FileEvent
@@ -187,7 +187,7 @@ PublishLoop:
       select {
       case <-time.After(p.config.Reconnect):
         continue
-      case <-p.shutdown.Signal():
+      case <-p.control.ShutdownSignal():
         // TODO: Persist pending payloads and resume? Quicker shutdown
         if p.num_payloads == 0 {
           break PublishLoop
@@ -350,7 +350,7 @@ PublishLoop:
 
         // Allow network timeout to receive something
         timer.Reset(p.config.Timeout)
-      case <-p.shutdown.Signal():
+      case <-p.control.ShutdownSignal():
         // If no pending payloads, simply end
         // TODO: Persist pending payloads and resume? Quicker shutdown
         if p.num_payloads == 0 {
@@ -359,6 +359,7 @@ PublishLoop:
 
         // Flag shutdown for when we finish pending payloads
         shutdown = true
+      // TODO: On configuration reload we should disconnect gracefully and refresh connections
       }
     }
 

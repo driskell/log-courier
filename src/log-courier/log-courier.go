@@ -34,40 +34,76 @@ func main() {
   logcourier.Run()
 }
 
-type LogCourierShutdown struct {
+type LogCourierMasterControl struct {
   signal chan interface{}
-  group sync.WaitGroup
+  sinks  map[*LogCourierControl]chan *Config
+  group  sync.WaitGroup
 }
 
-func NewLogCourierShutdown() *LogCourierShutdown {
-  return &LogCourierShutdown{
+func NewLogCourierMasterControl() *LogCourierMasterControl {
+  return &LogCourierMasterControl{
     signal: make(chan interface{}),
+    sinks:  make(map[*LogCourierControl]chan *Config),
   }
 }
 
-func (lcs *LogCourierShutdown) Signal() <-chan interface{} {
-  return lcs.signal
-}
-
-func (lcs *LogCourierShutdown) Shutdown() {
+func (lcs *LogCourierMasterControl) Shutdown() {
   close(lcs.signal)
 }
 
-func (lcs *LogCourierShutdown) Done() {
-  lcs.group.Done()
+func (lcs *LogCourierMasterControl) SendConfig(config *Config) {
+  for _, sink := range lcs.sinks {
+    sink <- config
+  }
 }
 
-func (lcs *LogCourierShutdown) Add() *LogCourierShutdown {
+func (lcs *LogCourierMasterControl) Register() *LogCourierControl {
+  return lcs.register()
+}
+
+func (lcs *LogCourierMasterControl) RegisterWithRecvConfig() *LogCourierControl {
+  ret := lcs.register()
+
+  config_chan := make(chan *Config)
+  lcs.sinks[ret] = config_chan
+  ret.sink = config_chan
+
+  return ret
+}
+
+func (lcs *LogCourierMasterControl) register() *LogCourierControl {
   lcs.group.Add(1)
-  return lcs
+
+  return &LogCourierControl{
+    signal: lcs.signal,
+    group:  &lcs.group,
+  }
 }
 
-func (lcs *LogCourierShutdown) Wait() {
+func (lcs *LogCourierMasterControl) Wait() {
   lcs.group.Wait()
 }
 
+type LogCourierControl struct {
+  signal <-chan interface{}
+  sink   <-chan *Config
+  group  *sync.WaitGroup
+}
+
+func (lcs *LogCourierControl) ShutdownSignal() <-chan interface{} {
+  return lcs.signal
+}
+
+func (lcs *LogCourierControl) RecvConfig() <-chan *Config {
+  return lcs.sink
+}
+
+func (lcs *LogCourierControl) Done() {
+  lcs.group.Done()
+}
+
 type LogCourier struct {
-  shutdown       *LogCourierShutdown
+  control        *LogCourierMasterControl
   config         *Config
   shutdown_chan  chan os.Signal
   reload_chan    chan os.Signal
@@ -79,7 +115,7 @@ type LogCourier struct {
 
 func NewLogCourier() *LogCourier {
   ret := &LogCourier{
-    shutdown: NewLogCourierShutdown(),
+    control: NewLogCourierMasterControl(),
   }
   return ret
 }
@@ -120,16 +156,16 @@ func (lc *LogCourier) Run() {
   }
 
   // Initialise pipeline
-  prospector := NewProspector(lc.config, lc.from_beginning, lc.shutdown.Add())
+  prospector := NewProspector(lc.config, lc.from_beginning, lc.control)
 
-  spooler := NewSpooler(lc.spool_size, lc.idle_timeout, lc.shutdown.Add())
+  spooler := NewSpooler(lc.spool_size, lc.idle_timeout, lc.control)
 
-  publisher := NewPublisher(&lc.config.Network, lc.shutdown.Add())
+  publisher := NewPublisher(&lc.config.Network, lc.control)
   if err := publisher.Init(); err != nil {
     log.Fatalf("The publisher failed to initialise: %s\n", err)
   }
 
-  registrar := NewRegistrar(lc.config.General.PersistDir, lc.shutdown.Add())
+  registrar := NewRegistrar(lc.config.General.PersistDir, lc.control)
 
   // Start the pipeline
   go prospector.Prospect(prospector_resume, registrar, event_chan)
@@ -144,12 +180,16 @@ func (lc *LogCourier) Run() {
   lc.reload_chan = make(chan os.Signal, 1)
   lc.registerSignals()
 
-  select {
-    case <-lc.shutdown_chan:
-      log.Printf("Log Courier shutting down\n")
-      lc.cleanShutdown()
-    case <-lc.reload_chan:
-      lc.reloadConfig()
+SignalLoop:
+  for {
+    select {
+      case <-lc.shutdown_chan:
+        log.Printf("Log Courier shutting down\n")
+        lc.cleanShutdown()
+        break SignalLoop
+      case <-lc.reload_chan:
+        lc.reloadConfig()
+    }
   }
 }
 
@@ -220,10 +260,13 @@ func (lc *LogCourier) loadConfig() bool {
 }
 
 func (lc *LogCourier) reloadConfig() {
-
+  log.Printf("Reloading configuration.\n")
+  if lc.loadConfig() {
+    lc.control.SendConfig(lc.config)
+  }
 }
 
 func (lc *LogCourier) cleanShutdown() {
-  lc.shutdown.Shutdown()
-  lc.shutdown.Wait()
+  lc.control.Shutdown()
+  lc.control.Wait()
 }

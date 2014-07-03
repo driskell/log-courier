@@ -108,7 +108,7 @@ func (pi *ProspectorInfo) Update(fileinfo os.FileInfo, iteration uint32) {
 }
 
 type Prospector struct {
-  shutdown         *LogCourierShutdown
+  control          *LogCourierControl
   generalconfig    *GeneralConfig
   fileconfigs      []FileConfig
   prospectorindex  map[string]*ProspectorInfo
@@ -119,9 +119,9 @@ type Prospector struct {
   registrar_events []RegistrarEvent
 }
 
-func NewProspector(config *Config, from_beginning bool, shutdown *LogCourierShutdown) *Prospector {
+func NewProspector(config *Config, from_beginning bool, control *LogCourierMasterControl) *Prospector {
   return &Prospector{
-    shutdown: shutdown,
+    control: control.RegisterWithRecvConfig(),
     generalconfig: &config.General,
     fileconfigs: config.Files,
     from_beginning: from_beginning,
@@ -131,7 +131,7 @@ func NewProspector(config *Config, from_beginning bool, shutdown *LogCourierShut
 
 func (p *Prospector) Prospect(resume map[string]*ProspectorInfo, registrar *Registrar, output chan<- *FileEvent) {
   defer func() {
-    p.shutdown.Done()
+    p.control.Done()
   }()
 
   // Connect to the registrar
@@ -218,8 +218,10 @@ ProspectLoop:
     // Defer next scan for a bit
     select {
       case <-time.After(p.generalconfig.ProspectInterval):
-      case <-p.shutdown.Signal():
+      case <-p.control.ShutdownSignal():
         break ProspectLoop
+      case config := <-p.control.RecvConfig():
+        p.fileconfigs = config.Files
     }
   }
 

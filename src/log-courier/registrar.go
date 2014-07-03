@@ -67,19 +67,19 @@ func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
 }
 
 type Registrar struct {
-  shutdown       *LogCourierShutdown
+  control        *LogCourierControl
   registrar_chan chan []RegistrarEvent
   references     int
   persistdir     string
   statefile      string
 }
 
-func NewRegistrar(persistdir string, shutdown *LogCourierShutdown) *Registrar {
+func NewRegistrar(persistdir string, control *LogCourierMasterControl) *Registrar {
   return &Registrar{
-    shutdown: shutdown,
+    control: control.Register(),
     registrar_chan: make(chan []RegistrarEvent, 16),
     persistdir: persistdir,
-    statefile:  ".log-courier",
+    statefile: ".log-courier",
   }
 }
 
@@ -99,7 +99,7 @@ func (r *Registrar) Disconnect() {
 
 func (r *Registrar) Register(state map[*ProspectorInfo]*FileState) {
   defer func() {
-    r.shutdown.Done()
+    r.control.Done()
   }()
 
   // Ignore shutdown channel - wait for registrar to close
