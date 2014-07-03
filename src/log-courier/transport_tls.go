@@ -133,6 +133,23 @@ func (f *TransportTlsFactory) NewTransport(config *NetworkConfig) (Transport, er
   return &TransportTls{config: f, net_config: config}, nil
 }
 
+func (t *TransportTls) ReloadConfig(new_net_config *NetworkConfig) int {
+  // Check we can grab new ZMQ config to compare, if not force transport reinit
+  new_config, ok := new_net_config.transport.(*TransportTlsFactory)
+  if !ok {
+    return 2
+  }
+
+  if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
+    return 2
+  }
+
+  // Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
+  t.net_config = new_net_config
+
+  return 0
+}
+
 func (t *TransportTls) Connect() error {
   // Pick a random server from the list.
   hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]

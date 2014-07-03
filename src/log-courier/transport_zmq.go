@@ -111,6 +111,23 @@ func (f *TransportZmqFactory) NewTransport(config *NetworkConfig) (Transport, er
   return &TransportZmq{config: f, net_config: config}, nil
 }
 
+func (t *TransportZmq) ReloadConfig(new_net_config *NetworkConfig) int {
+  // Check we can grab new ZMQ config to compare, if not force transport reinit
+  new_config, ok := new_net_config.transport.(*TransportZmqFactory)
+  if !ok {
+    return 2
+  }
+
+  if new_config.CurveServerkey != t.config.CurveServerkey || new_config.CurvePublickey != t.config.CurvePublickey || new_config.CurveSecretkey != t.config.CurveSecretkey {
+    return 2
+  }
+
+  // Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
+  t.net_config = new_net_config
+
+  return 0
+}
+
 func (t *TransportZmq) Connect() (err error) {
   endpoints := 0
 

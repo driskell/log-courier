@@ -21,6 +21,7 @@ type TransportFactory interface {
 }
 
 type Transport interface {
+  ReloadConfig(*NetworkConfig) int
   Connect() error
   CanSend() <-chan int
   Write(string, []byte) error
