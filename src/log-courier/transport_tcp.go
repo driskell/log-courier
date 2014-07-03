@@ -148,7 +148,7 @@ func (f *TransportTcpFactory) NewTransport(config *NetworkConfig) (Transport, er
 }
 
 func (t *TransportTcp) ReloadConfig(new_net_config *NetworkConfig) int {
-  // Check we can grab new ZMQ config to compare, if not force transport reinit
+  // Check we can grab new TCP config to compare, if not force transport reinit
   new_config, ok := new_net_config.transport.(*TransportTcpFactory)
   if !ok {
     return 2

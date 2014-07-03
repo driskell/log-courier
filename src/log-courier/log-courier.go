@@ -22,6 +22,7 @@ package main
 import (
   "encoding/json"
   "flag"
+  "fmt"
   "log"
   "os"
   "runtime/pprof"
@@ -201,10 +202,10 @@ func (lc *LogCourier) parseFlags() {
   var syslog bool
 
   flag.BoolVar(&version, "version", false, "show version information")
-  flag.BoolVar(&config_test, "config-test", false, "Test the configuration")
+  flag.BoolVar(&config_test, "config-test", false, "Test the configuration specified by -config and exit")
   flag.BoolVar(&list_supported, "list-supported", false, "List supported transports and codecs")
-  flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
   flag.BoolVar(&syslog, "log-to-syslog", false, "Log to syslog instead of stdout")
+  flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
 
   // TODO - These should be in the configuration file
   flag.Uint64Var(&lc.spool_size, "spool-size", 1024, "Maximum number of events to spool before a flush is forced.")
@@ -215,27 +216,30 @@ func (lc *LogCourier) parseFlags() {
   flag.Parse()
 
   if version {
-    log.Fatalf("Log Courier version 0.10\n")
+    fmt.Printf("Log Courier version 0.10\n")
+    os.Exit(0)
   }
 
   if config_test {
     if lc.loadConfig() {
-      log.Fatalf("Configuration OK\n")
+      fmt.Printf("Configuration OK\n")
+      os.Exit(0)
     }
-    log.Fatalf("Configuration test failed!\n")
+    fmt.Printf("Configuration test failed!\n")
+    os.Exit(1)
   }
 
   if list_supported {
-    log.Printf("Available transports:\n")
+    fmt.Printf("Available transports:\n")
     for _, transport := range AvailableTransports() {
-      log.Printf("\t%s", transport)
+      fmt.Printf("  %s\n", transport)
     }
 
-    log.Printf("Available codecs:\n")
+    fmt.Printf("Available codecs:\n")
     for _, codec := range AvailableCodecs() {
-      log.Printf("\t%s", codec)
+      fmt.Printf("  %s\n", codec)
     }
-    return
+    os.Exit(0)
   }
 
   if syslog {
