@@ -339,6 +339,8 @@ describe 'log-courier' do
   end
 
   it 'should response to SIGHUP by reloading configuration', :unless => RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/ do
+    start_server id: 'new'
+
     f1 = create_log
     f2 = create_log
 
@@ -370,7 +372,7 @@ describe 'log-courier' do
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
-        "servers": [ "127.0.0.1:#{server_port}" ]
+        "servers": [ "127.0.0.1:#{server_port('new')}" ]
       },
       "files": [
         {
@@ -385,6 +387,8 @@ describe 'log-courier' do
 
     # Receive and check
     receive_and_check
+
+    expect(server_count('new')).to be > 0
   end
 
   it 'should allow use of a custom persist directory' do
