@@ -202,16 +202,18 @@ ProspectLoop:
     // afterwards we force from beginning
     p.from_beginning = true
 
-    // Clear out entries that no longer exist and we've stopped harvesting
+    // Clean up the prospector collections
     for _, info := range p.prospectors {
-      if info.IsRunning() {
-        continue
-      }
-      if !info.orphaned {
+      if info.orphaned {
+        if !info.IsRunning() {
+          delete(p.prospectors, info)
+        }
+      } else {
         if info.last_seen >= p.iteration {
           continue
         }
         delete(p.prospectorindex, info.file)
+        info.orphaned = true
         p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
       }
     }
@@ -314,9 +316,6 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
         // Keep the old file in case we find it again shortly
         info.orphaned = true
 
-        // Remove the orphan from registrar to prevent its updated overwriting saved state of this new file
-        p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
-
         if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
           // This file was renamed from another file we know - link the same harvester channel as the old file
           log.Printf("File rename was detected: %s -> %s\n", previous, file)
@@ -407,6 +406,8 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *Pros
       delete(p.prospectors, ki)
       if !ki.orphaned {
         delete(p.prospectorindex, ki.file)
+      } else {
+        ki.orphaned = false
       }
       return ki.file, ki
     }
