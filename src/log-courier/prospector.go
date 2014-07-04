@@ -116,32 +116,41 @@ type Prospector struct {
   from_beginning   bool
   iteration        uint32
   lastscan         time.Time
+  registrar        *Registrar
+  registrar_chan   chan<- []RegistrarEvent
   registrar_events []RegistrarEvent
 }
 
-func NewProspector(config *Config, from_beginning bool, control *LogCourierMasterControl) *Prospector {
+func NewProspector(config *Config, from_beginning bool, registrar *Registrar, control *LogCourierMasterControl) *Prospector {
   return &Prospector{
     control: control.RegisterWithRecvConfig(),
     generalconfig: &config.General,
     fileconfigs: config.Files,
     from_beginning: from_beginning,
+    registrar: registrar,
+    registrar_chan: registrar.Connect(),
     registrar_events: make([]RegistrarEvent, 0),
   }
 }
 
-func (p *Prospector) Prospect(resume map[string]*ProspectorInfo, registrar *Registrar, output chan<- *FileEvent) {
+func (p *Prospector) Prospect(output chan<- *FileEvent) {
   defer func() {
     p.control.Done()
   }()
 
-  // Connect to the registrar
-  registrar_chan := registrar.Connect()
-
-  // Pre-populate prospectors with what we had previously
-  p.prospectorindex = resume
   p.prospectors = make(map[*ProspectorInfo]*ProspectorInfo)
-  for _, v := range resume {
-    p.prospectors[v] = v
+  p.prospectorindex = p.registrar.LoadPrevious()
+  if p.prospectorindex == nil {
+    // No previous state to follow, obey -from-beginning and start empy
+    p.prospectorindex = make(map[string]*ProspectorInfo)
+  } else {
+    // -from-beginning=false flag should only affect the very first run (no previous state)
+    p.from_beginning = true
+
+    // Pre-populate prospectors with what we had previously
+    for _, v := range p.prospectorindex {
+      p.prospectors[v] = v
+    }
   }
 
   // Handle any "-" (stdin) paths - but only once
@@ -185,7 +194,7 @@ ProspectLoop:
     for config_k, config := range p.fileconfigs {
       for _, path := range config.Paths {
         // Scan - flag false so new files always start at beginning
-        p.scan(path, &p.fileconfigs[config_k], registrar_chan, output)
+        p.scan(path, &p.fileconfigs[config_k], output)
       }
     }
 
@@ -209,11 +218,11 @@ ProspectLoop:
 
     // Flush the accumulated registrar events
     if len(p.registrar_events) != 0 {
-      registrar_chan <- p.registrar_events
+      p.registrar_chan <- p.registrar_events
+      p.registrar_events = make([]RegistrarEvent, 0)
     }
 
     p.lastscan = newlastscan
-    p.registrar_events = make([]RegistrarEvent, 0)
 
     // Defer next scan for a bit
     select {
@@ -235,12 +244,12 @@ ProspectLoop:
   }
 
   // Disconnect from the registrar
-  registrar.Disconnect()
+  p.registrar.Disconnect()
 
   log.Printf("Prospector shutdown complete\n")
 }
 
-func (p *Prospector) scan(path string, config *FileConfig, registrar_chan chan<- []RegistrarEvent, output chan<- *FileEvent) {
+func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEvent) {
   // Evaluate the path as a wildcards/shell glob
   matches, err := filepath.Glob(path)
   if err != nil {

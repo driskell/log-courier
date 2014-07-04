@@ -132,12 +132,16 @@ type Publisher struct {
   last_payload     *PendingPayload
   num_payloads     int
   out_of_sync      int
+  registrar        *Registrar
+  registrar_chan   chan<- []RegistrarEvent
 }
 
-func NewPublisher(config *NetworkConfig, control *LogCourierMasterControl) *Publisher {
+func NewPublisher(config *NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) *Publisher {
   return &Publisher{
     control: control.RegisterWithRecvConfig(),
     config: config,
+    registrar: registrar,
+    registrar_chan: registrar.Connect(),
   }
 }
 
@@ -171,7 +175,7 @@ func (p *Publisher) initTransport() error {
   return nil
 }
 
-func (p *Publisher) Publish(input <-chan []*FileEvent, registrar *Registrar) {
+func (p *Publisher) Publish(input <-chan []*FileEvent) {
   defer func() {
     p.control.Done()
   }()
@@ -181,9 +185,6 @@ func (p *Publisher) Publish(input <-chan []*FileEvent, registrar *Registrar) {
   var err error
   var shutdown bool
   var reload int
-
-  // Connect to registrar
-  registrar_chan := registrar.Connect()
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   timer := time.NewTimer(keepalive_timeout)
@@ -305,7 +306,7 @@ PublishLoop:
             break SelectLoop
           }
         case bytes.Compare(signature, []byte("ACKN")) == 0:
-          if err = p.processAck(message, registrar_chan); err != nil {
+          if err = p.processAck(message, p.registrar_chan); err != nil {
             break SelectLoop
           }
         default:
@@ -407,7 +408,7 @@ PublishLoop:
   p.transport.Disconnect()
 
   // Disconnect from registrar
-  registrar.Disconnect()
+  p.registrar.Disconnect()
 
   log.Printf("Publisher shutdown complete\n")
 }
