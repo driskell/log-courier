@@ -256,7 +256,7 @@ describe 'log-courier' do
 
     # Write to both
     f1.log 5_000
-    f2.log(5_000).skip 5_000
+    f2.log 5_000
 
     # Start again
     startup
