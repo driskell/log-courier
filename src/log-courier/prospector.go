@@ -108,7 +108,7 @@ func (pi *ProspectorInfo) Update(fileinfo os.FileInfo, iteration uint32) {
 }
 
 type Prospector struct {
-  shutdown         *LogCourierShutdown
+  control          *LogCourierControl
   generalconfig    *GeneralConfig
   fileconfigs      []FileConfig
   prospectorindex  map[string]*ProspectorInfo
@@ -116,32 +116,41 @@ type Prospector struct {
   from_beginning   bool
   iteration        uint32
   lastscan         time.Time
+  registrar        *Registrar
+  registrar_chan   chan<- []RegistrarEvent
   registrar_events []RegistrarEvent
 }
 
-func NewProspector(config *Config, shutdown *LogCourierShutdown) *Prospector {
+func NewProspector(config *Config, from_beginning bool, registrar *Registrar, control *LogCourierMasterControl) *Prospector {
   return &Prospector{
-    shutdown: shutdown,
+    control: control.RegisterWithRecvConfig(),
     generalconfig: &config.General,
     fileconfigs: config.Files,
-    from_beginning: *from_beginning,
+    from_beginning: from_beginning,
+    registrar: registrar,
+    registrar_chan: registrar.Connect(),
     registrar_events: make([]RegistrarEvent, 0),
   }
 }
 
-func (p *Prospector) Prospect(resume map[string]*ProspectorInfo, registrar *Registrar, output chan<- *FileEvent) {
+func (p *Prospector) Prospect(output chan<- *FileEvent) {
   defer func() {
-    p.shutdown.Done()
+    p.control.Done()
   }()
 
-  // Connect to the registrar
-  registrar_chan := registrar.Connect()
-
-  // Pre-populate prospectors with what we had previously
-  p.prospectorindex = resume
   p.prospectors = make(map[*ProspectorInfo]*ProspectorInfo)
-  for _, v := range resume {
-    p.prospectors[v] = v
+  p.prospectorindex = p.registrar.LoadPrevious()
+  if p.prospectorindex == nil {
+    // No previous state to follow, obey -from-beginning and start empy
+    p.prospectorindex = make(map[string]*ProspectorInfo)
+  } else {
+    // -from-beginning=false flag should only affect the very first run (no previous state)
+    p.from_beginning = true
+
+    // Pre-populate prospectors with what we had previously
+    for _, v := range p.prospectorindex {
+      p.prospectors[v] = v
+    }
   }
 
   // Handle any "-" (stdin) paths - but only once
@@ -185,7 +194,7 @@ ProspectLoop:
     for config_k, config := range p.fileconfigs {
       for _, path := range config.Paths {
         // Scan - flag false so new files always start at beginning
-        p.scan(path, &p.fileconfigs[config_k], registrar_chan, output)
+        p.scan(path, &p.fileconfigs[config_k], output)
       }
     }
 
@@ -193,33 +202,38 @@ ProspectLoop:
     // afterwards we force from beginning
     p.from_beginning = true
 
-    // Clear out entries that no longer exist and we've stopped harvesting
+    // Clean up the prospector collections
     for _, info := range p.prospectors {
-      if info.IsRunning() {
-        continue
-      }
-      if !info.orphaned {
+      if info.orphaned {
+        if !info.IsRunning() {
+          delete(p.prospectors, info)
+        }
+      } else {
         if info.last_seen >= p.iteration {
           continue
         }
         delete(p.prospectorindex, info.file)
+        info.orphaned = true
         p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
       }
     }
 
     // Flush the accumulated registrar events
     if len(p.registrar_events) != 0 {
-      registrar_chan <- p.registrar_events
+      p.registrar_chan <- p.registrar_events
+      p.registrar_events = make([]RegistrarEvent, 0)
     }
 
     p.lastscan = newlastscan
-    p.registrar_events = make([]RegistrarEvent, 0)
 
     // Defer next scan for a bit
     select {
       case <-time.After(p.generalconfig.ProspectInterval):
-      case <-p.shutdown.Signal():
+      case <-p.control.ShutdownSignal():
         break ProspectLoop
+      case config := <-p.control.RecvConfig():
+        p.generalconfig = &config.General
+        p.fileconfigs = config.Files
     }
   }
 
@@ -232,12 +246,12 @@ ProspectLoop:
   }
 
   // Disconnect from the registrar
-  registrar.Disconnect()
+  p.registrar.Disconnect()
 
   log.Printf("Prospector shutdown complete\n")
 }
 
-func (p *Prospector) scan(path string, config *FileConfig, registrar_chan chan<- []RegistrarEvent, output chan<- *FileEvent) {
+func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEvent) {
   // Evaluate the path as a wildcards/shell glob
   matches, err := filepath.Glob(path)
   if err != nil {
@@ -301,9 +315,6 @@ func (p *Prospector) scan(path string, config *FileConfig, registrar_chan chan<-
       if !info.identity.SameAs(fileinfo) {
         // Keep the old file in case we find it again shortly
         info.orphaned = true
-
-        // Remove the orphan from registrar to prevent its updated overwriting saved state of this new file
-        p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
 
         if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
           // This file was renamed from another file we know - link the same harvester channel as the old file
@@ -395,6 +406,8 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *Pros
       delete(p.prospectors, ki)
       if !ki.orphaned {
         delete(p.prospectorindex, ki.file)
+      } else {
+        ki.orphaned = false
       }
       return ki.file, ki
     }

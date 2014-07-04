@@ -21,6 +21,6 @@ package main
 
 import "log"
 
-func configureSyslog() {
+func (lc *LogCourier) configureSyslog() {
   log.Printf("Logging to syslog not supported on this platform\n")
 }

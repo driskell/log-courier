@@ -45,7 +45,12 @@ const (
   socket_interval_seconds = 1
 )
 
-type TransportTlsFactory struct {
+type TransportTcpRegistrar struct {
+}
+
+type TransportTcpFactory struct {
+  transport string
+
   SSLCertificate string `json:"ssl certificate"`
   SSLKey         string `json:"ssl key"`
   SSLCA          string `json:"ssl ca"`
@@ -54,10 +59,11 @@ type TransportTlsFactory struct {
   tls_config  tls.Config
 }
 
-type TransportTls struct {
-  config     *TransportTlsFactory
+type TransportTcp struct {
+  config     *TransportTcpFactory
   net_config *NetworkConfig
-  socket     *tls.Conn
+  socket     net.Conn
+  tlssocket  *tls.Conn
 
   wait     sync.WaitGroup
   shutdown chan interface{}
@@ -71,8 +77,8 @@ type TransportTls struct {
 // If tls.Conn.Write ever times out it will permanently break, so we cannot use SetWriteDeadline with it directly
 // So we wrap the given tcpsocket and handle the SetWriteDeadline there and check shutdown signal and loop
 // Inside tls.Conn the Write blocks until it finishes and everyone is happy
-type TransportTlsWrap struct {
-  transport *TransportTls
+type TransportTcpWrap struct {
+  transport *TransportTcp
   tcpsocket net.Conn
 
   net.Conn
@@ -82,58 +88,83 @@ func init() {
   rand.Seed(time.Now().UnixNano())
 }
 
-func NewTransportTlsFactory(config_path string, config map[string]interface{}) (TransportFactory, error) {
+func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, config map[string]interface{}) (TransportFactory, error) {
   var err error
 
-  ret := &TransportTlsFactory{
+  ret := &TransportTcpFactory{
+    transport: name,
     hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
   }
 
-  if err = PopulateConfig(ret, config_path, config); err != nil {
-    return nil, err
-  }
-
-  if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
-    log.Printf("Loading client ssl certificate: %s and %s\n", ret.SSLCertificate, ret.SSLKey)
-    cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
-    if err != nil {
-      return nil, errors.New(fmt.Sprintf("Failed loading client ssl certificate: %s", err))
-    }
-    ret.tls_config.Certificates = []tls.Certificate{cert}
-  }
-
-  if len(ret.SSLCA) > 0 {
-    log.Printf("Setting trusted CA from file: %s\n", ret.SSLCA)
-    ret.tls_config.RootCAs = x509.NewCertPool()
-
-    pemdata, err := ioutil.ReadFile(ret.SSLCA)
-    if err != nil {
-      return nil, errors.New(fmt.Sprintf("Failure reading CA certificate: %s", err))
+  // Only allow SSL configurations if this is "tls"
+  if name == "tls" {
+    if err = PopulateConfig(ret, config_path, config); err != nil {
+      return nil, err
     }
 
-    block, _ := pem.Decode(pemdata)
-    if block == nil {
-      return nil, errors.New("Failed to decode CA certificate data")
-    }
-    if block.Type != "CERTIFICATE" {
-      return nil, errors.New(fmt.Sprintf("Specified CA certificate is not a certificate: %s", ret.SSLCA))
+    if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
+      log.Printf("Loading client ssl certificate: %s and %s\n", ret.SSLCertificate, ret.SSLKey)
+      cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
+      if err != nil {
+        return nil, errors.New(fmt.Sprintf("Failed loading client ssl certificate: %s", err))
+      }
+      ret.tls_config.Certificates = []tls.Certificate{cert}
     }
 
-    cert, err := x509.ParseCertificate(block.Bytes)
-    if err != nil {
-      return nil, errors.New(fmt.Sprintf("Failed to parse CA certificate: %s", err))
+    if len(ret.SSLCA) > 0 {
+      log.Printf("Setting trusted CA from file: %s\n", ret.SSLCA)
+      ret.tls_config.RootCAs = x509.NewCertPool()
+
+      pemdata, err := ioutil.ReadFile(ret.SSLCA)
+      if err != nil {
+        return nil, errors.New(fmt.Sprintf("Failure reading CA certificate: %s", err))
+      }
+
+      block, _ := pem.Decode(pemdata)
+      if block == nil {
+        return nil, errors.New("Failed to decode CA certificate data")
+      }
+      if block.Type != "CERTIFICATE" {
+        return nil, errors.New(fmt.Sprintf("Specified CA certificate is not a certificate: %s", ret.SSLCA))
+      }
+
+      cert, err := x509.ParseCertificate(block.Bytes)
+      if err != nil {
+        return nil, errors.New(fmt.Sprintf("Failed to parse CA certificate: %s", err))
+      }
+      ret.tls_config.RootCAs.AddCert(cert)
     }
-    ret.tls_config.RootCAs.AddCert(cert)
+  } else {
+    if err := ReportUnusedConfig(config_path, config); err != nil {
+      return nil, err
+    }
   }
 
   return ret, nil
 }
 
-func (f *TransportTlsFactory) NewTransport(config *NetworkConfig) (Transport, error) {
-  return &TransportTls{config: f, net_config: config}, nil
+func (f *TransportTcpFactory) NewTransport(config *NetworkConfig) (Transport, error) {
+  return &TransportTcp{config: f, net_config: config}, nil
 }
 
-func (t *TransportTls) Connect() error {
+func (t *TransportTcp) ReloadConfig(new_net_config *NetworkConfig) int {
+  // Check we can grab new TCP config to compare, if not force transport reinit
+  new_config, ok := new_net_config.transport.(*TransportTcpFactory)
+  if !ok {
+    return 2
+  }
+
+  if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
+    return 2
+  }
+
+  // Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
+  t.net_config = new_net_config
+
+  return 0
+}
+
+func (t *TransportTcp) Connect() error {
   // Pick a random server from the list.
   hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]
   submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
@@ -160,15 +191,23 @@ func (t *TransportTls) Connect() error {
     return fmt.Errorf("Failure connecting to %s: %s", address, err)
   }
 
-  // Set the tlsconfig server name for server validation (since Go 1.3)
-  t.config.tls_config.ServerName = host
+  // Now wrap in TLS if this is the "tls" transport
+  if t.config.transport == "tls" {
+    // Set the tlsconfig server name for server validation (since Go 1.3)
+    t.config.tls_config.ServerName = host
 
-  t.socket = tls.Client(&TransportTlsWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
-  t.socket.SetDeadline(time.Now().Add(t.net_config.Timeout))
-  err = t.socket.Handshake()
-  if err != nil {
-    t.socket.Close()
-    return fmt.Errorf("TLS Handshake failure with %s: %s", address, err)
+    t.tlssocket = tls.Client(&TransportTcpWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
+    t.tlssocket.SetDeadline(time.Now().Add(t.net_config.Timeout))
+    err = t.tlssocket.Handshake()
+    if err != nil {
+      t.tlssocket.Close()
+      tcpsocket.Close()
+      return fmt.Errorf("TLS Handshake failure with %s: %s", address, err)
+    }
+
+    t.socket = t.tlssocket
+  } else {
+    t.socket = tcpsocket
   }
 
   log.Printf("Connected with %s\n", address)
@@ -195,7 +234,7 @@ func (t *TransportTls) Connect() error {
   return nil
 }
 
-func (t *TransportTls) sender() {
+func (t *TransportTcp) sender() {
 SendLoop:
   for {
     select {
@@ -222,7 +261,7 @@ SendLoop:
   t.wait.Done()
 }
 
-func (t *TransportTls) receiver() {
+func (t *TransportTcp) receiver() {
   var err error
   var shutdown bool
   header := make([]byte, 8)
@@ -260,7 +299,7 @@ func (t *TransportTls) receiver() {
   t.wait.Done()
 }
 
-func (t *TransportTls) receiverRead(data []byte) (error, bool) {
+func (t *TransportTcp) receiverRead(data []byte) (error, bool) {
   received := 0
 
 RecvLoop:
@@ -291,18 +330,18 @@ RecvLoop:
   return nil, true
 }
 
-func (t *TransportTls) setChan(set chan<- int) {
+func (t *TransportTcp) setChan(set chan<- int) {
   select {
   case set <- 1:
   default:
   }
 }
 
-func (t *TransportTls) CanSend() <-chan int {
+func (t *TransportTcp) CanSend() <-chan int {
   return t.can_send
 }
 
-func (t *TransportTls) Write(signature string, message []byte) (err error) {
+func (t *TransportTcp) Write(signature string, message []byte) (err error) {
   var write_buffer *bytes.Buffer
   write_buffer = bytes.NewBuffer(make([]byte, 0, len(signature)+4+len(message)))
 
@@ -322,11 +361,11 @@ func (t *TransportTls) Write(signature string, message []byte) (err error) {
   return nil
 }
 
-func (t *TransportTls) Read() <-chan interface{} {
+func (t *TransportTcp) Read() <-chan interface{} {
   return t.recv_chan
 }
 
-func (t *TransportTls) Disconnect() {
+func (t *TransportTcp) Disconnect() {
   if t.shutdown == nil {
     return
   }
@@ -334,14 +373,20 @@ func (t *TransportTls) Disconnect() {
   // Send shutdown request
   close(t.shutdown)
   t.wait.Wait()
+
+  // If tls, shutdown tls socket first
+  if t.config.transport == "tls" {
+    t.tlssocket.Close()
+  }
+
   t.socket.Close()
 }
 
-func (w *TransportTlsWrap) Read(b []byte) (int, error) {
+func (w *TransportTcpWrap) Read(b []byte) (int, error) {
   return w.tcpsocket.Read(b)
 }
 
-func (w *TransportTlsWrap) Write(b []byte) (n int, err error) {
+func (w *TransportTcpWrap) Write(b []byte) (n int, err error) {
   length := 0
 
 RetrySend:
@@ -368,26 +413,32 @@ RetrySend:
   } /* loop forever */
 }
 
-func (w *TransportTlsWrap) Close() error {
+func (w *TransportTcpWrap) Close() error {
   return w.tcpsocket.Close()
 }
 
-func (w *TransportTlsWrap) LocalAddr() net.Addr {
+func (w *TransportTcpWrap) LocalAddr() net.Addr {
   return w.tcpsocket.LocalAddr()
 }
 
-func (w *TransportTlsWrap) RemoteAddr() net.Addr {
+func (w *TransportTcpWrap) RemoteAddr() net.Addr {
   return w.tcpsocket.RemoteAddr()
 }
 
-func (w *TransportTlsWrap) SetDeadline(t time.Time) error {
+func (w *TransportTcpWrap) SetDeadline(t time.Time) error {
   return w.tcpsocket.SetDeadline(t)
 }
 
-func (w *TransportTlsWrap) SetReadDeadline(t time.Time) error {
+func (w *TransportTcpWrap) SetReadDeadline(t time.Time) error {
   return w.tcpsocket.SetReadDeadline(t)
 }
 
-func (w *TransportTlsWrap) SetWriteDeadline(t time.Time) error {
+func (w *TransportTcpWrap) SetWriteDeadline(t time.Time) error {
   return w.tcpsocket.SetWriteDeadline(t)
+}
+
+// Register the transports
+func init() {
+  RegisterTransport(&TransportTcpRegistrar{}, "tcp")
+  RegisterTransport(&TransportTcpRegistrar{}, "tls")
 }

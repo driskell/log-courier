@@ -20,7 +20,9 @@
 package main
 
 import (
+  "encoding/json"
   "log"
+  "os"
 )
 
 func (e *NewFileEvent) Process(state map[*ProspectorInfo]*FileState) {
@@ -67,20 +69,58 @@ func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
 }
 
 type Registrar struct {
-  shutdown       *LogCourierShutdown
+  control        *LogCourierControl
   registrar_chan chan []RegistrarEvent
   references     int
   persistdir     string
   statefile      string
+  state          map[*ProspectorInfo]*FileState
 }
 
-func NewRegistrar(persistdir string, shutdown *LogCourierShutdown) *Registrar {
+func NewRegistrar(persistdir string, control *LogCourierMasterControl) *Registrar {
   return &Registrar{
-    shutdown: shutdown,
+    control: control.Register(),
     registrar_chan: make(chan []RegistrarEvent, 16),
     persistdir: persistdir,
-    statefile:  ".log-courier",
+    statefile: ".log-courier",
+    state: make(map[*ProspectorInfo]*FileState),
   }
+}
+
+func (r *Registrar) LoadPrevious() map[string]*ProspectorInfo {
+  // Generate ProspectorInfo structures for registrar and prosector to communicate with
+  data := make(map[string]*FileState)
+
+  // Load the previous state
+  filename := r.persistdir + string(os.PathSeparator) + ".log-courier"
+  f, err := os.Open(filename)
+  if err != nil {
+    // Try the .new file - maybe we failed mid-move
+    filename = r.persistdir + string(os.PathSeparator) + ".log-courier.new"
+    f, err = os.Open(filename)
+  }
+
+  if err != nil {
+    // Failed to load previous state, return nil
+    return nil
+  }
+
+  // Parse the data
+  log.Printf("Loaded registrar data from %s\n", filename)
+
+  decoder := json.NewDecoder(f)
+  decoder.Decode(&data)
+  f.Close()
+
+  r.state = make(map[*ProspectorInfo]*FileState, len(data))
+  resume := make(map[string]*ProspectorInfo, len(data))
+
+  for file, state := range data {
+    resume[file] = NewProspectorInfoFromFileState(file, state)
+    r.state[resume[file]] = state
+  }
+
+  return resume
 }
 
 func (r *Registrar) Connect() chan<- []RegistrarEvent {
@@ -97,19 +137,19 @@ func (r *Registrar) Disconnect() {
   }
 }
 
-func (r *Registrar) Register(state map[*ProspectorInfo]*FileState) {
+func (r *Registrar) Register() {
   defer func() {
-    r.shutdown.Done()
+    r.control.Done()
   }()
 
   // Ignore shutdown channel - wait for registrar to close
   for events := range r.registrar_chan {
     for _, event := range events {
-      event.Process(state)
+      event.Process(r.state)
     }
 
-    state_json := make(map[string]*FileState, len(state))
-    for _, value := range state {
+    state_json := make(map[string]*FileState, len(r.state))
+    for _, value := range r.state {
       //if _, ok := state_json[*value.Source]; ok {
         // Panic? We should never allow this
       //}

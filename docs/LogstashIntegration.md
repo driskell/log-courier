@@ -46,7 +46,7 @@ configuration for the input plugin follows.
 The following options are available for the input plugin:
 
 * address - Interface address to listen on (defaults to all interfaces)
-* transport - "tls" (default) or "zmq"
+* transport - "tcp", "tls" (default), "plainzmq" or "zmq"
 * ssl_certificate - Path to server SSL certificate
 * ssl_key - Path to server SSL private key
 * ssl_key_passphrase - Password for ssl_key (optional)
@@ -69,4 +69,5 @@ be used at the moment)
 * idle_timeout - Maxmimum time in seconds to wait for a full spool before
 flushing anyway (default 5)
 
-NOTE: The ZMQ transport is not implemented in the output plugin at this time.
+NOTE: The tcp, plainzmq and zmq transports are not implemented in the output
+plugin at this time. It supports only the tls transport.

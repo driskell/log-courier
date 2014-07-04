@@ -121,7 +121,7 @@ func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *FileEvent
 }
 
 type Publisher struct {
-  shutdown         *LogCourierShutdown
+  control          *LogCourierControl
   config           *NetworkConfig
   transport        Transport
   hostname         string
@@ -132,12 +132,16 @@ type Publisher struct {
   last_payload     *PendingPayload
   num_payloads     int
   out_of_sync      int
+  registrar        *Registrar
+  registrar_chan   chan<- []RegistrarEvent
 }
 
-func NewPublisher(config *NetworkConfig, shutdown *LogCourierShutdown) *Publisher {
+func NewPublisher(config *NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) *Publisher {
   return &Publisher{
-    shutdown: shutdown,
+    control: control.RegisterWithRecvConfig(),
     config: config,
+    registrar: registrar,
+    registrar_chan: registrar.Connect(),
   }
 }
 
@@ -150,28 +154,37 @@ func (p *Publisher) Init() error {
     p.hostname = default_publisher_hostname
   }
 
-  // Set up the selected transport (currently only TLS)
-  if p.transport, err = p.config.transport.NewTransport(p.config); err != nil {
+  p.pending_payloads = make(map[string]*PendingPayload)
+
+  // Set up the selected transport
+  if err = p.initTransport(); err != nil {
     return err
   }
-
-  p.pending_payloads = make(map[string]*PendingPayload)
 
   return nil
 }
 
-func (p *Publisher) Publish(input <-chan []*FileEvent, registrar *Registrar) {
+func (p *Publisher) initTransport() error {
+  transport, err := p.config.transport.NewTransport(p.config)
+  if err != nil {
+    return err
+  }
+
+  p.transport = transport
+
+  return nil
+}
+
+func (p *Publisher) Publish(input <-chan []*FileEvent) {
   defer func() {
-    p.shutdown.Done()
+    p.control.Done()
   }()
 
   var input_toggle <-chan []*FileEvent
   var retry_payload *PendingPayload
   var err error
   var shutdown bool
-
-  // Connect to registrar
-  registrar_chan := registrar.Connect()
+  var reload int
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   timer := time.NewTimer(keepalive_timeout)
@@ -187,7 +200,7 @@ PublishLoop:
       select {
       case <-time.After(p.config.Reconnect):
         continue
-      case <-p.shutdown.Signal():
+      case <-p.control.ShutdownSignal():
         // TODO: Persist pending payloads and resume? Quicker shutdown
         if p.num_payloads == 0 {
           break PublishLoop
@@ -293,7 +306,7 @@ PublishLoop:
             break SelectLoop
           }
         case bytes.Compare(signature, []byte("ACKN")) == 0:
-          if err = p.processAck(message, registrar_chan); err != nil {
+          if err = p.processAck(message, p.registrar_chan); err != nil {
             break SelectLoop
           }
         default:
@@ -350,33 +363,78 @@ PublishLoop:
 
         // Allow network timeout to receive something
         timer.Reset(p.config.Timeout)
-      case <-p.shutdown.Signal():
+      case <-p.control.ShutdownSignal():
         // If no pending payloads, simply end
-        // TODO: Persist pending payloads and resume? Quicker shutdown
         if p.num_payloads == 0 {
           break PublishLoop
         }
 
         // Flag shutdown for when we finish pending payloads
+        // TODO: Persist pending payloads and resume? Quicker shutdown
         shutdown = true
+      case config := <-p.control.RecvConfig():
+        // Apply and check for changes
+        reload = p.reloadConfig(&config.Network)
+
+        // If a change and no pending payloads, process immediately
+        if reload != 0 && p.num_payloads == 0 {
+          break SelectLoop
+        }
       }
     }
 
-    // Disconnect and retry payloads
-    log.Printf("Transport error, will reconnect: %s\n", err)
-    p.transport.Disconnect()
+    if err != nil {
+      // An error occurred, reconnect after timeout
+      log.Printf("Transport error, will reconnect: %s\n", err)
+      p.transport.Disconnect()
+      time.Sleep(p.config.Reconnect)
+    } else {
+      // Reloading transport
+      p.transport.Disconnect()
+
+      // Do we need to reinit transport?
+      if reload == 2 {
+        if err = p.initTransport(); err != nil {
+          log.Printf("The new transport configuration failed to apply: %s\n", err)
+        }
+      }
+
+      reload = 0
+    }
 
     retry_payload = p.first_payload
-
-    time.Sleep(p.config.Reconnect)
   }
 
   p.transport.Disconnect()
 
   // Disconnect from registrar
-  registrar.Disconnect()
+  p.registrar.Disconnect()
 
   log.Printf("Publisher shutdown complete\n")
+}
+
+func (p *Publisher) reloadConfig(new_config *NetworkConfig) int {
+  old_config := p.config
+  p.config = new_config
+
+  // Transport reload will return whether we need a full reload or not
+  reload := p.transport.ReloadConfig(new_config)
+  if reload == 2 {
+    return 2
+  }
+
+  // Same servers?
+  if len(new_config.Servers) != len(old_config.Servers) {
+    return 1
+  }
+
+  for i := range new_config.Servers {
+    if new_config.Servers[i] != old_config.Servers[i] {
+      return 1
+    }
+  }
+
+  return reload
 }
 
 func (p *Publisher) checkResend() (bool, error) {

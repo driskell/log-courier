@@ -25,15 +25,15 @@ import (
 )
 
 type Spooler struct {
-  shutdown     *LogCourierShutdown
+  control     *LogCourierControl
   max_size     uint64
   idle_timeout time.Duration
   spool        []*FileEvent
 }
 
-func NewSpooler(max_size uint64, idle_timeout time.Duration, shutdown *LogCourierShutdown) *Spooler {
+func NewSpooler(max_size uint64, idle_timeout time.Duration, control *LogCourierMasterControl) *Spooler {
   return &Spooler{
-    shutdown: shutdown,
+    control: control.Register(),
     max_size: max_size,
     idle_timeout: idle_timeout,
     spool: make([]*FileEvent, 0, max_size),
@@ -42,7 +42,7 @@ func NewSpooler(max_size uint64, idle_timeout time.Duration, shutdown *LogCourie
 
 func (s *Spooler) Spool(input <-chan *FileEvent, output chan<- []*FileEvent) {
   defer func() {
-    s.shutdown.Done()
+    s.control.Done()
   }()
 
   timer := time.NewTimer(s.idle_timeout)
@@ -69,7 +69,7 @@ SpoolerLoop:
       }
 
       timer.Reset(s.idle_timeout)
-    case <-s.shutdown.Signal():
+    case <-s.control.ShutdownSignal():
       break SpoolerLoop
     }
   }
@@ -79,7 +79,7 @@ SpoolerLoop:
 
 func (s *Spooler) sendSpool(output chan<- []*FileEvent) bool {
   select {
-  case <-s.shutdown.Signal():
+  case <-s.control.ShutdownSignal():
     return false
   case output <- s.spool:
   }

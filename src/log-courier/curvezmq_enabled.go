@@ -1,10 +1,7 @@
-// +build !windows
+// +build zmq_4_x
 
 /*
  * Copyright 2014 Jason Woods.
- *
- * This file is a modification of code from Logstash Forwarder.
- * Copyright 2012-2013 Jordan Sissel and contributors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +18,23 @@
 
 package main
 
-import (
-  "log"
-  "log/syslog"
-)
-
-func (lc *LogCourier) configureSyslog() {
-  writer, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "log-courier")
-  if err != nil {
-    log.Fatalf("Failed to open syslog: %s\n", err)
-    return
+func (t *TransportZmq) configureSocket() (err error) {
+  if t.config.transport == "zmq" {
+    // Configure CurveMQ security
+    if err = t.dealer.SetCurveServerkey(t.config.CurveServerkey); err != nil {
+      return
+    }
+    if err = t.dealer.SetCurvePublickey(t.config.CurvePublickey); err != nil {
+      return
+    }
+    if err = t.dealer.SetCurveSecretkey(t.config.CurveSecretkey); err != nil {
+      return
+    }
   }
-  log.SetOutput(writer)
+  return
+}
+
+// Register the transport
+func init() {
+  RegisterTransport(&TransportZmqRegistrar{}, "zmq")
 }

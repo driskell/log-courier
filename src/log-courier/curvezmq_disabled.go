@@ -1,10 +1,7 @@
-// +build !windows
+// +build zmq_3_x
 
 /*
  * Copyright 2014 Jason Woods.
- *
- * This file is a modification of code from Logstash Forwarder.
- * Copyright 2012-2013 Jordan Sissel and contributors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +18,6 @@
 
 package main
 
-import (
-  "log"
-  "log/syslog"
-)
-
-func (lc *LogCourier) configureSyslog() {
-  writer, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "log-courier")
-  if err != nil {
-    log.Fatalf("Failed to open syslog: %s\n", err)
-    return
-  }
-  log.SetOutput(writer)
+func (t *TransportZmq) configureSocket() error {
+  return nil
 }
