@@ -149,7 +149,7 @@ func (r *Registrar) Register() {
     }
 
     state_json := make(map[string]*FileState, len(r.state))
-    for p, value := range r.state {
+    for _, value := range r.state {
       //if _, ok := state_json[*value.Source]; ok {
         // Panic? We should never allow this
       //}
