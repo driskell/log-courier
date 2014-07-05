@@ -32,18 +32,18 @@ import (
 func (lc *LogCourier) configureLogging(syslog bool) {
   // First, the stdout backend
   backends := make([]logging.Backend, 1)
-  stdout_backend := logging.NewLogBackend(os.Stdout, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
-  backends[0] = stdout_backend
+  stderr_backend := logging.NewLogBackend(os.Stderr, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
+  backends[0] = stderr_backend
 
   // Make it color if it's a TTY
-  if lc.isatty(os.Stdout) {
-    //stdout_backend.Color = true
+  if lc.isatty(os.Stderr) {
+    stderr_backend.Color = true
   }
 
   if syslog {
     syslog_backend, err := logging.NewSyslogBackend("log-courier")
     if err != nil {
-      log.Fatalf("Failed to open syslog: %s\n", err)
+      log.Fatalf("Failed to open syslog: %s", err)
     }
     backends = append(backends, syslog_backend)
   }

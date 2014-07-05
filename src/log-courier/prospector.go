@@ -87,7 +87,7 @@ func (pi *ProspectorInfo) Stop() {
     // Just in case someone started us outside a pipeline with stdin
     // to stop confusion at why we don't exit after Ctrl+C
     // There's no deadline on Stdin reads :-(
-    log.Notice("Waiting for Stdin to close (EOF or Ctrl+D)\n")
+    log.Notice("Waiting for Stdin to close (EOF or Ctrl+D)")
   }
   close(pi.harvester_stop)
 }
@@ -161,7 +161,7 @@ func (p *Prospector) Prospect(output chan<- *FileEvent) {
           // We need to check err - we cannot allow a nil stat
           stat, err := os.Stdin.Stat()
           if err != nil {
-            log.Error("stat(Stdin) failed: %s\n", err)
+            log.Error("stat(Stdin) failed: %s", err)
             continue
           }
 
@@ -247,14 +247,14 @@ ProspectLoop:
   // Disconnect from the registrar
   p.registrar.Disconnect()
 
-  log.Info("Prospector shutdown complete\n")
+  log.Info("Prospector shutdown complete")
 }
 
 func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEvent) {
   // Evaluate the path as a wildcards/shell glob
   matches, err := filepath.Glob(path)
   if err != nil {
-    log.Error("glob(%s) failed: %v\n", path, err)
+    log.Error("glob(%s) failed: %v", path, err)
     return
   }
 
@@ -265,12 +265,12 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
     //       waiting for Harvester or Registrar to do it
     fileinfo, err := os.Stat(file)
     if err != nil {
-      log.Error("stat(%s) failed: %s\n", file, err)
+      log.Error("stat(%s) failed: %s", file, err)
       continue
     }
 
     if fileinfo.IsDir() {
-      log.Info("Skipping directory: %s\n", file)
+      log.Info("Skipping directory: %s", file)
       continue
     }
 
@@ -285,7 +285,7 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
       // This ensures we don't skip genuine creations with dead times less than 10s
       if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
         // This file was simply renamed (known inode+dev) - link the same harvester channel as the old file
-        log.Info("File rename was detected: %s -> %s\n", previous, file)
+        log.Info("File rename was detected: %s -> %s", previous, file)
         info = previousinfo
         info.file = file
 
@@ -296,14 +296,14 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
 
         if fileinfo.ModTime().Before(p.lastscan) && time.Since(fileinfo.ModTime()) > config.DeadTime {
           // Old file, skip it, but push offset of file size so we start from the end if this file changes and needs picking up
-          log.Info("Skipping file (older than dead time of %v): %s\n", config.DeadTime, file)
+          log.Info("Skipping file (older than dead time of %v): %s", config.DeadTime, file)
 
           // Store the offset that we should resume from if we notice a modification
           info.finish_offset = fileinfo.Size()
           p.registrar_events = append(p.registrar_events, &NewFileEvent{ProspectorInfo: info, Source: file, Offset: fileinfo.Size(), fileinfo: fileinfo})
         } else {
           // Process new file
-          log.Info("Launching harvester on new file: %s\n", file)
+          log.Info("Launching harvester on new file: %s", file)
           p.startHarvester(info, output, config)
         }
 
@@ -317,14 +317,14 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
 
         if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
           // This file was renamed from another file we know - link the same harvester channel as the old file
-          log.Info("File rename was detected: %s -> %s\n", previous, file)
+          log.Info("File rename was detected: %s -> %s", previous, file)
           info = previousinfo
           info.file = file
 
           p.registrar_events = append(p.registrar_events, &RenamedEvent{ProspectorInfo: info, Source: file})
         } else {
           // File is not the same file we saw previously, it must have rotated and is a new file
-          log.Info("Launching harvester on rotated file: %s\n", file)
+          log.Info("Launching harvester on rotated file: %s", file)
 
           // Forget about the previous harvester and let it continue on the old file - so start a new channel to use with the new harvester
           info = NewProspectorInfoFromFileInfo(file, fileinfo)
@@ -343,13 +343,13 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
     if resume {
       if info.status == Status_Resume {
         // This is a filestate that was saved, resume the harvester
-        log.Info("Resuming harvester on a previously harvested file: %s\n", file)
+        log.Info("Resuming harvester on a previously harvested file: %s", file)
       } else if info.status == Status_Failed {
         // Last attempt we failed to start, try again
-        log.Info("Attempting to restart failed harvester: %s\n", file)
+        log.Info("Attempting to restart failed harvester: %s", file)
       } else if info.identity.Stat().ModTime() != fileinfo.ModTime() {
         // Resume harvesting of an old file we've stopped harvesting from
-        log.Info("Resuming harvester on an old file that was just modified: %s\n", file)
+        log.Info("Resuming harvester on an old file that was just modified: %s", file)
       } else {
         resume = false
       }

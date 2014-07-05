@@ -151,7 +151,7 @@ func (t *TransportZmq) Connect() (err error) {
   for _, hostport := range t.net_config.Servers {
     submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
     if submatch == nil {
-      log.Warning("Invalid host:port given: %s\n", hostport)
+      log.Warning("Invalid host:port given: %s", hostport)
       continue
     }
 
@@ -160,7 +160,7 @@ func (t *TransportZmq) Connect() (err error) {
     port := string(submatch[2])
     addresses, err := net.LookupHost(host)
     if err != nil {
-      log.Warning("DNS lookup failure \"%s\": %s\n", host, err)
+      log.Warning("DNS lookup failure \"%s\": %s", host, err)
       continue
     }
 
@@ -173,7 +173,7 @@ func (t *TransportZmq) Connect() (err error) {
         continue
       }
 
-      log.Info("Connected with %s (%s) \n", addressport, host)
+      log.Info("Connected with %s (%s) ", addressport, host)
       endpoints++
     }
   }

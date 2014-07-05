@@ -102,7 +102,7 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
     }
 
     if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
-      log.Info("Loading client ssl certificate: %s and %s\n", ret.SSLCertificate, ret.SSLKey)
+      log.Info("Loading client ssl certificate: %s and %s", ret.SSLCertificate, ret.SSLKey)
       cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
       if err != nil {
         return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
@@ -111,7 +111,7 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
     }
 
     if len(ret.SSLCA) > 0 {
-      log.Info("Setting trusted CA from file: %s\n", ret.SSLCA)
+      log.Info("Setting trusted CA from file: %s", ret.SSLCA)
       ret.tls_config.RootCAs = x509.NewCertPool()
 
       pemdata, err := ioutil.ReadFile(ret.SSLCA)
@@ -183,7 +183,7 @@ func (t *TransportTcp) Connect() error {
   address := addresses[rand.Int()%len(addresses)]
   addressport := net.JoinHostPort(address, port)
 
-  log.Info("Connecting to %s (%s) \n", addressport, host)
+  log.Info("Connecting to %s (%s) ", addressport, host)
 
   tcpsocket, err := net.DialTimeout("tcp", addressport, t.net_config.Timeout)
   if err != nil {
@@ -209,7 +209,7 @@ func (t *TransportTcp) Connect() error {
     t.socket = tcpsocket
   }
 
-  log.Info("Connected with %s\n", address)
+  log.Info("Connected with %s", address)
 
   // Signal channels
   t.shutdown = make(chan interface{}, 1)

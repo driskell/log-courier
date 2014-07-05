@@ -97,7 +97,7 @@ func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *FileEvent
   var value []byte
   value, err = json.Marshal(event.Event)
   if err != nil {
-    log.Error("JSON event encoding error: %s\n", err)
+    log.Error("JSON event encoding error: %s", err)
 
     if err = binary.Write(output, binary.BigEndian, 2); err != nil {
       return
@@ -149,7 +149,7 @@ func (p *Publisher) Init() error {
 
   p.hostname, err = os.Hostname()
   if err != nil {
-    log.Warning("Failed to determine the FQDN; using localhost.localdomain.\n")
+    log.Warning("Failed to determine the FQDN; using localhost.localdomain.")
     p.hostname = default_publisher_hostname
   }
 
@@ -194,7 +194,7 @@ func (p *Publisher) Publish(input <-chan []*FileEvent) {
 PublishLoop:
   for {
     if err = p.transport.Connect(); err != nil {
-      log.Error("Connect attempt failed: %s\n", err)
+      log.Error("Connect attempt failed: %s", err)
       // TODO: implement shutdown select
       select {
       case <-time.After(p.config.Reconnect):
@@ -384,7 +384,7 @@ PublishLoop:
 
     if err != nil {
       // An error occurred, reconnect after timeout
-      log.Error("Transport error, will reconnect: %s\n", err)
+      log.Error("Transport error, will reconnect: %s", err)
       p.transport.Disconnect()
       time.Sleep(p.config.Reconnect)
     } else {
@@ -394,7 +394,7 @@ PublishLoop:
       // Do we need to reinit transport?
       if reload == 2 {
         if err = p.initTransport(); err != nil {
-          log.Error("The new transport configuration failed to apply: %s\n", err)
+          log.Error("The new transport configuration failed to apply: %s", err)
         }
       }
 
@@ -409,7 +409,7 @@ PublishLoop:
   // Disconnect from registrar
   p.registrar.Disconnect()
 
-  log.Info("Publisher shutdown complete\n")
+  log.Info("Publisher shutdown complete")
 }
 
 func (p *Publisher) reloadConfig(new_config *NetworkConfig) int {

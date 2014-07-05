@@ -73,7 +73,7 @@ SpoolerLoop:
     }
   }
 
-  log.Info("Spooler shutdown complete\n")
+  log.Info("Spooler shutdown complete")
 }
 
 func (s *Spooler) sendSpool(output chan<- []*FileEvent) bool {

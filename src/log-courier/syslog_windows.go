@@ -32,6 +32,6 @@ func (lc *LogCourier) configureLogging() {
   logging.SetBackend(backends...)
 
   if syslog {
-    log.Warning("Logging to syslog is not supported on this platform\n")
+    log.Warning("Logging to syslog is not supported on this platform")
   }
 }

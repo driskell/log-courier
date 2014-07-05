@@ -74,7 +74,7 @@ func (h *Harvester) Harvest(output chan<- *FileEvent) (int64, bool) {
   // Get current offset in file
   // TODO: Check error?
   offset, _ := h.file.Seek(0, os.SEEK_CUR)
-  log.Info("Started harvester at position %d (requested %d): %s\n", offset, h.offset, h.path)
+  log.Info("Started harvester at position %d (requested %d): %s", offset, h.offset, h.path)
   h.offset = offset
 
   // TODO(sissel): Make the buffer size tunable at start-time
@@ -106,13 +106,13 @@ ReadLoop:
         info, err := h.file.Stat()
         if err == nil {
           if info.Size() < h.offset {
-            log.Info("File truncated, seeking to beginning: %s\n", h.path)
+            log.Info("File truncated, seeking to beginning: %s", h.path)
             h.file.Seek(0, os.SEEK_SET)
             h.offset = 0
             continue
           } else if age := time.Since(last_read_time); age > h.fileconfig.DeadTime {
             // if last_read_time was more than dead time, this file is probably dead. Stop watching it.
-            log.Info("Stopping harvest of %s; last change was %v ago\n", h.path, age-(age%time.Second))
+            log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
             // TODO: We should return a Stat() from before we attempted to read
             // In prospector we use that for comparison to resume
             // This prevents a potential race condition if we stop just as the
@@ -122,10 +122,10 @@ ReadLoop:
 
           continue
         } else {
-          log.Error("Unexpected error checking status of %s: %s\n", h.path, err)
+          log.Error("Unexpected error checking status of %s: %s", h.path, err)
         }
       } else {
-        log.Error("Unexpected error reading from %s: %s\n", h.path, err)
+        log.Error("Unexpected error reading from %s: %s", h.path, err)
       }
       return h.codec.Teardown(), true
     }
@@ -141,7 +141,7 @@ ReadLoop:
     }
   }
 
-  log.Info("Harvester shutdown for %s complete\n", h.path)
+  log.Info("Harvester shutdown for %s complete", h.path)
   return h.codec.Teardown(), false
 }
 
@@ -155,7 +155,7 @@ func (h *Harvester) prepareHarvester() bool {
   var err error
   h.file, err = h.openFile(h.path)
   if err != nil {
-    log.Error("Failed opening %s: %s\n", h.path, err)
+    log.Error("Failed opening %s: %s", h.path, err)
     return false
   }
 
@@ -211,7 +211,7 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer, eof_tim
         }
         continue
       } else {
-        log.Warning("%s\n", err)
+        log.Warning("%s", err)
         return nil, 0, err // TODO(sissel): don't do this?
       }
     }

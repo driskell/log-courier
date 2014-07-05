@@ -129,10 +129,10 @@ func NewLogCourier() *LogCourier {
 func (lc *LogCourier) Run() {
   lc.parseFlags()
 
-  log.Notice("Log Courier starting up\n")
+  log.Notice("Log Courier starting up")
 
   if !lc.loadConfig() {
-    log.Fatalf("Startup failed. Please check the configuration.\n")
+    log.Fatalf("Startup failed. Please check the configuration.")
   }
 
   event_chan := make(chan *FileEvent, 16)
@@ -143,7 +143,7 @@ func (lc *LogCourier) Run() {
 
   publisher := NewPublisher(&lc.config.Network, registrar, lc.control)
   if err := publisher.Init(); err != nil {
-    log.Fatalf("The publisher failed to initialise: %s\n", err)
+    log.Fatalf("The publisher failed to initialise: %s", err)
   }
 
   spooler := NewSpooler(lc.spool_size, lc.idle_timeout, lc.control)
@@ -167,13 +167,15 @@ SignalLoop:
   for {
     select {
       case <-lc.shutdown_chan:
-        log.Notice("Log Courier shutting down\n")
+        log.Notice("Log Courier shutting down")
         lc.cleanShutdown()
         break SignalLoop
       case <-lc.reload_chan:
         lc.reloadConfig()
     }
   }
+
+  log.Notice("Log Courier shutdown complete")
 }
 
 func (lc *LogCourier) parseFlags() {
@@ -227,7 +229,7 @@ func (lc *LogCourier) parseFlags() {
   lc.configureLogging(syslog)
 
   if cpu_profile != "" {
-    log.Notice("Starting CPU profiler\n")
+    log.Notice("Starting CPU profiler")
     f, err := os.Create(cpu_profile)
     if err != nil {
       log.Fatal(err)
@@ -236,7 +238,7 @@ func (lc *LogCourier) parseFlags() {
     go func() {
       time.Sleep(60 * time.Second)
       pprof.StopCPUProfile()
-      log.Panic("CPU profile completed\n")
+      log.Panic("CPU profile completed")
     }()
   }
 }
@@ -244,12 +246,12 @@ func (lc *LogCourier) parseFlags() {
 func (lc *LogCourier) loadConfig() bool {
   lc.config = NewConfig()
   if err := lc.config.Load(lc.config_file); err != nil {
-    log.Critical("%s\n", err)
+    log.Critical("%s", err)
     return false
   }
 
   if len(lc.config.Files) == 0 {
-    log.Critical("No file groups were found in the configuration.\n")
+    log.Critical("No file groups were found in the configuration.")
     return false
   }
 
@@ -257,7 +259,7 @@ func (lc *LogCourier) loadConfig() bool {
 }
 
 func (lc *LogCourier) reloadConfig() {
-  log.Notice("Reloading configuration.\n")
+  log.Notice("Reloading configuration.")
   if lc.loadConfig() {
     lc.control.SendConfig(lc.config)
   }
