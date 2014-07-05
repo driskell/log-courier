@@ -28,7 +28,6 @@ import (
   "errors"
   "fmt"
   "io/ioutil"
-  "log"
   "math/rand"
   "net"
   "regexp"
@@ -103,21 +102,21 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
     }
 
     if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
-      log.Printf("Loading client ssl certificate: %s and %s\n", ret.SSLCertificate, ret.SSLKey)
+      log.Info("Loading client ssl certificate: %s and %s\n", ret.SSLCertificate, ret.SSLKey)
       cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
       if err != nil {
-        return nil, errors.New(fmt.Sprintf("Failed loading client ssl certificate: %s", err))
+        return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
       }
       ret.tls_config.Certificates = []tls.Certificate{cert}
     }
 
     if len(ret.SSLCA) > 0 {
-      log.Printf("Setting trusted CA from file: %s\n", ret.SSLCA)
+      log.Info("Setting trusted CA from file: %s\n", ret.SSLCA)
       ret.tls_config.RootCAs = x509.NewCertPool()
 
       pemdata, err := ioutil.ReadFile(ret.SSLCA)
       if err != nil {
-        return nil, errors.New(fmt.Sprintf("Failure reading CA certificate: %s", err))
+        return nil, fmt.Errorf("Failure reading CA certificate: %s", err)
       }
 
       block, _ := pem.Decode(pemdata)
@@ -125,12 +124,12 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
         return nil, errors.New("Failed to decode CA certificate data")
       }
       if block.Type != "CERTIFICATE" {
-        return nil, errors.New(fmt.Sprintf("Specified CA certificate is not a certificate: %s", ret.SSLCA))
+        return nil, fmt.Errorf("Specified CA certificate is not a certificate: %s", ret.SSLCA)
       }
 
       cert, err := x509.ParseCertificate(block.Bytes)
       if err != nil {
-        return nil, errors.New(fmt.Sprintf("Failed to parse CA certificate: %s", err))
+        return nil, fmt.Errorf("Failed to parse CA certificate: %s", err)
       }
       ret.tls_config.RootCAs.AddCert(cert)
     }
@@ -184,7 +183,7 @@ func (t *TransportTcp) Connect() error {
   address := addresses[rand.Int()%len(addresses)]
   addressport := net.JoinHostPort(address, port)
 
-  log.Printf("Connecting to %s (%s) \n", addressport, host)
+  log.Info("Connecting to %s (%s) \n", addressport, host)
 
   tcpsocket, err := net.DialTimeout("tcp", addressport, t.net_config.Timeout)
   if err != nil {
@@ -210,7 +209,7 @@ func (t *TransportTcp) Connect() error {
     t.socket = tcpsocket
   }
 
-  log.Printf("Connected with %s\n", address)
+  log.Info("Connected with %s\n", address)
 
   // Signal channels
   t.shutdown = make(chan interface{}, 1)
@@ -276,7 +275,7 @@ func (t *TransportTcp) receiver() {
 
     // Sanity
     if length > 1048576 {
-      err = errors.New(fmt.Sprintf("Data too large (%d)", length))
+      err = fmt.Errorf("Data too large (%d)", length)
       break
     }
 

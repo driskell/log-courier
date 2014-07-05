@@ -20,7 +20,6 @@
 package main
 
 import (
-  "log"
   "time"
 )
 
@@ -74,7 +73,7 @@ SpoolerLoop:
     }
   }
 
-  log.Printf("Spooler shutdown complete\n")
+  log.Info("Spooler shutdown complete\n")
 }
 
 func (s *Spooler) sendSpool(output chan<- []*FileEvent) bool {

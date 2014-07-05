@@ -27,7 +27,6 @@ import (
   "errors"
   "fmt"
   "io"
-  "log"
   "math/rand"
   "os"
   "time"
@@ -98,7 +97,7 @@ func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *FileEvent
   var value []byte
   value, err = json.Marshal(event.Event)
   if err != nil {
-    log.Printf("JSON event encoding error: %s\n", err)
+    log.Error("JSON event encoding error: %s\n", err)
 
     if err = binary.Write(output, binary.BigEndian, 2); err != nil {
       return
@@ -150,7 +149,7 @@ func (p *Publisher) Init() error {
 
   p.hostname, err = os.Hostname()
   if err != nil {
-    log.Printf("Failed to determine the FQDN; using localhost.localdomain.\n")
+    log.Warning("Failed to determine the FQDN; using localhost.localdomain.\n")
     p.hostname = default_publisher_hostname
   }
 
@@ -195,7 +194,7 @@ func (p *Publisher) Publish(input <-chan []*FileEvent) {
 PublishLoop:
   for {
     if err = p.transport.Connect(); err != nil {
-      log.Printf("Connect attempt failed: %s\n", err)
+      log.Error("Connect attempt failed: %s\n", err)
       // TODO: implement shutdown select
       select {
       case <-time.After(p.config.Reconnect):
@@ -310,7 +309,7 @@ PublishLoop:
             break SelectLoop
           }
         default:
-          err = errors.New(fmt.Sprintf("Unknown message received: % X", signature))
+          err = fmt.Errorf("Unknown message received: % X", signature)
           break SelectLoop
         }
 
@@ -385,7 +384,7 @@ PublishLoop:
 
     if err != nil {
       // An error occurred, reconnect after timeout
-      log.Printf("Transport error, will reconnect: %s\n", err)
+      log.Error("Transport error, will reconnect: %s\n", err)
       p.transport.Disconnect()
       time.Sleep(p.config.Reconnect)
     } else {
@@ -395,7 +394,7 @@ PublishLoop:
       // Do we need to reinit transport?
       if reload == 2 {
         if err = p.initTransport(); err != nil {
-          log.Printf("The new transport configuration failed to apply: %s\n", err)
+          log.Error("The new transport configuration failed to apply: %s\n", err)
         }
       }
 
@@ -410,7 +409,7 @@ PublishLoop:
   // Disconnect from registrar
   p.registrar.Disconnect()
 
-  log.Printf("Publisher shutdown complete\n")
+  log.Info("Publisher shutdown complete\n")
 }
 
 func (p *Publisher) reloadConfig(new_config *NetworkConfig) int {
@@ -503,7 +502,7 @@ func (p *Publisher) sendNewPayload(events []*FileEvent) (err error) {
 
 func (p *Publisher) processPong(message []byte) error {
   if len(message) != 0 {
-    return errors.New(fmt.Sprintf("PONG message overflow (%d)", len(message)))
+    return fmt.Errorf("PONG message overflow (%d)", len(message))
   }
 
   // Were we pending a ping?
@@ -517,7 +516,7 @@ func (p *Publisher) processPong(message []byte) error {
 
 func (p *Publisher) processAck(message []byte, registrar_chan chan<- []RegistrarEvent) (err error) {
   if len(message) != 20 {
-    err = errors.New(fmt.Sprintf("ACKN message corruption (%d)", len(message)))
+    err = fmt.Errorf("ACKN message corruption (%d)", len(message))
     return
   }
 

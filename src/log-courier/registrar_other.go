@@ -23,7 +23,6 @@ package main
 
 import (
   "encoding/json"
-  "log"
   "os"
 )
 
@@ -33,7 +32,7 @@ func (r *Registrar) WriteRegistry(state map[string]*FileState) {
   tname := fname + ".new"
   file, err := os.Create(tname)
   if err != nil {
-    log.Printf("Failed to open %s for writing: %s\n", tname, err)
+    log.Error("Registrar save problem: Failed to open %s for writing: %s\n", tname, err)
     return
   }
   defer file.Close()
@@ -43,6 +42,6 @@ func (r *Registrar) WriteRegistry(state map[string]*FileState) {
 
   err = os.Rename(tname, fname)
   if err != nil {
-    log.Printf("Registrar save problem: Failed to move the new file into place: %s\n", err)
+    log.Error("Registrar save problem: Failed to move the new file into place: %s\n", err)
   }
 }

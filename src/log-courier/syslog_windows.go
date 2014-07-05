@@ -19,8 +19,19 @@
 
 package main
 
-import "log"
+import (
+  "github.com/op/go-logging"
+  stdlog "log"
+)
 
-func (lc *LogCourier) configureSyslog() {
-  log.Printf("Logging to syslog not supported on this platform\n")
+func (lc *LogCourier) configureLogging() {
+  // First, the stdout backend
+  backends := make([]logging.Backend, 1)
+  backends[0] := logging.NewLogBackend(os.Stdout, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
+
+  logging.SetBackend(backends...)
+
+  if syslog {
+    log.Warning("Logging to syslog is not supported on this platform\n")
+  }
 }

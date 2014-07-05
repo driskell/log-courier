@@ -22,7 +22,6 @@ package main
 import (
   "bytes"
   "encoding/json"
-  "errors"
   "fmt"
   "math"
   "os"
@@ -246,7 +245,7 @@ func (config *Config) Load(path string) (err error) {
     if factory != nil {
       config.Network.transport = factory
     } else {
-      err = errors.New(fmt.Sprintf("Unrecognised transport '%s'", transport_name))
+      err = fmt.Errorf("Unrecognised transport '%s'", transport_name)
       return
     }
   } else {
@@ -272,7 +271,7 @@ func (config *Config) Load(path string) (err error) {
       if factory != nil {
         config.Files[k].codec = factory
       } else {
-        err = errors.New(fmt.Sprintf("Unrecognised codec '%s'", codec_name))
+        err = fmt.Errorf("Unrecognised codec '%s'", codec_name)
         return
       }
     } else {
@@ -320,7 +319,7 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
           delete(raw_config, tag)
           continue
         } else {
-          err = errors.New(fmt.Sprintf("Option %s%s must be a hash", config_path, tag))
+          err = fmt.Errorf("Option %s%s must be a hash", config_path, tag)
           return
         }
       }
@@ -340,7 +339,7 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
           if item.Elem().Type().AssignableTo(field.Type().Elem()) {
             field.SetMapIndex(j, item.Elem())
           } else {
-            err = errors.New(fmt.Sprintf("Option %s%s[%s] must be %s or similar", config_path, tag, j, field.Type().Elem()))
+            err = fmt.Errorf("Option %s%s[%s] must be %s or similar", config_path, tag, j, field.Type().Elem())
             return
           }
         }
@@ -350,23 +349,23 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
         if value.Type().AssignableTo(vduration.Type()) {
           duration = value.Float()
           if duration < math.MinInt64 || duration > math.MaxInt64 {
-            err = errors.New(fmt.Sprintf("Option %s%s is not a valid numeric or string duration", config_path, tag))
+            err = fmt.Errorf("Option %s%s is not a valid numeric or string duration", config_path, tag)
             return
           }
           field.Set(reflect.ValueOf(time.Duration(int64(duration)) * time.Second))
         } else if value.Kind() == reflect.String {
           var tduration time.Duration
           if tduration, err = time.ParseDuration(value.String()); err != nil {
-            err = errors.New(fmt.Sprintf("Option %s%s is not a valid numeric or string duration: %s", config_path, tag, err))
+            err = fmt.Errorf("Option %s%s is not a valid numeric or string duration: %s", config_path, tag, err)
             return
           }
           field.Set(reflect.ValueOf(tduration))
         } else {
-          err = errors.New(fmt.Sprintf("Option %s%s must be %s or similar", config_path, tag, vduration.Type()))
+          err = fmt.Errorf("Option %s%s must be %s or similar", config_path, tag, vduration.Type())
           return
         }
       } else {
-        err = errors.New(fmt.Sprintf("Option %s%s must be %s or similar", config_path, tag, field.Type()))
+        err = fmt.Errorf("Option %s%s must be %s or similar", config_path, tag, field.Type())
         return
       }
       delete(raw_config, tag)
@@ -404,7 +403,7 @@ func PopulateConfigSlice(field reflect.Value, config_path string, raw_config []i
 
 func ReportUnusedConfig(config_path string, raw_config map[string]interface{}) (err error) {
   for k := range raw_config {
-    err = errors.New(fmt.Sprintf("Option %s%s is not available", config_path, k))
+    err = fmt.Errorf("Option %s%s is not available", config_path, k)
     return
   }
   return

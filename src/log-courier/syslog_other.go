@@ -22,15 +22,40 @@
 package main
 
 import (
-  "log"
-  "log/syslog"
+  "github.com/op/go-logging"
+  stdlog "log"
+  "os"
+  "syscall"
+  "unsafe"
 )
 
-func (lc *LogCourier) configureSyslog() {
-  writer, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "log-courier")
-  if err != nil {
-    log.Fatalf("Failed to open syslog: %s\n", err)
-    return
+func (lc *LogCourier) configureLogging(syslog bool) {
+  // First, the stdout backend
+  backends := make([]logging.Backend, 1)
+  stdout_backend := logging.NewLogBackend(os.Stdout, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
+  backends[0] = stdout_backend
+
+  // Make it color if it's a TTY
+  if lc.isatty(os.Stdout) {
+    //stdout_backend.Color = true
   }
-  log.SetOutput(writer)
+
+  if syslog {
+    syslog_backend, err := logging.NewSyslogBackend("log-courier")
+    if err != nil {
+      log.Fatalf("Failed to open syslog: %s\n", err)
+    }
+    backends = append(backends, syslog_backend)
+  }
+
+  logging.SetBackend(backends...)
+}
+
+func (lc *LogCourier) isatty(f *os.File) bool {
+  var pgrp int64
+  // Most real isatty implementations use TIOCGETA
+  // However, TIOCGPRGP is easier than TIOCGETA as it only requires an int and not a termios struct
+  // There is a possibility it may not have the exact same effect - but seems fine to me
+  _, _, err := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), syscall.TIOCGPGRP, uintptr(unsafe.Pointer(&pgrp)));
+  return err == 0
 }

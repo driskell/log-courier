@@ -24,7 +24,6 @@ import (
   "errors"
   "fmt"
   zmq "github.com/alecthomas/gozmq"
-  "log"
   "net"
   "regexp"
   "runtime"
@@ -87,19 +86,19 @@ func (r *TransportZmqRegistrar) NewFactory(name string, config_path string, conf
     }
 
     if len(ret.CurveServerkey) == 0 {
-      return nil, errors.New(fmt.Sprintf("Option %scurve server key is required", config_path))
+      return nil, fmt.Errorf("Option %scurve server key is required", config_path)
     } else if len(ret.CurveServerkey) != 40 || !Z85Validate(ret.CurveServerkey) {
-      return nil, errors.New(fmt.Sprintf("Option %scurve server key must be a valid 40 character Z85 encoded string", config_path))
+      return nil, fmt.Errorf("Option %scurve server key must be a valid 40 character Z85 encoded string", config_path)
     }
     if len(ret.CurvePublickey) == 0 {
-      return nil, errors.New(fmt.Sprintf("Option %scurve public key is required", config_path))
+      return nil, fmt.Errorf("Option %scurve public key is required", config_path)
     } else if len(ret.CurvePublickey) != 40 || !Z85Validate(ret.CurvePublickey) {
-      return nil, errors.New(fmt.Sprintf("Option %scurve public key must be a valid 40 character Z85 encoded string", config_path))
+      return nil, fmt.Errorf("Option %scurve public key must be a valid 40 character Z85 encoded string", config_path)
     }
     if len(ret.CurveSecretkey) == 0 {
-      return nil, errors.New(fmt.Sprintf("Option %scurve secret key is required", config_path))
+      return nil, fmt.Errorf("Option %scurve secret key is required", config_path)
     } else if len(ret.CurveSecretkey) != 40 || !Z85Validate(ret.CurveSecretkey) {
-      return nil, errors.New(fmt.Sprintf("Option %scurve secret key must be a valid 40 character Z85 encoded string", config_path))
+      return nil, fmt.Errorf("Option %scurve secret key must be a valid 40 character Z85 encoded string", config_path)
     }
   } else {
     if err := ReportUnusedConfig(config_path, config); err != nil {
@@ -109,7 +108,7 @@ func (r *TransportZmqRegistrar) NewFactory(name string, config_path string, conf
 
   ret.context, err = zmq.NewContext()
   if err != nil {
-    return nil, errors.New(fmt.Sprintf("Failed to create ZMQ context: %s", err))
+    return nil, fmt.Errorf("Failed to create ZMQ context: %s", err)
   }
 
   return ret, nil
@@ -152,7 +151,7 @@ func (t *TransportZmq) Connect() (err error) {
   for _, hostport := range t.net_config.Servers {
     submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
     if submatch == nil {
-      log.Printf("Invalid host:port given: %s\n", hostport)
+      log.Warning("Invalid host:port given: %s\n", hostport)
       continue
     }
 
@@ -161,7 +160,7 @@ func (t *TransportZmq) Connect() (err error) {
     port := string(submatch[2])
     addresses, err := net.LookupHost(host)
     if err != nil {
-      log.Printf("DNS lookup failure \"%s\": %s\n", host, err)
+      log.Warning("DNS lookup failure \"%s\": %s\n", host, err)
       continue
     }
 
@@ -170,11 +169,11 @@ func (t *TransportZmq) Connect() (err error) {
       addressport := net.JoinHostPort(address, port)
 
       if err = t.dealer.Connect("tcp://" + addressport); err != nil {
-        log.Printf("Failed to connect to %s (%s), skipping", addressport, host)
+        log.Warning("Failed to connect to %s (%s), skipping", addressport, host)
         continue
       }
 
-      log.Printf("Connected with %s (%s) \n", addressport, host)
+      log.Info("Connected with %s (%s) \n", addressport, host)
       endpoints++
     }
   }
@@ -296,7 +295,7 @@ PollLoop:
       }
 
       // Failure
-      t.recv_chan <- errors.New(fmt.Sprintf("zmq.Poll failure %s", err))
+      t.recv_chan <- fmt.Errorf("zmq.Poll failure %s", err)
       break
     }
 
@@ -315,7 +314,7 @@ PollLoop:
         }
 
         // Failure
-        t.recv_chan <- errors.New(fmt.Sprintf("Pull zmq.Socket.Recv failure %s", err))
+        t.recv_chan <- fmt.Errorf("Pull zmq.Socket.Recv failure %s", err)
         break
       }
 
@@ -369,7 +368,7 @@ PollLoop:
           }
 
           // Failure
-          t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.Send failure %s", err))
+          t.recv_chan <- fmt.Errorf("Dealer zmq.Socket.Send failure %s", err)
           break
         }
 
@@ -400,7 +399,7 @@ PollLoop:
             }
 
             // Failure
-            t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.Send failure %s", err))
+            t.recv_chan <- fmt.Errorf("Dealer zmq.Socket.Send failure %s", err)
             break PollLoop
           }
 
@@ -443,14 +442,14 @@ PollLoop:
           }
 
           // Failure
-          t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.Recv failure %s", err))
+          t.recv_chan <- fmt.Errorf("Dealer zmq.Socket.Recv failure %s", err)
           break PollLoop
         }
 
         more, err := t.dealer.RcvMore()
         if err != nil {
           // Failure
-          t.recv_chan <- errors.New(fmt.Sprintf("Dealer zmq.Socket.RcvMore failure %s", err))
+          t.recv_chan <- fmt.Errorf("Dealer zmq.Socket.RcvMore failure %s", err)
           break PollLoop
         }
 
@@ -466,13 +465,13 @@ PollLoop:
 
           // Last message and receiving, validate it first
           if len(data) < 8 {
-            log.Printf("Skipping invalid message: not enough data")
+            log.Warning("Skipping invalid message: not enough data")
           } else {
             length := binary.BigEndian.Uint32(data[4:8])
             if length > 1048576 {
-              log.Printf("Skipping invalid message: data too large (%d)", length)
+              log.Warning("Skipping invalid message: data too large (%d)", length)
             } else if length != uint32(len(data))-8 {
-              log.Printf("Skipping invalid message: data has invalid length (%d != %d)", len(data)-8, length)
+              log.Warning("Skipping invalid message: data has invalid length (%d != %d)", len(data)-8, length)
             } else {
               message := [][]byte{data[0:4], data[8:]}
 

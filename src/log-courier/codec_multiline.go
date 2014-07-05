@@ -72,7 +72,7 @@ func (r *CodecMultilineRegistrar) NewFactory(config_path string, config map[stri
 
   result.matcher, err = regexp.Compile(result.Pattern)
   if err != nil {
-    return nil, errors.New(fmt.Sprintf("Failed to compile multiline codec pattern, '%s'.", err))
+    return nil, fmt.Errorf("Failed to compile multiline codec pattern, '%s'.", err)
   }
 
   if result.What == "" || result.What == "previous" {

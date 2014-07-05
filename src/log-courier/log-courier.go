@@ -22,12 +22,18 @@ package main
 import (
   "flag"
   "fmt"
-  "log"
+  "github.com/op/go-logging"
   "os"
   "runtime/pprof"
   "sync"
   "time"
 )
+
+var log *logging.Logger
+
+func init() {
+  log = logging.MustGetLogger("")
+}
 
 func main() {
   logcourier := NewLogCourier()
@@ -123,7 +129,7 @@ func NewLogCourier() *LogCourier {
 func (lc *LogCourier) Run() {
   lc.parseFlags()
 
-  log.Printf("Log Courier starting up\n")
+  log.Notice("Log Courier starting up\n")
 
   if !lc.loadConfig() {
     log.Fatalf("Startup failed. Please check the configuration.\n")
@@ -161,7 +167,7 @@ SignalLoop:
   for {
     select {
       case <-lc.shutdown_chan:
-        log.Printf("Log Courier shutting down\n")
+        log.Notice("Log Courier shutting down\n")
         lc.cleanShutdown()
         break SignalLoop
       case <-lc.reload_chan:
@@ -218,14 +224,10 @@ func (lc *LogCourier) parseFlags() {
     os.Exit(0)
   }
 
-  if syslog {
-    lc.configureSyslog()
-  } else {
-    log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-  }
+  lc.configureLogging(syslog)
 
   if cpu_profile != "" {
-    log.Printf("Starting CPU profiler\n")
+    log.Notice("Starting CPU profiler\n")
     f, err := os.Create(cpu_profile)
     if err != nil {
       log.Fatal(err)
@@ -234,7 +236,7 @@ func (lc *LogCourier) parseFlags() {
     go func() {
       time.Sleep(60 * time.Second)
       pprof.StopCPUProfile()
-      panic("CPU profile completed")
+      log.Panic("CPU profile completed\n")
     }()
   }
 }
@@ -242,12 +244,12 @@ func (lc *LogCourier) parseFlags() {
 func (lc *LogCourier) loadConfig() bool {
   lc.config = NewConfig()
   if err := lc.config.Load(lc.config_file); err != nil {
-    log.Printf("%s\n", err)
+    log.Critical("%s\n", err)
     return false
   }
 
   if len(lc.config.Files) == 0 {
-    log.Printf("No file groups were found in the configuration.\n")
+    log.Critical("No file groups were found in the configuration.\n")
     return false
   }
 
@@ -255,7 +257,7 @@ func (lc *LogCourier) loadConfig() bool {
 }
 
 func (lc *LogCourier) reloadConfig() {
-  log.Printf("Reloading configuration.\n")
+  log.Notice("Reloading configuration.\n")
   if lc.loadConfig() {
     lc.control.SendConfig(lc.config)
   }

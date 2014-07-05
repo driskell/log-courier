@@ -21,7 +21,6 @@ package main
 
 import (
   "encoding/json"
-  "log"
   "os"
 )
 
@@ -52,9 +51,9 @@ func (e *RenamedEvent) Process(state map[*ProspectorInfo]*FileState) {
 
 func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
   if len(e.Events) == 1 {
-    log.Printf("Registrar received %d event\n", len(e.Events))
+    log.Info("Registrar received %d event\n", len(e.Events))
   } else {
-    log.Printf("Registrar received %d events\n", len(e.Events))
+    log.Info("Registrar received %d events\n", len(e.Events))
   }
 
   for _, event := range e.Events {
@@ -106,7 +105,7 @@ func (r *Registrar) LoadPrevious() map[string]*ProspectorInfo {
   }
 
   // Parse the data
-  log.Printf("Loaded registrar data from %s\n", filename)
+  log.Notice("Loaded registrar data from %s\n", filename)
 
   decoder := json.NewDecoder(f)
   decoder.Decode(&data)
@@ -159,5 +158,5 @@ func (r *Registrar) Register() {
     r.WriteRegistry(state_json)
   }
 
-  log.Printf("Registrar shutdown complete\n")
+  log.Info("Registrar shutdown complete\n")
 }
