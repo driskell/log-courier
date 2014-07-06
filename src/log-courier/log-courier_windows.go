@@ -30,3 +30,17 @@ func (lc *LogCourier) registerSignals() {
 
 	// No reload signal for Windows - implementation will have to wait
 }
+
+type LogCourierPlatformWindows struct {
+}
+
+func NewLogCourierPlatform() LogCourierPlatform {
+	return &LogCourierPlatformWindows{}
+}
+
+func (lcp *LogCourierPlatformWindows) Init() {
+	// No syslog support for Windows
+}
+
+func (lcp *LogCourierPlatformWindows) ConfigureLogging(backends []logging.Backend) {
+}

@@ -23,6 +23,7 @@ import (
   "flag"
   "fmt"
   "github.com/op/go-logging"
+  stdlog "log"
   "os"
   "runtime/pprof"
   "sync"
@@ -38,6 +39,11 @@ func init() {
 func main() {
   logcourier := NewLogCourier()
   logcourier.Run()
+}
+
+type LogCourierPlatform interface {
+  Init()
+  ConfigureLogging([]logging.Backend)
 }
 
 type LogCourierMasterControl struct {
@@ -110,6 +116,7 @@ func (lcs *LogCourierControl) Done() {
 
 type LogCourier struct {
   control        *LogCourierMasterControl
+  platform       LogCourierPlatform
   config         *Config
   shutdown_chan  chan os.Signal
   reload_chan    chan os.Signal
@@ -121,7 +128,8 @@ type LogCourier struct {
 
 func NewLogCourier() *LogCourier {
   ret := &LogCourier{
-    control: NewLogCourierMasterControl(),
+    control:  NewLogCourierMasterControl(),
+    platform: NewLogCourierPlatform(),
   }
   return ret
 }
@@ -180,16 +188,19 @@ SignalLoop:
 
 func (lc *LogCourier) parseFlags() {
   var version bool
-  var list_supported bool
   var config_test bool
+  var list_supported bool
+  var log_level string
   var cpu_profile string
-  var syslog bool
 
   flag.BoolVar(&version, "version", false, "show version information")
   flag.BoolVar(&config_test, "config-test", false, "Test the configuration specified by -config and exit")
   flag.BoolVar(&list_supported, "list-supported", false, "List supported transports and codecs")
-  flag.BoolVar(&syslog, "log-to-syslog", false, "Log to syslog instead of stdout")
+  flag.StringVar(&log_level, "log-level", "info", "Logging level")
   flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
+
+  // This MAY add some flags
+  lc.platform.Init()
 
   // TODO - These should be in the configuration file
   flag.Uint64Var(&lc.spool_size, "spool-size", 1024, "Maximum number of events to spool before a flush is forced.")
@@ -226,7 +237,7 @@ func (lc *LogCourier) parseFlags() {
     os.Exit(0)
   }
 
-  lc.configureLogging(syslog)
+  lc.configureLogging(log_level)
 
   if cpu_profile != "" {
     log.Notice("Starting CPU profiler")
@@ -241,6 +252,34 @@ func (lc *LogCourier) parseFlags() {
       log.Panic("CPU profile completed")
     }()
   }
+}
+
+func (lc *LogCourier) configureLogging(log_level string) {
+  // First, the stdout backend
+  backends := make([]logging.Backend, 1)
+  stderr_backend := logging.NewLogBackend(os.Stderr, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
+  backends[0] = stderr_backend
+
+  // Set backends BEFORE log level (or we reset log level)
+  logging.SetBackend(backends...)
+
+  // Set the logging level
+  switch log_level {
+  case "critical":
+    logging.SetLevel(logging.CRITICAL, "")
+  case "error":
+    logging.SetLevel(logging.ERROR, "")
+  case "warning":
+    logging.SetLevel(logging.WARNING, "")
+  case "notice":
+    logging.SetLevel(logging.NOTICE, "")
+  default:
+    logging.SetLevel(logging.INFO, "")
+  case "debug":
+    logging.SetLevel(logging.DEBUG, "")
+  }
+
+  lc.platform.ConfigureLogging(backends)
 }
 
 func (lc *LogCourier) loadConfig() bool {
