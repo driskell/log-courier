@@ -28,8 +28,12 @@ import (
 
 const (
   Status_Ok     = iota
-  Status_Resume = iota
-  Status_Failed = iota
+  Status_Resume
+  Status_Failed
+
+  Orphaned_No    = iota
+  Orphaned_Maybe
+  Orphaned_Yes
 )
 
 type ProspectorInfo struct {
@@ -40,7 +44,7 @@ type ProspectorInfo struct {
   harvester_stop chan interface{}
   status         int
   running        bool
-  orphaned       bool
+  orphaned       int
   finish_offset  int64
 }
 
@@ -168,7 +172,7 @@ func (p *Prospector) Prospect(output chan<- *FileEvent) {
 
           // Stdin is implicitly an orphaned fileinfo
           info := NewProspectorInfoFromFileInfo("-", stat)
-          info.orphaned = true
+          info.orphaned = Orphaned_Yes
 
           // Store the reference so we can shut it down later
           p.prospectors[info] = info
@@ -204,7 +208,7 @@ ProspectLoop:
 
     // Clean up the prospector collections
     for _, info := range p.prospectors {
-      if info.orphaned {
+      if info.orphaned >= Orphaned_Maybe {
         if !info.IsRunning() {
           delete(p.prospectors, info)
         }
@@ -213,7 +217,10 @@ ProspectLoop:
           continue
         }
         delete(p.prospectorindex, info.file)
-        info.orphaned = true
+        info.orphaned = Orphaned_Maybe
+      }
+      if info.orphaned == Orphaned_Maybe {
+        info.orphaned = Orphaned_Yes
         p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
       }
     }
@@ -314,7 +321,7 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
     } else {
       if !info.identity.SameAs(fileinfo) {
         // Keep the old file in case we find it again shortly
-        info.orphaned = true
+        info.orphaned = Orphaned_Maybe
 
         if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
           // This file was renamed from another file we know - link the same harvester channel as the old file
@@ -397,17 +404,17 @@ func (p *Prospector) startHarvesterWithOffset(info *ProspectorInfo, output chan<
 
 func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *ProspectorInfo) {
   for _, ki := range p.prospectors {
-    if !ki.orphaned && ki.file == file {
+    if ki.orphaned == Orphaned_No && ki.file == file {
       // We already know the prospector info for this file doesn't match, so don't check again
       continue
     }
     if ki.identity.SameAs(info) {
       // Found previous information, remove it and return it (it will be added again)
       delete(p.prospectors, ki)
-      if !ki.orphaned {
+      if ki.orphaned == Orphaned_No {
         delete(p.prospectorindex, ki.file)
       } else {
-        ki.orphaned = false
+        ki.orphaned = Orphaned_No
       }
       return ki.file, ki
     }
