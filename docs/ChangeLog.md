@@ -1,10 +1,25 @@
 # Change Log
 
+## ?.??
+
+*?*
+
+* Fix edge case file rotation problems (#7)
+* Fix incorrect field population in events (#9)
+* Fix random hang when Log Courier loses connection to Logstash (#8)
+* Improve logging and make the level of detail configurable (#10)
+* Replace `make selfsigned` with a utility lc-tlscert that can generate
+self-signed certificates and the necessary log snippets like genkey did for ZMQ
+* Rename genkey to lc-curvekey for consistency
+* Various other minor tweaks and fixes
+
 ## 0.10
 
 *29th June 2014*
 
 * Support for Go 1.3 (#3)
+* Configuration can be reloaded while log courier is running by sending the
+SIGHUP signal (*nix only)
 * Additional configuration files can be imported by the main configuration file
 using the new `"includes"` section which is an array of Fileglobs. (#5)
 * Added `make selfsigned` to allow quick generation of SSL certificates for

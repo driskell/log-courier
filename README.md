@@ -52,9 +52,6 @@ Otherwise, simply run make standalone as follows.
 
 The log-courier program can then be found in the 'bin' folder.
 
-A genkey utility can also be found in 'bin' when ZMQ support is built. This
-utility will generate CurveZMQ key pair configurations for you.
-
 *If you receive errors, try using `gmake` instead.*
 
 ### Logstash Integration
@@ -64,17 +61,14 @@ Details instructions on how to integrate with Logstash can be found on the
 
 ### Generating Certificates and Keys
 
-To quickly create a self-signed SSL certificate, run `make selfsigned`. This
-will prompt for the certificate information; most of which can be anything or
-left as the default except 'Common Name', that should be set to the exact same
-hostname you will use in log-courier's 'servers' configuration. This ensures
-that certificate validation passes successfully. You will find the generated
-`.key` and `.crt` files inside the 'bin' folder.
+After Log Courier is built you will find a utility named lc-tlscert inside the
+'bin' folder alongside the main log-courier program. This will generate a
+self-signed certificate to get you started quickly with the TLS transport, and
+the necessary Log Courier and Logstash configuration snippets to make it work.
 
-*If you will be connecting via IP address, the certificate will need extra
-information to pass validation. Open spec/lib/openssl.cnf in your favourite
-editor and look for `#subjectAltName = IP:1.1.1.1`, remove the pound prefix,
-set the IP address, and run `make selfsigned` again.*
+Likewise, a utility called lc-curvekey is produced when ZMQ support is enabled.
+This utility will generate CurveZMQ key pairs as well as the necessary
+configuration snippets.
 
 ## Command Line Options
 

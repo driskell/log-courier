@@ -3,17 +3,16 @@
 export GOPATH := ${PWD}
 
 TAGS :=
-BINS := bin/log-courier
+BINS := bin/log-courier bin/lc-tlscert
 TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
 
 ifeq ($(with),zmq3)
 TAGS := $(TAGS) zmq zmq_3_x
-BINS := $(BINS) bin/genkey
 TESTS := $(TESTS) spec/plainzmq_spec.rb
 endif
 ifeq ($(with),zmq4)
 TAGS := $(TAGS) zmq zmq_4_x
-BINS := $(BINS) bin/genkey
+BINS := $(BINS) bin/lc-curvekey
 TESTS := $(TESTS) spec/plainzmq_spec.rb spec/zmq_spec.rb
 endif
 
@@ -29,10 +28,6 @@ all: $(BINS)
 
 test: all vendor/bundle/.GemfileModT
 	bundle exec rspec $(TESTS)
-
-selfsigned:
-	openssl req -config spec/lib/openssl.cnf -new -keyout bin/selfsigned.key -out bin/selfsigned.csr
-	openssl x509 -extfile spec/lib/openssl.cnf -extensions extensions_section -req -days 365 -in bin/selfsigned.csr -signkey bin/selfsigned.key -out bin/selfsigned.crt
 
 # Only update bundle if Gemfile changes
 vendor/bundle/.GemfileModT: Gemfile

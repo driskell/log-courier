@@ -127,6 +127,13 @@ server acknowledges receipt of the events.
 How often Log Courier should check for changes on the filesystem, such as the
 appearance of new log files, rotations and deletions.
 
+### `"log level"`
+
+*String. Optional. Default: "info"
+Available values: "critical", "error", "warning", "notice", "info", "debug"*
+
+The maximum level of detailed logs to produce.
+
 ## `"network"`
 
 The network configuration tells Log Courier where to ship the logs, and also

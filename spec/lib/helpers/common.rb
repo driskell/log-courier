@@ -26,7 +26,7 @@ shared_context 'Helpers' do
 
     # Generate the ssl key
     system("openssl req -config spec/lib/openssl.cnf -new -batch -keyout #{@ssl_key.path} -out #{@ssl_csr.path}")
-    system("openssl x509 -extfile spec/lib/openssl.cnf -extensions extensions_section_rspec -req -days 365 -in #{@ssl_csr.path} -signkey #{@ssl_key.path} -out #{@ssl_cert.path}")
+    system("openssl x509 -extfile spec/lib/openssl.cnf -extensions extensions_section -req -days 365 -in #{@ssl_csr.path} -signkey #{@ssl_key.path} -out #{@ssl_cert.path}")
   end
 
   after :all do
