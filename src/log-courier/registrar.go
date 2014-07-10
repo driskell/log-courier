@@ -163,9 +163,10 @@ func (r *Registrar) Register() {
 
     state_json := make(map[string]*FileState, len(r.state))
     for _, value := range r.state {
-      //if _, ok := state_json[*value.Source]; ok {
-        // Panic? We should never allow this
-      //}
+      if _, ok := state_json[*value.Source]; ok {
+        // We should never allow this - report an error
+        log.Error("BUG: Unexpected registrar conflict detected for %s", *value.Source)
+      }
       state_json[*value.Source] = value
     }
 
