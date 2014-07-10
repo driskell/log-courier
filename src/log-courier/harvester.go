@@ -106,7 +106,7 @@ ReadLoop:
         info, err := h.file.Stat()
         if err == nil {
           if info.Size() < h.offset {
-            log.Info("File truncated, seeking to beginning: %s", h.path)
+            log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
             h.file.Seek(0, os.SEEK_SET)
             h.offset = 0
             continue

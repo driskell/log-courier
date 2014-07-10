@@ -135,13 +135,7 @@ func NewLogCourier() *LogCourier {
 }
 
 func (lc *LogCourier) Run() {
-  lc.parseFlags()
-
-  log.Notice("Log Courier starting up")
-
-  if !lc.loadConfig() {
-    log.Fatalf("Startup failed. Please check the configuration.")
-  }
+  lc.startUp()
 
   event_chan := make(chan *FileEvent, 16)
   publisher_chan := make(chan []*FileEvent, 1)
@@ -175,7 +169,6 @@ SignalLoop:
   for {
     select {
       case <-lc.shutdown_chan:
-        log.Notice("Log Courier shutting down")
         lc.cleanShutdown()
         break SignalLoop
       case <-lc.reload_chan:
@@ -183,20 +176,18 @@ SignalLoop:
     }
   }
 
-  log.Notice("Log Courier shutdown complete")
+  log.Notice("Log Courier exiting")
 }
 
-func (lc *LogCourier) parseFlags() {
+func (lc *LogCourier) startUp() {
   var version bool
   var config_test bool
   var list_supported bool
-  var log_level string
   var cpu_profile string
 
   flag.BoolVar(&version, "version", false, "show version information")
   flag.BoolVar(&config_test, "config-test", false, "Test the configuration specified by -config and exit")
   flag.BoolVar(&list_supported, "list-supported", false, "List supported transports and codecs")
-  flag.StringVar(&log_level, "log-level", "info", "Logging level")
   flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
 
   // This MAY add some flags
@@ -215,15 +206,6 @@ func (lc *LogCourier) parseFlags() {
     os.Exit(0)
   }
 
-  if config_test {
-    if lc.loadConfig() {
-      fmt.Printf("Configuration OK\n")
-      os.Exit(0)
-    }
-    fmt.Printf("Configuration test failed!\n")
-    os.Exit(1)
-  }
-
   if list_supported {
     fmt.Printf("Available transports:\n")
     for _, transport := range AvailableTransports() {
@@ -237,7 +219,23 @@ func (lc *LogCourier) parseFlags() {
     os.Exit(0)
   }
 
-  lc.configureLogging(log_level)
+  err := lc.loadConfig()
+
+  if config_test {
+    if err == nil {
+      fmt.Printf("Configuration OK\n")
+      os.Exit(0)
+    }
+    fmt.Printf("Configuration test failed!\n")
+    os.Exit(1)
+  }
+
+  if err != nil {
+    fmt.Printf("Configuration error: %s\n", err)
+    os.Exit(1)
+  }
+
+  lc.configureLogging()
 
   if cpu_profile != "" {
     log.Notice("Starting CPU profiler")
@@ -252,9 +250,11 @@ func (lc *LogCourier) parseFlags() {
       log.Panic("CPU profile completed")
     }()
   }
+
+  log.Notice("Log Courier starting up")
 }
 
-func (lc *LogCourier) configureLogging(log_level string) {
+func (lc *LogCourier) configureLogging() {
   // First, the stdout backend
   backends := make([]logging.Backend, 1)
   stderr_backend := logging.NewLogBackend(os.Stderr, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
@@ -264,47 +264,41 @@ func (lc *LogCourier) configureLogging(log_level string) {
   logging.SetBackend(backends...)
 
   // Set the logging level
-  switch log_level {
-  case "critical":
-    logging.SetLevel(logging.CRITICAL, "")
-  case "error":
-    logging.SetLevel(logging.ERROR, "")
-  case "warning":
-    logging.SetLevel(logging.WARNING, "")
-  case "notice":
-    logging.SetLevel(logging.NOTICE, "")
-  default:
-    logging.SetLevel(logging.INFO, "")
-  case "debug":
-    logging.SetLevel(logging.DEBUG, "")
-  }
+  logging.SetLevel(lc.config.General.LogLevel, "")
 
   lc.platform.ConfigureLogging(backends)
 }
 
-func (lc *LogCourier) loadConfig() bool {
+func (lc *LogCourier) loadConfig() error {
   lc.config = NewConfig()
   if err := lc.config.Load(lc.config_file); err != nil {
-    log.Critical("%s", err)
-    return false
+    return err
   }
 
   if len(lc.config.Files) == 0 {
-    log.Critical("No file groups were found in the configuration.")
-    return false
+    return fmt.Errorf("No file groups were found in the configuration.")
   }
 
-  return true
+  return nil
 }
 
 func (lc *LogCourier) reloadConfig() {
-  log.Notice("Reloading configuration.")
-  if lc.loadConfig() {
-    lc.control.SendConfig(lc.config)
+  if err := lc.loadConfig(); err != nil {
+    log.Warning("Configuration error, reload unsuccessful: %s", err)
+    return
   }
+
+  log.Notice("Configuration reload successful")
+
+  // Update the log level
+  logging.SetLevel(lc.config.General.LogLevel, "")
+
+  // Pass the new config to the pipeline workers
+  lc.control.SendConfig(lc.config)
 }
 
 func (lc *LogCourier) cleanShutdown() {
+  log.Notice("Initiating shutdown")
   lc.control.Shutdown()
   lc.control.Wait()
 }

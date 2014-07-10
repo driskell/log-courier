@@ -23,6 +23,7 @@ import (
   "bytes"
   "encoding/json"
   "fmt"
+  "github.com/op/go-logging"
   "math"
   "os"
   "path/filepath"
@@ -33,6 +34,7 @@ import (
 const (
   default_GeneralConfig_PersistDir       string = "."
   default_GeneralConfig_ProspectInterval int64  = 10
+  default_GeneralConfig_LogLevel         logging.Level = logging.INFO
   default_NetworkConfig_Timeout          int64  = 15
   default_NetworkConfig_Reconnect        int64  = 1
   default_FileConfig_DeadTime            int64  = 86400
@@ -48,6 +50,7 @@ type Config struct {
 type GeneralConfig struct {
   PersistDir       string        `json:"persist directory"`
   ProspectInterval time.Duration `json:"prospect interval"`
+  LogLevel         logging.Level `json:"log level"`
 }
 
 var NewTransportZmqFactoryIfAvailable func(string, map[string]interface{}) (TransportFactory, error)
@@ -193,6 +196,9 @@ func (config *Config) Load(path string) (err error) {
   if err = json.Unmarshal(data.Bytes(), &raw_config); err != nil {
     return
   }
+
+  // Fill in defaults where the zero-value is a valid setting
+  config.General.LogLevel = default_GeneralConfig_LogLevel
 
   // Populate configuration - reporting errors on spelling mistakes etc.
   if err = PopulateConfig(config, "/", raw_config); err != nil {
@@ -361,7 +367,19 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
           }
           field.Set(reflect.ValueOf(tduration))
         } else {
-          err = fmt.Errorf("Option %s%s must be %s or similar", config_path, tag, vduration.Type())
+          err = fmt.Errorf("Option %s%s must be a valid numeric or string duration", config_path, tag)
+          return
+        }
+      } else if field.Type().String() == "logging.Level" {
+        if value.Kind() == reflect.String {
+          var llevel logging.Level
+          if llevel, err = logging.LogLevel(value.String()); err != nil {
+            err = fmt.Errorf("Option %s%s is not a valid log level (critical, error, warning, notice, info, debug)", config_path, tag)
+            return
+          }
+          field.Set(reflect.ValueOf(llevel))
+        } else {
+          err = fmt.Errorf("Option %s%s must be a valid log level (critical, error, warning, notice, info, debug)", config_path, tag)
           return
         }
       } else {

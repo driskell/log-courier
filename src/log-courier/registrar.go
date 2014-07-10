@@ -21,10 +21,13 @@ package main
 
 import (
   "encoding/json"
+  "github.com/op/go-logging"
   "os"
 )
 
 func (e *NewFileEvent) Process(state map[*ProspectorInfo]*FileState) {
+  log.Debug("Registrar received a new file event for %s", e.Source)
+
   // A new file we need to save offset information for so we can resume
   state[e.ProspectorInfo] = &FileState{
     Source: &e.Source,
@@ -34,6 +37,14 @@ func (e *NewFileEvent) Process(state map[*ProspectorInfo]*FileState) {
 }
 
 func (e *DeletedEvent) Process(state map[*ProspectorInfo]*FileState) {
+  if log.IsEnabledFor(logging.DEBUG) {
+    if _, ok := state[e.ProspectorInfo]; ok {
+      log.Debug("Registrar received a deletion event for %s", *state[e.ProspectorInfo].Source)
+    } else {
+      log.Warning("Registrar received a deletion event for UNKNOWN (%p)", e.ProspectorInfo)
+    }
+  }
+
   // Purge the registrar entry - means the file is deleted so we can't resume
   // This keeps the state clean so it doesn't build up after thousands of log files
   delete(state, e.ProspectorInfo)
@@ -45,15 +56,18 @@ func (e *RenamedEvent) Process(state map[*ProspectorInfo]*FileState) {
     // This is probably stdin or a deleted file we can't resume
     return
   }
+
+  log.Debug("Registrar received a rename event for %s -> %s", state[e.ProspectorInfo].Source, e.Source)
+
   // Update the stored file name
   state[e.ProspectorInfo].Source = &e.Source
 }
 
 func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
   if len(e.Events) == 1 {
-    log.Info("Registrar received %d event", len(e.Events))
+    log.Debug("Registrar received offsets for %d log entries", len(e.Events))
   } else {
-    log.Info("Registrar received %d events", len(e.Events))
+    log.Debug("Registrar received offsets for %d log entries", len(e.Events))
   }
 
   for _, event := range e.Events {

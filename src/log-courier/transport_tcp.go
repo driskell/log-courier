@@ -102,16 +102,15 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
     }
 
     if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
-      log.Info("Loading client ssl certificate: %s and %s", ret.SSLCertificate, ret.SSLKey)
       cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
       if err != nil {
         return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
       }
+
       ret.tls_config.Certificates = []tls.Certificate{cert}
     }
 
     if len(ret.SSLCA) > 0 {
-      log.Info("Setting trusted CA from file: %s", ret.SSLCA)
       ret.tls_config.RootCAs = x509.NewCertPool()
 
       pemdata, err := ioutil.ReadFile(ret.SSLCA)
@@ -131,6 +130,7 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
       if err != nil {
         return nil, fmt.Errorf("Failed to parse CA certificate: %s", err)
       }
+      
       ret.tls_config.RootCAs.AddCert(cert)
     }
   } else {
