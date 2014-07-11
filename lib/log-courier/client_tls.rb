@@ -36,17 +36,17 @@ module LogCourier
       @logger = @options[:logger]
 
       [:port, :ssl_ca].each do |k|
-        raise "[LogCourierClientTLS] '#{k}' is required" if @options[k].nil?
+        raise "[LogCourierClient] '#{k}' is required" if @options[k].nil?
       end
 
-      raise '[LogCourierClientTLS] \'addresses\' must contain at least one address' if @options[:addresses].empty?
+      raise '[LogCourierClient] \'addresses\' must contain at least one address' if @options[:addresses].empty?
 
       c = 0
       [:ssl_certificate, :ssl_key].each do
         c += 1
       end
 
-      raise '[LogCourierClientTLS] \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
+      raise '[LogCourierClient] \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
     end
 
     def connect(io_control)
@@ -107,13 +107,13 @@ module LogCourier
         end
       end
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-      @logger.warn("[LogCourierClientTLS] SSL write error: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierClient] SSL write error: #{e}") unless @logger.nil?
       io_control << ['F']
     rescue ClientShutdownSignal
       # Just shutdown
     rescue => e
-      @logger.warn("[LogCourierClientTLS] Unknown SSL write error: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierClientTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierClient] Unknown SSL write error: #{e}") unless @logger.nil?
+      @logger.debug("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
       io_control << ['F']
     end
 
@@ -128,7 +128,7 @@ module LogCourier
 
         if length > 1048576
           # Too big raise error
-          @logger.warn("[LogCourierClientTLS] Invalid message: data too big (#{length})") unless @logger.nil?
+          @logger.warn("[LogCourierClient] Invalid message: data too big (#{length})") unless @logger.nil?
           io_control << ['F']
           break
         end
@@ -140,16 +140,16 @@ module LogCourier
         io_control << ['R', signature, message]
       end
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-      @logger.warn("[LogCourierClientTLS] SSL read error: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierClient] SSL read error: #{e}") unless @logger.nil?
       io_control << ['F']
     rescue EOFError
-      @logger.warn("[LogCourierClientTLS] Connection closed by server") unless @logger.nil?
+      @logger.warn("[LogCourierClient] Connection closed by server") unless @logger.nil?
       io_control << ['F']
     rescue ClientShutdownSignal
       # Just shutdown
     rescue => e
-      @logger.warn("[LogCourierClientTLS] Unknown SSL read error: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierClientTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierClient] Unknown SSL read error: #{e}") unless @logger.nil?
+      @logger.debug("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
       io_control << ['F']
     end
 
@@ -177,7 +177,7 @@ module LogCourier
 
     def tls_connect
       # TODO: Implement random selection - and don't use separate :port
-      @logger.info("[LogCourierClientTLS] Connecting to #{@options[:addresses][0]}:#{@options[:port]}") unless @logger.nil?
+      @logger.info("[LogCourierClient] Connecting to #{@options[:addresses][0]}:#{@options[:port]}") unless @logger.nil?
       tcp_socket = TCPSocket.new(@options[:addresses][0], @options[:port])
 
       ssl = OpenSSL::SSL::SSLContext.new
@@ -195,17 +195,17 @@ module LogCourier
       @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
 
       socket = @ssl_client.connect
-      @logger.info("[LogCourierClientTLS] Connected successfully") unless @logger.nil?
+      @logger.info("[LogCourierClient] Connected successfully") unless @logger.nil?
 
       socket
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-      @logger.warn("[LogCourierClientTLS] Connection to #{@options[:addresses][0]}:#{@options[:port]} failed: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierClient] Connection to #{@options[:addresses][0]}:#{@options[:port]} failed: #{e}") unless @logger.nil?
     rescue ClientShutdownSignal
       # Just shutdown
       0
     rescue => e
-      @logger.warn("[LogCourierClientTLS] Unknown connection failure to #{@options[:addresses][0]}:#{@options[:port]}: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierClientTLS] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierClient] Unknown connection failure to #{@options[:addresses][0]}:#{@options[:port]}: #{e}") unless @logger.nil?
+      @logger.debug("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
     end
   end
 end
