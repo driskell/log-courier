@@ -14,6 +14,11 @@
 
 # Common helpers for testing the courier
 shared_context 'Helpers_Log_Courier' do
+  before :all do
+    # Just in case of a remnant from a previous run that did not cleanup
+    File.unlink('.log-courier') if File.file?('.log-courier')
+  end
+
   before :each do
     @config = File.open(File.join(TEMP_PATH, 'config'), 'w')
 
