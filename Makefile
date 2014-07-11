@@ -1,4 +1,4 @@
-.PHONY: go-check all test clean selfsigned
+.PHONY: go-check all log-courier gem test doc clean
 
 export GOPATH := ${PWD}
 
@@ -24,7 +24,12 @@ SAVETAGS := $(shell echo "$(TAGS)" >.Makefile.tags)
 endif
 endif
 
-all: $(BINS)
+all: log-courier
+
+log-courier: $(BINS)
+
+gem:
+	gem build log-courier.gemspec
 
 test: all vendor/bundle/.GemfileModT
 	bundle exec rspec $(TESTS)
@@ -38,11 +43,7 @@ doc:
 # Only update bundle if Gemfile changes
 vendor/bundle/.GemfileModT: Gemfile
 	bundle install --path vendor/bundle
-	touch $@
-
-go-check:
-	@go version >/dev/null || (echo "Go not found. You need to install Go: http://golang.org/doc/install"; false)
-	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.1.x, 1.2.x or 1.3.x required, you have a version of Go that is not supported."; false)
+	@touch $@
 
 clean:
 	go clean -i ./...
@@ -51,6 +52,10 @@ ifneq ($(implyclean),yes)
 	rm -f Gemfile.lock
 	rm -f log-courier-*.gem
 endif
+
+go-check:
+	@go version >/dev/null || (echo "Go not found. You need to install Go: http://golang.org/doc/install"; false)
+	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.1.x, 1.2.x or 1.3.x required, you have a version of Go that is not supported."; false)
 
 .SECONDEXPANSION:
 bin/%: $$(wildcard src/%/*.go) | go-check
