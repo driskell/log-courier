@@ -11,7 +11,7 @@ Gem::Specification.new do |gem|
   gem.require_paths     = ['lib']
   gem.files             = %w(
     lib/log-courier/server.rb
-    lib/log-courier/server_tls.rb
+    lib/log-courier/server_tcp.rb
     lib/log-courier/server_zmq.rb
     lib/log-courier/client.rb
     lib/log-courier/client_tls.rb

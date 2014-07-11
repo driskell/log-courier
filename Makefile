@@ -29,19 +29,27 @@ all: $(BINS)
 test: all vendor/bundle/.GemfileModT
 	bundle exec rspec $(TESTS)
 
+doc:
+	@npm --version >/dev/null || (echo "'npm' not found. You need to install node.js.")
+	@npm install doctoc >/dev/null || (echo "Failed to perform local install of doctoc.")
+	@node_modules/.bin/doctoc README.md
+	@for F in docs/*.md; do node_modules/.bin/doctoc $$F; done
+
 # Only update bundle if Gemfile changes
 vendor/bundle/.GemfileModT: Gemfile
 	bundle install --path vendor/bundle
 	touch $@
 
 go-check:
-	@go version > /dev/null || (echo "Go not found. You need to install go: http://golang.org/doc/install"; false)
-	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.1.x, 1.2.x or 1.3.x required, you have a version of go that is not supported."; false)
+	@go version >/dev/null || (echo "Go not found. You need to install Go: http://golang.org/doc/install"; false)
+	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.1.x, 1.2.x or 1.3.x required, you have a version of Go that is not supported."; false)
 
 clean:
 	go clean -i ./...
 ifneq ($(implyclean),yes)
 	rm -rf vendor/bundle
+	rm -f Gemfile.lock
+	rm -f log-courier-*.gem
 endif
 
 .SECONDEXPANSION:

@@ -1,5 +1,40 @@
 # Log Courier Configuration
 
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
+
+- [Overview](#overview)
+- [Reloading](#reloading)
+- [Examples](#examples)
+- [Field Types](#field-types)
+  - [String, Number, Boolean, Array, Dictionary](#string-number-boolean-array-dictionary)
+  - [Duration](#duration)
+  - [Fileglob](#fileglob)
+- [`"general"`](#general)
+  - [`"persist directory"`](#persist-directory)
+  - [`"prospect interval"`](#prospect-interval)
+  - [`"log level"`](#log-level)
+- [`"network"`](#network)
+  - [`"transport"`](#transport)
+  - [`"servers"`](#servers)
+  - [`"ssl ca"`](#ssl-ca)
+  - [`"ssl certificate"`](#ssl-certificate)
+  - [`"ssl key"`](#ssl-key)
+  - [`"curve server key"`](#curve-server-key)
+  - [`"curve public key"`](#curve-public-key)
+  - [`"curve secret key"`](#curve-secret-key)
+  - [`"timeout"`](#timeout)
+  - [`"reconnect"`](#reconnect)
+- [`"files"`](#files)
+  - [`"paths"`](#paths)
+  - [`"fields"`](#fields)
+  - [`"dead time"`](#dead-time)
+  - [`"codec"`](#codec)
+- [`"includes"`](#includes)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Overview
 
 The Log Courier configuration is currently stored in standard JSON format with

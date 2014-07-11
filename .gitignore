@@ -1,6 +1,8 @@
 Gemfile.lock
 build
 bin
+log-courier-*.gem
+node_modules
 pkg
 spec/tmp
 src/github.com

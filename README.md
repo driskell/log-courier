@@ -6,6 +6,21 @@ small amounts of local resources. The project is an enhanced fork of
 [Logstash Forwarder](https://github.com/elasticsearch/logstash-forwarder) 0.3.1
 with many enhancements and behavioural improvements.
 
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
+
+- [Features](#features)
+- [Installation](#installation)
+  - [Build Requirements](#build-requirements)
+  - [Building](#building)
+  - [Logstash Integration](#logstash-integration)
+  - [Generating Certificates and Keys](#generating-certificates-and-keys)
+- [Command Line Options](#command-line-options)
+- [Documentation](#documentation)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Features
 
 Log Courier implements the following features:
