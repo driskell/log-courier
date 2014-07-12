@@ -208,12 +208,13 @@ PublishLoop:
         shutdown = true
       }
     }
+
+    p.pending_ping = false
     p.can_send = p.transport.CanSend()
     input_toggle = nil
 
   SelectLoop:
     for {
-      // TODO: implement shutdown select
       select {
       case <-p.can_send:
         // Resend payloads from full retry first
@@ -356,6 +357,8 @@ PublishLoop:
         if err = p.transport.Write("PING", nil); err != nil {
           break SelectLoop
         }
+
+        p.pending_ping = true
 
         // We may have just filled the send buffer
         input_toggle = nil
