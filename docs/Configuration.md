@@ -147,6 +147,7 @@ of new log files.
 ### `"persist directory"`
 
 *String. Optional. Default: "."*
+*Requires restart*
 
 The directory that Log Courier should store its persistence data in. The default
 is the current working directory of Log Courier which is specified using the
