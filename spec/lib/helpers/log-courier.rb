@@ -97,7 +97,8 @@ shared_context 'Helpers_Log_Courier' do
       puts "Log-courier hung during shutdown, sending KILL signal"
     end
     unless terminated
-      Process.kill('KILL', @log_courier.pid)
+      # Force a stacktrace
+      Process.kill('QUIT', @log_courier.pid)
       @log_courier.close
     end
     @log_courier = nil
