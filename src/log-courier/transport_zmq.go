@@ -76,7 +76,7 @@ func (r *TransportZmqRegistrar) NewFactory(name string, config_path string, conf
   var err error
 
   ret := &TransportZmqFactory{
-    transport: name,
+    transport:   name,
     hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
   }
 

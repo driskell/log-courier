@@ -93,11 +93,11 @@ type Registrar struct {
 
 func NewRegistrar(persistdir string, control *LogCourierMasterControl) *Registrar {
   return &Registrar{
-    control: control.Register(),
+    control:        control.Register(),
     registrar_chan: make(chan []RegistrarEvent, 16),
-    persistdir: persistdir,
-    statefile: ".log-courier",
-    state: make(map[*ProspectorInfo]*FileState),
+    persistdir:     persistdir,
+    statefile:      ".log-courier",
+    state:          make(map[*ProspectorInfo]*FileState),
   }
 }
 

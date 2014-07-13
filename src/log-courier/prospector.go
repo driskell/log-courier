@@ -26,11 +26,11 @@ import (
 )
 
 const (
-  Status_Ok     = iota
+  Status_Ok = iota
   Status_Resume
   Status_Failed
 
-  Orphaned_No    = iota
+  Orphaned_No = iota
   Orphaned_Maybe
   Orphaned_Yes
 )
@@ -126,12 +126,12 @@ type Prospector struct {
 
 func NewProspector(config *Config, from_beginning bool, registrar *Registrar, control *LogCourierMasterControl) (*Prospector, error) {
   ret := &Prospector{
-    control: control.RegisterWithRecvConfig(),
-    generalconfig: &config.General,
-    fileconfigs: config.Files,
-    from_beginning: from_beginning,
-    registrar: registrar,
-    registrar_chan: registrar.Connect(),
+    control:          control.RegisterWithRecvConfig(),
+    generalconfig:    &config.General,
+    fileconfigs:      config.Files,
+    from_beginning:   from_beginning,
+    registrar:        registrar,
+    registrar_chan:   registrar.Connect(),
     registrar_events: make([]RegistrarEvent, 0),
   }
 
@@ -247,12 +247,12 @@ ProspectLoop:
 
     // Defer next scan for a bit
     select {
-      case <-time.After(p.generalconfig.ProspectInterval):
-      case <-p.control.ShutdownSignal():
-        break ProspectLoop
-      case config := <-p.control.RecvConfig():
-        p.generalconfig = &config.General
-        p.fileconfigs = config.Files
+    case <-time.After(p.generalconfig.ProspectInterval):
+    case <-p.control.ShutdownSignal():
+      break ProspectLoop
+    case config := <-p.control.RecvConfig():
+      p.generalconfig = &config.General
+      p.fileconfigs = config.Files
     }
   }
 

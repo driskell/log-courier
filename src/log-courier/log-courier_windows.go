@@ -14,32 +14,32 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
-*/
+ */
 
 package main
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
+  "os"
+  "os/signal"
+  "syscall"
 )
 
 func (lc *LogCourier) registerSignals() {
-	// Windows onyl supports os.Interrupt
-	signal.Notify(lc.shutdown_chan, os.Interrupt)
+  // Windows onyl supports os.Interrupt
+  signal.Notify(lc.shutdown_chan, os.Interrupt)
 
-	// No reload signal for Windows - implementation will have to wait
+  // No reload signal for Windows - implementation will have to wait
 }
 
 type LogCourierPlatformWindows struct {
 }
 
 func NewLogCourierPlatform() LogCourierPlatform {
-	return &LogCourierPlatformWindows{}
+  return &LogCourierPlatformWindows{}
 }
 
 func (lcp *LogCourierPlatformWindows) Init() {
-	// No syslog support for Windows
+  // No syslog support for Windows
 }
 
 func (lcp *LogCourierPlatformWindows) ConfigureLogging(backends []logging.Backend) {

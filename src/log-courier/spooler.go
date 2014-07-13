@@ -24,16 +24,16 @@ import (
 )
 
 type Spooler struct {
-  control      *LogCourierControl
-  config       *GeneralConfig
-  spool        []*FileEvent
+  control *LogCourierControl
+  config  *GeneralConfig
+  spool   []*FileEvent
 }
 
 func NewSpooler(config *GeneralConfig, control *LogCourierMasterControl) *Spooler {
   return &Spooler{
     control: control.RegisterWithRecvConfig(),
-    config: config,
-    spool: make([]*FileEvent, 0, config.SpoolSize),
+    config:  config,
+    spool:   make([]*FileEvent, 0, config.SpoolSize),
   }
 }
 

@@ -32,14 +32,14 @@ import (
 )
 
 const (
-  default_GeneralConfig_PersistDir       string = "."
-  default_GeneralConfig_ProspectInterval time.Duration  = 10*time.Second
-  default_GeneralConfig_SpoolSize        int64  = 1024
-  default_GeneralConfig_SpoolTimeout     time.Duration = 5*time.Second
+  default_GeneralConfig_PersistDir       string        = "."
+  default_GeneralConfig_ProspectInterval time.Duration = 10 * time.Second
+  default_GeneralConfig_SpoolSize        int64         = 1024
+  default_GeneralConfig_SpoolTimeout     time.Duration = 5 * time.Second
   default_GeneralConfig_LogLevel         logging.Level = logging.INFO
-  default_NetworkConfig_Timeout          time.Duration = 15*time.Second
-  default_NetworkConfig_Reconnect        time.Duration = 1*time.Second
-  default_FileConfig_DeadTime            int64  = 86400
+  default_NetworkConfig_Timeout          time.Duration = 15 * time.Second
+  default_NetworkConfig_Reconnect        time.Duration = 1 * time.Second
+  default_FileConfig_DeadTime            int64         = 86400
 )
 
 type Config struct {
@@ -74,9 +74,9 @@ type CodecConfigStub struct {
 }
 
 type FileConfig struct {
-  Paths    []string          `json:"paths"`
+  Paths    []string               `json:"paths"`
   Fields   map[string]interface{} `json:"fields"`
-  Codec    CodecConfigStub   `json:"codec"`
+  Codec    CodecConfigStub        `json:"codec"`
   codec    CodecFactory
   DeadTime time.Duration `json:"dead time"`
 }

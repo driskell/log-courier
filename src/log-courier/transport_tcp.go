@@ -91,7 +91,7 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
   var err error
 
   ret := &TransportTcpFactory{
-    transport: name,
+    transport:   name,
     hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
   }
 
@@ -130,7 +130,7 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
       if err != nil {
         return nil, fmt.Errorf("Failed to parse CA certificate: %s", err)
       }
-      
+
       ret.tls_config.RootCAs.AddCert(cert)
     }
   } else {

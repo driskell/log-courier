@@ -177,11 +177,11 @@ func (lc *LogCourier) Run() {
 SignalLoop:
   for {
     select {
-      case <-lc.shutdown_chan:
-        lc.cleanShutdown()
-        break SignalLoop
-      case <-lc.reload_chan:
-        lc.reloadConfig()
+    case <-lc.shutdown_chan:
+      lc.cleanShutdown()
+      break SignalLoop
+    case <-lc.reload_chan:
+      lc.reloadConfig()
     }
   }
 

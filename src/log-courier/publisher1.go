@@ -137,9 +137,9 @@ type Publisher struct {
 
 func NewPublisher(config *NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) (*Publisher, error) {
   ret := &Publisher{
-    control: control.RegisterWithRecvConfig(),
-    config: config,
-    registrar: registrar,
+    control:        control.RegisterWithRecvConfig(),
+    config:         config,
+    registrar:      registrar,
     registrar_chan: registrar.Connect(),
   }
 
