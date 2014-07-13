@@ -15,6 +15,8 @@
 
 *13th July 2014*
 
+* Security fix: Ruby gem client (used by Logstash output plugin) did not verify
+ certificate hostname
 * Fix edge case file rotation problems (#7)
 * Fix incorrect field population in events (#9)
 * Fix random hang when Log Courier loses connection to Logstash (#8)
