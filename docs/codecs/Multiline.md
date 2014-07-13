@@ -6,6 +6,20 @@ As long as lines match the specified `pattern` they are buffered. When a line is
 encountered that does not match, an event is flushed as dictated by the `what`
 option.
 
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
+
+- [Multiline Codec](#multiline-codec)
+  - [Example](#example)
+  - [Options](#options)
+    - [`pattern`](#pattern)
+    - [`negate`](#negate)
+    - [`what`](#what)
+    - [`previous_timeout`](#previous_timeout)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Example
 
 	{

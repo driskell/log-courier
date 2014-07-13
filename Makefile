@@ -38,7 +38,7 @@ doc:
 	@npm --version >/dev/null || (echo "'npm' not found. You need to install node.js.")
 	@npm install doctoc >/dev/null || (echo "Failed to perform local install of doctoc.")
 	@node_modules/.bin/doctoc README.md
-	@for F in docs/*.md; do node_modules/.bin/doctoc $$F; done
+	@for F in docs/*.md docs/codecs/*.md; do node_modules/.bin/doctoc $$F; done
 
 # Only update bundle if Gemfile changes
 vendor/bundle/.GemfileModT: Gemfile
