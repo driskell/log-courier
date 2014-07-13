@@ -33,10 +33,12 @@ import (
 
 const (
   default_GeneralConfig_PersistDir       string = "."
-  default_GeneralConfig_ProspectInterval int64  = 10
+  default_GeneralConfig_ProspectInterval time.Duration  = 10*time.Second
+  default_GeneralConfig_SpoolSize        int64  = 1024
+  default_GeneralConfig_SpoolTimeout     time.Duration = 5*time.Second
   default_GeneralConfig_LogLevel         logging.Level = logging.INFO
-  default_NetworkConfig_Timeout          int64  = 15
-  default_NetworkConfig_Reconnect        int64  = 1
+  default_NetworkConfig_Timeout          time.Duration = 15*time.Second
+  default_NetworkConfig_Reconnect        time.Duration = 1*time.Second
   default_FileConfig_DeadTime            int64  = 86400
 )
 
@@ -50,6 +52,8 @@ type Config struct {
 type GeneralConfig struct {
   PersistDir       string        `json:"persist directory"`
   ProspectInterval time.Duration `json:"prospect interval"`
+  SpoolSize        int64         `json:"spool size"`
+  SpoolTimeout     time.Duration `json:"spool timeout"`
   LogLevel         logging.Level `json:"log level"`
 }
 
@@ -237,7 +241,13 @@ func (config *Config) Load(path string) (err error) {
     config.General.PersistDir = default_GeneralConfig_PersistDir
   }
   if config.General.ProspectInterval == time.Duration(0) {
-    config.General.ProspectInterval = time.Duration(default_GeneralConfig_ProspectInterval) * time.Second
+    config.General.ProspectInterval = default_GeneralConfig_ProspectInterval
+  }
+  if config.General.SpoolSize == 0 {
+    config.General.SpoolSize = default_GeneralConfig_SpoolSize
+  }
+  if config.General.SpoolTimeout == time.Duration(0) {
+    config.General.SpoolTimeout = default_GeneralConfig_SpoolTimeout
   }
 
   // Process through NetworkConfig
@@ -259,11 +269,10 @@ func (config *Config) Load(path string) (err error) {
   }
 
   if config.Network.Timeout == time.Duration(0) {
-    config.Network.Timeout = time.Duration(default_NetworkConfig_Timeout) * time.Second
+    config.Network.Timeout = default_NetworkConfig_Timeout
   }
-
   if config.Network.Reconnect == time.Duration(0) {
-    config.Network.Reconnect = time.Duration(default_NetworkConfig_Reconnect) * time.Second
+    config.Network.Reconnect = default_NetworkConfig_Reconnect
   }
 
   for k := range config.Files {

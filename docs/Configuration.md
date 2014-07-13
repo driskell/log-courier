@@ -14,6 +14,8 @@
 - [`"general"`](#general)
   - [`"persist directory"`](#persist-directory)
   - [`"prospect interval"`](#prospect-interval)
+  - [`"spool size"`](#spool-size)
+  - [`"spool timeout"`](#spool-timeout)
   - [`"log level"`](#log-level)
 - [`"network"`](#network)
   - [`"transport"`](#transport)
@@ -161,6 +163,21 @@ server acknowledges receipt of the events.
 
 How often Log Courier should check for changes on the filesystem, such as the
 appearance of new log files, rotations and deletions.
+
+### `"spool size"`
+
+*Number. Optional. Default: 1024*
+
+How many events to spool together and flush at once. This improves efficiency
+when processing large numbers of events by submitting them for processing in
+bulk.
+
+### `"spool timeout"`
+
+*Duration. Optional. Default: 5*
+
+The maximum amount of time to wait for a full spool. If an incomplete spool is
+not filled within this time limit, the spool will be flushed regardless.
 
 ### `"log level"`
 

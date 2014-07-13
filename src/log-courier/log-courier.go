@@ -120,8 +120,6 @@ type LogCourier struct {
   config         *Config
   shutdown_chan  chan os.Signal
   reload_chan    chan os.Signal
-  spool_size     uint64
-  idle_timeout   time.Duration
   config_file    string
   from_beginning bool
 }
@@ -148,7 +146,7 @@ func (lc *LogCourier) Run() {
     log.Fatalf("The publisher failed to initialise: %s", err)
   }
 
-  spooler := NewSpooler(lc.spool_size, lc.idle_timeout, lc.control)
+  spooler := NewSpooler(&lc.config.General, lc.control)
 
   prospector := NewProspector(lc.config, lc.from_beginning, registrar, lc.control)
 
@@ -193,11 +191,8 @@ func (lc *LogCourier) startUp() {
   // This MAY add some flags
   lc.platform.Init()
 
-  // TODO - These should be in the configuration file
-  flag.Uint64Var(&lc.spool_size, "spool-size", 1024, "Maximum number of events to spool before a flush is forced.")
-  flag.DurationVar(&lc.idle_timeout, "idle-flush-time", 5*time.Second, "Maximum time to wait for a full spool before flushing anyway")
   flag.StringVar(&lc.config_file, "config", "", "The config file to load")
-  flag.BoolVar(&lc.from_beginning, "from-beginning", false, "Read new files from the beginning, instead of the end")
+  flag.BoolVar(&lc.from_beginning, "from-beginning", false, "On first run, read new files from the beginning instead of the end")
 
   flag.Parse()
 

@@ -20,6 +20,8 @@
 * Fix random hang when Log Courier loses connection to Logstash (#8)
 * Improve logging and make the level of detail configurable (#10)
 * Fix PING/PONG protocol errors when idle (#12)
+* Move spool-size and idle-timeout to the configuration file as "spool size" and
+"spool timeout"
 * Replace `make selfsigned` with a utility lc-tlscert that can generate
 self-signed certificates and the necessary log snippets like genkey did for ZMQ
 * Rename genkey to lc-curvekey for consistency

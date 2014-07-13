@@ -24,18 +24,16 @@ import (
 )
 
 type Spooler struct {
-  control     *LogCourierControl
-  max_size     uint64
-  idle_timeout time.Duration
+  control      *LogCourierControl
+  config       *GeneralConfig
   spool        []*FileEvent
 }
 
-func NewSpooler(max_size uint64, idle_timeout time.Duration, control *LogCourierMasterControl) *Spooler {
+func NewSpooler(config *GeneralConfig, control *LogCourierMasterControl) *Spooler {
   return &Spooler{
-    control: control.Register(),
-    max_size: max_size,
-    idle_timeout: idle_timeout,
-    spool: make([]*FileEvent, 0, max_size),
+    control: control.RegisterWithRecvConfig(),
+    config: config,
+    spool: make([]*FileEvent, 0, config.SpoolSize),
   }
 }
 
@@ -44,7 +42,8 @@ func (s *Spooler) Spool(input <-chan *FileEvent, output chan<- []*FileEvent) {
     s.control.Done()
   }()
 
-  timer := time.NewTimer(s.idle_timeout)
+  timer_start := time.Now()
+  timer := time.NewTimer(s.config.SpoolTimeout)
 
 SpoolerLoop:
   for {
@@ -57,7 +56,8 @@ SpoolerLoop:
         if !s.sendSpool(output) {
           break SpoolerLoop
         }
-        timer.Reset(s.idle_timeout)
+        timer_start = time.Now()
+        timer.Reset(s.config.SpoolTimeout)
       }
     case <-timer.C:
       // Flush what we have, if anything
@@ -67,9 +67,24 @@ SpoolerLoop:
         }
       }
 
-      timer.Reset(s.idle_timeout)
+      timer_start = time.Now()
+      timer.Reset(s.config.SpoolTimeout)
     case <-s.control.ShutdownSignal():
       break SpoolerLoop
+    case config := <-s.control.RecvConfig():
+      s.config = &config.General
+
+      // Immediate flush?
+      passed := time.Now().Sub(timer_start)
+      if passed >= s.config.SpoolTimeout || len(s.spool) >= int(s.config.SpoolSize) {
+        if !s.sendSpool(output) {
+          break SpoolerLoop
+        }
+        timer_start = time.Now()
+        timer.Reset(s.config.SpoolTimeout)
+      } else {
+        timer.Reset(passed - s.config.SpoolTimeout)
+      }
     }
   }
 
@@ -82,6 +97,6 @@ func (s *Spooler) sendSpool(output chan<- []*FileEvent) bool {
     return false
   case output <- s.spool:
   }
-  s.spool = make([]*FileEvent, 0, s.max_size)
+  s.spool = make([]*FileEvent, 0, s.config.SpoolSize)
   return true
 }
