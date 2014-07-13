@@ -124,8 +124,8 @@ type Prospector struct {
   registrar_events []RegistrarEvent
 }
 
-func NewProspector(config *Config, from_beginning bool, registrar *Registrar, control *LogCourierMasterControl) *Prospector {
-  return &Prospector{
+func NewProspector(config *Config, from_beginning bool, registrar *Registrar, control *LogCourierMasterControl) (*Prospector, error) {
+  ret := &Prospector{
     control: control.RegisterWithRecvConfig(),
     generalconfig: &config.General,
     fileconfigs: config.Files,
@@ -134,15 +134,20 @@ func NewProspector(config *Config, from_beginning bool, registrar *Registrar, co
     registrar_chan: registrar.Connect(),
     registrar_events: make([]RegistrarEvent, 0),
   }
+
+  if err := ret.init(); err != nil {
+    return nil, err
+  }
+
+  return ret, nil
 }
 
-func (p *Prospector) Prospect(output chan<- *FileEvent) {
-  defer func() {
-    p.control.Done()
-  }()
+func (p *Prospector) init() (err error) {
+  if p.prospectorindex, err = p.registrar.LoadPrevious(); err != nil {
+    return
+  }
 
   p.prospectors = make(map[*ProspectorInfo]*ProspectorInfo)
-  p.prospectorindex = p.registrar.LoadPrevious()
   if p.prospectorindex == nil {
     // No previous state to follow, obey -from-beginning and start empy
     p.prospectorindex = make(map[string]*ProspectorInfo)
@@ -155,6 +160,14 @@ func (p *Prospector) Prospect(output chan<- *FileEvent) {
       p.prospectors[v] = v
     }
   }
+
+  return
+}
+
+func (p *Prospector) Prospect(output chan<- *FileEvent) {
+  defer func() {
+    p.control.Done()
+  }()
 
   // Handle any "-" (stdin) paths - but only once
   stdin_started := false

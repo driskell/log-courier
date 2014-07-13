@@ -26,22 +26,18 @@ import (
   "os"
 )
 
-func (r *Registrar) WriteRegistry(state map[string]*FileState) {
+func (r *Registrar) writeRegistry() error {
   // Open tmp file, write, flush, rename
   fname := r.persistdir + string(os.PathSeparator) + r.statefile
   tname := fname + ".new"
   file, err := os.Create(tname)
   if err != nil {
-    log.Error("Registrar save problem: Failed to open %s for writing: %s", tname, err)
-    return
+    return err
   }
   defer file.Close()
 
   encoder := json.NewEncoder(file)
-  encoder.Encode(state)
+  encoder.Encode(r.toCanonical())
 
-  err = os.Rename(tname, fname)
-  if err != nil {
-    log.Error("Registrar save problem: Failed to move the new file into place: %s", err)
-  }
+  return os.Rename(tname, fname)
 }

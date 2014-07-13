@@ -21,32 +21,31 @@ package main
 
 import (
   "encoding/json"
+  "fmt"
   "os"
 )
 
-func (r *Registrar) WriteRegistry(state map[string]*FileState) {
+func (r *Registrar) writeRegistry() error {
   fname := r.persistdir + string(os.PathSeparator) + r.statefile
   tname := fname + ".new"
   file, err := os.Create(tname)
   if err != nil {
-    log.Error("Registrar save problem: Failed to open %s for writing: %s", tname, err)
-    return
+    return err
   }
 
   encoder := json.NewEncoder(file)
-  encoder.Encode(state)
+  encoder.Encode(r.toCanonical())
   file.Close()
 
-  if _, err = os.Stat(fname); err != nil && os.IsNotExist(err) {
-  } else {
-    err = os.Remove(fname)
-    if err != nil {
-      log.Error("Registrar save problem: Failed to delete previous file: %s", err)
-    }
+  var d_err error
+  if _, err = os.Stat(fname); err == nil || !os.IsNotExist(err) {
+    d_err = os.Remove(fname)
   }
 
   err = os.Rename(tname, fname)
   if err != nil {
-    log.Error("Registrar save problem: Failed to move the new file into place: %s", err)
+    return fmt.Errorf("%s -> %s", d_err, err)
   }
+
+  return nil
 }

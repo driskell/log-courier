@@ -21,6 +21,7 @@ package main
 
 import (
   "encoding/json"
+  "fmt"
   "github.com/op/go-logging"
   "os"
 )
@@ -100,26 +101,37 @@ func NewRegistrar(persistdir string, control *LogCourierMasterControl) *Registra
   }
 }
 
-func (r *Registrar) LoadPrevious() map[string]*ProspectorInfo {
+func (r *Registrar) LoadPrevious() (map[string]*ProspectorInfo, error) {
   // Generate ProspectorInfo structures for registrar and prosector to communicate with
   data := make(map[string]*FileState)
 
-  // Load the previous state
+  // Load the previous state - opening RDWR ensures we can write too and fail early
+  // c_filename is what we will use to test create capability
   filename := r.persistdir + string(os.PathSeparator) + ".log-courier"
-  f, err := os.Open(filename)
+  c_filename := r.persistdir + string(os.PathSeparator) + ".log-courier.new"
+
+  f, err := os.OpenFile(filename, os.O_RDWR, 0600)
   if err != nil {
+    // Fail immediately if this is not a path not found error
+    if !os.IsNotExist(err) {
+      return nil, err
+    }
+
     // Try the .new file - maybe we failed mid-move
-    filename = r.persistdir + string(os.PathSeparator) + ".log-courier.new"
-    f, err = os.Open(filename)
+    filename, c_filename = c_filename, filename
+    f, err = os.OpenFile(filename, os.O_RDWR, 0600)
   }
 
   if err != nil {
-    // Failed to load previous state, return nil
-    return nil
+    // Did we fail, or did it just not exist?
+    if !os.IsNotExist(err) {
+      return nil, err
+    }
+    return nil, nil
   }
 
   // Parse the data
-  log.Notice("Loaded registrar data from %s", filename)
+  log.Notice("Loading registrar data from %s", filename)
 
   decoder := json.NewDecoder(f)
   decoder.Decode(&data)
@@ -133,7 +145,12 @@ func (r *Registrar) LoadPrevious() map[string]*ProspectorInfo {
     r.state[resume[file]] = state
   }
 
-  return resume
+  // Test we can successfully save new states by attempting to save now
+  if err := r.writeRegistry(); err != nil {
+    return nil, fmt.Errorf("Registry write failed: %s", err)
+  }
+
+  return resume, nil
 }
 
 func (r *Registrar) Connect() chan<- []RegistrarEvent {
@@ -150,6 +167,18 @@ func (r *Registrar) Disconnect() {
   }
 }
 
+func (r *Registrar) toCanonical() (canonical map[string]*FileState) {
+  canonical = make(map[string]*FileState, len(r.state))
+  for _, value := range r.state {
+    if _, ok := canonical[*value.Source]; ok {
+      // We should never allow this - report an error
+      log.Error("BUG: Unexpected registrar conflict detected for %s", *value.Source)
+    }
+    canonical[*value.Source] = value
+  }
+  return
+}
+
 func (r *Registrar) Register() {
   defer func() {
     r.control.Done()
@@ -161,16 +190,9 @@ func (r *Registrar) Register() {
       event.Process(r.state)
     }
 
-    state_json := make(map[string]*FileState, len(r.state))
-    for _, value := range r.state {
-      if _, ok := state_json[*value.Source]; ok {
-        // We should never allow this - report an error
-        log.Error("BUG: Unexpected registrar conflict detected for %s", *value.Source)
-      }
-      state_json[*value.Source] = value
+    if err := r.writeRegistry(); err != nil {
+      log.Error("Registry write failed: %s", err)
     }
-
-    r.WriteRegistry(state_json)
   }
 
   log.Info("Registrar shutdown complete")

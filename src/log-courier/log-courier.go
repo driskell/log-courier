@@ -146,14 +146,17 @@ func (lc *LogCourier) Run() {
   // Initialise pipeline
   registrar := NewRegistrar(lc.config.General.PersistDir, lc.control)
 
-  publisher := NewPublisher(&lc.config.Network, registrar, lc.control)
-  if err := publisher.Init(); err != nil {
-    log.Fatalf("The publisher failed to initialise: %s", err)
+  publisher, err := NewPublisher(&lc.config.Network, registrar, lc.control)
+  if err != nil {
+    log.Fatalf("Failed to initialise: %s", err)
   }
 
   spooler := NewSpooler(&lc.config.General, lc.control)
 
-  prospector := NewProspector(lc.config, lc.from_beginning, registrar, lc.control)
+  prospector, err := NewProspector(lc.config, lc.from_beginning, registrar, lc.control)
+  if err != nil {
+    log.Fatalf("Failed to initialise: %s", err)
+  }
 
   // Start the pipeline
   go prospector.Prospect(event_chan)

@@ -135,16 +135,22 @@ type Publisher struct {
   registrar_chan   chan<- []RegistrarEvent
 }
 
-func NewPublisher(config *NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) *Publisher {
-  return &Publisher{
+func NewPublisher(config *NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) (*Publisher, error) {
+  ret := &Publisher{
     control: control.RegisterWithRecvConfig(),
     config: config,
     registrar: registrar,
     registrar_chan: registrar.Connect(),
   }
+
+  if err := ret.init(); err != nil {
+    return nil, err
+  }
+
+  return ret, nil
 }
 
-func (p *Publisher) Init() error {
+func (p *Publisher) init() error {
   var err error
 
   p.hostname, err = os.Hostname()
