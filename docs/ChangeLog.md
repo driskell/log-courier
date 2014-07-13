@@ -19,6 +19,7 @@
 * Fix incorrect field population in events (#9)
 * Fix random hang when Log Courier loses connection to Logstash (#8)
 * Improve logging and make the level of detail configurable (#10)
+* Fix PING/PONG protocol errors when idle (#12)
 * Replace `make selfsigned` with a utility lc-tlscert that can generate
 self-signed certificates and the necessary log snippets like genkey did for ZMQ
 * Rename genkey to lc-curvekey for consistency
