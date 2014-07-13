@@ -267,7 +267,7 @@ func (lc *LogCourier) startUp() {
 func (lc *LogCourier) configureLogging() {
   // First, the stdout backend
   backends := make([]logging.Backend, 1)
-  stderr_backend := logging.NewLogBackend(os.Stderr, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
+  stderr_backend := logging.NewLogBackend(os.Stdout, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
   backends[0] = stderr_backend
 
   // Set backends BEFORE log level (or we reset log level)

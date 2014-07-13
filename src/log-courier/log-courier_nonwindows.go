@@ -44,12 +44,12 @@ func NewLogCourierPlatform() LogCourierPlatform {
 }
 
 func (lcp *LogCourierPlatformOther) Init() {
-	flag.BoolVar(&lcp.syslog, "log-to-syslog", false, "Log to syslog instead of stdout")
+	flag.BoolVar(&lcp.syslog, "log-to-syslog", false, "Log to syslog as well as stdout")
 }
 
 func (lcp *LogCourierPlatformOther) ConfigureLogging(backends []logging.Backend) {
 	// Make it color if it's a TTY
-	if lcp.isatty(os.Stderr) {
+	if lcp.isatty(os.Stdout) {
 		backends[0].(*logging.LogBackend).Color = true
 	}
 
