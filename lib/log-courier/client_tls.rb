@@ -176,7 +176,7 @@ module LogCourier
     end
 
     def tls_connect
-      # TODO: Implement random selection - and don't use separate :port
+      # TODO: Implement random selection - and don't use separate :port - remember to update post_connection_check too
       @logger.info("[LogCourierClient] Connecting to #{@options[:addresses][0]}:#{@options[:port]}") unless @logger.nil?
       tcp_socket = TCPSocket.new(@options[:addresses][0], @options[:port])
 
@@ -189,12 +189,16 @@ module LogCourier
 
       cert_store = OpenSSL::X509::Store.new
       cert_store.add_file(@options[:ssl_ca])
-      ssl.cert_store = cert_store
+      #ssl.cert_store = cert_store
       ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
 
       @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
 
       socket = @ssl_client.connect
+
+      # Verify certificate
+      socket.post_connection_check(@options[:addresses][0])
+
       @logger.info("[LogCourierClient] Connected successfully") unless @logger.nil?
 
       socket
