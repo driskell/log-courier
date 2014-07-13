@@ -30,6 +30,8 @@ import (
   "time"
 )
 
+const Log_Courier_Version string = "0.11"
+
 var log *logging.Logger
 
 func init() {
@@ -107,6 +109,9 @@ func (lcs *LogCourierControl) ShutdownSignal() <-chan interface{} {
 }
 
 func (lcs *LogCourierControl) RecvConfig() <-chan *Config {
+  if lcs.sink == nil {
+    panic("RecvConfig invalid: LogCourierControl was not registered with RegisterWithRecvConfig")
+  }
   return lcs.sink
 }
 
@@ -197,7 +202,7 @@ func (lc *LogCourier) startUp() {
   flag.Parse()
 
   if version {
-    fmt.Printf("Log Courier version 0.10\n")
+    fmt.Printf("Log Courier version %s\n", Log_Courier_Version)
     os.Exit(0)
   }
 
@@ -214,6 +219,12 @@ func (lc *LogCourier) startUp() {
     os.Exit(0)
   }
 
+  if lc.config_file == "" {
+    fmt.Fprintf(os.Stderr, "Please specify a configuration file with -config.\n\n")
+    flag.PrintDefaults()
+    os.Exit(1)
+  }
+
   err := lc.loadConfig()
 
   if config_test {
@@ -221,7 +232,7 @@ func (lc *LogCourier) startUp() {
       fmt.Printf("Configuration OK\n")
       os.Exit(0)
     }
-    fmt.Printf("Configuration test failed!\n")
+    fmt.Printf("Configuration test failed: %s\n", err)
     os.Exit(1)
   }
 
