@@ -195,5 +195,5 @@ func (r *Registrar) Register() {
     }
   }
 
-  log.Info("Registrar shutdown complete")
+  log.Info("Registrar exiting")
 }

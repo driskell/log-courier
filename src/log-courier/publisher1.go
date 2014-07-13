@@ -418,7 +418,7 @@ PublishLoop:
   // Disconnect from registrar
   p.registrar.Disconnect()
 
-  log.Info("Publisher shutdown complete")
+  log.Info("Publisher exiting")
 }
 
 func (p *Publisher) reloadConfig(new_config *NetworkConfig) int {

@@ -141,7 +141,7 @@ ReadLoop:
     }
   }
 
-  log.Info("Harvester shutdown for %s complete", h.path)
+  log.Info("Harvester for %s exiting", h.path)
   return h.codec.Teardown(), false
 }
 

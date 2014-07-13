@@ -143,7 +143,8 @@ func (lc *LogCourier) Run() {
   event_chan := make(chan *FileEvent, 16)
   publisher_chan := make(chan []*FileEvent, 1)
 
-  // Initialise pipeline
+  log.Info("Starting pipeline")
+
   registrar := NewRegistrar(lc.config.General.PersistDir, lc.control)
 
   publisher, err := NewPublisher(&lc.config.Network, registrar, lc.control)
@@ -167,6 +168,8 @@ func (lc *LogCourier) Run() {
 
   go registrar.Register()
 
+  log.Notice("Pipeline ready")
+
   lc.shutdown_chan = make(chan os.Signal, 1)
   lc.reload_chan = make(chan os.Signal, 1)
   lc.registerSignals()
@@ -182,7 +185,7 @@ SignalLoop:
     }
   }
 
-  log.Notice("Log Courier exiting")
+  log.Notice("Exiting")
 }
 
 func (lc *LogCourier) startUp() {
@@ -259,8 +262,6 @@ func (lc *LogCourier) startUp() {
       log.Panic("CPU profile completed")
     }()
   }
-
-  log.Notice("Log Courier starting up")
 }
 
 func (lc *LogCourier) configureLogging() {

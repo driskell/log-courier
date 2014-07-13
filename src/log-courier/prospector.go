@@ -267,7 +267,7 @@ ProspectLoop:
   // Disconnect from the registrar
   p.registrar.Disconnect()
 
-  log.Info("Prospector shutdown complete")
+  log.Info("Prospector exiting")
 }
 
 func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEvent) {
