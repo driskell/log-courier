@@ -4,16 +4,16 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
-- [?.??](#)
+- [0.11](#011)
 - [0.10](#010)
 - [0.9](#09)
 - [Pre-release](#pre-release)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## ?.??
+## 0.11
 
-*?*
+*13th July 2014*
 
 * Fix edge case file rotation problems (#7)
 * Fix incorrect field population in events (#9)
