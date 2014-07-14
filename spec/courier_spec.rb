@@ -21,7 +21,7 @@ describe 'log-courier' do
   include_context 'Helpers_Log_Courier'
 
   it 'should follow stdin' do
-    startup mode: 'w', config: <<-config
+    startup stdin: true, config: <<-config
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
@@ -438,7 +438,7 @@ describe 'log-courier' do
   end
 
   it 'should allow multiple fields to be configured' do
-    startup mode: 'w', config: <<-config
+    startup config: <<-config
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
@@ -474,7 +474,7 @@ describe 'log-courier' do
   end
 
   it 'should allow arrays inside field configuration' do
-    startup mode: 'w', config: <<-config
+    startup stdin: true, config: <<-config
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
@@ -508,7 +508,7 @@ describe 'log-courier' do
   end
 
   it 'should allow dictionaries inside field configuration' do
-    startup mode: 'w', config: <<-config
+    startup stdin: true, config: <<-config
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",

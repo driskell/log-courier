@@ -34,7 +34,7 @@ shared_context 'Helpers_Log_Courier' do
     File.unlink('.log-courier') if File.file?('.log-courier')
   end
 
-  def startup(config: nil, args: '', mode: 'r')
+  def startup(config: nil, args: '', stdin: false)
     # A standard configuration when we don't want anything special
     if config.nil?
       config = <<-config
@@ -58,9 +58,25 @@ shared_context 'Helpers_Log_Courier' do
 
     _write_config config
 
+    if stdin
+      mode = 'r+'
+    else
+      mode = 'r'
+    end
+
     # Start LSF
-    # NOTE: What happens to stdout since we don't read it? Or does Go log go to stderr?
     @log_courier = IO.popen("bin/log-courier -config #{@config.path}" + (args.empty? ? '' : ' ' + args), mode)
+
+    # Start a thread to flush the STDOUT from the pipe
+    log_courier = @log_courier
+    @log_courier_reader = Thread.new do
+      loop do
+        line = log_courier.gets
+        break if line.nil?
+        puts 'SO: ' + line
+      end
+      puts 'SO- END'
+    end
 
     # Needs some time to startup - to ensure when we create new files AFTER this, they are not detected during startup
     sleep STARTUP_WAIT_TIME
@@ -94,7 +110,7 @@ shared_context 'Helpers_Log_Courier' do
       end
       terminated = true
     rescue Timeout::Error
-      puts "Log-courier hung during shutdown, sending KILL signal"
+      puts "Log-courier hung during shutdown, sending QUIT signal"
     end
     unless terminated
       # Force a stacktrace
