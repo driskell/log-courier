@@ -98,8 +98,8 @@ The configuration is documented in full below.
 
 These are JSON types and follow the same rules. Strings within double quotes,
 arrays of fields within square brackets separated by commas, and dictionaries
-of key value pairs within curly braces and each entry, in the form string:
-field, separated by a comma.
+of key value pairs within curly braces and each entry, in the form `"key":
+value`, separated by a comma.
 
 ### Duration
 
@@ -355,7 +355,7 @@ build of log-courier.*
 
 The specified codec will receive the lines read from the log stream and perform
 any decoding necessary to generate events. The plain codec does nothing and
-simple ships the events as-is.
+simply ships the events unchanged.
 
 All configurations are a dictionary with at least a "name" key. Additional
 options can be provided if the specified codec allows.
@@ -363,7 +363,7 @@ options can be provided if the specified codec allows.
 	{ "name": "codec-name" }
 	{ "name": "codec-name", "option1": "value", "option2": "42" }
 
-A single codec is available at this time.
+Aside from "plain", a single codec is available at this time.
 
 * [Multiline](codecs/Multiline.md)
 
