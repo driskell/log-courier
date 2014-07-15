@@ -43,11 +43,6 @@ func main() {
   logcourier.Run()
 }
 
-type LogCourierPlatform interface {
-  Init()
-  ConfigureLogging(*[]logging.Backend) error
-}
-
 type LogCourierMasterControl struct {
   signal chan interface{}
   sinks  map[*LogCourierControl]chan *Config
@@ -121,18 +116,17 @@ func (lcs *LogCourierControl) Done() {
 
 type LogCourier struct {
   control        *LogCourierMasterControl
-  platform       LogCourierPlatform
   config         *Config
   shutdown_chan  chan os.Signal
   reload_chan    chan os.Signal
   config_file    string
   from_beginning bool
+  log_file       *os.File
 }
 
 func NewLogCourier() *LogCourier {
   ret := &LogCourier{
     control:  NewLogCourierMasterControl(),
-    platform: NewLogCourierPlatform(),
   }
   return ret
 }
@@ -186,23 +180,22 @@ SignalLoop:
   }
 
   log.Notice("Exiting")
+
+  if lc.log_file != nil {
+    lc.log_file.Close()
+  }
 }
 
 func (lc *LogCourier) startUp() {
   var version bool
   var config_test bool
   var list_supported bool
-  var stdout bool
   var cpu_profile string
 
   flag.BoolVar(&version, "version", false, "show version information")
   flag.BoolVar(&config_test, "config-test", false, "Test the configuration specified by -config and exit")
   flag.BoolVar(&list_supported, "list-supported", false, "List supported transports and codecs")
-  flag.BoolVar(&stdout, "log-to-stdout", true, "Log to stdout")
   flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
-
-  // This MAY add some flags
-  lc.platform.Init()
 
   flag.StringVar(&lc.config_file, "config", "", "The config file to load")
   flag.BoolVar(&lc.from_beginning, "from-beginning", false, "On first run, read new files from the beginning instead of the end")
@@ -249,7 +242,7 @@ func (lc *LogCourier) startUp() {
     os.Exit(1)
   }
 
-  if err = lc.configureLogging(stdout); err != nil {
+  if err = lc.configureLogging(); err != nil {
     fmt.Printf("Failed to initialise logging: %s", err)
     os.Exit(1)
   }
@@ -269,16 +262,24 @@ func (lc *LogCourier) startUp() {
   }
 }
 
-func (lc *LogCourier) configureLogging(stdout bool) error {
+func (lc *LogCourier) configureLogging() (err error) {
   backends := make([]logging.Backend, 0, 1)
 
   // First, the stdout backend
-  if stdout {
+  if lc.config.General.LogStdout {
     backends = append(backends, logging.NewLogBackend(os.Stdout, "", stdlog.LstdFlags|stdlog.Lmicroseconds))
   }
 
-  if err := lc.platform.ConfigureLogging(&backends); err != nil {
-    return err
+  // Log file?
+  if lc.config.General.LogFile != "" {
+    lc.log_file, err = os.OpenFile(lc.config.General.LogFile, os.O_CREATE|os.O_APPEND, 0640)
+    if err != nil {
+      return
+    }
+  }
+
+  if err = lc.configureLoggingPlatform(&backends); err != nil {
+    return
   }
 
   // Set backends BEFORE log level (or we reset log level)

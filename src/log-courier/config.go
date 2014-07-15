@@ -37,6 +37,8 @@ const (
   default_GeneralConfig_SpoolSize        int64         = 1024
   default_GeneralConfig_SpoolTimeout     time.Duration = 5 * time.Second
   default_GeneralConfig_LogLevel         logging.Level = logging.INFO
+  default_GeneralConfig_LogStdout        bool          = true
+  default_GeneralConfig_LogSyslog        bool          = false
   default_NetworkConfig_Timeout          time.Duration = 15 * time.Second
   default_NetworkConfig_Reconnect        time.Duration = 1 * time.Second
   default_FileConfig_DeadTime            int64         = 86400
@@ -55,6 +57,9 @@ type GeneralConfig struct {
   SpoolSize        int64         `json:"spool size"`
   SpoolTimeout     time.Duration `json:"spool timeout"`
   LogLevel         logging.Level `json:"log level"`
+  LogStdout        bool          `json:"log stdout"`
+  LogSyslog        bool          `json:"log syslog"`
+  LogFile          string        `json:"log file"`
 }
 
 var NewTransportZmqFactoryIfAvailable func(string, map[string]interface{}) (TransportFactory, error)
@@ -203,6 +208,8 @@ func (config *Config) Load(path string) (err error) {
 
   // Fill in defaults where the zero-value is a valid setting
   config.General.LogLevel = default_GeneralConfig_LogLevel
+  config.General.LogStdout = default_GeneralConfig_LogStdout
+  config.General.LogSyslog = default_GeneralConfig_LogSyslog
 
   // Populate configuration - reporting errors on spelling mistakes etc.
   if err = PopulateConfig(config, "/", raw_config); err != nil {

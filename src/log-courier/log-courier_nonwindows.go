@@ -19,7 +19,6 @@
 package main
 
 import (
-  "flag"
   "fmt"
   "github.com/op/go-logging"
   "os"
@@ -36,26 +35,14 @@ func (lc *LogCourier) registerSignals() {
   signal.Notify(lc.reload_chan, syscall.SIGHUP)
 }
 
-type LogCourierPlatformOther struct {
-  syslog bool
-}
-
-func NewLogCourierPlatform() LogCourierPlatform {
-  return &LogCourierPlatformOther{}
-}
-
-func (lcp *LogCourierPlatformOther) Init() {
-  flag.BoolVar(&lcp.syslog, "log-to-syslog", false, "Log to syslog")
-}
-
-func (lcp *LogCourierPlatformOther) ConfigureLogging(backends *[]logging.Backend) error {
+func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
   // Make it color if it's a TTY
   // TODO: This could be prone to problems when updating logging in future
-  if lcp.isatty(os.Stdout) && len(*backends) == 1 {
+  if lc.isatty(os.Stdout) && lc.config.General.LogStdout {
     (*backends)[0].(*logging.LogBackend).Color = true
   }
 
-  if lcp.syslog {
+  if lc.config.General.LogSyslog {
     syslog_backend, err := logging.NewSyslogBackend("log-courier")
     if err != nil {
       return fmt.Errorf("Failed to open syslog: %s", err)
@@ -67,7 +54,7 @@ func (lcp *LogCourierPlatformOther) ConfigureLogging(backends *[]logging.Backend
   return nil
 }
 
-func (lcp *LogCourierPlatformOther) isatty(f *os.File) bool {
+func (lc *LogCourier) isatty(f *os.File) bool {
   var pgrp int64
   // Most real isatty implementations use TIOCGETA
   // However, TIOCGPRGP is easier than TIOCGETA as it only requires an int and not a termios struct
