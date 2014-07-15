@@ -45,8 +45,8 @@ class LogFile
     num.times do |i|
       i += @count + @next
       @file.puts @orig_path + " test event #{i}"
+      @file.flush
     end
-    @file.flush
     @count += num
     self
   end
