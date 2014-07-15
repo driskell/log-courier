@@ -25,9 +25,7 @@ describe 'log-courier' do
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
-        "servers": [ "127.0.0.1:#{server_port}" ],
-        "timeout": 15,
-        "reconnect": 1
+        "servers": [ "127.0.0.1:#{server_port}" ]
       },
       "files": [
         {
@@ -270,9 +268,7 @@ describe 'log-courier' do
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
-        "servers": [ "127.0.0.1:#{server_port}" ],
-        "timeout": 15,
-        "reconnect": 1
+        "servers": [ "127.0.0.1:#{server_port}" ]
       },
       "files": [
         {
@@ -304,9 +300,7 @@ describe 'log-courier' do
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
-        "servers": [ "127.0.0.1:#{server_port}" ],
-        "timeout": 15,
-        "reconnect": 1
+        "servers": [ "127.0.0.1:#{server_port}" ]
       },
       "files": [
         {
@@ -591,5 +585,37 @@ describe 'log-courier' do
         File.unlink(include_file) if File.file?(include_file)
       end
     end
+  end
+
+  # TODO: We should start using Go tests for things like this
+  it 'should accept the various general and network configuration elements' do
+    f = create_log
+
+    startup config: <<-config
+    {
+      "general": {
+        "prospect interval": 10,
+        "spool size": 1024,
+        "spool timeout": 5,
+        "log level": "debug"
+      },
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ],
+        "timeout": 15,
+        "reconnect": 1
+      },
+      "files": [
+        {
+          "paths": [ "#{TEMP_PATH}/logs/log-*" ]
+        }
+      ]
+    }
+    config
+
+    f.log 5000
+
+    # Receive and check
+    receive_and_check
   end
 end

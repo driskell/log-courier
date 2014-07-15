@@ -361,34 +361,48 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
       } else if field.Type().String() == "time.Duration" {
         var duration float64
         vduration := reflect.ValueOf(duration)
+        fail := true
         if value.Type().AssignableTo(vduration.Type()) {
           duration = value.Float()
-          if duration < math.MinInt64 || duration > math.MaxInt64 {
-            err = fmt.Errorf("Option %s%s is not a valid numeric or string duration", config_path, tag)
-            return
+          if duration >= math.MinInt64 && duration <= math.MaxInt64 {
+            field.Set(reflect.ValueOf(time.Duration(int64(duration)) * time.Second))
+            fail = false
           }
-          field.Set(reflect.ValueOf(time.Duration(int64(duration)) * time.Second))
         } else if value.Kind() == reflect.String {
           var tduration time.Duration
-          if tduration, err = time.ParseDuration(value.String()); err != nil {
-            err = fmt.Errorf("Option %s%s is not a valid numeric or string duration: %s", config_path, tag, err)
-            return
+          if tduration, err = time.ParseDuration(value.String()); err == nil {
+            field.Set(reflect.ValueOf(tduration))
+            fail = false
           }
-          field.Set(reflect.ValueOf(tduration))
-        } else {
+        }
+        if fail {
           err = fmt.Errorf("Option %s%s must be a valid numeric or string duration", config_path, tag)
           return
         }
+      } else if field.Kind() == reflect.Int64 {
+        fail := true
+        if value.Kind() == reflect.Float64 {
+          number := value.Float()
+          if math.Floor(number) == number {
+            fail = false
+            field.Set(reflect.ValueOf(int64(number)))
+          }
+        }
+        if fail {
+          err = fmt.Errorf("Option %s%s is not a valid integer", config_path, tag, field.Type())
+          return
+        }
       } else if field.Type().String() == "logging.Level" {
+        fail := true
         if value.Kind() == reflect.String {
           var llevel logging.Level
-          if llevel, err = logging.LogLevel(value.String()); err != nil {
-            err = fmt.Errorf("Option %s%s is not a valid log level (critical, error, warning, notice, info, debug)", config_path, tag)
-            return
+          if llevel, err = logging.LogLevel(value.String()); err == nil {
+            fail = false
+            field.Set(reflect.ValueOf(llevel))
           }
-          field.Set(reflect.ValueOf(llevel))
-        } else {
-          err = fmt.Errorf("Option %s%s must be a valid log level (critical, error, warning, notice, info, debug)", config_path, tag)
+        }
+        if fail {
+          err = fmt.Errorf("Option %s%s is not a valid log level (critical, error, warning, notice, info, debug)", config_path, tag)
           return
         }
       } else {
