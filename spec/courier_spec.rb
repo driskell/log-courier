@@ -597,7 +597,10 @@ describe 'log-courier' do
         "prospect interval": 10,
         "spool size": 1024,
         "spool timeout": 5,
-        "log level": "debug"
+        "log level": "debug",
+        "log syslog": false,
+        "log stdout": false,
+        "log file": "#{TEMP_PATH}/logs/log.log"
       },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
@@ -617,5 +620,9 @@ describe 'log-courier' do
 
     # Receive and check
     receive_and_check
+
+    shutdown
+    expect(File.file?("#{TEMP_PATH}/logs/log.log")).to be true
+    File.unlink "#{TEMP_PATH}/logs/log.log" if File.file? "#{TEMP_PATH}/logs/log.log"
   end
 end
