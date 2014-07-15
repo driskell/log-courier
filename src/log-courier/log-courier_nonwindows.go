@@ -20,6 +20,7 @@ package main
 
 import (
   "flag"
+  "fmt"
   "github.com/op/go-logging"
   "os"
   "os/signal"
@@ -44,22 +45,26 @@ func NewLogCourierPlatform() LogCourierPlatform {
 }
 
 func (lcp *LogCourierPlatformOther) Init() {
-  flag.BoolVar(&lcp.syslog, "log-to-syslog", false, "Log to syslog as well as stdout")
+  flag.BoolVar(&lcp.syslog, "log-to-syslog", false, "Log to syslog")
 }
 
-func (lcp *LogCourierPlatformOther) ConfigureLogging(backends []logging.Backend) {
+func (lcp *LogCourierPlatformOther) ConfigureLogging(backends *[]logging.Backend) error {
   // Make it color if it's a TTY
-  if lcp.isatty(os.Stdout) {
-    backends[0].(*logging.LogBackend).Color = true
+  // TODO: This could be prone to problems when updating logging in future
+  if lcp.isatty(os.Stdout) && len(*backends) == 1 {
+    (*backends)[0].(*logging.LogBackend).Color = true
   }
 
   if lcp.syslog {
     syslog_backend, err := logging.NewSyslogBackend("log-courier")
     if err != nil {
-      log.Fatalf("Failed to open syslog: %s", err)
+      return fmt.Errorf("Failed to open syslog: %s", err)
     }
-    backends = append(backends, syslog_backend)
+    new_backends := append(*backends, syslog_backend)
+    *backends = new_backends
   }
+
+  return nil
 }
 
 func (lcp *LogCourierPlatformOther) isatty(f *os.File) bool {

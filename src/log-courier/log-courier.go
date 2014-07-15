@@ -45,7 +45,7 @@ func main() {
 
 type LogCourierPlatform interface {
   Init()
-  ConfigureLogging([]logging.Backend)
+  ConfigureLogging(*[]logging.Backend) error
 }
 
 type LogCourierMasterControl struct {
@@ -192,11 +192,13 @@ func (lc *LogCourier) startUp() {
   var version bool
   var config_test bool
   var list_supported bool
+  var stdout bool
   var cpu_profile string
 
   flag.BoolVar(&version, "version", false, "show version information")
   flag.BoolVar(&config_test, "config-test", false, "Test the configuration specified by -config and exit")
   flag.BoolVar(&list_supported, "list-supported", false, "List supported transports and codecs")
+  flag.BoolVar(&stdout, "log-to-stdout", true, "Log to stdout")
   flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
 
   // This MAY add some flags
@@ -247,7 +249,10 @@ func (lc *LogCourier) startUp() {
     os.Exit(1)
   }
 
-  lc.configureLogging()
+  if err = lc.configureLogging(stdout); err != nil {
+    fmt.Printf("Failed to initialise logging: %s", err)
+    os.Exit(1)
+  }
 
   if cpu_profile != "" {
     log.Notice("Starting CPU profiler")
@@ -264,11 +269,17 @@ func (lc *LogCourier) startUp() {
   }
 }
 
-func (lc *LogCourier) configureLogging() {
+func (lc *LogCourier) configureLogging(stdout bool) error {
+  backends := make([]logging.Backend, 0, 1)
+
   // First, the stdout backend
-  backends := make([]logging.Backend, 1)
-  stderr_backend := logging.NewLogBackend(os.Stdout, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
-  backends[0] = stderr_backend
+  if stdout {
+    backends = append(backends, logging.NewLogBackend(os.Stdout, "", stdlog.LstdFlags|stdlog.Lmicroseconds))
+  }
+
+  if err := lc.platform.ConfigureLogging(&backends); err != nil {
+    return err
+  }
 
   // Set backends BEFORE log level (or we reset log level)
   logging.SetBackend(backends...)
@@ -276,7 +287,7 @@ func (lc *LogCourier) configureLogging() {
   // Set the logging level
   logging.SetLevel(lc.config.General.LogLevel, "")
 
-  lc.platform.ConfigureLogging(backends)
+  return nil
 }
 
 func (lc *LogCourier) loadConfig() error {

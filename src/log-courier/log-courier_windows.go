@@ -42,5 +42,5 @@ func (lcp *LogCourierPlatformWindows) Init() {
   // No syslog support for Windows
 }
 
-func (lcp *LogCourierPlatformWindows) ConfigureLogging(backends []logging.Backend) {
+func (lcp *LogCourierPlatformWindows) ConfigureLogging(backends *[]logging.Backend) error {
 }
