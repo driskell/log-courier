@@ -248,8 +248,15 @@ ProspectLoop:
     // Defer next scan for a bit
     select {
     case <-time.After(p.generalconfig.ProspectInterval):
-    case <-p.control.ShutdownSignal():
-      break ProspectLoop
+    case signal := <-p.control.Signal():
+      if signal == nil {
+        // Shutdown
+        break ProspectLoop
+      }
+
+      // Gather snapshot information
+      // TODO - from harvesters
+      p.control.SendSnapshot()
     case config := <-p.control.RecvConfig():
       p.generalconfig = &config.General
       p.fileconfigs = config.Files

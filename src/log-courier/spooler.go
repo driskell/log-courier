@@ -69,8 +69,13 @@ SpoolerLoop:
 
       timer_start = time.Now()
       timer.Reset(s.config.SpoolTimeout)
-    case <-s.control.ShutdownSignal():
-      break SpoolerLoop
+    case signal := <-s.control.Signal():
+      if signal == nil {
+        // Shutdown
+        break SpoolerLoop
+      }
+
+      s.control.SendSnapshot()
     case config := <-s.control.RecvConfig():
       s.config = &config.General
 

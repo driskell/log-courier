@@ -23,6 +23,7 @@ import (
   "bufio"
   "bytes"
   "io"
+  "math"
   "os"
   "time"
 )
@@ -35,7 +36,8 @@ type Harvester struct {
   offset     int64
   codec      Codec
 
-  file *os.File /* the file being watched */
+  file  *os.File /* the file being watched */
+  speed float64
 }
 
 func NewHarvester(info *ProspectorInfo, fileconfig *FileConfig, offset int64) *Harvester {
@@ -81,25 +83,55 @@ func (h *Harvester) Harvest(output chan<- *FileEvent) (int64, bool) {
   reader := bufio.NewReaderSize(h.file, 16<<10) // 16kb buffer by default
   buffer := new(bytes.Buffer)
 
-  var read_timeout = 10 * time.Second
+  // TODO: Make configurable?
+  read_timeout := 10 * time.Second
+
   last_read_time := time.Now()
+  last_measurement := last_read_time
+  event_count := 0
+
+  log.Info("%v", last_read_time.Sub(last_measurement))
 
 ReadLoop:
   for {
-    // Check shutdown
-    select {
-    case <-h.info.ShutdownSignal():
-      break ReadLoop
-    default:
-    }
+    text, bytesread, err := h.readline(reader, buffer)
 
-    text, bytesread, err := h.readline(reader, buffer, read_timeout)
+    if duration := time.Since(last_measurement); duration >= time.Second {
+      // Check shutdown
+      select {
+      case <-h.info.ShutdownSignal():
+        break ReadLoop
+      default:
+      }
+
+      if h.speed == 0 {
+        h.speed = float64(event_count)
+      } else {
+        // Calculate a moving average over 5 seconds - use similiar weight as load average
+        h.speed = float64(event_count) + math.Exp(float64(duration / time.Second) / -5) * (h.speed - float64(event_count))
+      }
+      event_count = 0
+      last_measurement = time.Now()
+      log.Notice("Processing %.2f per second", h.speed)
+    }
 
     if err != nil {
       if err == io.EOF {
-        // Timed out waiting for data, got EOF, check to see if the file was truncated
+        // Check shutdown
+        select {
+        case <-h.info.ShutdownSignal():
+          break ReadLoop
+        default:
+        }
+
+        // Timed out waiting for data, got EOF
         if h.path == "-" {
           // This wouldn't make sense on stdin so lets not risk anything strange happening
+          continue
+        }
+
+        // Don't check for truncation until we hit the full read_timeout
+        if time.Since(last_read_time) < read_timeout {
           continue
         }
 
@@ -129,7 +161,6 @@ ReadLoop:
       }
       return h.codec.Teardown(), true
     }
-    last_read_time = time.Now()
 
     line++
     line_offset := h.offset
@@ -139,6 +170,9 @@ ReadLoop:
     if !h.codec.Event(line_offset, h.offset, line, text) {
       break
     }
+
+    last_read_time = time.Now()
+    event_count++
   }
 
   log.Info("Harvester for %s exiting", h.path)
@@ -172,10 +206,9 @@ func (h *Harvester) prepareHarvester() bool {
   return true
 }
 
-func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer, eof_timeout time.Duration) (*string, int, error) {
+func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer) (*string, int, error) {
   var is_partial bool = true
   var newline_length int = 1
-  start_time := time.Now()
 
   for {
     segment, err := reader.ReadBytes('\n')
@@ -204,12 +237,7 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer, eof_tim
         case <-time.After(1 * time.Second):
         }
 
-        // Give up waiting for data after a certain amount of time.
-        // If we time out, return the error (eof)
-        if time.Since(start_time) > eof_timeout {
-          return nil, 0, err
-        }
-        continue
+        return nil, 0, err
       } else {
         log.Warning("%s", err)
         return nil, 0, err // TODO(sissel): don't do this?

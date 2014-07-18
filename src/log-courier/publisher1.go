@@ -205,13 +205,17 @@ PublishLoop:
       select {
       case <-time.After(p.config.Reconnect):
         continue
-      case <-p.control.ShutdownSignal():
-        // TODO: Persist pending payloads and resume? Quicker shutdown
-        if p.num_payloads == 0 {
-          break PublishLoop
-        }
+      case signal := <-p.control.Signal():
+        if signal == nil {
+          // TODO: Persist pending payloads and resume? Quicker shutdown
+          if p.num_payloads == 0 {
+            break PublishLoop
+          }
 
-        shutdown = true
+          shutdown = true
+        } else {
+          p.handleSnapshot()
+        }
       }
     }
 
@@ -371,15 +375,19 @@ PublishLoop:
 
         // Allow network timeout to receive something
         timer.Reset(p.config.Timeout)
-      case <-p.control.ShutdownSignal():
-        // If no pending payloads, simply end
-        if p.num_payloads == 0 {
-          break PublishLoop
-        }
+      case signal := <-p.control.Signal():
+        if signal == nil {
+          // If no pending payloads, simply end
+          if p.num_payloads == 0 {
+            break PublishLoop
+          }
 
-        // Flag shutdown for when we finish pending payloads
-        // TODO: Persist pending payloads and resume? Quicker shutdown
-        shutdown = true
+          // Flag shutdown for when we finish pending payloads
+          // TODO: Persist pending payloads and resume? Quicker shutdown
+          shutdown = true
+        } else {
+          p.handleSnapshot()
+        }
       case config := <-p.control.RecvConfig():
         // Apply and check for changes
         reload = p.reloadConfig(&config.Network)
@@ -599,4 +607,8 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
   }
 
   return
+}
+
+func (p *Publisher) handleSnapshot() {
+  p.control.SendSnapshot()
 }

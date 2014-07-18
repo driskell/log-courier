@@ -184,14 +184,24 @@ func (r *Registrar) Register() {
     r.control.Done()
   }()
 
-  // Ignore shutdown channel - wait for registrar to close
-  for events := range r.registrar_chan {
-    for _, event := range events {
-      event.Process(r.state)
-    }
+  for {
+    select {
+    case events := <-r.registrar_chan:
+      for _, event := range events {
+        event.Process(r.state)
+      }
 
-    if err := r.writeRegistry(); err != nil {
-      log.Error("Registry write failed: %s", err)
+      if err := r.writeRegistry(); err != nil {
+        log.Error("Registry write failed: %s", err)
+      }
+    case signal := <-r.control.Signal():
+      if signal == nil {
+        // We ignore shutdown in registrar and instead wait for registrar_chan
+        // which will be closed once all other pipeline workers shutdown
+        continue
+      }
+      
+      r.control.SendSnapshot()
     }
   }
 

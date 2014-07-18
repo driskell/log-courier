@@ -44,15 +44,19 @@ func main() {
 }
 
 type LogCourierMasterControl struct {
-  signal chan interface{}
-  sinks  map[*LogCourierControl]chan *Config
-  group  sync.WaitGroup
+  signal         chan interface{}
+  config_sinks   map[*LogCourierControl]chan *Config
+  snapshot_chan  chan interface{}
+  shutdown_group sync.WaitGroup
+  snapshot_group sync.WaitGroup
+  group_count    int
 }
 
 func NewLogCourierMasterControl() *LogCourierMasterControl {
   return &LogCourierMasterControl{
-    signal: make(chan interface{}),
-    sinks:  make(map[*LogCourierControl]chan *Config),
+    signal:        make(chan interface{}),
+    snapshot_chan: make(chan interface{}),
+    config_sinks:  make(map[*LogCourierControl]chan *Config),
   }
 }
 
@@ -61,9 +65,39 @@ func (lcs *LogCourierMasterControl) Shutdown() {
 }
 
 func (lcs *LogCourierMasterControl) SendConfig(config *Config) {
-  for _, sink := range lcs.sinks {
+  for _, sink := range lcs.config_sinks {
     sink <- config
   }
+}
+
+func (lcs *LogCourierMasterControl) Snapshot() {
+  lcs.snapshot_group.Add(lcs.group_count)
+  sent, received := lcs.group_count, lcs.group_count
+
+  // Send and receive snapshot information
+  for {
+    select {
+    case snapshot := <-lcs.snapshot_chan:
+      // TODO
+      log.Notice("Received: %v", snapshot)
+
+      // Finished receiving?
+      received--
+      if received == 0 {
+        break
+      }
+    case func() {
+      
+    }() <- 1:
+      // Finished sending?
+      sent--
+      if sent == 0 {
+        signal = nil
+      }
+    }
+  }
+
+  log.Notice("Snapshot complete")
 }
 
 func (lcs *LogCourierMasterControl) Register() *LogCourierControl {
@@ -74,18 +108,21 @@ func (lcs *LogCourierMasterControl) RegisterWithRecvConfig() *LogCourierControl 
   ret := lcs.register()
 
   config_chan := make(chan *Config)
-  lcs.sinks[ret] = config_chan
-  ret.sink = config_chan
+  lcs.config_sinks[ret] = config_chan
+  ret.config_sink = config_chan
 
   return ret
 }
 
 func (lcs *LogCourierMasterControl) register() *LogCourierControl {
-  lcs.group.Add(1)
+  lcs.shutdown_group.Add(1)
+  lcs.group_count++
 
   return &LogCourierControl{
-    signal: lcs.signal,
-    group:  &lcs.group,
+    signal:         lcs.signal,
+    snapshot_chan:  lcs.snapshot_chan,
+    shutdown_group: &lcs.shutdown_group,
+    snapshot_group: &lcs.snapshot_group,
   }
 }
 
@@ -94,24 +131,29 @@ func (lcs *LogCourierMasterControl) Wait() {
 }
 
 type LogCourierControl struct {
-  signal <-chan interface{}
-  sink   <-chan *Config
-  group  *sync.WaitGroup
+  signal         <-chan interface{}
+  config_sink    <-chan *Config
+  snapshot_chan  ->chan interface{}
+  shutdown_group *sync.WaitGroup
 }
 
-func (lcs *LogCourierControl) ShutdownSignal() <-chan interface{} {
+func (lcs *LogCourierControl) Signal() <-chan interface{} {
   return lcs.signal
 }
 
+func (lcs *LogCourierControl) SendSnapshot() {
+  lcs.snapshot_chan <- "SNAPSHOT"
+}
+
 func (lcs *LogCourierControl) RecvConfig() <-chan *Config {
-  if lcs.sink == nil {
+  if lcs.config_sink == nil {
     panic("RecvConfig invalid: LogCourierControl was not registered with RegisterWithRecvConfig")
   }
-  return lcs.sink
+  return lcs.config_sink
 }
 
 func (lcs *LogCourierControl) Done() {
-  lcs.group.Done()
+  lcs.shutdown_group.Done()
 }
 
 type LogCourier struct {
@@ -176,6 +218,9 @@ SignalLoop:
       break SignalLoop
     case <-lc.reload_chan:
       lc.reloadConfig()
+      // TODO: make part of a comm channel of some sort
+    case <-time.After(5 * time.Second):
+      lc.fetchSnapshot()
     }
   }
 
@@ -317,6 +362,11 @@ func (lc *LogCourier) reloadConfig() {
 
   // Pass the new config to the pipeline workers
   lc.control.SendConfig(lc.config)
+}
+
+func (lc *LogCourier) fetchSnapshot() {
+  lc.control.Snapshot()
+  // TODO
 }
 
 func (lc *LogCourier) cleanShutdown() {
