@@ -49,17 +49,13 @@ two Logstash instances.
 
 1. The [go](http://golang.org/doc/install) compiler tools (>= 1.1.0)
 1. [Logstash](http://logstash.net) 1.4.x
-1. (Optional) [ZeroMQ](http://zeromq.org/intro:get-the-software) (>= 4.0.0)
+1. (Optional) [ZeroMQ](http://zeromq.org/intro:get-the-software) (>= 3.2 or >=
+4.0 for CurveZMQ)
 
 ### Building
 
-To build with the optional ZMQ support use the following.
-
-	git clone https://github.com/driskell/log-courier
-	cd log-courier
-	make with=zmq
-
-Otherwise, simply run make standalone as follows.
+To build without the optional ZMQ support, simply run `make` as
+follows.
 
 	git clone https://github.com/driskell/log-courier
 	cd log-courier
@@ -68,6 +64,15 @@ Otherwise, simply run make standalone as follows.
 The log-courier program can then be found in the 'bin' folder.
 
 *If you receive errors, try using `gmake` instead.*
+
+To build with the optional ZMQ support use the following.
+
+  git clone https://github.com/driskell/log-courier
+  cd log-courier
+  make with=zmq3
+
+For CurveZMQ support (ZMQ with public key encryption) replace `zmq3` with
+`zmq4`.
 
 ### Logstash Integration
 
