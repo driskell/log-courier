@@ -40,10 +40,10 @@ module LogStash
       config :transport, :validate => :string, :default => 'tls'
 
       # SSL certificate to use
-      config :ssl_certificate, :validate => :path, :required => true
+      config :ssl_certificate, :validate => :path
 
       # SSL key to use
-      config :ssl_key, :validate => :path, :required => true
+      config :ssl_key, :validate => :path
 
       # SSL key passphrase to use
       config :ssl_key_passphrase, :validate => :password
@@ -56,6 +56,9 @@ module LogStash
 
       # CA certificate to use when verifying client certificates
       config :ssl_verify_ca, :validate => :path
+
+      # Curve secret key
+      config :curve_secret_key, :validate => :string
 
       public
 
@@ -73,7 +76,8 @@ module LogStash
           :ssl_key_passphrase    => @ssl_key_passphrase,
           :ssl_verify            => @ssl_verify,
           :ssl_verify_default_ca => @ssl_verify_default_ca,
-          :ssl_verify_ca         => @ssl_verify_ca
+          :ssl_verify_ca         => @ssl_verify_ca,
+          :curve_secret_key      => @curve_secret_key
         )
       end
 
