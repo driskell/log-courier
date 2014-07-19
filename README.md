@@ -63,8 +63,6 @@ follows.
 
 The log-courier program can then be found in the 'bin' folder.
 
-*If you receive errors, try using `gmake` instead.*
-
 To build with the optional ZMQ support use the following.
 
 	git clone https://github.com/driskell/log-courier
@@ -73,6 +71,8 @@ To build with the optional ZMQ support use the following.
 
 For CurveZMQ support (ZMQ with public key encryption) replace `zmq3` with
 `zmq4`.
+
+*If you receive errors whilst running `make` try `gmake` instead.*
 
 ### Logstash Integration
 
