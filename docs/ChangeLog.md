@@ -11,6 +11,16 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## 0.12
+
+*?*
+
+* Fix non-ASCII but valid UTF-8 characters getting replaced with question marks
+by the Logstash gem
+* Remove support for Go 1.1 due to json.Marshal returning error InvalidUTF8Error
+on encountering an invalid sequence. Go 1.2 and above do not and replace invalid
+sequence with the Unicode replacement character.
+
 ## 0.11
 
 *13th July 2014*

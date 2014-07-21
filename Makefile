@@ -55,7 +55,7 @@ endif
 
 go-check:
 	@go version >/dev/null || (echo "Go not found. You need to install Go: http://golang.org/doc/install"; false)
-	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.1.x, 1.2.x or 1.3.x required, you have a version of Go that is not supported."; false)
+	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.2 or 1.3 required, you have a version of Go that is not supported."; false)
 
 .SECONDEXPANSION:
 bin/%: $$(wildcard src/%/*.go) | go-check
