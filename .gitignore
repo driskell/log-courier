@@ -1,5 +1,4 @@
 Gemfile.lock
-build
 bin
 log-courier-*.gem
 node_modules
