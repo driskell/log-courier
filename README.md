@@ -49,8 +49,8 @@ two Logstash instances.
 
 1. The [go](http://golang.org/doc/install) compiler tools (1.2 or 1.3)
 1. [Logstash](http://logstash.net) 1.4.x
-1. (Optional) [ZeroMQ](http://zeromq.org/intro:get-the-software) (>= 3.2 or >=
-4.0 for CurveZMQ)
+1. (Optional) [ZeroMQ](http://zeromq.org/intro:get-the-software) (3.2 or 4.0 for
+CurveZMQ)
 
 ### Building
 

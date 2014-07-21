@@ -8,6 +8,7 @@ Log Courier is built to work seamlessly with [Logstash](http://logstash.net)
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
 - [Installation](#installation)
+- [Remote Installation](#remote-installation)
 - [Configuration](#configuration)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -28,7 +29,9 @@ First build the gem. This will generate a file called log-courier-X.X.gem.
 		make gem
 
 Then switch to the Logstash installation directory and install it. Note that
-because this is JRuby it may take a minute to finish the install.
+because this is JRuby it may take a minute to finish the install. The
+ffi-rzmq-core and ffi-rzmq gems bundled with Logstash will be upgraded during
+the installation, which will require an internet connection.
 
 		cd /opt/logstash
 		export GEM_HOME=vendor/bundle/jruby/1.9
@@ -38,6 +41,18 @@ Now install the Logstash plugins.
 
 		cd <log-courier-source>
 		cp -rvf lib/logstash /opt/logstash/lib
+
+## Remote Installation
+
+If you need to install the gem on a server without an internet connection, you
+must download the latest ffi-rzmq-core and ffi-zmq gems from the rubygems site
+and transfer them across.
+
+* https://rubygems.org/gems/ffi-rzmq-core
+* https://rubygems.org/gems/ffi-rzmq
+
+These gems should be installed before the log-courer gem. As a result, the
+log-courier gem installation will not need them to be downloaded.
 
 ## Configuration
 
