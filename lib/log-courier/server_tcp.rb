@@ -98,6 +98,10 @@ module LogCourier
         else
           @server = @tcp_server
         end
+
+        if @options[:port] == 0
+          @logger.warn '[LogCourierServer] Transport is listening on ephemeral port ' + @port.to_s
+        end
       rescue => e
         raise "[LogCourierServer] Failed to initialise: #{e}"
       end
