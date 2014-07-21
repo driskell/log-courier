@@ -69,15 +69,18 @@ configuration for the input plugin follows.
 
 The following options are available for the input plugin:
 
+* transport - "tcp", "tls", "plainzmq" or "zmq" (default: "tls")
 * address - Interface address to listen on (defaults to all interfaces)
-* transport - "tcp", "tls" (default), "plainzmq" or "zmq"
-* ssl_certificate - Path to server SSL certificate
-* ssl_key - Path to server SSL private key
-* ssl_key_passphrase - Password for ssl_key (optional)
-* ssl_verify - If true, verifies client certificates (default false)
+* port - The port number to listen on
+* ssl_certificate - Path to server SSL certificate (tls)
+* ssl_key - Path to server SSL private key (tls)
+* ssl_key_passphrase - Password for ssl_key (tls, optional)
+* ssl_verify - If true, verifies client certificates (tls, default false)
 * ssl_verify_default_ca - Accept client certificates signed by systems root CAs
+(tls)
 * ssl_verify_ca - Path to an SSL CA certificate to use for client certificate
-verification
+verification (tls)
+* curve_secret_key - CurveZMQ secret key for the server (zmq)
 
 The following options are available for the output plugin:
 
