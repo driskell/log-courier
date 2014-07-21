@@ -61,13 +61,13 @@ shared_context 'Helpers_Log_Courier' do
     _write_config config
 
     if stdin
-      mode = 'r+'
+      @log_courier_mode = 'r+'
     else
-      mode = 'r'
+      @log_courier_mode = 'r'
     end
 
     # Start LSF
-    @log_courier = IO.popen("bin/log-courier -config #{@config.path}" + (args.empty? ? '' : ' ' + args), mode)
+    @log_courier = IO.popen("bin/log-courier -config #{@config.path}" + (args.empty? ? '' : ' ' + args), @log_courier_mode)
 
     # Start a thread to flush the STDOUT from the pipe
     log_courier = @log_courier
@@ -107,8 +107,9 @@ shared_context 'Helpers_Log_Courier' do
     Process.kill('TERM', @log_courier.pid)
     begin
       Timeout.timeout(30) do
-        # Close will wait for the process to terminate
-        @log_courier.close
+        # Close and wait
+        @log_courier.close_write if @log_courier_mode == 'r+'
+        @log_courier_reader.join
       end
       terminated = true
     rescue Timeout::Error
@@ -117,8 +118,9 @@ shared_context 'Helpers_Log_Courier' do
     unless terminated
       # Force a stacktrace
       Process.kill('QUIT', @log_courier.pid)
-      @log_courier.close
+      @log_courier_reader.join
     end
     @log_courier = nil
+    @log_courier_reader = nil
   end
 end
