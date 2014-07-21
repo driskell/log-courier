@@ -17,5 +17,5 @@ Gem::Specification.new do |gem|
     lib/log-courier/client_tls.rb
   )
 
-  gem.add_runtime_dependency 'ffi-rzmq'
+  gem.add_runtime_dependency 'ffi-rzmq', '>= 2.0'
 end
