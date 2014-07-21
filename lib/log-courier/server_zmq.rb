@@ -47,20 +47,25 @@ module LogCourier
 
         if @options[:transport] == 'zmq'
           rc = @socket.setsockopt(ZMQ::CURVE_SERVER, 1)
-          raise ZMQError, 'setsockopt CURVE_SERVER failure' unless ZMQ::Util.resultcode_ok?(rc)
+          raise ZMQError, 'setsockopt CURVE_SERVER failure: ' + rc.to_s unless ZMQ::Util.resultcode_ok?(rc)
 
           rc = @socket.setsockopt(ZMQ::CURVE_SECRETKEY, @options[:curve_secret_key])
-          raise ZMQError, 'setsockopt CURVE_SECRETKEY failure' unless ZMQ::Util.resultcode_ok?(rc)
+          raise ZMQError, 'setsockopt CURVE_SECRETKEY failure: ' + rc.to_s unless ZMQ::Util.resultcode_ok?(rc)
         end
 
-        rc = @socket.bind('tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s))
-        raise ZMQError, 'bind failure' unless ZMQ::Util.resultcode_ok?(rc)
+        bind = 'tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s)
+        rc = @socket.bind(bind)
+        raise ZMQError, 'failed to bind at ' + bind + ': ' + rc.to_s unless ZMQ::Util.resultcode_ok?(rc)
 
         # Lookup port number that was allocated in case it was set to 0
         endpoint = ''
         rc = @socket.getsockopt(ZMQ::LAST_ENDPOINT, endpoint)
-        raise ZMQError, 'getsockopt LAST_ENDPOINT failure' unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
+        raise ZMQError, 'getsockopt LAST_ENDPOINT failure: ' + rc.to_s unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
         @port = endpoint_port.to_i
+
+        if @options[:port] == 0
+          @logger.warn '[LogCourierServer] Transport is listening on ephemeral port ' + @port.to_s
+        end
       rescue => e
         raise "[LogCourierServer] Failed to initialise: #{e}"
       end
@@ -86,7 +91,7 @@ module LogCourier
           data = Timeout.timeout(@timeout - Time.now.to_i) do
             data = ''
             rc = @socket.recv_string(data)
-            raise ZMQError unless ZMQ::Util.resultcode_ok?(rc)
+            raise ZMQError, 'recv_string error: ' + rc.to_s unless ZMQ::Util.resultcode_ok?(rc)
             data
           end
         rescue ZMQError => e
@@ -142,7 +147,7 @@ module LogCourier
       Timeout.timeout(@timeout - Time.now.to_i) do
         rc = @socket.send_string(data)
         unless ZMQ::Util.resultcode_ok?(rc)
-          @logger.warn "[LogCourierServer] Message send failed: #{rc}" unless @logger.nil?
+          @logger.warn "[LogCourierServer] Message send failed: #{rc.to_s}" unless @logger.nil?
           return
         end
       end
