@@ -126,7 +126,7 @@ type LogCourier struct {
 
 func NewLogCourier() *LogCourier {
   ret := &LogCourier{
-    control:  NewLogCourierMasterControl(),
+    control: NewLogCourierMasterControl(),
   }
   return ret
 }
