@@ -17,10 +17,19 @@
 *?*
 
 * Fix non-ASCII but valid UTF-8 characters getting replaced with question marks
-by the Logstash gem
+by the Logstash gem (#22)
+* Fix zmq transport not working in Logstash due to ffi-rzmq version too old. Gem
+installation will now trigger update of the ffi-rzmq gems to the necessary
+versions (#20)
+* Fix broken syslog logging (#18)
+* Fix broken spool-size configuration setting (#17)
+* Move logging cmdline settings (such as log-to-syslog) to the configuration
+file and allow configuration of stdout logging and file logging as well as
+syslog logging (#15)
 * Remove support for Go 1.1 due to json.Marshal returning error InvalidUTF8Error
 on encountering an invalid sequence. Go 1.2 and above do not and replace invalid
-sequence with the Unicode replacement character.
+sequence with the Unicode replacement character
+* Various other minor tweaks and fixes
 
 ## 0.11
 
