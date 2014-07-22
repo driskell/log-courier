@@ -19,9 +19,9 @@
 package main
 
 import (
+  "github.com/op/go-logging"
   "os"
   "os/signal"
-  "syscall"
 )
 
 func (lc *LogCourier) registerSignals() {
