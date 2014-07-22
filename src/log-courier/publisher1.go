@@ -133,6 +133,7 @@ type Publisher struct {
   out_of_sync      int
   registrar        *Registrar
   registrar_chan   chan<- []RegistrarEvent
+  shutdown         bool
 }
 
 func NewPublisher(config *NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) (*Publisher, error) {
@@ -211,13 +212,18 @@ PublishLoop:
           break PublishLoop
         }
 
-        shutdown = true
+        p.shutdown = true
       }
     }
 
     p.pending_ping = false
-    p.can_send = p.transport.CanSend()
     input_toggle = nil
+
+    if p.shutdown || p.num_payloads >= max_pending_payloads {
+      p.can_send = nil
+    } else {
+      p.can_send = p.transport.CanSend()
+    }
 
   SelectLoop:
     for {
@@ -346,7 +352,7 @@ PublishLoop:
         }
 
         // If we have pending payloads, we should've received something by now
-        if p.num_payloads != 0 || input_toggle == nil {
+        if p.num_payloads != 0 {
           err = errors.New("Server did not respond within network timeout")
           break SelectLoop
         }
@@ -379,7 +385,9 @@ PublishLoop:
 
         // Flag shutdown for when we finish pending payloads
         // TODO: Persist pending payloads and resume? Quicker shutdown
-        shutdown = true
+        p.shutdown = true
+        p.can_send = nil
+        input_toggle = nil
       case config := <-p.control.RecvConfig():
         // Apply and check for changes
         reload = p.reloadConfig(&config.Network)
@@ -392,6 +400,13 @@ PublishLoop:
     }
 
     if err != nil {
+      // If we're shutting down and we hit a timeout and aren't out of sync
+      // We can then quit - as we'd be resending payloads anyway
+      if shutdown && p.out_of_sync == 0 {
+        log.Error("Transport error: %s", err)
+        break PublishLoop
+      }
+
       // An error occurred, reconnect after timeout
       log.Error("Transport error, will reconnect: %s", err)
       p.transport.Disconnect()
@@ -579,7 +594,7 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
       p.out_of_sync = out_of_sync
 
       // Resume sending if we stopped due to excessive pending payload count
-      if p.can_send == nil {
+      if !p.shutdown && p.can_send == nil {
         p.can_send = p.transport.CanSend()
       }
 
