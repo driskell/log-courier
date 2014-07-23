@@ -104,6 +104,7 @@ module LogCourier
       end
 
       # PONG!
+      # NOTE: comm.send can raise a Timeout::Error of its own
       comm.send 'PONG', ''
     end
 
@@ -177,12 +178,14 @@ module LogCourier
         end
       rescue Timeout::Error
         # Full pipeline, partial ack
+        # NOTE: comm.send can raise a Timeout::Error of its own
         comm.send('ACKN', [nonce, sequence].pack('A*N'))
         reset_ack_timeout
         retry
       end
 
       # Acknowledge the full message
+      # NOTE: comm.send can raise a Timeout::Error
       comm.send('ACKN', [nonce, sequence].pack('A*N'))
     end
 
