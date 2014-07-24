@@ -189,14 +189,12 @@ func (p *Publisher) Publish(input <-chan []*FileEvent) {
   var input_toggle <-chan []*FileEvent
   var retry_payload *PendingPayload
   var err error
-  var shutdown bool
   var reload int
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   timer := time.NewTimer(keepalive_timeout)
 
-  // TODO: We should still obey network timeout if we've sent events and not yet received response
-  //       as its the quickest way to detect a connection problem after idle
+  shutdown_signal := p.control.ShutdownSignal()
 
 PublishLoop:
   for {
@@ -273,7 +271,7 @@ PublishLoop:
         }
 
         // No pending payloads, are we shutting down? Skip if so
-        if shutdown {
+        if p.shutdown {
           break
         }
 
@@ -329,7 +327,7 @@ PublishLoop:
         // If no more pending payloads, set keepalive, otherwise reset to network timeout
         if p.num_payloads == 0 {
           // Handle shutdown
-          if shutdown {
+          if p.shutdown {
             break PublishLoop
           }
           timer.Reset(keepalive_timeout)
@@ -377,7 +375,7 @@ PublishLoop:
 
         // Allow network timeout to receive something
         timer.Reset(p.config.Timeout)
-      case <-p.control.ShutdownSignal():
+      case <-shutdown_signal:
         // If no pending payloads, simply end
         if p.num_payloads == 0 {
           break PublishLoop
@@ -385,6 +383,8 @@ PublishLoop:
 
         // Flag shutdown for when we finish pending payloads
         // TODO: Persist pending payloads and resume? Quicker shutdown
+        log.Warning("Delaying shutdown to wait for pending responses from the server")
+        shutdown_signal = nil
         p.shutdown = true
         p.can_send = nil
         input_toggle = nil
@@ -402,7 +402,7 @@ PublishLoop:
     if err != nil {
       // If we're shutting down and we hit a timeout and aren't out of sync
       // We can then quit - as we'd be resending payloads anyway
-      if shutdown && p.out_of_sync == 0 {
+      if p.shutdown && p.out_of_sync == 0 {
         log.Error("Transport error: %s", err)
         break PublishLoop
       }
