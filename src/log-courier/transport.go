@@ -26,11 +26,11 @@ type TransportFactory interface {
 
 type Transport interface {
   ReloadConfig(*NetworkConfig) int
-  Connect() error
+  Init() error
   CanSend() <-chan int
   Write(string, []byte) error
   Read() <-chan interface{}
-  Disconnect()
+  Shutdown()
 }
 
 var transportRegistry map[string]TransportRegistrar = make(map[string]TransportRegistrar)

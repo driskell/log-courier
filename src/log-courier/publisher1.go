@@ -38,6 +38,12 @@ const (
   max_pending_payloads       int           = 100
 )
 
+const (
+  Reload_None      = iota
+  Reload_Servers
+  Reload_Transport
+)
+
 type PendingPayload struct {
   next          *PendingPayload
   nonce         string
@@ -163,14 +169,14 @@ func (p *Publisher) init() error {
   p.pending_payloads = make(map[string]*PendingPayload)
 
   // Set up the selected transport
-  if err = p.initTransport(); err != nil {
+  if err = p.loadTransport(); err != nil {
     return err
   }
 
   return nil
 }
 
-func (p *Publisher) initTransport() error {
+func (p *Publisher) loadTransport() error {
   transport, err := p.config.transport.NewTransport(p.config)
   if err != nil {
     return err
@@ -200,8 +206,8 @@ func (p *Publisher) Publish(input <-chan []*FileEvent) {
 
 PublishLoop:
   for {
-    if err = p.transport.Connect(); err != nil {
-      log.Error("Connect attempt failed: %s", err)
+    if err = p.transport.Init(); err != nil {
+      log.Error("Transport init failed: %s", err)
       // TODO: implement shutdown select
       select {
       case <-time.After(p.config.Reconnect):
@@ -393,7 +399,7 @@ PublishLoop:
         reload = p.reloadConfig(&config.Network)
 
         // If a change and no pending payloads, process immediately
-        if reload != 0 && p.num_payloads == 0 {
+        if reload != Reload_None && p.num_payloads == 0 {
           break SelectLoop
         }
       }
@@ -408,27 +414,26 @@ PublishLoop:
       }
 
       // An error occurred, reconnect after timeout
-      log.Error("Transport error, will reconnect: %s", err)
-      p.transport.Disconnect()
+      log.Error("Transport error, will try again: %s", err)
       time.Sleep(p.config.Reconnect)
     } else {
-      // Reloading transport
-      p.transport.Disconnect()
+      // Do we need to reload transport?
+      if reload == Reload_Transport {
+        // Shutdown and reload transport
+        p.transport.Shutdown()
 
-      // Do we need to reinit transport?
-      if reload == 2 {
-        if err = p.initTransport(); err != nil {
+        if err = p.loadTransport(); err != nil {
           log.Error("The new transport configuration failed to apply: %s", err)
         }
       }
 
-      reload = 0
+      reload = Reload_None
     }
 
     retry_payload = p.first_payload
   }
 
-  p.transport.Disconnect()
+  p.transport.Shutdown()
 
   // Disconnect from registrar
   p.registrar.Disconnect()
@@ -442,18 +447,18 @@ func (p *Publisher) reloadConfig(new_config *NetworkConfig) int {
 
   // Transport reload will return whether we need a full reload or not
   reload := p.transport.ReloadConfig(new_config)
-  if reload == 2 {
-    return 2
+  if reload == Reload_Transport {
+    return Reload_Transport
   }
 
   // Same servers?
   if len(new_config.Servers) != len(old_config.Servers) {
-    return 1
+    return Reload_Servers
   }
 
   for i := range new_config.Servers {
     if new_config.Servers[i] != old_config.Servers[i] {
-      return 1
+      return Reload_Servers
     }
   }
 

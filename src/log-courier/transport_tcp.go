@@ -150,20 +150,24 @@ func (t *TransportTcp) ReloadConfig(new_net_config *NetworkConfig) int {
   // Check we can grab new TCP config to compare, if not force transport reinit
   new_config, ok := new_net_config.transport.(*TransportTcpFactory)
   if !ok {
-    return 2
+    return Reload_Transport
   }
 
   if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
-    return 2
+    return Reload_Transport
   }
 
   // Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
   t.net_config = new_net_config
 
-  return 0
+  return Reload_None
 }
 
-func (t *TransportTcp) Connect() error {
+func (t *TransportTcp) Init() error {
+  if t.shutdown != nil {
+    t.disconnect()
+  }
+
   // Pick a random server from the list.
   hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]
   submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
@@ -183,11 +187,11 @@ func (t *TransportTcp) Connect() error {
   address := addresses[rand.Int()%len(addresses)]
   addressport := net.JoinHostPort(address, port)
 
-  log.Info("Connecting to %s (%s) ", addressport, host)
+  log.Info("Attempting to connect to %s (%s)", addressport, host)
 
   tcpsocket, err := net.DialTimeout("tcp", addressport, t.net_config.Timeout)
   if err != nil {
-    return fmt.Errorf("Failure connecting to %s: %s", address, err)
+    return fmt.Errorf("Failed to connect to %s: %s", address, err)
   }
 
   // Now wrap in TLS if this is the "tls" transport
@@ -209,7 +213,7 @@ func (t *TransportTcp) Connect() error {
     t.socket = tcpsocket
   }
 
-  log.Info("Connected with %s", address)
+  log.Info("Connected to %s", address)
 
   // Signal channels
   t.shutdown = make(chan interface{}, 1)
@@ -231,6 +235,24 @@ func (t *TransportTcp) Connect() error {
   go t.receiver()
 
   return nil
+}
+
+func (t *TransportTcp) disconnect() {
+  if t.shutdown == nil {
+    return
+  }
+
+  // Send shutdown request
+  close(t.shutdown)
+  t.wait.Wait()
+  t.shutdown = nil
+
+  // If tls, shutdown tls socket first
+  if t.config.transport == "tls" {
+    t.tlssocket.Close()
+  }
+
+  t.socket.Close()
 }
 
 func (t *TransportTcp) sender() {
@@ -364,21 +386,8 @@ func (t *TransportTcp) Read() <-chan interface{} {
   return t.recv_chan
 }
 
-func (t *TransportTcp) Disconnect() {
-  if t.shutdown == nil {
-    return
-  }
-
-  // Send shutdown request
-  close(t.shutdown)
-  t.wait.Wait()
-
-  // If tls, shutdown tls socket first
-  if t.config.transport == "tls" {
-    t.tlssocket.Close()
-  }
-
-  t.socket.Close()
+func (t *TransportTcp) Shutdown() {
+  t.disconnect()
 }
 
 func (w *TransportTcpWrap) Read(b []byte) (int, error) {
