@@ -34,6 +34,10 @@ gem:
 test: all vendor/bundle/.GemfileModT
 	bundle exec rspec $(TESTS)
 
+selfsigned: | bin/lc-tlscert
+	bin/lc-tlscert
+
+
 doc:
 	@npm --version >/dev/null || (echo "'npm' not found. You need to install node.js.")
 	@npm install doctoc >/dev/null || (echo "Failed to perform local install of doctoc.")
