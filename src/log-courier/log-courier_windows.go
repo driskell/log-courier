@@ -32,4 +32,5 @@ func (lc *LogCourier) registerSignals() {
 }
 
 func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
+  return nil
 }
