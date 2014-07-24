@@ -257,11 +257,11 @@ func (t *TransportZmq) Init() (err error) {
       addressport := net.JoinHostPort(address, port)
 
       if err = t.dealer.Connect("tcp://" + addressport); err != nil {
-        log.Warning("Failed to register %s (%s), skipping", addressport, host)
+        log.Warning("Failed to register %s (%s) with ZMQ, skipping", addressport, host)
         continue
       }
 
-      log.Info("Registered %s (%s) ", addressport, host)
+      log.Info("Registered %s (%s) with ZMQ", addressport, host)
       endpoints++
     }
   }
