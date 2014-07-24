@@ -18,17 +18,21 @@
 
 package main
 
+import (
+  "fmt"
+)
+
 func (t *TransportZmq) configureSocket() (err error) {
   if t.config.transport == "zmq" {
     // Configure CurveMQ security
     if err = t.dealer.SetCurveServerkey(t.config.CurveServerkey); err != nil {
-      return
+      return fmt.Errorf("Failed to set ZMQ curve server key: %s", err)
     }
     if err = t.dealer.SetCurvePublickey(t.config.CurvePublickey); err != nil {
-      return
+      return fmt.Errorf("Failed to set ZMQ curve public key: %s", err)
     }
     if err = t.dealer.SetCurveSecretkey(t.config.CurveSecretkey); err != nil {
-      return
+      return fmt.Errorf("Failed to set ZMQ curve secret key: %s", err)
     }
   }
   return
