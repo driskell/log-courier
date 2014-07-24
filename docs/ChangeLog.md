@@ -24,6 +24,9 @@ versions (#20)
 * Fix broken syslog logging (#18)
 * Fix broken spool-size configuration setting (#17)
 * Fix compilation on Windows (#23)
+* Fix shutdown not working when publisher has pending payloads (#24)
+* Fix potential race condition issues in the ZMQ Logstash plugin
+* Implement ZMQ monitor and log when connections/disconnects happen
 * Move logging cmdline settings (such as log-to-syslog) to the configuration
 file and allow configuration of stdout logging and file logging as well as
 syslog logging (#15)
