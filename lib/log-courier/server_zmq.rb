@@ -98,7 +98,9 @@ module LogCourier
             # Wait for a message to arrive, handling timeouts
             @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
             @poller.register @socket, ZMQ::POLLIN
-            raise Timeout::Error if @poller.poll((@timeout - Time.now.to_i) * 1_000) == 0
+            while @poller.poll(1_000) == 0
+              raise Timeout::Error if Time.now.to_i >= @timeout
+            end
             next
           end
         rescue Timeout::Error
@@ -164,7 +166,9 @@ module LogCourier
         # Wait for send to become available, handling timeouts
         @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
         @poller.register @socket, ZMQ::POLLOUT
-        raise Timeout::Error if @poller.poll((@timeout - Time.now.to_i) * 1_000) == 0
+        while @poller.poll(1_000) == 0
+          raise Timeout::Error if Time.now.to_i >= @timeout
+        end
       end
     end
 
