@@ -63,7 +63,7 @@ type TransportZmq struct {
   send_buff  *ZMQMessage
   recv_buff  [][]byte
   recv_body  bool
-  event      *ZMQEvent
+  event      ZMQEvent
   ready      bool
 
   wait sync.WaitGroup
@@ -84,7 +84,6 @@ type ZMQMessage struct {
 
 type ZMQEvent struct {
   part      int
-  previous  *ZMQEvent
   event     zmq.Event
   val       int32
   data      []byte
@@ -95,9 +94,6 @@ func (e *ZMQEvent) Log() {
   case zmq.EVENT_CONNECTED:
     log.Info("Connected to %s", e.data)
   case zmq.EVENT_CONNECT_RETRIED:
-    if e.previous.event == zmq.EVENT_CONNECT_RETRIED {
-      log.Error("Failed to connect to %s", e.previous.data)
-    }
     log.Info("Attempting to connect to %s", e.data)
   case zmq.EVENT_DISCONNECTED:
     log.Error("Lost connection to %s", e.data)
@@ -290,7 +286,6 @@ func (t *TransportZmq) Init() (err error) {
   t.send_buff = nil
   t.recv_buff = nil
   t.recv_body = false
-  t.event = new(ZMQEvent)
 
   return nil
 }
@@ -647,11 +642,7 @@ func (t *TransportZmq) processMonitorIn() (ok bool) {
         log.Debug("Unexpected end of monitor message. Skipping.")
       }
 
-      // Keep the previous event in hand so we can be smart with log messages
-      t.event.previous = nil
-      new_event := new(ZMQEvent)
-      new_event.previous = t.event
-      t.event = new_event
+      t.event.part = Monitor_Part_Header
       continue
     }
 
