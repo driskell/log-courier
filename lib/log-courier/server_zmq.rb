@@ -96,8 +96,8 @@ module LogCourier
             raise ZMQError, 'recv_string error: ' + ZMQ::Util.error_string if ZMQ::Util.errno != ZMQ::EAGAIN
 
             # Wait for a message to arrive, handling timeouts
-            @poller.deregister @socket
-            @poller.register_readable @socket
+            @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
+            @poller.register @socket, ZMQ::POLLIN
             raise Timeout::Error if @poller.poll((@timeout - Time.now.to_i) * 1_000) == 0
             next
           end
@@ -162,9 +162,9 @@ module LogCourier
         end
 
         # Wait for send to become available, handling timeouts
-        @poller.deregister @socket
-        @poller.register_writable @socket
-        raise Timeout::Error if @poller.poll(()@timeout - Time.now.to_i) * 1_000) == 0
+        @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
+        @poller.register @socket, ZMQ::POLLOUT
+        raise Timeout::Error if @poller.poll((@timeout - Time.now.to_i) * 1_000) == 0
       end
     end
 
