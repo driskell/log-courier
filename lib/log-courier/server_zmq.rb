@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 # Copyright 2014 Jason Woods.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,20 +47,27 @@ module LogCourier
 
         if @options[:transport] == 'zmq'
           rc = @socket.setsockopt(ZMQ::CURVE_SERVER, 1)
-          raise ZMQError, 'setsockopt CURVE_SERVER failure' unless ZMQ::Util.resultcode_ok?(rc)
+          raise ZMQError, 'setsockopt CURVE_SERVER failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
           rc = @socket.setsockopt(ZMQ::CURVE_SECRETKEY, @options[:curve_secret_key])
-          raise ZMQError, 'setsockopt CURVE_SECRETKEY failure' unless ZMQ::Util.resultcode_ok?(rc)
+          raise ZMQError, 'setsockopt CURVE_SECRETKEY failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
         end
 
-        rc = @socket.bind('tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s))
-        raise ZMQError, 'bind failure' unless ZMQ::Util.resultcode_ok?(rc)
+        bind = 'tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s)
+        rc = @socket.bind(bind)
+        raise ZMQError, 'failed to bind at ' + bind + ': ' + rZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
         # Lookup port number that was allocated in case it was set to 0
         endpoint = ''
         rc = @socket.getsockopt(ZMQ::LAST_ENDPOINT, endpoint)
-        raise ZMQError, 'getsockopt LAST_ENDPOINT failure' unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
+        raise ZMQError, 'getsockopt LAST_ENDPOINT failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
         @port = endpoint_port.to_i
+
+        @poller = ZMQ::Poller.new
+
+        if @options[:port] == 0
+          @logger.warn '[LogCourierServer] Transport is listening on ephemeral port ' + @port.to_s
+        end
       rescue => e
         raise "[LogCourierServer] Failed to initialise: #{e}"
       end
@@ -80,20 +89,28 @@ module LogCourier
     def run(&block)
       loop do
         begin
-          # If we don't receive anything after the main timeout - something is probably wrong
-          data = Timeout.timeout(@timeout - Time.now.to_i) do
-            data = ''
-            rc = @socket.recv_string(data)
-            raise ZMQError unless ZMQ::Util.resultcode_ok?(rc)
-            data
+          # Try to receive a message
+          data = ''
+          rc = @socket.recv_string(data, ZMQ::DONTWAIT)
+          unless ZMQ::Util.resultcode_ok?(rc)
+            raise ZMQError, 'recv_string error: ' + ZMQ::Util.error_string if ZMQ::Util.errno != ZMQ::EAGAIN
+
+            # Wait for a message to arrive, handling timeouts
+            @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
+            @poller.register @socket, ZMQ::POLLIN
+            while @poller.poll(1_000) == 0
+              raise Timeout::Error if Time.now.to_i >= @timeout
+            end
+            next
           end
-        rescue ZMQError => e
-          @logger.warn "[LogCourierServer] ZMQ recv_string failed: #{e}" unless @logger.nil?
         rescue Timeout::Error
           # We'll let ZeroMQ manage reconnections and new connections
           # There is no point in us doing any form of reconnect ourselves
           # We will keep this timeout in however, for shutdown checks
           reset_timeout
+          next
+        rescue ZMQError => e
+          @logger.warn "[LogCourierServer] ZMQ recv_string failed: #{e}" unless @logger.nil?
           next
         end
         # We only work with one part messages at the moment
@@ -137,11 +154,20 @@ module LogCourier
     def send(signature, message)
       reset_timeout
       data = signature + [message.length].pack('N') + message
-      Timeout.timeout(@timeout - Time.now.to_i) do
-        rc = @socket.send_string(data)
-        unless ZMQ::Util.resultcode_ok?(rc)
-          @logger.warn "[LogCourierServer] Message send failed: #{rc}" unless @logger.nil?
-          return
+      loop do
+        # Try to send a message but never block
+        rc = @socket.send_string(data, ZMQ::DONTWAIT)
+        break if ZMQ::Util.resultcode_ok?(rc)
+        if ZMQ::Util.errno != ZMQ::EAGAIN
+          @logger.warn "[LogCourierServer] Message send failed: #{ZMQ::Util.error_string}" unless @logger.nil?
+          raise Timeout::Error
+        end
+
+        # Wait for send to become available, handling timeouts
+        @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
+        @poller.register @socket, ZMQ::POLLOUT
+        while @poller.poll(1_000) == 0
+          raise Timeout::Error if Time.now.to_i >= @timeout
         end
       end
     end

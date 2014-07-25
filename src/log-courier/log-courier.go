@@ -168,7 +168,7 @@ type LogCourier struct {
 
 func NewLogCourier() *LogCourier {
   ret := &LogCourier{
-    control:  NewLogCourierMasterControl(),
+    control: NewLogCourierMasterControl(),
   }
   return ret
 }
@@ -317,10 +317,12 @@ func (lc *LogCourier) configureLogging() (err error) {
 
   // Log file?
   if lc.config.General.LogFile != "" {
-    lc.log_file, err = os.OpenFile(lc.config.General.LogFile, os.O_CREATE|os.O_APPEND, 0640)
+    lc.log_file, err = os.OpenFile(lc.config.General.LogFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0640)
     if err != nil {
       return
     }
+
+    backends = append(backends, logging.NewLogBackend(lc.log_file, "", stdlog.LstdFlags|stdlog.Lmicroseconds))
   }
 
   if err = lc.configureLoggingPlatform(&backends); err != nil {

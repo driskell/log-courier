@@ -47,10 +47,10 @@ two Logstash instances.
 
 ### Build Requirements
 
-1. The [go](http://golang.org/doc/install) compiler tools (>= 1.1.0)
+1. The [go](http://golang.org/doc/install) compiler tools (1.2 or 1.3)
 1. [Logstash](http://logstash.net) 1.4.x
-1. (Optional) [ZeroMQ](http://zeromq.org/intro:get-the-software) (>= 3.2 or >=
-4.0 for CurveZMQ)
+1. (Optional) [ZeroMQ](http://zeromq.org/intro:get-the-software) (3.2 or 4.0 for
+CurveZMQ)
 
 ### Building
 
@@ -63,16 +63,16 @@ follows.
 
 The log-courier program can then be found in the 'bin' folder.
 
-*If you receive errors, try using `gmake` instead.*
-
 To build with the optional ZMQ support use the following.
 
-  git clone https://github.com/driskell/log-courier
-  cd log-courier
-  make with=zmq3
+	git clone https://github.com/driskell/log-courier
+	cd log-courier
+	make with=zmq3
 
 For CurveZMQ support (ZMQ with public key encryption) replace `zmq3` with
 `zmq4`.
+
+*If you receive errors whilst running `make` try `gmake` instead.*
 
 ### Logstash Integration
 
@@ -94,14 +94,14 @@ configuration snippets.
 
 The log-courier command accepts the following command line options.
 
-  -config="": The config file to load
-  -config-test=false: Test the configuration specified by -config and exit
-  -cpuprofile="": write cpu profile to file
-  -from-beginning=false: On first run, read new files from the beginning instead of the end
-  -list-supported=false: List supported transports and codecs
-  -log-to-stdout=true: Log to stdout
-  -log-to-syslog=false: Log to syslog
-  -version=false: show version information
+	-config="": The config file to load
+	-config-test=false: Test the configuration specified by -config and exit
+	-cpuprofile="": write cpu profile to file
+	-from-beginning=false: On first run, read new files from the beginning instead of the end
+	-list-supported=false: List supported transports and codecs
+	-log-to-stdout=true: Log to stdout
+	-log-to-syslog=false: Log to syslog
+	-version=false: show version information
 
 ## Documentation
 

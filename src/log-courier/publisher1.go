@@ -38,6 +38,12 @@ const (
   max_pending_payloads       int           = 100
 )
 
+const (
+  Reload_None      = iota
+  Reload_Servers
+  Reload_Transport
+)
+
 type PendingPayload struct {
   next          *PendingPayload
   nonce         string
@@ -133,6 +139,7 @@ type Publisher struct {
   out_of_sync      int
   registrar        *Registrar
   registrar_chan   chan<- []RegistrarEvent
+  shutdown         bool
 }
 
 func NewPublisher(config *NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) (*Publisher, error) {
@@ -162,14 +169,14 @@ func (p *Publisher) init() error {
   p.pending_payloads = make(map[string]*PendingPayload)
 
   // Set up the selected transport
-  if err = p.initTransport(); err != nil {
+  if err = p.loadTransport(); err != nil {
     return err
   }
 
   return nil
 }
 
-func (p *Publisher) initTransport() error {
+func (p *Publisher) loadTransport() error {
   transport, err := p.config.transport.NewTransport(p.config)
   if err != nil {
     return err
@@ -188,19 +195,17 @@ func (p *Publisher) Publish(input <-chan []*FileEvent) {
   var input_toggle <-chan []*FileEvent
   var retry_payload *PendingPayload
   var err error
-  var shutdown bool
   var reload int
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   timer := time.NewTimer(keepalive_timeout)
 
-  // TODO: We should still obey network timeout if we've sent events and not yet received response
-  //       as its the quickest way to detect a connection problem after idle
+  control_signal := p.control.Signal()
 
 PublishLoop:
   for {
-    if err = p.transport.Connect(); err != nil {
-      log.Error("Connect attempt failed: %s", err)
+    if err = p.transport.Init(); err != nil {
+      log.Error("Transport init failed: %s", err)
       // TODO: implement shutdown select
       select {
       case <-time.After(p.config.Reconnect):
@@ -212,7 +217,7 @@ PublishLoop:
             break PublishLoop
           }
 
-          shutdown = true
+          p.shutdown = true
         } else {
           p.handleSnapshot()
         }
@@ -220,8 +225,13 @@ PublishLoop:
     }
 
     p.pending_ping = false
-    p.can_send = p.transport.CanSend()
     input_toggle = nil
+
+    if p.shutdown || p.num_payloads >= max_pending_payloads {
+      p.can_send = nil
+    } else {
+      p.can_send = p.transport.CanSend()
+    }
 
   SelectLoop:
     for {
@@ -271,7 +281,7 @@ PublishLoop:
         }
 
         // No pending payloads, are we shutting down? Skip if so
-        if shutdown {
+        if p.shutdown {
           break
         }
 
@@ -327,7 +337,7 @@ PublishLoop:
         // If no more pending payloads, set keepalive, otherwise reset to network timeout
         if p.num_payloads == 0 {
           // Handle shutdown
-          if shutdown {
+          if p.shutdown {
             break PublishLoop
           }
           timer.Reset(keepalive_timeout)
@@ -350,7 +360,7 @@ PublishLoop:
         }
 
         // If we have pending payloads, we should've received something by now
-        if p.num_payloads != 0 || input_toggle == nil {
+        if p.num_payloads != 0 {
           err = errors.New("Server did not respond within network timeout")
           break SelectLoop
         }
@@ -375,7 +385,7 @@ PublishLoop:
 
         // Allow network timeout to receive something
         timer.Reset(p.config.Timeout)
-      case signal := <-p.control.Signal():
+      case signal := <-control_signal:
         if signal == nil {
           // If no pending payloads, simply end
           if p.num_payloads == 0 {
@@ -384,7 +394,11 @@ PublishLoop:
 
           // Flag shutdown for when we finish pending payloads
           // TODO: Persist pending payloads and resume? Quicker shutdown
-          shutdown = true
+          log.Warning("Delaying shutdown to wait for pending responses from the server")
+          control_signal = nil
+          p.shutdown = true
+          p.can_send = nil
+          input_toggle = nil
         } else {
           p.handleSnapshot()
         }
@@ -393,35 +407,41 @@ PublishLoop:
         reload = p.reloadConfig(&config.Network)
 
         // If a change and no pending payloads, process immediately
-        if reload != 0 && p.num_payloads == 0 {
+        if reload != Reload_None && p.num_payloads == 0 {
           break SelectLoop
         }
       }
     }
 
     if err != nil {
+      // If we're shutting down and we hit a timeout and aren't out of sync
+      // We can then quit - as we'd be resending payloads anyway
+      if p.shutdown && p.out_of_sync == 0 {
+        log.Error("Transport error: %s", err)
+        break PublishLoop
+      }
+
       // An error occurred, reconnect after timeout
-      log.Error("Transport error, will reconnect: %s", err)
-      p.transport.Disconnect()
+      log.Error("Transport error, will try again: %s", err)
       time.Sleep(p.config.Reconnect)
     } else {
-      // Reloading transport
-      p.transport.Disconnect()
+      // Do we need to reload transport?
+      if reload == Reload_Transport {
+        // Shutdown and reload transport
+        p.transport.Shutdown()
 
-      // Do we need to reinit transport?
-      if reload == 2 {
-        if err = p.initTransport(); err != nil {
+        if err = p.loadTransport(); err != nil {
           log.Error("The new transport configuration failed to apply: %s", err)
         }
       }
 
-      reload = 0
+      reload = Reload_None
     }
 
     retry_payload = p.first_payload
   }
 
-  p.transport.Disconnect()
+  p.transport.Shutdown()
 
   // Disconnect from registrar
   p.registrar.Disconnect()
@@ -435,18 +455,18 @@ func (p *Publisher) reloadConfig(new_config *NetworkConfig) int {
 
   // Transport reload will return whether we need a full reload or not
   reload := p.transport.ReloadConfig(new_config)
-  if reload == 2 {
-    return 2
+  if reload == Reload_Transport {
+    return Reload_Transport
   }
 
   // Same servers?
   if len(new_config.Servers) != len(old_config.Servers) {
-    return 1
+    return Reload_Servers
   }
 
   for i := range new_config.Servers {
     if new_config.Servers[i] != old_config.Servers[i] {
-      return 1
+      return Reload_Servers
     }
   }
 
@@ -587,7 +607,7 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
       p.out_of_sync = out_of_sync
 
       // Resume sending if we stopped due to excessive pending payload count
-      if p.can_send == nil {
+      if !p.shutdown && p.can_send == nil {
         p.can_send = p.transport.CanSend()
       }
 

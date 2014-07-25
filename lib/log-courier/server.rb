@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 # Copyright 2014 Jason Woods.
 #
 # This file is a modification of code from Logstash Forwarder.
@@ -102,6 +104,7 @@ module LogCourier
       end
 
       # PONG!
+      # NOTE: comm.send can raise a Timeout::Error of its own
       comm.send 'PONG', ''
     end
 
@@ -144,8 +147,15 @@ module LogCourier
           raise ProtocolError
         end
 
-        # Extract message, and force UTF-8 to ensure we don't break anything, replacing invalid sequences
-        data = message[p...p + length].encode('utf-8', 'binary', :invalid => :replace, :undef => :replace, :replace => '?').force_encoding('UTF-8')
+        # Extract message
+        data = message[p...p + length].force_encoding('utf-8')
+
+        # Ensure valid encoding
+        unless data.valid_encoding?
+          data.chars.map do |c|
+            c.valid_encoding? ? c : "\xEF\xBF\xBD"
+          end
+        end
         p += length
 
         # Decode the JSON
@@ -168,12 +178,14 @@ module LogCourier
         end
       rescue Timeout::Error
         # Full pipeline, partial ack
+        # NOTE: comm.send can raise a Timeout::Error of its own
         comm.send('ACKN', [nonce, sequence].pack('A*N'))
         reset_ack_timeout
         retry
       end
 
       # Acknowledge the full message
+      # NOTE: comm.send can raise a Timeout::Error
       comm.send('ACKN', [nonce, sequence].pack('A*N'))
     end
 

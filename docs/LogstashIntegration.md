@@ -8,6 +8,7 @@ Log Courier is built to work seamlessly with [Logstash](http://logstash.net)
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
 - [Installation](#installation)
+- [Remote Installation](#remote-installation)
 - [Configuration](#configuration)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -28,7 +29,9 @@ First build the gem. This will generate a file called log-courier-X.X.gem.
 		make gem
 
 Then switch to the Logstash installation directory and install it. Note that
-because this is JRuby it may take a minute to finish the install.
+because this is JRuby it may take a minute to finish the install. The
+ffi-rzmq-core and ffi-rzmq gems bundled with Logstash will be upgraded during
+the installation, which will require an internet connection.
 
 		cd /opt/logstash
 		export GEM_HOME=vendor/bundle/jruby/1.9
@@ -38,6 +41,18 @@ Now install the Logstash plugins.
 
 		cd <log-courier-source>
 		cp -rvf lib/logstash /opt/logstash/lib
+
+## Remote Installation
+
+If you need to install the gem on a server without an internet connection, you
+must download the latest ffi-rzmq-core and ffi-zmq gems from the rubygems site
+and transfer them across.
+
+* https://rubygems.org/gems/ffi-rzmq-core
+* https://rubygems.org/gems/ffi-rzmq
+
+These gems should be installed before the log-courer gem. As a result, the
+log-courier gem installation will not need them to be downloaded.
 
 ## Configuration
 
@@ -54,15 +69,18 @@ configuration for the input plugin follows.
 
 The following options are available for the input plugin:
 
+* transport - "tcp", "tls", "plainzmq" or "zmq" (default: "tls")
 * address - Interface address to listen on (defaults to all interfaces)
-* transport - "tcp", "tls" (default), "plainzmq" or "zmq"
-* ssl_certificate - Path to server SSL certificate
-* ssl_key - Path to server SSL private key
-* ssl_key_passphrase - Password for ssl_key (optional)
-* ssl_verify - If true, verifies client certificates (default false)
+* port - The port number to listen on
+* ssl_certificate - Path to server SSL certificate (tls)
+* ssl_key - Path to server SSL private key (tls)
+* ssl_key_passphrase - Password for ssl_key (tls, optional)
+* ssl_verify - If true, verifies client certificates (tls, default false)
 * ssl_verify_default_ca - Accept client certificates signed by systems root CAs
+(tls)
 * ssl_verify_ca - Path to an SSL CA certificate to use for client certificate
-verification
+verification (tls)
+* curve_secret_key - CurveZMQ secret key for the server (zmq)
 
 The following options are available for the output plugin:
 

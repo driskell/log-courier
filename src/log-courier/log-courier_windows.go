@@ -19,9 +19,9 @@
 package main
 
 import (
+  "github.com/op/go-logging"
   "os"
   "os/signal"
-  "syscall"
 )
 
 func (lc *LogCourier) registerSignals() {
@@ -32,4 +32,5 @@ func (lc *LogCourier) registerSignals() {
 }
 
 func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
+  return nil
 }

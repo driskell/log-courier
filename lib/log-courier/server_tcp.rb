@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 # Copyright 2014 Jason Woods.
 #
 # This file is a modification of code from Logstash Forwarder.
@@ -95,6 +97,10 @@ module LogCourier
           @server = OpenSSL::SSL::SSLServer.new(@tcp_server, ssl)
         else
           @server = @tcp_server
+        end
+
+        if @options[:port] == 0
+          @logger.warn '[LogCourierServer] Transport is listening on ephemeral port ' + @port.to_s
         end
       rescue => e
         raise "[LogCourierServer] Failed to initialise: #{e}"

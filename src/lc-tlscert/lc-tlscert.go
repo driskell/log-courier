@@ -130,13 +130,13 @@ func main() {
 
   template.NotAfter = template.NotBefore.Add(time.Duration(readNumber("Number of days")) * time.Hour * 24)
 
-  fmt.Println("Common name: ", template.Subject.CommonName)
+  fmt.Println("Common name:", template.Subject.CommonName)
   fmt.Println("DNS SANs:")
-  if len(template.IPAddresses) == 0 {
+  if len(template.DNSNames) == 0 {
     fmt.Println("    None")
   } else {
     for _, e := range template.DNSNames {
-      fmt.Println("    ", e)
+      fmt.Println("   ", e)
     }
   }
   fmt.Println("IP SANs:")
@@ -144,7 +144,7 @@ func main() {
     fmt.Println("    None")
   } else {
     for _, e := range template.IPAddresses {
-      fmt.Println("    ", e)
+      fmt.Println("   ", e)
     }
   }
   fmt.Println()
@@ -155,26 +155,26 @@ func main() {
 
   priv, err := rsa.GenerateKey(rand.Reader, 2048)
   if err != nil {
-    fmt.Println("Failed to generate private key: ", err)
+    fmt.Println("Failed to generate private key:", err)
     os.Exit(1)
   }
 
   serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
   template.SerialNumber, err = rand.Int(rand.Reader, serialNumberLimit)
   if err != nil {
-    fmt.Println("Failed to generate serial number: ", err)
+    fmt.Println("Failed to generate serial number:", err)
     os.Exit(1)
   }
 
   derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
   if err != nil {
-    fmt.Println("Failed to create certificate: ", err)
+    fmt.Println("Failed to create certificate:", err)
     os.Exit(1)
   }
 
   certOut, err := os.Create("selfsigned.crt")
   if err != nil {
-    fmt.Println("Failed to open selfsigned.pem for writing: ", err)
+    fmt.Println("Failed to open selfsigned.pem for writing:", err)
     os.Exit(1)
   }
   pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
@@ -182,7 +182,7 @@ func main() {
 
   keyOut, err := os.OpenFile("selfsigned.key", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
   if err != nil {
-    fmt.Println("failed to open selfsigned.key for writing: ", err)
+    fmt.Println("failed to open selfsigned.key for writing:", err)
     os.Exit(1)
   }
   pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})

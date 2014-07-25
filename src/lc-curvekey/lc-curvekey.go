@@ -41,7 +41,7 @@ func main() {
 
     pub, priv, err := CurveKeyPair()
     if err != nil {
-      fmt.Println("An error occurred: ", err)
+      fmt.Println("An error occurred:", err)
       if err == syscall.ENOTSUP {
         fmt.Print("Please ensure that your zeromq installation was built with libsodium support")
       }
@@ -59,7 +59,7 @@ func main() {
 
   server_pub, server_priv, err := CurveKeyPair()
   if err != nil {
-    fmt.Println("An error occurred: ", err)
+    fmt.Println("An error occurred:", err)
     if err == syscall.ENOTSUP {
       fmt.Print("Please ensure that your zeromq installation was built with libsodium support")
     }
@@ -68,7 +68,7 @@ func main() {
 
   client_pub, client_priv, err := CurveKeyPair()
   if err != nil {
-    fmt.Println("An error occurred: ", err)
+    fmt.Println("An error occurred:", err)
     if err == syscall.ENOTSUP {
       fmt.Println("Please ensure that your zeromq installation was built with libsodium support")
     }
@@ -76,12 +76,12 @@ func main() {
   }
 
   fmt.Println("Copy and paste the following into your Log Courier configuration:")
-  fmt.Println("    \"curve server key\": \"", server_pub, "\",")
-  fmt.Println("    \"curve public key\": \"", client_pub, "\",")
-  fmt.Println("    \"curve secret key\": \"", client_priv, "\",")
+  fmt.Printf("    \"curve server key\": \"%s\",\n", server_pub)
+  fmt.Printf("    \"curve public key\": \"%s\",\n", client_pub)
+  fmt.Printf("    \"curve secret key\": \"%s\",\n", client_priv)
   fmt.Println("")
   fmt.Println("Copy and paste the following into your LogStash configuration:")
-  fmt.Println("    curve_secret_key => \"", server_priv, "\",")
+  fmt.Printf("    curve_secret_key => \"%s\",\n", server_priv)
 }
 
 // Because gozmq does not yet expose this for us, we have to expose it ourselves
