@@ -17,6 +17,9 @@
   - [`"spool size"`](#spool-size)
   - [`"spool timeout"`](#spool-timeout)
   - [`"log level"`](#log-level)
+  - [`"log syslog"`](#log-syslog)
+  - [`"log stdout"`](#log-stdout)
+  - [`"log file"`](#log-file)
 - [`"network"`](#network)
   - [`"transport"`](#transport)
   - [`"servers"`](#servers)
@@ -186,6 +189,26 @@ not filled within this time limit, the spool will be flushed regardless.
 Available values: "critical", "error", "warning", "notice", "info", "debug"*
 
 The maximum level of detailed logs to produce.
+
+### `"log stdout"`
+
+*Boolean. Optional. Default: true*
+
+Whether or not to enable sending of Log Courier's internal log messages to the console (stdout). May be used in conjunction with `"log syslog"` and `"log file"`.
+
+### `"log syslog"`
+
+*Boolean. Optional. Default: false*
+
+Whether or not to enable sending of Log Courier's internal log messages to syslog. May be used in conjunction with `"log stdout"` and `"log file"`.
+
+*This option is ignored by Windows builds.*
+
+### `"log file"`
+
+*Filepath. Optional*
+
+A log file to save Log Courier's internal log messages into. May be used in conjunction with `"log stdout"` and `"log syslog"`.
 
 ## `"network"`
 
