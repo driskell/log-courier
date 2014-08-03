@@ -198,7 +198,7 @@ what transport and security to use.
 Available values: "tcp", "tls", "plainzmq", "zmq"*
 
 *Depending on how log-courier was built, some transports may not be available.
-Run `log-courer -list-supported` to see the list of transports available in
+Run `log-courier -list-supported` to see the list of transports available in
 a specific build of log-courier.*
 
 Sets the transport to use when sending logs to the servers. "tls" is recommended
@@ -350,7 +350,7 @@ ensure old log files are not kept open preventing deletion.
 *Codec configuration. Optional. Default: `{ "name": "plain" }`*
 
 *Depending on how log-courier was built, some codecs may not be available. Run
-`log-courer -list-supported` to see the list of codecs available in a specific
+`log-courier -list-supported` to see the list of codecs available in a specific
 build of log-courier.*
 
 The specified codec will receive the lines read from the log stream and perform
