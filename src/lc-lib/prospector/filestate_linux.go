@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package main
+package prospector
 
 import (
   "os"
@@ -26,7 +26,7 @@ import (
 
 type FileStateOS struct {
   Inode  uint64 `json:"inode,omitempty"`
-  Device int32  `json:"device,omitempty"`
+  Device uint64 `json:"device,omitempty"`
 }
 
 func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {

@@ -28,9 +28,14 @@ import (
   "time"
 )
 
+type HarvesterStatus struct {
+  Last_Offset int64
+  Failed bool
+}
+
 type Harvester struct {
   stop_chan   chan interface{}
-  return_chan struct{Last_Offset int64, Failed bool}
+  return_chan chan *HarvesterStatus
   stream      core.Stream
   fileinfo    os.FileInfo
   path        string
@@ -49,28 +54,32 @@ func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64)
     path, fileinfo = stream.Info()
   } else {
     // This is stdin
-    fileinfo = nil
-    path = "-"
+    path, fileinfo = "-", nil
   }
   return &Harvester{
-    stop_chan:  make(chan interface{}),
-    stream:     stream,
-    fileinfo:   fileinfo,
-    path:       path,
-    fileconfig: fileconfig,
-    offset:     offset,
+    stop_chan:   make(chan interface{}),
+    return_chan: make(chan *HarvesterStatus, 1),
+    stream:      stream,
+    fileinfo:    fileinfo,
+    path:        path,
+    fileconfig:  fileconfig,
+    offset:      offset,
   }
 }
 
 func (h *Harvester) Start(output chan<- *core.EventDescriptor) {
-  go h.harvest(output)
+  go func() {
+    status := &HarvesterStatus{}
+    status.Last_Offset, status.Failed = h.harvest(output)
+    h.return_chan <- status
+  }()
 }
 
 func (h *Harvester) Stop() {
   close(h.stop_chan)
 }
 
-func (h *Harvester) Status() <-chan {
+func (h *Harvester) Status() <-chan *HarvesterStatus {
   return h.return_chan
 }
 
@@ -156,7 +165,7 @@ ReadLoop:
   }
 
   log.Info("Harvester for %s exiting", h.path)
-  h.return_chan <- struct{Last_Offset: h.codec.Teardown(), Failed: false}
+  return h.codec.Teardown(), false
 }
 
 func (h *Harvester) eventCallback(start_offset int64, end_offset int64, line uint64, text string) {

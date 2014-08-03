@@ -1,6 +1,9 @@
 /*
  * Copyright 2014 Jason Woods.
  *
+ * This file is a modification of code from Logstash Forwarder.
+ * Copyright 2012-2013 Jordan Sissel and contributors.
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -14,33 +17,26 @@
  * limitations under the License.
  */
 
-package main
+package prospector
 
 import (
-  "lc-lib/config"
   "os"
+  "syscall"
 )
 
-type RegistrarEvent interface {
-  Process(state map[*ProspectorInfo]*FileState)
+type FileStateOS struct {
+  Inode  uint64 `json:"inode,omitempty"`
+  Device int32  `json:"device,omitempty"`
 }
 
-type NewFileEvent struct {
-  ProspectorInfo *ProspectorInfo
-  Source         string
-  Offset         int64
-  fileinfo       os.FileInfo
+func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
+  fstat := info.Sys().(*syscall.Stat_t)
+  fs.Inode = fstat.Ino
+  fs.Device = fstat.Dev
 }
 
-type DeletedEvent struct {
-  ProspectorInfo *ProspectorInfo
-}
-
-type RenamedEvent struct {
-  ProspectorInfo *ProspectorInfo
-  Source         string
-}
-
-type EventsEvent struct {
-  Events []*config.EventDescriptor
+func (fs *FileStateOS) SameAs(info os.FileInfo) bool {
+  state := &FileStateOS{}
+  state.PopulateFileIds(info)
+  return (fs.Inode == state.Inode && fs.Device == state.Device)
 }

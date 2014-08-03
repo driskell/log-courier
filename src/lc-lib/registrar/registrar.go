@@ -17,12 +17,13 @@
  * limitations under the License.
  */
 
-package main
+package registrar
 
 import (
   "encoding/json"
   "fmt"
   "github.com/op/go-logging"
+  "lc-lib/core"
   "os"
 )
 
@@ -83,6 +84,8 @@ func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
 }
 
 type Registrar struct {
+  core.PipelineSegment
+
   control        *LogCourierControl
   registrar_chan chan []RegistrarEvent
   references     int
@@ -91,9 +94,8 @@ type Registrar struct {
   state          map[*ProspectorInfo]*FileState
 }
 
-func NewRegistrar(persistdir string, control *LogCourierMasterControl) *Registrar {
+func NewRegistrar(persistdir string) *Registrar {
   return &Registrar{
-    control:        control.Register(),
     registrar_chan: make(chan []RegistrarEvent, 16),
     persistdir:     persistdir,
     statefile:      ".log-courier",

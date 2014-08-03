@@ -22,6 +22,7 @@ package prospector
 import (
   "lc-lib/core"
   "lc-lib/harvester"
+  "lc-lib/registrar"
   "os"
   "path/filepath"
   "time"
@@ -38,9 +39,6 @@ const (
 )
 
 type ProspectorInfo struct {
-  PipelineSegment
-  PipelineConfigReceiver
-
   file           string
   identity       FileIdentity
   last_seen      uint32
@@ -115,17 +113,19 @@ func (pi *ProspectorInfo) update(fileinfo os.FileInfo, iteration uint32) {
 }
 
 type Prospector struct {
-  control          *LogCourierControl
-  generalconfig    *config.GeneralConfig
-  fileconfigs      []config.FileConfig
+  core.PipelineSegment
+  core.PipelineConfigReceiver
+
+  generalconfig    *core.GeneralConfig
+  fileconfigs      []core.FileConfig
   prospectorindex  map[string]*ProspectorInfo
   prospectors      map[*ProspectorInfo]*ProspectorInfo
   from_beginning   bool
   iteration        uint32
   lastscan         time.Time
-  registrar        *Registrar
-  registrar_chan   chan<- []RegistrarEvent
-  registrar_events []RegistrarEvent
+  registrar        *registrar.Registrar
+  registrar_chan   chan<- []registrar.RegistrarEvent
+  registrar_events []registrar.RegistrarEvent
 }
 
 func NewProspector(config *config.Config, from_beginning bool, registrar *Registrar, control *LogCourierMasterControl) (*Prospector, error) {

@@ -1,5 +1,3 @@
-// +build !windows
-
 /*
  * Copyright 2014 Jason Woods.
  *
@@ -19,25 +17,26 @@
  * limitations under the License.
  */
 
-package main
+package prospector
 
 import (
-  "encoding/json"
   "os"
+  "syscall"
 )
 
-func (r *Registrar) writeRegistry() error {
-  // Open tmp file, write, flush, rename
-  fname := r.persistdir + string(os.PathSeparator) + r.statefile
-  tname := fname + ".new"
-  file, err := os.Create(tname)
-  if err != nil {
-    return err
-  }
-  defer file.Close()
+type FileStateOS struct {
+  Inode  uint32 `json:"inode,omitempty"`
+  Device uint32 `json:"device,omitempty"`
+}
 
-  encoder := json.NewEncoder(file)
-  encoder.Encode(r.toCanonical())
+func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
+  fstat := info.Sys().(*syscall.Stat_t)
+  fs.Inode = fstat.Ino
+  fs.Device = fstat.Dev
+}
 
-  return os.Rename(tname, fname)
+func (fs *FileStateOS) SameAs(info os.FileInfo) bool {
+  state := &FileStateOS{}
+  state.PopulateFileIds(info)
+  return (fs.Inode == state.Inode && fs.Device == state.Device)
 }

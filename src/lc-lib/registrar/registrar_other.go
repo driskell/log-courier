@@ -1,3 +1,5 @@
+// +build !windows
+
 /*
  * Copyright 2014 Jason Woods.
  *
@@ -17,26 +19,25 @@
  * limitations under the License.
  */
 
-package main
+package registrar
 
 import (
+  "encoding/json"
   "os"
-  "syscall"
 )
 
-type FileStateOS struct {
-  Inode  uint32 `json:"inode,omitempty"`
-  Device uint32 `json:"device,omitempty"`
-}
+func (r *Registrar) writeRegistry() error {
+  // Open tmp file, write, flush, rename
+  fname := r.persistdir + string(os.PathSeparator) + r.statefile
+  tname := fname + ".new"
+  file, err := os.Create(tname)
+  if err != nil {
+    return err
+  }
+  defer file.Close()
 
-func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
-  fstat := info.Sys().(*syscall.Stat_t)
-  fs.Inode = fstat.Ino
-  fs.Device = fstat.Dev
-}
+  encoder := json.NewEncoder(file)
+  encoder.Encode(r.toCanonical())
 
-func (fs *FileStateOS) SameAs(info os.FileInfo) bool {
-  state := &FileStateOS{}
-  state.PopulateFileIds(info)
-  return (fs.Inode == state.Inode && fs.Device == state.Device)
+  return os.Rename(tname, fname)
 }
