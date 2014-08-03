@@ -16,6 +16,10 @@
 
 package main
 
+import (
+  "lc-lib/config"
+)
+
 type CodecPlainRegistrar struct {
 }
 
@@ -24,20 +28,20 @@ type CodecPlainFactory struct {
 
 type CodecPlain struct {
   path        string
-  fileconfig  *FileConfig
-  info        *ProspectorInfo
+  fileconfig  *config.FileConfig
+  stream      config.Stream
   last_offset int64
-  output      chan<- *FileEvent
+  output      chan<- *config.EventDescriptor
 }
 
-func (r *CodecPlainRegistrar) NewFactory(config_path string, config map[string]interface{}) (CodecFactory, error) {
+func (r *CodecPlainRegistrar) NewFactory(config_path string, config map[string]interface{}) (config.CodecFactory, error) {
   if err := ReportUnusedConfig(config_path, config); err != nil {
     return nil, err
   }
   return &CodecPlainFactory{}, nil
 }
 
-func (f *CodecPlainFactory) NewCodec(path string, fileconfig *FileConfig, info *ProspectorInfo, offset int64, output chan<- *FileEvent) Codec {
+func (f *CodecPlainFactory) NewCodec(path string, fileconfig *config.FileConfig, info interface{}, offset int64, output chan<- *config.EventDescriptor) config.Codec {
   return &CodecPlain{
     path:        path,
     fileconfig:  fileconfig,
@@ -55,13 +59,13 @@ func (c *CodecPlain) Event(start_offset int64, end_offset int64, line uint64, te
   c.last_offset = end_offset
 
   // Ship downstream
-  event := &FileEvent{
-    ProspectorInfo: c.info,
-    Offset:         end_offset,
-    Event:          NewEvent(c.fileconfig.Fields, &c.path, start_offset, line, text),
+  event := &config.EventDescriptor{
+    Stream: c.info,
+    Offset: end_offset,
+    Event:  NewEvent(c.fileconfig.Fields, &c.path, start_offset, line, text),
   }
   select {
-  case <-c.info.ShutdownSignal():
+  case <-c.info.Signal():
     return false
   case c.output <- event:
   }

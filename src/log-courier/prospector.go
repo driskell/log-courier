@@ -20,6 +20,7 @@
 package main
 
 import (
+  "lc-lib/config"
   "os"
   "path/filepath"
   "time"
@@ -96,7 +97,7 @@ func (pi *ProspectorInfo) Stop() {
   close(pi.harvester_stop)
 }
 
-func (pi *ProspectorInfo) Wait() {
+func (pi *ProspectorInfo) wait() {
   if !pi.running {
     return
   }
@@ -104,7 +105,7 @@ func (pi *ProspectorInfo) Wait() {
   pi.running = false
 }
 
-func (pi *ProspectorInfo) Update(fileinfo os.FileInfo, iteration uint32) {
+func (pi *ProspectorInfo) update(fileinfo os.FileInfo, iteration uint32) {
   // Allow identity to replace itself with a new identity (this allows a FileState to promote itself to a FileInfo)
   pi.identity.Update(fileinfo, &pi.identity)
   pi.last_seen = iteration
@@ -112,8 +113,8 @@ func (pi *ProspectorInfo) Update(fileinfo os.FileInfo, iteration uint32) {
 
 type Prospector struct {
   control          *LogCourierControl
-  generalconfig    *GeneralConfig
-  fileconfigs      []FileConfig
+  generalconfig    *config.GeneralConfig
+  fileconfigs      []config.FileConfig
   prospectorindex  map[string]*ProspectorInfo
   prospectors      map[*ProspectorInfo]*ProspectorInfo
   from_beginning   bool
@@ -124,7 +125,7 @@ type Prospector struct {
   registrar_events []RegistrarEvent
 }
 
-func NewProspector(config *Config, from_beginning bool, registrar *Registrar, control *LogCourierMasterControl) (*Prospector, error) {
+func NewProspector(config *config.Config, from_beginning bool, registrar *Registrar, control *LogCourierMasterControl) (*Prospector, error) {
   ret := &Prospector{
     control:          control.RegisterWithRecvConfig(),
     generalconfig:    &config.General,
@@ -164,7 +165,7 @@ func (p *Prospector) init() (err error) {
   return
 }
 
-func (p *Prospector) Prospect(output chan<- *FileEvent) {
+func (p *Prospector) Prospect(output chan<- *config.EventDescriptor) {
   defer func() {
     p.control.Done()
   }()
@@ -258,10 +259,10 @@ ProspectLoop:
 
   // Send stop signal to all harvesters, then wait for them, for quick shutdown
   for _, info := range p.prospectors {
-    info.Stop()
+    info.stop()
   }
   for _, info := range p.prospectors {
-    info.Wait()
+    info.wait()
   }
 
   // Disconnect from the registrar
@@ -270,7 +271,7 @@ ProspectLoop:
   log.Info("Prospector exiting")
 }
 
-func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEvent) {
+func (p *Prospector) scan(path string, config *config.FileConfig, output chan<- *config.EventDescriptor) {
   // Evaluate the path as a wildcards/shell glob
   matches, err := filepath.Glob(path)
   if err != nil {
@@ -320,7 +321,7 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
 
           // Store the offset that we should resume from if we notice a modification
           info.finish_offset = fileinfo.Size()
-          p.registrar_events = append(p.registrar_events, &NewFileEvent{ProspectorInfo: info, Source: file, Offset: fileinfo.Size(), fileinfo: fileinfo})
+          p.registrar_events = append(p.registrar_events, &Newconfig.EventDescriptor{ProspectorInfo: info, Source: file, Offset: fileinfo.Size(), fileinfo: fileinfo})
         } else {
           // Process new file
           log.Info("Launching harvester on new file: %s", file)
@@ -375,7 +376,7 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
       }
     }
 
-    info.Update(fileinfo, p.iteration)
+    info.update(fileinfo, p.iteration)
 
     if resume {
       p.startHarvesterWithOffset(info, output, config, info.finish_offset)
@@ -385,7 +386,7 @@ func (p *Prospector) scan(path string, config *FileConfig, output chan<- *FileEv
   } // for each file matched by the glob
 }
 
-func (p *Prospector) startHarvester(info *ProspectorInfo, output chan<- *FileEvent, config *FileConfig) {
+func (p *Prospector) startHarvester(info *ProspectorInfo, output chan<- *config.EventDescriptor, config *config.FileConfig) {
   var offset int64
 
   if p.from_beginning {
@@ -395,12 +396,12 @@ func (p *Prospector) startHarvester(info *ProspectorInfo, output chan<- *FileEve
   }
 
   // Send a new file event to allow registrar to begin persisting for this harvester
-  p.registrar_events = append(p.registrar_events, &NewFileEvent{ProspectorInfo: info, Source: info.file, Offset: offset, fileinfo: info.identity.Stat()})
+  p.registrar_events = append(p.registrar_events, &Newconfig.EventDescriptor{ProspectorInfo: info, Source: info.file, Offset: offset, fileinfo: info.identity.Stat()})
 
   p.startHarvesterWithOffset(info, output, config, offset)
 }
 
-func (p *Prospector) startHarvesterWithOffset(info *ProspectorInfo, output chan<- *FileEvent, config *FileConfig, offset int64) {
+func (p *Prospector) startHarvesterWithOffset(info *ProspectorInfo, output chan<- *config.EventDescriptor, config *config.FileConfig, offset int64) {
   // TODO - hook in a shutdown channel
   harvester := NewHarvester(info, config, offset)
   info.running = true

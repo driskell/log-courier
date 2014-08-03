@@ -24,6 +24,7 @@ import (
   "errors"
   "fmt"
   zmq "github.com/alecthomas/gozmq"
+  "lc-lib/config"
   "net"
   "regexp"
   "runtime"
@@ -55,7 +56,7 @@ type TransportZmqFactory struct {
 
 type TransportZmq struct {
   config     *TransportZmqFactory
-  net_config *NetworkConfig
+  net_config *config.NetworkConfig
   context    *zmq.Context
   dealer     *zmq.Socket
   monitor    *zmq.Socket

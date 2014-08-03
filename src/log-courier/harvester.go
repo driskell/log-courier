@@ -23,6 +23,7 @@ import (
   "bufio"
   "bytes"
   "io"
+  "lc-lib/config"
   "os"
   "time"
 )
@@ -31,14 +32,14 @@ type Harvester struct {
   info       *ProspectorInfo
   fileinfo   os.FileInfo
   path       string /* the file path to harvest */
-  fileconfig *FileConfig
+  fileconfig *config.FileConfig
   offset     int64
-  codec      Codec
+  codec      config.Codec
 
   file *os.File /* the file being watched */
 }
 
-func NewHarvester(info *ProspectorInfo, fileconfig *FileConfig, offset int64) *Harvester {
+func NewHarvester(info *ProspectorInfo, fileconfig *config.FileConfig, offset int64) *Harvester {
   var fileinfo os.FileInfo
   var path string
   if info != nil {
@@ -59,7 +60,7 @@ func NewHarvester(info *ProspectorInfo, fileconfig *FileConfig, offset int64) *H
   }
 }
 
-func (h *Harvester) Harvest(output chan<- *FileEvent) (int64, bool) {
+func (h *Harvester) Harvest(output chan<- *config.EventDescriptor) (int64, bool) {
   if !h.prepareHarvester() {
     return h.offset, true
   }

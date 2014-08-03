@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package main
+package core
 
 import (
   "bytes"
@@ -39,38 +39,39 @@ const (
   default_GeneralConfig_LogLevel         logging.Level = logging.INFO
   default_GeneralConfig_LogStdout        bool          = true
   default_GeneralConfig_LogSyslog        bool          = false
+  default_NetworkConfig_Transport        string        = "tls"
   default_NetworkConfig_Timeout          time.Duration = 15 * time.Second
   default_NetworkConfig_Reconnect        time.Duration = 1 * time.Second
+  default_FileConfig_Codec               string        = "plain"
   default_FileConfig_DeadTime            int64         = 86400
 )
 
 type Config struct {
-  General  GeneralConfig `json:"general"`
-  Network  NetworkConfig `json:"network"`
-  Files    []FileConfig  `json:"files"`
-  Includes []string      `json:"includes"`
+  General  GeneralConfig `config:"general"`
+  Network  NetworkConfig `config:"network"`
+  Files    []FileConfig  `config:"files"`
+  Includes []string      `config:"includes"`
 }
 
 type GeneralConfig struct {
-  PersistDir       string        `json:"persist directory"`
-  ProspectInterval time.Duration `json:"prospect interval"`
-  SpoolSize        int64         `json:"spool size"`
-  SpoolTimeout     time.Duration `json:"spool timeout"`
-  LogLevel         logging.Level `json:"log level"`
-  LogStdout        bool          `json:"log stdout"`
-  LogSyslog        bool          `json:"log syslog"`
-  LogFile          string        `json:"log file"`
+  PersistDir       string        `config:"persist directory"`
+  ProspectInterval time.Duration `config:"prospect interval"`
+  SpoolSize        int64         `config:"spool size"`
+  SpoolTimeout     time.Duration `config:"spool timeout"`
+  LogLevel         logging.Level `config:"log level"`
+  LogStdout        bool          `config:"log stdout"`
+  LogSyslog        bool          `config:"log syslog"`
+  LogFile          string        `config:"log file"`
 }
 
-var NewTransportZmqFactoryIfAvailable func(string, map[string]interface{}) (TransportFactory, error)
-
 type NetworkConfig struct {
-  Transport string `json:"transport"`
-  transport TransportFactory
-  Servers   []string      `json:"servers"`
-  Timeout   time.Duration `json:"timeout"`
-  Reconnect time.Duration `json:"reconnect"`
+  Transport string        `config:"transport"`
+  Servers   []string      `config:"servers"`
+  Timeout   time.Duration `config:"timeout"`
+  Reconnect time.Duration `config:"reconnect"`
   Unused    map[string]interface{}
+
+  TransportFactory TransportFactory
 }
 
 type CodecConfigStub struct {
@@ -79,11 +80,12 @@ type CodecConfigStub struct {
 }
 
 type FileConfig struct {
-  Paths    []string               `json:"paths"`
-  Fields   map[string]interface{} `json:"fields"`
-  Codec    CodecConfigStub        `json:"codec"`
-  codec    CodecFactory
-  DeadTime time.Duration `json:"dead time"`
+  Paths        []string               `config:"paths"`
+  Fields       map[string]interface{} `config:"fields"`
+  Codec        CodecConfigStub        `config:"codec"`
+  DeadTime     time.Duration `config:"dead time"`
+
+  CodecFactory CodecFactory
 }
 
 func NewConfig() *Config {
@@ -190,13 +192,12 @@ func (c *Config) loadFile(path string) (stripped *bytes.Buffer, err error) {
   return
 }
 
-// TODO: Change (config *Config) to (c *Config) - not done yet to prevent
-//       feature merge conflicts
-func (config *Config) Load(path string) (err error) {
+// TODO: Config from a TOML? Maybe a custom one
+func (c *Config) Load(path string) (err error) {
   var data *bytes.Buffer
 
   // Read the main config file
-  if data, err = config.loadFile(path); err != nil {
+  if data, err = c.loadFile(path); err != nil {
     return
   }
 
@@ -207,17 +208,17 @@ func (config *Config) Load(path string) (err error) {
   }
 
   // Fill in defaults where the zero-value is a valid setting
-  config.General.LogLevel = default_GeneralConfig_LogLevel
-  config.General.LogStdout = default_GeneralConfig_LogStdout
-  config.General.LogSyslog = default_GeneralConfig_LogSyslog
+  c.General.LogLevel = default_GeneralConfig_LogLevel
+  c.General.LogStdout = default_GeneralConfig_LogStdout
+  c.General.LogSyslog = default_GeneralConfig_LogSyslog
 
   // Populate configuration - reporting errors on spelling mistakes etc.
-  if err = PopulateConfig(config, "/", raw_config); err != nil {
+  if err = c.PopulateConfig(c, "/", raw_config); err != nil {
     return
   }
 
   // Iterate includes
-  for _, glob := range config.Includes {
+  for _, glob := range c.Includes {
     // Glob the path
     var matches []string
     if matches, err = filepath.Glob(glob); err != nil {
@@ -226,7 +227,7 @@ func (config *Config) Load(path string) (err error) {
 
     for _, include := range matches {
       // Read the include
-      if data, err = config.loadFile(include); err != nil {
+      if data, err = c.loadFile(include); err != nil {
         return
       }
 
@@ -237,86 +238,75 @@ func (config *Config) Load(path string) (err error) {
       }
 
       // Append to configuration
-      if err = PopulateConfigSlice(reflect.ValueOf(config).Elem().FieldByName("Files"), fmt.Sprintf("%s/", include), raw_include); err != nil {
+      if err = c.populateConfigSlice(reflect.ValueOf(c).Elem().FieldByName("Files"), fmt.Sprintf("%s/", include), raw_include); err != nil {
         return
       }
     }
   }
 
   // Fill in defaults for GeneralConfig
-  if config.General.PersistDir == "" {
-    config.General.PersistDir = default_GeneralConfig_PersistDir
+  if c.General.PersistDir == "" {
+    c.General.PersistDir = default_GeneralConfig_PersistDir
   }
-  if config.General.ProspectInterval == time.Duration(0) {
-    config.General.ProspectInterval = default_GeneralConfig_ProspectInterval
+  if c.General.ProspectInterval == time.Duration(0) {
+    c.General.ProspectInterval = default_GeneralConfig_ProspectInterval
   }
-  if config.General.SpoolSize == 0 {
-    config.General.SpoolSize = default_GeneralConfig_SpoolSize
+  if c.General.SpoolSize == 0 {
+    c.General.SpoolSize = default_GeneralConfig_SpoolSize
   }
-  if config.General.SpoolTimeout == time.Duration(0) {
-    config.General.SpoolTimeout = default_GeneralConfig_SpoolTimeout
+  if c.General.SpoolTimeout == time.Duration(0) {
+    c.General.SpoolTimeout = default_GeneralConfig_SpoolTimeout
   }
 
   // Process through NetworkConfig
-  if config.Network.Transport == "" {
-    config.Network.Transport = "tls"
+  if c.Network.Transport == "" {
+    c.Network.Transport = default_NetworkConfig_Transport
   }
-  transport_name := config.Network.Transport
 
-  var factory TransportFactory
-  if factory, err = NewTransportFactory("/network/", transport_name, config.Network.Unused); err == nil {
-    if factory != nil {
-      config.Network.transport = factory
-    } else {
-      err = fmt.Errorf("Unrecognised transport '%s'", transport_name)
+  if registrar, ok := registered_Transports[c.Network.Transport]; ok {
+    if c.Network.TransportFactory, err = registrar.NewFactory(c, "/network/", c.Network.Transport, c.Network.Unused); err != nil {
       return
     }
   } else {
+    err = fmt.Errorf("Unrecognised transport '%s'", c.Network.Transport)
     return
   }
 
-  if config.Network.Timeout == time.Duration(0) {
-    config.Network.Timeout = default_NetworkConfig_Timeout
+  if c.Network.Timeout == time.Duration(0) {
+    c.Network.Timeout = default_NetworkConfig_Timeout
   }
-  if config.Network.Reconnect == time.Duration(0) {
-    config.Network.Reconnect = default_NetworkConfig_Reconnect
+  if c.Network.Reconnect == time.Duration(0) {
+    c.Network.Reconnect = default_NetworkConfig_Reconnect
   }
 
-  for k := range config.Files {
-    if config.Files[k].Codec.Name == "" {
-      config.Files[k].Codec.Name = "plain"
+  for k := range c.Files {
+    if c.Files[k].Codec.Name == "" {
+      c.Files[k].Codec.Name = default_FileConfig_Codec
     }
-    codec_name := config.Files[k].Codec.Name
 
-    var factory CodecFactory
-    if factory, err = NewCodecFactory(fmt.Sprintf("/files[%d]/codec/", k), codec_name, config.Files[k].Codec.Unused); err == nil {
-      if factory != nil {
-        config.Files[k].codec = factory
-      } else {
-        err = fmt.Errorf("Unrecognised codec '%s'", codec_name)
+    if registrar, ok := registered_Codecs[c.Files[k].Codec.Name]; ok {
+      if c.Files[k].CodecFactory, err = registrar.NewFactory(c, fmt.Sprintf("/files[%d]/codec/", k), c.Files[k].Codec.Name, c.Files[k].Codec.Unused); err != nil {
         return
       }
     } else {
+      err = fmt.Errorf("Unrecognised codec '%s'", c.Files[k].Codec.Name)
       return
     }
 
-    if config.Files[k].DeadTime == time.Duration(0) {
-      config.Files[k].DeadTime = time.Duration(default_FileConfig_DeadTime) * time.Second
+    if c.Files[k].DeadTime == time.Duration(0) {
+      c.Files[k].DeadTime = time.Duration(default_FileConfig_DeadTime) * time.Second
     }
   }
 
   return
 }
 
-// TODO: The below to be combined into (c *Config) - not done yet to prevent
-//       conflicts during pending feature merges
-
 // TODO: This should be pushed to a wrapper or module
 //       It populated dynamic configuration, automatically converting time.Duration etc.
 //       Any config entries not found in the structure are moved to an "Unused" field if it exists
 //       or an error is reported if "Unused" is not available
 //       We can then take the unused configuration dynamically at runtime based on another value
-func PopulateConfig(config interface{}, config_path string, raw_config map[string]interface{}) (err error) {
+func (c *Config) PopulateConfig(config interface{}, config_path string, raw_config map[string]interface{}) (err error) {
   vconfig := reflect.ValueOf(config).Elem()
   for i := 0; i < vconfig.NumField(); i++ {
     field := vconfig.Field(i)
@@ -324,18 +314,14 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
       continue
     }
     fieldtype := vconfig.Type().Field(i)
-    name := fieldtype.Name
-    if name == "Unused" {
-      continue
-    }
-    tag := fieldtype.Tag.Get("json")
+    tag := fieldtype.Tag.Get("config")
     if tag == "" {
-      tag = name
+      continue
     }
     if _, ok := raw_config[tag]; ok {
       if field.Kind() == reflect.Struct {
         if reflect.TypeOf(raw_config[tag]).Kind() == reflect.Map {
-          if err = PopulateConfig(field.Addr().Interface(), fmt.Sprintf("%s%s/", config_path, tag), raw_config[tag].(map[string]interface{})); err != nil {
+          if err = c.PopulateConfig(field.Addr().Interface(), fmt.Sprintf("%s%s/", config_path, tag), raw_config[tag].(map[string]interface{})); err != nil {
             return
           }
           delete(raw_config, tag)
@@ -349,7 +335,7 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
       if value.Type().AssignableTo(field.Type()) {
         field.Set(value)
       } else if value.Kind() == reflect.Slice && field.Kind() == reflect.Slice {
-        if err = PopulateConfigSlice(field, fmt.Sprintf("%s%s/", config_path, tag), raw_config[tag].([]interface{})); err != nil {
+        if err = c.populateConfigSlice(field, fmt.Sprintf("%s%s/", config_path, tag), raw_config[tag].([]interface{})); err != nil {
           return
         }
       } else if value.Kind() == reflect.Map && field.Kind() == reflect.Map {
@@ -428,15 +414,15 @@ func PopulateConfig(config interface{}, config_path string, raw_config map[strin
     }
     return
   }
-  return ReportUnusedConfig(config_path, raw_config)
+  return c.ReportUnusedConfig(config_path, raw_config)
 }
 
-func PopulateConfigSlice(field reflect.Value, config_path string, raw_config []interface{}) (err error) {
+func (c *Config) populateConfigSlice(field reflect.Value, config_path string, raw_config []interface{}) (err error) {
   elemtype := field.Type().Elem()
   if elemtype.Kind() == reflect.Struct {
     for j := 0; j < len(raw_config); j++ {
       item := reflect.New(elemtype)
-      if err = PopulateConfig(item.Interface(), fmt.Sprintf("%s[%d]/", config_path, j), raw_config[j].(map[string]interface{})); err != nil {
+      if err = c.PopulateConfig(item.Interface(), fmt.Sprintf("%s[%d]/", config_path, j), raw_config[j].(map[string]interface{})); err != nil {
         return
       }
       field.Set(reflect.Append(field, item.Elem()))
@@ -449,7 +435,7 @@ func PopulateConfigSlice(field reflect.Value, config_path string, raw_config []i
   return
 }
 
-func ReportUnusedConfig(config_path string, raw_config map[string]interface{}) (err error) {
+func (c *Config) ReportUnusedConfig(config_path string, raw_config map[string]interface{}) (err error) {
   for k := range raw_config {
     err = fmt.Errorf("Option %s%s is not available", config_path, k)
     return

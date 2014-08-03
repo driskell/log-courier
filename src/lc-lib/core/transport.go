@@ -14,15 +14,7 @@
  * limitations under the License.
  */
 
-package main
-
-type TransportRegistrar interface {
-  NewFactory(string, string, map[string]interface{}) (TransportFactory, error)
-}
-
-type TransportFactory interface {
-  NewTransport(*NetworkConfig) (Transport, error)
-}
+package core
 
 type Transport interface {
   ReloadConfig(*NetworkConfig) int
@@ -33,23 +25,24 @@ type Transport interface {
   Shutdown()
 }
 
-var transportRegistry map[string]TransportRegistrar = make(map[string]TransportRegistrar)
+type TransportFactory interface {
+  NewTransport(*NetworkConfig) (Transport, error)
+}
 
-func RegisterTransport(registrar TransportRegistrar, name string) {
-  transportRegistry[name] = registrar
+type TransportRegistrar interface {
+  NewFactory(*Config, string, string, map[string]interface{}) (TransportFactory, error)
+}
+
+var registered_Transports map[string]TransportRegistrar = make(map[string]TransportRegistrar)
+
+func RegisterTransport(transport string, registrar TransportRegistrar) {
+  registered_Transports[transport] = registrar
 }
 
 func AvailableTransports() (ret []string) {
-  ret = make([]string, 0, len(transportRegistry))
-  for k := range transportRegistry {
+  ret = make([]string, 0, len(registered_Transports))
+  for k := range registered_Transports {
     ret = append(ret, k)
   }
   return
-}
-
-func NewTransportFactory(config_path string, name string, config map[string]interface{}) (TransportFactory, error) {
-  if registrar, ok := transportRegistry[name]; ok {
-    return registrar.NewFactory(name, config_path, config)
-  }
-  return nil, nil
 }

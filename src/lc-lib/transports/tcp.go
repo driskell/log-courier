@@ -27,6 +27,7 @@ import (
   "encoding/pem"
   "errors"
   "fmt"
+  "lc-lib/config"
   "io/ioutil"
   "math/rand"
   "net"
@@ -60,7 +61,7 @@ type TransportTcpFactory struct {
 
 type TransportTcp struct {
   config     *TransportTcpFactory
-  net_config *NetworkConfig
+  net_config *config.NetworkConfig
   socket     net.Conn
   tlssocket  *tls.Conn
 

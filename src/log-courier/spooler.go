@@ -20,24 +20,25 @@
 package main
 
 import (
+  "lc-lib/config"
   "time"
 )
 
 type Spooler struct {
   control *LogCourierControl
-  config  *GeneralConfig
-  spool   []*FileEvent
+  config  *config.GeneralConfig
+  spool   []*config.EventDescriptor
 }
 
-func NewSpooler(config *GeneralConfig, control *LogCourierMasterControl) *Spooler {
+func NewSpooler(config *config.GeneralConfig, control *LogCourierMasterControl) *Spooler {
   return &Spooler{
     control: control.RegisterWithRecvConfig(),
     config:  config,
-    spool:   make([]*FileEvent, 0, config.SpoolSize),
+    spool:   make([]*config.EventDescriptor, 0, config.SpoolSize),
   }
 }
 
-func (s *Spooler) Spool(input <-chan *FileEvent, output chan<- []*FileEvent) {
+func (s *Spooler) Spool(input <-chan *config.EventDescriptor, output chan<- []*config.EventDescriptor) {
   defer func() {
     s.control.Done()
   }()
@@ -91,12 +92,15 @@ SpoolerLoop:
   log.Info("Spooler exiting")
 }
 
-func (s *Spooler) sendSpool(output chan<- []*FileEvent) bool {
+func (s *Spooler) sendSpool(output chan<- []*config.EventDescriptor) bool {
   select {
-  case <-s.control.ShutdownSignal():
-    return false
+  case signal := <-s.control.Signal():
+    if signal == nil {
+      return false
+    }
+    s.control.SendSnapshot()
   case output <- s.spool:
   }
-  s.spool = make([]*FileEvent, 0, s.config.SpoolSize)
+  s.spool = make([]*config.EventDescriptor, 0, s.config.SpoolSize)
   return true
 }

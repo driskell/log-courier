@@ -26,6 +26,7 @@ import (
   "encoding/json"
   "errors"
   "fmt"
+  "lc-lib/config"
   "io"
   "math/rand"
   "os"
@@ -47,7 +48,7 @@ const (
 type PendingPayload struct {
   next          *PendingPayload
   nonce         string
-  events        []*FileEvent
+  events        []*config.EventDescriptor
   num_events    int
   ack_events    int
   payload_start int
@@ -55,7 +56,7 @@ type PendingPayload struct {
   timeout       *time.Time
 }
 
-func NewPendingPayload(events []*FileEvent, nonce string, hostname string) (*PendingPayload, error) {
+func NewPendingPayload(events []*config.EventDescriptor, nonce string, hostname string) (*PendingPayload, error) {
   payload := &PendingPayload{
     events:     events,
     nonce:      nonce,
@@ -99,7 +100,7 @@ func (pp *PendingPayload) Generate(hostname string) (err error) {
   return
 }
 
-func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *FileEvent) (err error) {
+func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *config.EventDescriptor) (err error) {
   var value []byte
   value, err = json.Marshal(event.Event)
   if err != nil {
@@ -127,8 +128,8 @@ func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *FileEvent
 
 type Publisher struct {
   control          *LogCourierControl
-  config           *NetworkConfig
-  transport        Transport
+  config           *config.NetworkConfig
+  transport        config.Transport
   hostname         string
   can_send         <-chan int
   pending_ping     bool
@@ -142,7 +143,7 @@ type Publisher struct {
   shutdown         bool
 }
 
-func NewPublisher(config *NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) (*Publisher, error) {
+func NewPublisher(config *config.NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) (*Publisher, error) {
   ret := &Publisher{
     control:        control.RegisterWithRecvConfig(),
     config:         config,
@@ -187,12 +188,12 @@ func (p *Publisher) loadTransport() error {
   return nil
 }
 
-func (p *Publisher) Publish(input <-chan []*FileEvent) {
+func (p *Publisher) Publish(input <-chan []*config.EventDescriptor) {
   defer func() {
     p.control.Done()
   }()
 
-  var input_toggle <-chan []*FileEvent
+  var input_toggle <-chan []*config.EventDescriptor
   var retry_payload *PendingPayload
   var err error
   var reload int
@@ -441,7 +442,7 @@ PublishLoop:
   log.Info("Publisher exiting")
 }
 
-func (p *Publisher) reloadConfig(new_config *NetworkConfig) int {
+func (p *Publisher) reloadConfig(new_config *config.NetworkConfig) int {
   old_config := p.config
   p.config = new_config
 
@@ -500,7 +501,7 @@ func (p *Publisher) generateNonce() string {
   return string(nonce)
 }
 
-func (p *Publisher) sendNewPayload(events []*FileEvent) (err error) {
+func (p *Publisher) sendNewPayload(events []*config.EventDescriptor) (err error) {
   // Calculate a nonce
   nonce := p.generateNonce()
   for {

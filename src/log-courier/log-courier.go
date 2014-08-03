@@ -23,6 +23,7 @@ import (
   "flag"
   "fmt"
   "github.com/op/go-logging"
+  "lc-lib/config"
   stdlog "log"
   "os"
   "runtime/pprof"
@@ -45,7 +46,7 @@ func main() {
 
 type LogCourierMasterControl struct {
   signal chan interface{}
-  sinks  map[*LogCourierControl]chan *Config
+  sinks  map[*LogCourierControl]chan *config.Config
   group  sync.WaitGroup
 }
 
@@ -60,7 +61,7 @@ func (lcs *LogCourierMasterControl) Shutdown() {
   close(lcs.signal)
 }
 
-func (lcs *LogCourierMasterControl) SendConfig(config *Config) {
+func (lcs *LogCourierMasterControl) SendConfig(config *config.Config) {
   for _, sink := range lcs.sinks {
     sink <- config
   }
@@ -90,12 +91,12 @@ func (lcs *LogCourierMasterControl) register() *LogCourierControl {
 }
 
 func (lcs *LogCourierMasterControl) Wait() {
-  lcs.group.Wait()
+  lcs.shutdown_group.Wait()
 }
 
 type LogCourierControl struct {
   signal <-chan interface{}
-  sink   <-chan *Config
+  sink   <-chan *config.Config
   group  *sync.WaitGroup
 }
 
@@ -116,7 +117,7 @@ func (lcs *LogCourierControl) Done() {
 
 type LogCourier struct {
   control        *LogCourierMasterControl
-  config         *Config
+  config         *config.Config
   shutdown_chan  chan os.Signal
   reload_chan    chan os.Signal
   config_file    string
@@ -134,8 +135,8 @@ func NewLogCourier() *LogCourier {
 func (lc *LogCourier) Run() {
   lc.startUp()
 
-  event_chan := make(chan *FileEvent, 16)
-  publisher_chan := make(chan []*FileEvent, 1)
+  event_chan := make(chan *config.EventDescriptor, 16)
+  publisher_chan := make(chan []*config.EventDescriptor, 1)
 
   log.Info("Starting pipeline")
 

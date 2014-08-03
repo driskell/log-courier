@@ -16,15 +16,10 @@
 
 package main
 
-import "os"
-
-type Event map[string]interface{}
-
-type FileEvent struct {
-  ProspectorInfo *ProspectorInfo
-  Offset         int64
-  Event          Event
-}
+import (
+  "lc-lib/config"
+  "os"
+)
 
 type RegistrarEvent interface {
   Process(state map[*ProspectorInfo]*FileState)
@@ -47,17 +42,5 @@ type RenamedEvent struct {
 }
 
 type EventsEvent struct {
-  Events []*FileEvent
-}
-
-func NewEvent(fields map[string]interface{}, file *string, offset int64, line uint64, message *string) Event {
-  event := Event{
-    "file":    file,
-    "offset":  offset,
-    "message": message,
-  }
-  for k := range fields {
-    event[k] = fields[k]
-  }
-  return event
+  Events []*config.EventDescriptor
 }

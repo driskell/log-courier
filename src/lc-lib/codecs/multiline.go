@@ -17,6 +17,7 @@
 package main
 
 import (
+  "lc-lib/config"
   "errors"
   "fmt"
   "regexp"
@@ -43,10 +44,10 @@ type CodecMultilineFactory struct {
 type CodecMultiline struct {
   config      *CodecMultilineFactory
   path        string
-  fileconfig  *FileConfig
-  info        *ProspectorInfo
+  fileconfig  *config.FileConfig
+  stream      config.Stream
   last_offset int64
-  output      chan<- *FileEvent
+  output      chan<- *config.EventDescriptor
 
   end_offset   int64
   start_offset int64
@@ -58,11 +59,11 @@ type CodecMultiline struct {
   event_return bool
 }
 
-func (r *CodecMultilineRegistrar) NewFactory(config_path string, config map[string]interface{}) (CodecFactory, error) {
+func (r *CodecMultilineRegistrar) NewFactory(config_path string, config map[string]interface{}) (config.CodecFactory, error) {
   var err error
 
   result := &CodecMultilineFactory{}
-  if err = PopulateConfig(result, config_path, config); err != nil {
+  if err = config.PopulateConfig(result, config_path, config); err != nil {
     return nil, err
   }
 
@@ -84,7 +85,7 @@ func (r *CodecMultilineRegistrar) NewFactory(config_path string, config map[stri
   return result, nil
 }
 
-func (f *CodecMultilineFactory) NewCodec(path string, fileconfig *FileConfig, info *ProspectorInfo, offset int64, output chan<- *FileEvent) Codec {
+func (f *CodecMultilineFactory) NewCodec(path string, fileconfig *config.FileConfig, info interface{}, offset int64, output chan<- *config.EventDescriptor) config.Codec {
   c := &CodecMultiline{
     config:       f,
     path:         path,
@@ -182,13 +183,13 @@ func (c *CodecMultiline) flush() {
   c.last_offset = c.end_offset
   c.buffer = nil
 
-  event := &FileEvent{
+  event := &config.EventDescriptor{
     ProspectorInfo: c.info,
     Offset:         c.end_offset,
     Event:          NewEvent(c.fileconfig.Fields, &c.path, c.start_offset, c.line, &text),
   }
   select {
-  case <-c.info.ShutdownSignal():
+  case <-c.info.Signal():
     c.event_return = false
   case c.output <- event:
   }
