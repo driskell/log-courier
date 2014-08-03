@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package main
+package codecs
 
 import (
-  "lc-lib/config"
+  "lc-lib/core"
   "errors"
   "fmt"
   "regexp"
@@ -26,11 +26,10 @@ import (
   "time"
 )
 
-const codecMultiline_What_Previous = 0x00000001
-const codecMultiline_What_Next = 0x00000002
-
-type CodecMultilineRegistrar struct {
-}
+const (
+  codecMultiline_What_Previous = 0x00000001
+  codecMultiline_What_Next     = 0x00000002
+)
 
 type CodecMultilineFactory struct {
   Pattern         string `json:"pattern"`
@@ -42,12 +41,9 @@ type CodecMultilineFactory struct {
 }
 
 type CodecMultiline struct {
-  config      *CodecMultilineFactory
-  path        string
-  fileconfig  *config.FileConfig
-  stream      config.Stream
-  last_offset int64
-  output      chan<- *config.EventDescriptor
+  config        *CodecMultilineFactory
+  last_offset   int64
+  callback_func core.CodecCallbackFunc
 
   end_offset   int64
   start_offset int64
@@ -55,15 +51,13 @@ type CodecMultiline struct {
   buffer       []string
   timer_lock   *sync.Mutex
   timer_chan   chan bool
-
-  event_return bool
 }
 
-func (r *CodecMultilineRegistrar) NewFactory(config_path string, config map[string]interface{}) (config.CodecFactory, error) {
+func NewMultilineCodecFactory(config *core.Config, config_path string, id string, unused map[string]interface{}) (core.CodecFactory, error) {
   var err error
 
   result := &CodecMultilineFactory{}
-  if err = config.PopulateConfig(result, config_path, config); err != nil {
+  if err = config.PopulateConfig(result, config_path, unused); err != nil {
     return nil, err
   }
 
@@ -85,15 +79,11 @@ func (r *CodecMultilineRegistrar) NewFactory(config_path string, config map[stri
   return result, nil
 }
 
-func (f *CodecMultilineFactory) NewCodec(path string, fileconfig *config.FileConfig, info interface{}, offset int64, output chan<- *config.EventDescriptor) config.Codec {
+func (f *CodecMultilineFactory) NewCodec(callback_func core.CodecCallbackFunc, offset int64) core.Codec {
   c := &CodecMultiline{
-    config:       f,
-    path:         path,
-    fileconfig:   fileconfig,
-    info:         info,
-    last_offset:  offset,
-    output:       output,
-    event_return: true,
+    config:        f,
+    last_offset:   offset,
+    callback_func: callback_func,
   }
 
   // TODO: Make this more performant - use similiar methodology to Go's internal network deadlines
@@ -135,7 +125,7 @@ func (c *CodecMultiline) Teardown() int64 {
   return c.last_offset
 }
 
-func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64, text *string) bool {
+func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64, text string) {
   // TODO(driskell): If we are using previous and we match on the very first line read,
   // then this is because we've started in the middle of a multiline event (the first line
   // should never match) - so we could potentially offer an option to discard this.
@@ -144,7 +134,7 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64
   // odd incomplete data. It would be a signal from the user, "I will worry about the buffering
   // issues my programs may have - you just make sure to write each event either completely or
   // partially, always with the FIRST line correct (which could be the important one)."
-  match_failed := c.config.Negate == c.config.matcher.MatchString(*text)
+  match_failed := c.config.Negate == c.config.matcher.MatchString(text)
   if c.config.what == codecMultiline_What_Previous {
     if c.config.PreviousTimeout != 0 {
       // Prevent a flush happening while we're modifying the stored data
@@ -159,7 +149,7 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64
     c.start_offset = start_offset
   }
   c.end_offset = end_offset
-  c.buffer = append(c.buffer, *text)
+  c.buffer = append(c.buffer, text)
   if c.config.what == codecMultiline_What_Previous {
     if c.config.PreviousTimeout != 0 {
       // Reset the timer and unlock
@@ -169,7 +159,6 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64
   } else if c.config.what == codecMultiline_What_Next && match_failed {
     c.flush()
   }
-  return c.event_return
 }
 
 func (c *CodecMultiline) flush() {
@@ -183,19 +172,10 @@ func (c *CodecMultiline) flush() {
   c.last_offset = c.end_offset
   c.buffer = nil
 
-  event := &config.EventDescriptor{
-    ProspectorInfo: c.info,
-    Offset:         c.end_offset,
-    Event:          NewEvent(c.fileconfig.Fields, &c.path, c.start_offset, c.line, &text),
-  }
-  select {
-  case <-c.info.Signal():
-    c.event_return = false
-  case c.output <- event:
-  }
+  c.callback_func(c.start_offset, c.end_offset, c.line, text)
 }
 
 // Register the codec
 func init() {
-  RegisterCodec(&CodecMultilineRegistrar{}, "multiline")
+  core.RegisterCodec("multiline", NewMultilineCodecFactory)
 }

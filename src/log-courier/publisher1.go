@@ -39,12 +39,6 @@ const (
   max_pending_payloads       int           = 100
 )
 
-const (
-  Reload_None      = iota
-  Reload_Servers
-  Reload_Transport
-)
-
 type PendingPayload struct {
   next          *PendingPayload
   nonce         string

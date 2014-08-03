@@ -40,5 +40,5 @@ func (t *TransportZmq) configureSocket() (err error) {
 
 // Register the transport
 func init() {
-  RegisterTransport(&TransportZmqRegistrar{}, "zmq")
+  core.RegisterTransport("zmq", NewZmqTransportFactory)
 }

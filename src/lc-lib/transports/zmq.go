@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package main
+package transports
 
 import (
   "bytes"
@@ -24,7 +24,7 @@ import (
   "errors"
   "fmt"
   zmq "github.com/alecthomas/gozmq"
-  "lc-lib/config"
+  "lc-lib/core"
   "net"
   "regexp"
   "runtime"
@@ -56,7 +56,7 @@ type TransportZmqFactory struct {
 
 type TransportZmq struct {
   config     *TransportZmqFactory
-  net_config *config.NetworkConfig
+  net_config *core.NetworkConfig
   context    *zmq.Context
   dealer     *zmq.Socket
   monitor    *zmq.Socket
@@ -104,7 +104,7 @@ func (e *ZMQEvent) Log() {
 type TransportZmqRegistrar struct {
 }
 
-func (r *TransportZmqRegistrar) NewFactory(name string, config_path string, config map[string]interface{}) (TransportFactory, error) {
+func NewZmqTransportFactory(name string, config_path string, config map[string]interface{}) (TransportFactory, error) {
   var err error
 
   ret := &TransportZmqFactory{
@@ -705,5 +705,5 @@ func (t *TransportZmq) Shutdown() {
 
 // Register the transport
 func init() {
-  RegisterTransport(&TransportZmqRegistrar{}, "plainzmq")
+  RegisterTransport("plainzmq", NewZmqTransportFactory)
 }

@@ -17,10 +17,11 @@
  * limitations under the License.
  */
 
-package main
+package prospector
 
 import (
-  "lc-lib/config"
+  "lc-lib/core"
+  "lc-lib/harvester"
   "os"
   "path/filepath"
   "time"
@@ -37,6 +38,9 @@ const (
 )
 
 type ProspectorInfo struct {
+  PipelineSegment
+  PipelineConfigReceiver
+
   file           string
   identity       FileIdentity
   last_seen      uint32
@@ -46,6 +50,7 @@ type ProspectorInfo struct {
   running        bool
   orphaned       int
   finish_offset  int64
+  harvester      *harvester.Harvester
 }
 
 func NewProspectorInfoFromFileState(file string, filestate *FileState) *ProspectorInfo {
@@ -53,7 +58,6 @@ func NewProspectorInfoFromFileState(file string, filestate *FileState) *Prospect
     file:           file,
     identity:       filestate,
     harvester_cb:   make(chan int64, 1),
-    harvester_stop: make(chan interface{}),
     status:         Status_Resume,
     finish_offset:  filestate.Offset,
   }
@@ -64,7 +68,6 @@ func NewProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *Prospecto
     file:           file,
     identity:       &FileInfo{fileinfo: fileinfo}, // fileinfo is nil for stdin
     harvester_cb:   make(chan int64, 1),
-    harvester_stop: make(chan interface{}),
   }
 }
 
@@ -73,7 +76,7 @@ func (pi *ProspectorInfo) IsRunning() bool {
     return false
   }
   select {
-  case pi.finish_offset = <-pi.harvester_cb:
+  case pi.finish_offset = <-h.Status():
     pi.running = false
   default:
   }
@@ -403,7 +406,7 @@ func (p *Prospector) startHarvester(info *ProspectorInfo, output chan<- *config.
 
 func (p *Prospector) startHarvesterWithOffset(info *ProspectorInfo, output chan<- *config.EventDescriptor, config *config.FileConfig, offset int64) {
   // TODO - hook in a shutdown channel
-  harvester := NewHarvester(info, config, offset)
+  info.harvester := NewHarvester(info, config, offset)
   info.running = true
   info.status = Status_Ok
   go func() {

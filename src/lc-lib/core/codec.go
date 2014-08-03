@@ -18,21 +18,21 @@ package core
 
 type Codec interface {
   Teardown() int64
-  Event(int64, int64, uint64, *string) bool
+  Event(int64, int64, uint64, string)
 }
+
+type CodecCallbackFunc func(int64, int64, uint64, string)
 
 type CodecFactory interface {
-  NewCodec(string, *FileConfig, Stream, int64, chan<- *EventDescriptor) Codec
+  NewCodec(CodecCallbackFunc, int64) Codec
 }
 
-type CodecRegistrar interface {
-  NewFactory(*Config, string, string, map[string]interface{}) (CodecFactory, error)
-}
+type CodecRegistrarFunc func(*Config, string, string, map[string]interface{}) (CodecFactory, error)
 
-var registered_Codecs map[string]CodecRegistrar = make(map[string]CodecRegistrar)
+var registered_Codecs map[string]CodecRegistrarFunc = make(map[string]CodecRegistrarFunc)
 
-func RegisterCodec(codec string, registrar CodecRegistrar) {
-  registered_Codecs[codec] = registrar
+func RegisterCodec(codec string, registrar_func CodecRegistrarFunc) {
+  registered_Codecs[codec] = registrar_func
 }
 
 func AvailableCodecs() (ret []string) {

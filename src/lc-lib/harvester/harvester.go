@@ -17,42 +17,44 @@
  * limitations under the License.
  */
 
-package main
+package harvester
 
 import (
   "bufio"
   "bytes"
   "io"
-  "lc-lib/config"
+  "lc-lib/core"
   "os"
   "time"
 )
 
 type Harvester struct {
-  info       *ProspectorInfo
-  fileinfo   os.FileInfo
-  path       string /* the file path to harvest */
-  fileconfig *config.FileConfig
-  offset     int64
-  codec      config.Codec
-
-  file *os.File /* the file being watched */
+  stop_chan   chan interface{}
+  return_chan struct{Last_Offset int64, Failed bool}
+  stream      core.Stream
+  fileinfo    os.FileInfo
+  path        string
+  fileconfig  *core.FileConfig
+  offset      int64
+  codec       core.Codec
+  output      chan<- *core.EventDescriptor
+  file        *os.File
 }
 
-func NewHarvester(info *ProspectorInfo, fileconfig *config.FileConfig, offset int64) *Harvester {
+func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64) *Harvester {
   var fileinfo os.FileInfo
   var path string
-  if info != nil {
+  if stream != nil {
     // Grab now so we can safely use them even if prospector changes them
-    fileinfo = info.identity.Stat()
-    path = info.file
+    path, fileinfo = stream.Info()
   } else {
     // This is stdin
     fileinfo = nil
     path = "-"
   }
   return &Harvester{
-    info:       info,
+    stop_chan:  make(chan interface{}),
+    stream:     stream,
     fileinfo:   fileinfo,
     path:       path,
     fileconfig: fileconfig,
@@ -60,12 +62,25 @@ func NewHarvester(info *ProspectorInfo, fileconfig *config.FileConfig, offset in
   }
 }
 
-func (h *Harvester) Harvest(output chan<- *config.EventDescriptor) (int64, bool) {
+func (h *Harvester) Start(output chan<- *core.EventDescriptor) {
+  go h.harvest(output)
+}
+
+func (h *Harvester) Stop() {
+  close(h.stop_chan)
+}
+
+func (h *Harvester) Status() <-chan {
+  return h.return_chan
+}
+
+func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, bool) {
   if !h.prepareHarvester() {
     return h.offset, true
   }
 
-  h.codec = h.fileconfig.codec.NewCodec(h.path, h.fileconfig, h.info, h.offset, output)
+  h.output = output
+  h.codec = h.fileconfig.CodecFactory.NewCodec(h.eventCallback, h.offset)
 
   defer h.file.Close()
 
@@ -89,7 +104,7 @@ ReadLoop:
   for {
     // Check shutdown
     select {
-    case <-h.info.ShutdownSignal():
+    case <-h.stop_chan:
       break ReadLoop
     default:
     }
@@ -136,14 +151,25 @@ ReadLoop:
     line_offset := h.offset
     h.offset += int64(bytesread)
 
-    // Codec is last - it saves harvester state for us such as offset for resume
-    if !h.codec.Event(line_offset, h.offset, line, text) {
-      break
-    }
+    // Codec is last - it forwards harvester state for us such as offset for resume
+    h.codec.Event(line_offset, h.offset, line, text)
   }
 
   log.Info("Harvester for %s exiting", h.path)
-  return h.codec.Teardown(), false
+  h.return_chan <- struct{Last_Offset: h.codec.Teardown(), Failed: false}
+}
+
+func (h *Harvester) eventCallback(start_offset int64, end_offset int64, line uint64, text string) {
+  event := &core.EventDescriptor{
+    Stream: h.stream,
+    Offset: end_offset,
+    Event:  core.NewEvent(h.fileconfig.Fields, h.path, start_offset, line, text),
+  }
+
+  select {
+  case <-h.stop_chan:
+  case h.output <- event:
+  }
 }
 
 func (h *Harvester) prepareHarvester() bool {
@@ -173,7 +199,7 @@ func (h *Harvester) prepareHarvester() bool {
   return true
 }
 
-func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer, eof_timeout time.Duration) (*string, int, error) {
+func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer, eof_timeout time.Duration) (string, int, error) {
   var is_partial bool = true
   var newline_length int = 1
   start_time := time.Now()
@@ -200,34 +226,33 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer, eof_tim
       if err == io.EOF && is_partial {
         // Backoff
         select {
-        case <-h.info.ShutdownSignal():
-          return nil, 0, err
+        case <-h.stop_chan:
+          return "", 0, err
         case <-time.After(1 * time.Second):
         }
 
         // Give up waiting for data after a certain amount of time.
         // If we time out, return the error (eof)
         if time.Since(start_time) > eof_timeout {
-          return nil, 0, err
+          return "", 0, err
         }
         continue
       } else {
         log.Warning("%s", err)
-        return nil, 0, err // TODO(sissel): don't do this?
+        return "", 0, err // TODO(sissel): don't do this?
       }
     }
 
     // If we got a full line, return the whole line without the EOL chars (CRLF or LF)
     if !is_partial {
       // Get the str length with the EOL chars (LF or CRLF)
-      bufferSize := buffer.Len()
-      str := new(string)
-      *str = buffer.String()[:bufferSize-newline_length]
+      buffer_size := buffer.Len()
+      str := buffer.String()[:buffer_size-newline_length]
       // Reset the buffer for the next line
       buffer.Reset()
-      return str, bufferSize, nil
+      return str, buffer_size, nil
     }
   } /* forever read chunks */
 
-  return nil, 0, nil
+  return "", 0, nil
 }

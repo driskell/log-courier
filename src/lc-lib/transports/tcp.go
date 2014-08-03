@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package main
+package transports
 
 import (
   "bytes"
@@ -27,7 +27,7 @@ import (
   "encoding/pem"
   "errors"
   "fmt"
-  "lc-lib/config"
+  "lc-lib/core"
   "io/ioutil"
   "math/rand"
   "net"
@@ -61,7 +61,7 @@ type TransportTcpFactory struct {
 
 type TransportTcp struct {
   config     *TransportTcpFactory
-  net_config *config.NetworkConfig
+  net_config *core.NetworkConfig
   socket     net.Conn
   tlssocket  *tls.Conn
 
@@ -84,11 +84,7 @@ type TransportTcpWrap struct {
   net.Conn
 }
 
-func init() {
-  rand.Seed(time.Now().UnixNano())
-}
-
-func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, config map[string]interface{}) (TransportFactory, error) {
+func NewTcpTransportFactory(config *core.Config, name string, config_path string, unused map[string]interface{}) (core.TransportFactory, error) {
   var err error
 
   ret := &TransportTcpFactory{
@@ -98,7 +94,7 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
 
   // Only allow SSL configurations if this is "tls"
   if name == "tls" {
-    if err = PopulateConfig(ret, config_path, config); err != nil {
+    if err = config.PopulateConfig(ret, config_path, unused); err != nil {
       return nil, err
     }
 
@@ -135,7 +131,7 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
       ret.tls_config.RootCAs.AddCert(cert)
     }
   } else {
-    if err := ReportUnusedConfig(config_path, config); err != nil {
+    if err := config.ReportUnusedConfig(config_path, unused); err != nil {
       return nil, err
     }
   }
@@ -143,25 +139,25 @@ func (r *TransportTcpRegistrar) NewFactory(name string, config_path string, conf
   return ret, nil
 }
 
-func (f *TransportTcpFactory) NewTransport(config *NetworkConfig) (Transport, error) {
+func (f *TransportTcpFactory) NewTransport(config *core.NetworkConfig) (core.Transport, error) {
   return &TransportTcp{config: f, net_config: config}, nil
 }
 
-func (t *TransportTcp) ReloadConfig(new_net_config *NetworkConfig) int {
+func (t *TransportTcp) ReloadConfig(new_net_config *core.NetworkConfig) int {
   // Check we can grab new TCP config to compare, if not force transport reinit
-  new_config, ok := new_net_config.transport.(*TransportTcpFactory)
+  new_config, ok := new_net_config.TransportFactory.(*TransportTcpFactory)
   if !ok {
-    return Reload_Transport
+    return core.Reload_Transport
   }
 
   if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
-    return Reload_Transport
+    return core.Reload_Transport
   }
 
   // Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
   t.net_config = new_net_config
 
-  return Reload_None
+  return core.Reload_None
 }
 
 func (t *TransportTcp) Init() error {
@@ -448,6 +444,8 @@ func (w *TransportTcpWrap) SetWriteDeadline(t time.Time) error {
 
 // Register the transports
 func init() {
-  RegisterTransport(&TransportTcpRegistrar{}, "tcp")
-  RegisterTransport(&TransportTcpRegistrar{}, "tls")
+  rand.Seed(time.Now().UnixNano())
+
+  core.RegisterTransport("tcp", NewTcpTransportFactory)
+  core.RegisterTransport("tls", NewTcpTransportFactory)
 }

@@ -14,10 +14,12 @@
 * limitations under the License.
 */
 
-package core
+package transports
 
-import "os"
+import "github.com/op/go-logging"
 
-type Stream interface {
-	Info() (string, os.FileInfo)
+var log *logging.Logger
+
+func init() {
+	log = logging.MustGetLogger("transports")
 }

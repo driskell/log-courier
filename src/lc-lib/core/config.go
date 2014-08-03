@@ -263,8 +263,8 @@ func (c *Config) Load(path string) (err error) {
     c.Network.Transport = default_NetworkConfig_Transport
   }
 
-  if registrar, ok := registered_Transports[c.Network.Transport]; ok {
-    if c.Network.TransportFactory, err = registrar.NewFactory(c, "/network/", c.Network.Transport, c.Network.Unused); err != nil {
+  if registrar_func, ok := registered_Transports[c.Network.Transport]; ok {
+    if c.Network.TransportFactory, err = registrar_func(c, "/network/", c.Network.Transport, c.Network.Unused); err != nil {
       return
     }
   } else {
@@ -284,8 +284,8 @@ func (c *Config) Load(path string) (err error) {
       c.Files[k].Codec.Name = default_FileConfig_Codec
     }
 
-    if registrar, ok := registered_Codecs[c.Files[k].Codec.Name]; ok {
-      if c.Files[k].CodecFactory, err = registrar.NewFactory(c, fmt.Sprintf("/files[%d]/codec/", k), c.Files[k].Codec.Name, c.Files[k].Codec.Unused); err != nil {
+    if registrar_func, ok := registered_Codecs[c.Files[k].Codec.Name]; ok {
+      if c.Files[k].CodecFactory, err = registrar_func(c, fmt.Sprintf("/files[%d]/codec/", k), c.Files[k].Codec.Name, c.Files[k].Codec.Unused); err != nil {
         return
       }
     } else {
