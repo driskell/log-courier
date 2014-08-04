@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package main
+package publisher
 
 import (
   "bytes"
@@ -26,7 +26,8 @@ import (
   "encoding/json"
   "errors"
   "fmt"
-  "lc-lib/config"
+  "lc-lib/core"
+  "lc-lib/registrar"
   "io"
   "math/rand"
   "os"
@@ -39,10 +40,10 @@ const (
   max_pending_payloads       int           = 100
 )
 
-type PendingPayload struct {
-  next          *PendingPayload
+type pendingPayload struct {
+  next          *pendingPayload
   nonce         string
-  events        []*config.EventDescriptor
+  events        []*core.EventDescriptor
   num_events    int
   ack_events    int
   payload_start int
@@ -50,8 +51,8 @@ type PendingPayload struct {
   timeout       *time.Time
 }
 
-func NewPendingPayload(events []*config.EventDescriptor, nonce string, hostname string) (*PendingPayload, error) {
-  payload := &PendingPayload{
+func newPendingPayload(events []*core.EventDescriptor, nonce string, hostname string) (*pendingPayload, error) {
+  payload := &pendingPayload{
     events:     events,
     nonce:      nonce,
     num_events: len(events),
@@ -64,7 +65,7 @@ func NewPendingPayload(events []*config.EventDescriptor, nonce string, hostname 
   return payload, nil
 }
 
-func (pp *PendingPayload) Generate(hostname string) (err error) {
+func (pp *pendingPayload) Generate(hostname string) (err error) {
   var buffer bytes.Buffer
 
   // Begin with the nonce
@@ -94,7 +95,7 @@ func (pp *PendingPayload) Generate(hostname string) (err error) {
   return
 }
 
-func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *config.EventDescriptor) (err error) {
+func (pp *pendingPayload) bufferJdatDataEvent(output io.Writer, event *core.EventDescriptor) (err error) {
   var value []byte
   value, err = json.Marshal(event.Event)
   if err != nil {
@@ -121,28 +122,29 @@ func (pp *PendingPayload) bufferJdatDataEvent(output io.Writer, event *config.Ev
 }
 
 type Publisher struct {
-  control          *LogCourierControl
-  config           *config.NetworkConfig
-  transport        config.Transport
+  core.PipelineSegment
+  core.PipelineConfigReceiver
+
+  config           *core.NetworkConfig
+  transport        core.Transport
   hostname         string
   can_send         <-chan int
   pending_ping     bool
-  pending_payloads map[string]*PendingPayload
-  first_payload    *PendingPayload
-  last_payload     *PendingPayload
+  pending_payloads map[string]*pendingPayload
+  first_payload    *pendingPayload
+  last_payload     *pendingPayload
   num_payloads     int
   out_of_sync      int
-  registrar        *Registrar
-  registrar_chan   chan<- []RegistrarEvent
+  registrar        *registrar.Registrar
+  registrar_chan   chan<- []registrar.RegistrarEvent
   shutdown         bool
 }
 
-func NewPublisher(config *config.NetworkConfig, registrar *Registrar, control *LogCourierMasterControl) (*Publisher, error) {
+func NewPublisher(config *core.NetworkConfig, registrar_imp *registrar.Registrar) (*Publisher, error) {
   ret := &Publisher{
-    control:        control.RegisterWithRecvConfig(),
     config:         config,
-    registrar:      registrar,
-    registrar_chan: registrar.Connect(),
+    registrar:      registrar_imp,
+    registrar_chan: registrar_imp.Connect(),
   }
 
   if err := ret.init(); err != nil {
@@ -161,7 +163,7 @@ func (p *Publisher) init() error {
     p.hostname = default_publisher_hostname
   }
 
-  p.pending_payloads = make(map[string]*PendingPayload)
+  p.pending_payloads = make(map[string]*pendingPayload)
 
   // Set up the selected transport
   if err = p.loadTransport(); err != nil {
@@ -172,7 +174,7 @@ func (p *Publisher) init() error {
 }
 
 func (p *Publisher) loadTransport() error {
-  transport, err := p.config.transport.NewTransport(p.config)
+  transport, err := p.config.TransportFactory.NewTransport(p.config)
   if err != nil {
     return err
   }
@@ -182,20 +184,20 @@ func (p *Publisher) loadTransport() error {
   return nil
 }
 
-func (p *Publisher) Publish(input <-chan []*config.EventDescriptor) {
+func (p *Publisher) Publish(input <-chan []*core.EventDescriptor) {
   defer func() {
-    p.control.Done()
+    p.Done()
   }()
 
-  var input_toggle <-chan []*config.EventDescriptor
-  var retry_payload *PendingPayload
+  var input_toggle <-chan []*core.EventDescriptor
+  var retry_payload *pendingPayload
   var err error
   var reload int
 
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   timer := time.NewTimer(keepalive_timeout)
 
-  shutdown_signal := p.control.ShutdownSignal()
+  shutdown_signal := p.ShutdownSignal()
 
 PublishLoop:
   for {
@@ -205,7 +207,7 @@ PublishLoop:
       select {
       case <-time.After(p.config.Reconnect):
         continue
-      case <-p.control.ShutdownSignal():
+      case <-p.ShutdownSignal():
         // TODO: Persist pending payloads and resume? Quicker shutdown
         if p.num_payloads == 0 {
           break PublishLoop
@@ -389,12 +391,12 @@ PublishLoop:
         p.shutdown = true
         p.can_send = nil
         input_toggle = nil
-      case config := <-p.control.RecvConfig():
+      case config := <-p.RecvConfig():
         // Apply and check for changes
         reload = p.reloadConfig(&config.Network)
 
         // If a change and no pending payloads, process immediately
-        if reload != Reload_None && p.num_payloads == 0 {
+        if reload != core.Reload_None && p.num_payloads == 0 {
           break SelectLoop
         }
       }
@@ -413,7 +415,7 @@ PublishLoop:
       time.Sleep(p.config.Reconnect)
     } else {
       // Do we need to reload transport?
-      if reload == Reload_Transport {
+      if reload == core.Reload_Transport {
         // Shutdown and reload transport
         p.transport.Shutdown()
 
@@ -422,7 +424,7 @@ PublishLoop:
         }
       }
 
-      reload = Reload_None
+      reload = core.Reload_None
     }
 
     retry_payload = p.first_payload
@@ -436,24 +438,24 @@ PublishLoop:
   log.Info("Publisher exiting")
 }
 
-func (p *Publisher) reloadConfig(new_config *config.NetworkConfig) int {
+func (p *Publisher) reloadConfig(new_config *core.NetworkConfig) int {
   old_config := p.config
   p.config = new_config
 
   // Transport reload will return whether we need a full reload or not
   reload := p.transport.ReloadConfig(new_config)
-  if reload == Reload_Transport {
-    return Reload_Transport
+  if reload == core.Reload_Transport {
+    return core.Reload_Transport
   }
 
   // Same servers?
   if len(new_config.Servers) != len(old_config.Servers) {
-    return Reload_Servers
+    return core.Reload_Servers
   }
 
   for i := range new_config.Servers {
     if new_config.Servers[i] != old_config.Servers[i] {
-      return Reload_Servers
+      return core.Reload_Servers
     }
   }
 
@@ -495,7 +497,7 @@ func (p *Publisher) generateNonce() string {
   return string(nonce)
 }
 
-func (p *Publisher) sendNewPayload(events []*config.EventDescriptor) (err error) {
+func (p *Publisher) sendNewPayload(events []*core.EventDescriptor) (err error) {
   // Calculate a nonce
   nonce := p.generateNonce()
   for {
@@ -506,8 +508,8 @@ func (p *Publisher) sendNewPayload(events []*config.EventDescriptor) (err error)
     nonce = p.generateNonce()
   }
 
-  var payload *PendingPayload
-  if payload, err = NewPendingPayload(events, nonce, p.hostname); err != nil {
+  var payload *pendingPayload
+  if payload, err = newPendingPayload(events, nonce, p.hostname); err != nil {
     return
   }
 
@@ -538,7 +540,7 @@ func (p *Publisher) processPong(message []byte) error {
   return nil
 }
 
-func (p *Publisher) processAck(message []byte, registrar_chan chan<- []RegistrarEvent) (err error) {
+func (p *Publisher) processAck(message []byte, registrar_chan chan<- []registrar.RegistrarEvent) (err error) {
   if len(message) != 20 {
     err = fmt.Errorf("ACKN message corruption (%d)", len(message))
     return
@@ -578,7 +580,7 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
     out_of_sync := p.out_of_sync + 1
     for payload.ack_events != 0 {
       if payload.ack_events != len(payload.events) {
-        registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events[:payload.ack_events]}}
+        registrar_chan <- []registrar.RegistrarEvent{registrar.NewEventsEvent(payload.events[:payload.ack_events])}
         payload.events = payload.events[payload.ack_events:]
         payload.num_events = len(payload.events)
         payload.ack_events = 0
@@ -586,7 +588,7 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []Registrar
         break
       }
 
-      registrar_chan <- []RegistrarEvent{&EventsEvent{Events: payload.events}}
+      registrar_chan <- []registrar.RegistrarEvent{registrar.NewEventsEvent(payload.events)}
       payload = payload.next
       p.first_payload = payload
       p.num_payloads--

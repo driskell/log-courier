@@ -27,7 +27,7 @@ type CodecFactory interface {
   NewCodec(CodecCallbackFunc, int64) Codec
 }
 
-type CodecRegistrarFunc func(*Config, string, string, map[string]interface{}) (CodecFactory, error)
+type CodecRegistrarFunc func(*Config, string, map[string]interface{}, string) (CodecFactory, error)
 
 var registered_Codecs map[string]CodecRegistrarFunc = make(map[string]CodecRegistrarFunc)
 

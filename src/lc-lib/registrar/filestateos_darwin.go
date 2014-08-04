@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package prospector
+package registrar
 
 import (
   "os"

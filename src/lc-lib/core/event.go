@@ -19,7 +19,7 @@ package core
 type Event map[string]interface{}
 
 type EventDescriptor struct {
-	Stream interface{}
+	Stream Stream
 	Offset int64
 	Event  Event
 }

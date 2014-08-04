@@ -14,11 +14,12 @@
 * limitations under the License.
 */
 
-package core
+package publisher
 
-import "os"
+import "github.com/op/go-logging"
 
-// A stream should be a pointer object that uniquely identified a file stream
-type Stream interface {
-	Info() (string, os.FileInfo)
+var log *logging.Logger
+
+func init() {
+	log = logging.MustGetLogger("publisher")
 }

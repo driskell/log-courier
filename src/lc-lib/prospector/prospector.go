@@ -38,12 +38,10 @@ const (
   Orphaned_Yes
 )
 
-type ProspectorInfo struct {
+type prospectorInfo struct {
   file           string
-  identity       FileIdentity
+  identity       registrar.FileIdentity
   last_seen      uint32
-  harvester_cb   chan int64
-  harvester_stop chan interface{}
   status         int
   running        bool
   orphaned       int
@@ -51,41 +49,43 @@ type ProspectorInfo struct {
   harvester      *harvester.Harvester
 }
 
-func NewProspectorInfoFromFileState(file string, filestate *FileState) *ProspectorInfo {
-  return &ProspectorInfo{
+func newProspectorInfoFromFileState(file string, filestate *registrar.FileState) *prospectorInfo {
+  return &prospectorInfo{
     file:           file,
     identity:       filestate,
-    harvester_cb:   make(chan int64, 1),
     status:         Status_Resume,
     finish_offset:  filestate.Offset,
   }
 }
 
-func NewProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *ProspectorInfo {
-  return &ProspectorInfo{
+func newProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *prospectorInfo {
+  return &prospectorInfo{
     file:           file,
-    identity:       &FileInfo{fileinfo: fileinfo}, // fileinfo is nil for stdin
-    harvester_cb:   make(chan int64, 1),
+    identity:       registrar.NewFileInfo(fileinfo), // fileinfo is nil for stdin
   }
 }
 
-func (pi *ProspectorInfo) IsRunning() bool {
+func (pi *prospectorInfo) Info() (string, os.FileInfo) {
+  return pi.file, pi.identity.Stat()
+}
+
+func (pi *prospectorInfo) isRunning() bool {
   if !pi.running {
     return false
   }
   select {
-  case pi.finish_offset = <-h.Status():
-    pi.running = false
+  case status := <-pi.harvester.Status():
+    pi.setHarvesterStopped(status)
   default:
   }
   return pi.running
 }
 
-func (pi *ProspectorInfo) ShutdownSignal() <-chan interface{} {
+/*func (pi *prospectorInfo) ShutdownSignal() <-chan interface{} {
   return pi.harvester_stop
-}
+}*/
 
-func (pi *ProspectorInfo) Stop() {
+func (pi *prospectorInfo) stop() {
   if !pi.running {
     return
   }
@@ -95,18 +95,27 @@ func (pi *ProspectorInfo) Stop() {
     // There's no deadline on Stdin reads :-(
     log.Notice("Waiting for Stdin to close (EOF or Ctrl+D)")
   }
-  close(pi.harvester_stop)
+  pi.harvester.Stop()
 }
 
-func (pi *ProspectorInfo) wait() {
+func (pi *prospectorInfo) wait() {
   if !pi.running {
     return
   }
-  pi.finish_offset = <-pi.harvester_cb
-  pi.running = false
+  status := <-pi.harvester.Status()
+  pi.setHarvesterStopped(status)
 }
 
-func (pi *ProspectorInfo) update(fileinfo os.FileInfo, iteration uint32) {
+func (pi *prospectorInfo) setHarvesterStopped(status *harvester.HarvesterStatus) {
+  pi.running = false
+  pi.finish_offset = status.Last_Offset
+  if status.Failed {
+    pi.status = Status_Failed
+  }
+  pi.harvester = nil
+}
+
+func (pi *prospectorInfo) update(fileinfo os.FileInfo, iteration uint32) {
   // Allow identity to replace itself with a new identity (this allows a FileState to promote itself to a FileInfo)
   pi.identity.Update(fileinfo, &pi.identity)
   pi.last_seen = iteration
@@ -118,8 +127,8 @@ type Prospector struct {
 
   generalconfig    *core.GeneralConfig
   fileconfigs      []core.FileConfig
-  prospectorindex  map[string]*ProspectorInfo
-  prospectors      map[*ProspectorInfo]*ProspectorInfo
+  prospectorindex  map[string]*prospectorInfo
+  prospectors      map[*prospectorInfo]*prospectorInfo
   from_beginning   bool
   iteration        uint32
   lastscan         time.Time
@@ -128,15 +137,16 @@ type Prospector struct {
   registrar_events []registrar.RegistrarEvent
 }
 
-func NewProspector(config *config.Config, from_beginning bool, registrar *Registrar, control *LogCourierMasterControl) (*Prospector, error) {
+func NewProspector(config *core.Config, from_beginning bool, registrar_imp *registrar.Registrar) (*Prospector, error) {
   ret := &Prospector{
-    control:          control.RegisterWithRecvConfig(),
     generalconfig:    &config.General,
     fileconfigs:      config.Files,
+    prospectorindex:  make(map[string]*prospectorInfo),
+    prospectors:      make(map[*prospectorInfo]*prospectorInfo),
     from_beginning:   from_beginning,
-    registrar:        registrar,
-    registrar_chan:   registrar.Connect(),
-    registrar_events: make([]RegistrarEvent, 0),
+    registrar:        registrar_imp,
+    registrar_chan:   registrar_imp.Connect(),
+    registrar_events: make([]registrar.RegistrarEvent, 0),
   }
 
   if err := ret.init(); err != nil {
@@ -147,15 +157,12 @@ func NewProspector(config *config.Config, from_beginning bool, registrar *Regist
 }
 
 func (p *Prospector) init() (err error) {
-  if p.prospectorindex, err = p.registrar.LoadPrevious(); err != nil {
+  var have_previous bool
+  if have_previous, err = p.registrar.LoadPrevious(p.loadCallback); err != nil {
     return
   }
 
-  p.prospectors = make(map[*ProspectorInfo]*ProspectorInfo)
-  if p.prospectorindex == nil {
-    // No previous state to follow, obey -from-beginning and start empy
-    p.prospectorindex = make(map[string]*ProspectorInfo)
-  } else {
+  if have_previous {
     // -from-beginning=false flag should only affect the very first run (no previous state)
     p.from_beginning = true
 
@@ -168,9 +175,14 @@ func (p *Prospector) init() (err error) {
   return
 }
 
-func (p *Prospector) Prospect(output chan<- *config.EventDescriptor) {
+func (p *Prospector) loadCallback(file string, state *registrar.FileState) (core.Stream, error) {
+  p.prospectorindex[file] = newProspectorInfoFromFileState(file, state)
+  return p.prospectorindex[file], nil
+}
+
+func (p *Prospector) Prospect(output chan<- *core.EventDescriptor) {
   defer func() {
-    p.control.Done()
+    p.Done()
   }()
 
   // Handle any "-" (stdin) paths - but only once
@@ -187,7 +199,7 @@ func (p *Prospector) Prospect(output chan<- *config.EventDescriptor) {
           }
 
           // Stdin is implicitly an orphaned fileinfo
-          info := NewProspectorInfoFromFileInfo("-", stat)
+          info := newProspectorInfoFromFileInfo("-", stat)
           info.orphaned = Orphaned_Yes
 
           // Store the reference so we can shut it down later
@@ -225,7 +237,7 @@ ProspectLoop:
     // Clean up the prospector collections
     for _, info := range p.prospectors {
       if info.orphaned >= Orphaned_Maybe {
-        if !info.IsRunning() {
+        if !info.isRunning() {
           delete(p.prospectors, info)
         }
       } else {
@@ -237,14 +249,14 @@ ProspectLoop:
       }
       if info.orphaned == Orphaned_Maybe {
         info.orphaned = Orphaned_Yes
-        p.registrar_events = append(p.registrar_events, &DeletedEvent{ProspectorInfo: info})
+        p.registrar_events = append(p.registrar_events, registrar.NewDeletedEvent(info))
       }
     }
 
     // Flush the accumulated registrar events
     if len(p.registrar_events) != 0 {
       p.registrar_chan <- p.registrar_events
-      p.registrar_events = make([]RegistrarEvent, 0)
+      p.registrar_events = make([]registrar.RegistrarEvent, 0)
     }
 
     p.lastscan = newlastscan
@@ -252,9 +264,9 @@ ProspectLoop:
     // Defer next scan for a bit
     select {
     case <-time.After(p.generalconfig.ProspectInterval):
-    case <-p.control.ShutdownSignal():
+    case <-p.ShutdownSignal():
       break ProspectLoop
-    case config := <-p.control.RecvConfig():
+    case config := <-p.RecvConfig():
       p.generalconfig = &config.General
       p.fileconfigs = config.Files
     }
@@ -274,7 +286,7 @@ ProspectLoop:
   log.Info("Prospector exiting")
 }
 
-func (p *Prospector) scan(path string, config *config.FileConfig, output chan<- *config.EventDescriptor) {
+func (p *Prospector) scan(path string, config *core.FileConfig, output chan<- *core.EventDescriptor) {
   // Evaluate the path as a wildcards/shell glob
   matches, err := filepath.Glob(path)
   if err != nil {
@@ -313,10 +325,10 @@ func (p *Prospector) scan(path string, config *config.FileConfig, output chan<- 
         info = previousinfo
         info.file = file
 
-        p.registrar_events = append(p.registrar_events, &RenamedEvent{ProspectorInfo: info, Source: file})
+        p.registrar_events = append(p.registrar_events, registrar.NewRenamedEvent(info, file))
       } else {
         // This is a new entry
-        info = NewProspectorInfoFromFileInfo(file, fileinfo)
+        info = newProspectorInfoFromFileInfo(file, fileinfo)
 
         if fileinfo.ModTime().Before(p.lastscan) && time.Since(fileinfo.ModTime()) > config.DeadTime {
           // Old file, skip it, but push offset of file size so we start from the end if this file changes and needs picking up
@@ -324,7 +336,7 @@ func (p *Prospector) scan(path string, config *config.FileConfig, output chan<- 
 
           // Store the offset that we should resume from if we notice a modification
           info.finish_offset = fileinfo.Size()
-          p.registrar_events = append(p.registrar_events, &Newconfig.EventDescriptor{ProspectorInfo: info, Source: file, Offset: fileinfo.Size(), fileinfo: fileinfo})
+          p.registrar_events = append(p.registrar_events, registrar.NewDiscoverEvent(info, file, fileinfo.Size(), fileinfo))
         } else {
           // Process new file
           log.Info("Launching harvester on new file: %s", file)
@@ -345,13 +357,13 @@ func (p *Prospector) scan(path string, config *config.FileConfig, output chan<- 
           info = previousinfo
           info.file = file
 
-          p.registrar_events = append(p.registrar_events, &RenamedEvent{ProspectorInfo: info, Source: file})
+          p.registrar_events = append(p.registrar_events, registrar.NewRenamedEvent(info, file))
         } else {
           // File is not the same file we saw previously, it must have rotated and is a new file
           log.Info("Launching harvester on rotated file: %s", file)
 
           // Forget about the previous harvester and let it continue on the old file - so start a new channel to use with the new harvester
-          info = NewProspectorInfoFromFileInfo(file, fileinfo)
+          info = newProspectorInfoFromFileInfo(file, fileinfo)
 
           // Process new file
           p.startHarvester(info, output, config)
@@ -363,7 +375,7 @@ func (p *Prospector) scan(path string, config *config.FileConfig, output chan<- 
     }
 
     // Resume stopped harvesters
-    resume := !info.IsRunning()
+    resume := !info.isRunning()
     if resume {
       if info.status == Status_Resume {
         // This is a filestate that was saved, resume the harvester
@@ -389,7 +401,7 @@ func (p *Prospector) scan(path string, config *config.FileConfig, output chan<- 
   } // for each file matched by the glob
 }
 
-func (p *Prospector) startHarvester(info *ProspectorInfo, output chan<- *config.EventDescriptor, config *config.FileConfig) {
+func (p *Prospector) startHarvester(info *prospectorInfo, output chan<- *core.EventDescriptor, config *core.FileConfig) {
   var offset int64
 
   if p.from_beginning {
@@ -399,26 +411,20 @@ func (p *Prospector) startHarvester(info *ProspectorInfo, output chan<- *config.
   }
 
   // Send a new file event to allow registrar to begin persisting for this harvester
-  p.registrar_events = append(p.registrar_events, &Newconfig.EventDescriptor{ProspectorInfo: info, Source: info.file, Offset: offset, fileinfo: info.identity.Stat()})
+  p.registrar_events = append(p.registrar_events, registrar.NewDiscoverEvent(info, info.file, offset, info.identity.Stat()))
 
   p.startHarvesterWithOffset(info, output, config, offset)
 }
 
-func (p *Prospector) startHarvesterWithOffset(info *ProspectorInfo, output chan<- *config.EventDescriptor, config *config.FileConfig, offset int64) {
+func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, output chan<- *core.EventDescriptor, config *core.FileConfig, offset int64) {
   // TODO - hook in a shutdown channel
-  info.harvester := NewHarvester(info, config, offset)
+  info.harvester = harvester.NewHarvester(info, config, offset)
   info.running = true
   info.status = Status_Ok
-  go func() {
-    offset, failed := harvester.Harvest(output)
-    if failed {
-      info.status = Status_Failed
-    }
-    info.harvester_cb <- offset
-  }()
+  info.harvester.Start(output)
 }
 
-func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *ProspectorInfo) {
+func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *prospectorInfo) {
   for _, ki := range p.prospectors {
     if ki.orphaned == Orphaned_No && ki.file == file {
       // We already know the prospector info for this file doesn't match, so don't check again

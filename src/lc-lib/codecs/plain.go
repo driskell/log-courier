@@ -28,7 +28,7 @@ type CodecPlain struct {
   callback_func core.CodecCallbackFunc
 }
 
-func NewPlainCodecFactory(config *core.Config, config_path string, id string, unused map[string]interface{}) (core.CodecFactory, error) {
+func NewPlainCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
   if err := config.ReportUnusedConfig(config_path, unused); err != nil {
     return nil, err
   }

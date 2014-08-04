@@ -17,30 +17,31 @@
  * limitations under the License.
  */
 
-package main
+package spooler
 
 import (
-  "lc-lib/config"
+  "lc-lib/core"
   "time"
 )
 
 type Spooler struct {
-  control *LogCourierControl
-  config  *config.GeneralConfig
-  spool   []*config.EventDescriptor
+  core.PipelineSegment
+  core.PipelineConfigReceiver
+
+  config *core.GeneralConfig
+  spool  []*core.EventDescriptor
 }
 
-func NewSpooler(config *config.GeneralConfig, control *LogCourierMasterControl) *Spooler {
+func NewSpooler(config *core.GeneralConfig) *Spooler {
   return &Spooler{
-    control: control.RegisterWithRecvConfig(),
-    config:  config,
-    spool:   make([]*config.EventDescriptor, 0, config.SpoolSize),
+    config: config,
+    spool:  make([]*core.EventDescriptor, 0, config.SpoolSize),
   }
 }
 
-func (s *Spooler) Spool(input <-chan *config.EventDescriptor, output chan<- []*config.EventDescriptor) {
+func (s *Spooler) Spool(input <-chan *core.EventDescriptor, output chan<- []*core.EventDescriptor) {
   defer func() {
-    s.control.Done()
+    s.Done()
   }()
 
   timer_start := time.Now()
@@ -70,9 +71,9 @@ SpoolerLoop:
 
       timer_start = time.Now()
       timer.Reset(s.config.SpoolTimeout)
-    case <-s.control.ShutdownSignal():
+    case <-s.ShutdownSignal():
       break SpoolerLoop
-    case config := <-s.control.RecvConfig():
+    case config := <-s.RecvConfig():
       s.config = &config.General
 
       // Immediate flush?
@@ -92,15 +93,12 @@ SpoolerLoop:
   log.Info("Spooler exiting")
 }
 
-func (s *Spooler) sendSpool(output chan<- []*config.EventDescriptor) bool {
+func (s *Spooler) sendSpool(output chan<- []*core.EventDescriptor) bool {
   select {
-  case signal := <-s.control.Signal():
-    if signal == nil {
-      return false
-    }
-    s.control.SendSnapshot()
+  case <-s.ShutdownSignal():
+    return false
   case output <- s.spool:
   }
-  s.spool = make([]*config.EventDescriptor, 0, s.config.SpoolSize)
+  s.spool = make([]*core.EventDescriptor, 0, s.config.SpoolSize)
   return true
 }

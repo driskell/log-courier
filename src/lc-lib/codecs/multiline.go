@@ -53,7 +53,7 @@ type CodecMultiline struct {
   timer_chan   chan bool
 }
 
-func NewMultilineCodecFactory(config *core.Config, config_path string, id string, unused map[string]interface{}) (core.CodecFactory, error) {
+func NewMultilineCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
   var err error
 
   result := &CodecMultilineFactory{}

@@ -23,13 +23,19 @@ import (
   "flag"
   "fmt"
   "github.com/op/go-logging"
-  "lc-lib/config"
+  "lc-lib/core"
+  "lc-lib/prospector"
+  "lc-lib/spooler"
+  "lc-lib/publisher"
+  "lc-lib/registrar"
   stdlog "log"
   "os"
   "runtime/pprof"
-  "sync"
   "time"
 )
+
+import _ "lc-lib/codecs"
+import _ "lc-lib/transports"
 
 const Log_Courier_Version string = "0.12"
 
@@ -45,8 +51,8 @@ func main() {
 }
 
 type LogCourier struct {
-  control        *LogCourierMasterControl
-  config         *config.Config
+  pipeline       *core.Pipeline
+  config         *core.Config
   shutdown_chan  chan os.Signal
   reload_chan    chan os.Signal
   config_file    string
@@ -56,7 +62,7 @@ type LogCourier struct {
 
 func NewLogCourier() *LogCourier {
   ret := &LogCourier{
-    control: NewLogCourierMasterControl(),
+    pipeline: core.NewPipeline(),
   }
   return ret
 }
@@ -64,24 +70,31 @@ func NewLogCourier() *LogCourier {
 func (lc *LogCourier) Run() {
   lc.startUp()
 
-  event_chan := make(chan *config.EventDescriptor, 16)
-  publisher_chan := make(chan []*config.EventDescriptor, 1)
+  event_chan := make(chan *core.EventDescriptor, 16)
+  publisher_chan := make(chan []*core.EventDescriptor, 1)
 
   log.Info("Starting pipeline")
 
-  registrar := NewRegistrar(lc.config.General.PersistDir, lc.control)
+  registrar := registrar.NewRegistrar(lc.config.General.PersistDir)
+  lc.pipeline.Register(&registrar.PipelineSegment)
 
-  publisher, err := NewPublisher(&lc.config.Network, registrar, lc.control)
+  publisher, err := publisher.NewPublisher(&lc.config.Network, registrar)
   if err != nil {
     log.Fatalf("Failed to initialise: %s", err)
   }
+  lc.pipeline.Register(&publisher.PipelineSegment)
+  lc.pipeline.RegisterConfigReceiver(&publisher.PipelineConfigReceiver)
 
-  spooler := NewSpooler(&lc.config.General, lc.control)
+  spooler := spooler.NewSpooler(&lc.config.General)
+  lc.pipeline.Register(&spooler.PipelineSegment)
+  lc.pipeline.RegisterConfigReceiver(&spooler.PipelineConfigReceiver)
 
-  prospector, err := NewProspector(lc.config, lc.from_beginning, registrar, lc.control)
+  prospector, err := prospector.NewProspector(lc.config, lc.from_beginning, registrar)
   if err != nil {
     log.Fatalf("Failed to initialise: %s", err)
   }
+  lc.pipeline.Register(&prospector.PipelineSegment)
+  lc.pipeline.RegisterConfigReceiver(&prospector.PipelineConfigReceiver)
 
   // Start the pipeline
   go prospector.Prospect(event_chan)
@@ -139,12 +152,12 @@ func (lc *LogCourier) startUp() {
 
   if list_supported {
     fmt.Printf("Available transports:\n")
-    for _, transport := range AvailableTransports() {
+    for _, transport := range core.AvailableTransports() {
       fmt.Printf("  %s\n", transport)
     }
 
     fmt.Printf("Available codecs:\n")
-    for _, codec := range AvailableCodecs() {
+    for _, codec := range core.AvailableCodecs() {
       fmt.Printf("  %s\n", codec)
     }
     os.Exit(0)
@@ -224,7 +237,7 @@ func (lc *LogCourier) configureLogging() (err error) {
 }
 
 func (lc *LogCourier) loadConfig() error {
-  lc.config = NewConfig()
+  lc.config = core.NewConfig()
   if err := lc.config.Load(lc.config_file); err != nil {
     return err
   }
@@ -248,11 +261,11 @@ func (lc *LogCourier) reloadConfig() {
   logging.SetLevel(lc.config.General.LogLevel, "")
 
   // Pass the new config to the pipeline workers
-  lc.control.SendConfig(lc.config)
+  lc.pipeline.SendConfig(lc.config)
 }
 
 func (lc *LogCourier) cleanShutdown() {
   log.Notice("Initiating shutdown")
-  lc.control.Shutdown()
-  lc.control.Wait()
+  lc.pipeline.Shutdown()
+  lc.pipeline.Wait()
 }

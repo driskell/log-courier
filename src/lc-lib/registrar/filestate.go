@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package prospector
+package registrar
 
 import (
   "os"
@@ -30,7 +30,7 @@ type FileState struct {
 }
 
 type FileInfo struct {
-  fileinfo os.FileInfo /* the file info */
+  fileinfo os.FileInfo
 }
 
 func NewFileInfo(fileinfo os.FileInfo) *FileInfo {

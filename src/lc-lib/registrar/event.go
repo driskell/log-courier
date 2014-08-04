@@ -17,29 +17,58 @@
 package registrar
 
 import (
+  "lc-lib/core"
   "os"
 )
 
 type RegistrarEvent interface {
-  Process(state map[*ProspectorInfo]*FileState)
+  Process(state map[core.Stream]*FileState)
 }
 
-type NewFileEvent struct {
-  ProspectorInfo *ProspectorInfo
-  Source         string
-  Offset         int64
-  fileinfo       os.FileInfo
+type DiscoverEvent struct {
+  stream   core.Stream
+  source   string
+  offset   int64
+  fileinfo os.FileInfo
+}
+
+func NewDiscoverEvent(stream core.Stream, source string, offset int64, fileinfo os.FileInfo) *DiscoverEvent {
+  return &DiscoverEvent{
+    stream:   stream,
+    source:   source,
+    offset:   offset,
+    fileinfo: fileinfo,
+  }
 }
 
 type DeletedEvent struct {
-  ProspectorInfo *ProspectorInfo
+  stream core.Stream
+}
+
+func NewDeletedEvent(stream core.Stream) *DeletedEvent {
+  return &DeletedEvent{
+    stream: stream,
+  }
 }
 
 type RenamedEvent struct {
-  ProspectorInfo *ProspectorInfo
-  Source         string
+  stream core.Stream
+  source string
+}
+
+func NewRenamedEvent(stream core.Stream, source string) *RenamedEvent {
+  return &RenamedEvent{
+    stream: stream,
+    source: source,
+  }
 }
 
 type EventsEvent struct {
-  Events []*config.EventDescriptor
+  events []*core.EventDescriptor
+}
+
+func NewEventsEvent(events []*core.EventDescriptor) *EventsEvent {
+  return &EventsEvent{
+    events: events,
+  }
 }

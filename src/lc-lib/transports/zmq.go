@@ -47,9 +47,9 @@ const (
 type TransportZmqFactory struct {
   transport string
 
-  CurveServerkey string `json:"curve server key"`
-  CurvePublickey string `json:"curve public key"`
-  CurveSecretkey string `json:"curve secret key"`
+  CurveServerkey string `config:"curve server key"`
+  CurvePublickey string `config:"curve public key"`
+  CurveSecretkey string `config:"curve secret key"`
 
   hostport_re *regexp.Regexp
 }
@@ -104,7 +104,7 @@ func (e *ZMQEvent) Log() {
 type TransportZmqRegistrar struct {
 }
 
-func NewZmqTransportFactory(name string, config_path string, config map[string]interface{}) (TransportFactory, error) {
+func NewZmqTransportFactory(core *core.Config, config_path string, config map[string]interface{}, name string) (TransportFactory, error) {
   var err error
 
   ret := &TransportZmqFactory{

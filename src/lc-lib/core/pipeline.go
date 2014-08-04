@@ -20,14 +20,14 @@ import "sync"
 
 type Pipeline struct {
 	signal chan interface{}
-	sinks  map[*PipelineSegment]chan *Config
+	sinks  map[*PipelineConfigReceiver]chan *Config
 	group  sync.WaitGroup
 }
 
 func NewPipeline() *Pipeline {
 	return &Pipeline{
 		signal: make(chan interface{}),
-		sinks:  make(map[*PipelineSegment]chan *Config),
+		sinks:  make(map[*PipelineConfigReceiver]chan *Config),
 	}
 }
 
@@ -41,18 +41,17 @@ func (p *Pipeline) SendConfig(config *Config) {
 	}
 }
 
-func (p *Pipeline) Register(s interface{}) {
+func (p *Pipeline) Register(pipe *PipelineSegment) {
 	p.group.Add(1)
 
-	var pipe *PipelineSegment = s.(*PipelineSegment)
 	pipe.signal = p.signal
 	pipe.group = &p.group
+}
 
-	if pipe_config, ok := s.(*PipelineConfigReceiver); ok {
-		config_chan := make(chan *Config)
-		p.sinks[pipe] = config_chan
-		pipe_config.sink = config_chan
-	}
+func (p *Pipeline) RegisterConfigReceiver(pipe *PipelineConfigReceiver) {
+	config_chan := make(chan *Config)
+	p.sinks[pipe] = config_chan
+	pipe.sink = config_chan
 }
 
 func (p *Pipeline) Wait() {

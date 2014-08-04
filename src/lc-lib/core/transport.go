@@ -35,7 +35,7 @@ type TransportFactory interface {
   NewTransport(*NetworkConfig) (Transport, error)
 }
 
-type TransportRegistrarFunc func(*Config, string, string, map[string]interface{}) (TransportFactory, error)
+type TransportRegistrarFunc func(*Config, string, map[string]interface{}, string) (TransportFactory, error)
 
 var registered_Transports map[string]TransportRegistrarFunc = make(map[string]TransportRegistrarFunc)
 

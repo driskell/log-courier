@@ -29,7 +29,7 @@ import (
 */
 import "C"
 
-func Z85Validate(z85 string) bool {
+func z85Validate(z85 string) bool {
   var decoded []C.uint8_t
 
   if len(z85)%5 != 0 {
