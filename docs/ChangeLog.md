@@ -14,7 +14,7 @@
 
 ## 0.12
 
-*?*
+*4th August 2014*
 
 * Fix non-ASCII but valid UTF-8 characters getting replaced with question marks
 by the Logstash gem (#22)
