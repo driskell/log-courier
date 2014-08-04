@@ -31,7 +31,7 @@ import (
   "time"
 )
 
-const Log_Courier_Version string = "0.11"
+const Log_Courier_Version string = "0.12"
 
 var log *logging.Logger
 

@@ -15,7 +15,7 @@ option.
   - [`pattern`](#pattern)
   - [`negate`](#negate)
   - [`what`](#what)
-  - [`previous_timeout`](#previous_timeout)
+  - [`previous timeout`](#previous-timeout)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -26,7 +26,7 @@ option.
 		"pattern": "^[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} ",
 		"negate": true,
 		"what": "previous",
-		"previous_timeout": "30s"
+		"previous timeout": "30s"
 	}
 
 ## Options
@@ -62,13 +62,13 @@ the current event. Flush the previously buffered lines along with this line as a
 single event and start a new buffer.
 
 A side effect of using `"previous"` is that an event will not be flushed until
-the first line of the next event is encountered. The `"previous_timeout"` option
+the first line of the next event is encountered. The `"previous timeout"` option
 offers a solution to this.
 
-### `previous_timeout`
+### `previous timeout`
 
 *Duration. Optional. Default: 0. Ignored when "what" != "previous"*
 
-When using `"previous"`, if `"previous_timeout"` is not 0 any buffered lines
+When using `"previous"`, if `"previous timeout"` is not 0 any buffered lines
 will be flushed as a single event if no more lines are received within the
 specified time period.

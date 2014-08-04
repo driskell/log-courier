@@ -99,8 +99,6 @@ The log-courier command accepts the following command line options.
 	-cpuprofile="": write cpu profile to file
 	-from-beginning=false: On first run, read new files from the beginning instead of the end
 	-list-supported=false: List supported transports and codecs
-	-log-to-stdout=true: Log to stdout
-	-log-to-syslog=false: Log to syslog
 	-version=false: show version information
 
 ## Documentation

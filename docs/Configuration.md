@@ -17,6 +17,9 @@
   - [`"spool size"`](#spool-size)
   - [`"spool timeout"`](#spool-timeout)
   - [`"log level"`](#log-level)
+  - [`"log stdout"`](#log-stdout)
+  - [`"log syslog"`](#log-syslog)
+  - [`"log file"`](#log-file)
 - [`"network"`](#network)
   - [`"transport"`](#transport)
   - [`"servers"`](#servers)
@@ -182,10 +185,30 @@ not filled within this time limit, the spool will be flushed regardless.
 
 ### `"log level"`
 
-*String. Optional. Default: "info"
+*String. Optional. Default: "info".
 Available values: "critical", "error", "warning", "notice", "info", "debug"*
 
-The maximum level of detailed logs to produce.
+The maximum level of detail to produce in Log Courier's internal log.
+
+### `"log stdout"`
+
+*Boolean. Optional. Default: true*
+
+Enables sending of Log Courier's internal log to the console (stdout). May be used in conjunction with `"log syslog"` and `"log file"`.
+
+### `"log syslog"`
+
+*Boolean. Optional. Default: false*
+
+Enables sending of Log Courier's internal log to syslog. May be used in conjunction with `"log stdout"` and `"log file"`.
+
+*This option is ignored by Windows builds.*
+
+### `"log file"`
+
+*Filepath. Optional*
+
+A log file to save Log Courier's internal log into. May be used in conjunction with `"log stdout"` and `"log syslog"`.
 
 ## `"network"`
 
@@ -198,7 +221,7 @@ what transport and security to use.
 Available values: "tcp", "tls", "plainzmq", "zmq"*
 
 *Depending on how log-courier was built, some transports may not be available.
-Run `log-courer -list-supported` to see the list of transports available in
+Run `log-courier -list-supported` to see the list of transports available in
 a specific build of log-courier.*
 
 Sets the transport to use when sending logs to the servers. "tls" is recommended
@@ -350,7 +373,7 @@ ensure old log files are not kept open preventing deletion.
 *Codec configuration. Optional. Default: `{ "name": "plain" }`*
 
 *Depending on how log-courier was built, some codecs may not be available. Run
-`log-courer -list-supported` to see the list of codecs available in a specific
+`log-courier -list-supported` to see the list of codecs available in a specific
 build of log-courier.*
 
 The specified codec will receive the lines read from the log stream and perform
