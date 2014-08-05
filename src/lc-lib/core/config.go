@@ -69,13 +69,14 @@ type NetworkConfig struct {
   Servers   []string      `config:"servers"`
   Timeout   time.Duration `config:"timeout"`
   Reconnect time.Duration `config:"reconnect"`
-  Unused    map[string]interface{}
 
+  Unused           map[string]interface{}
   TransportFactory TransportFactory
 }
 
 type CodecConfigStub struct {
-  Name   string `config:"name"`
+  Name string `config:"name"`
+
   Unused map[string]interface{}
 }
 

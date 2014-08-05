@@ -32,12 +32,13 @@ const (
 )
 
 type CodecMultilineFactory struct {
-  Pattern         string `json:"pattern"`
-  matcher         *regexp.Regexp
-  What            string `json:"what"`
-  what            int
-  Negate          bool          `json:"negate"`
-  PreviousTimeout time.Duration `json:"previous timeout"`
+  Pattern         string        `config:"pattern"`
+  What            string        `config:"what"`
+  Negate          bool          `config:"negate"`
+  PreviousTimeout time.Duration `config:"previous timeout"`
+
+  matcher *regexp.Regexp
+  what    int
 }
 
 type CodecMultiline struct {
