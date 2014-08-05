@@ -24,10 +24,10 @@ import (
 )
 
 type CodecFilterFactory struct {
-  Pattern string `config:"pattern"`
-  Negate  bool   `config:"negate"`
+  Patterns []string `config:"patterns"`
+  Negate   bool     `config:"negate"`
 
-  matcher *regexp.Regexp
+  matchers []*regexp.Regexp
 }
 
 type CodecFilter struct {
@@ -44,13 +44,16 @@ func NewFilterCodecFactory(config *core.Config, config_path string, unused map[s
     return nil, err
   }
 
-  if result.Pattern == "" {
+  if len(result.Patterns) == 0 {
     return nil, errors.New("Filter codec pattern must be specified.")
   }
 
-  result.matcher, err = regexp.Compile(result.Pattern)
-  if err != nil {
-    return nil, fmt.Errorf("Failed to compile filter codec pattern, '%s'.", err)
+  result.matchers = make([]*regexp.Regexp, len(result.Patterns))
+  for k, pattern := range result.Patterns {
+    result.matchers[k], err = regexp.Compile(pattern)
+    if err != nil {
+      return nil, fmt.Errorf("Failed to compile filter codec pattern, '%s'.", err)
+    }
   }
 
   return result, nil
@@ -69,9 +72,12 @@ func (c *CodecFilter) Teardown() int64 {
 }
 
 func (c *CodecFilter) Event(start_offset int64, end_offset int64, line uint64, text string) {
-  // Only flush the event if it doesn't match the filter
-  if c.config.Negate == c.config.matcher.MatchString(text) {
-    c.callback_func(start_offset, end_offset, line, text)
+  // Only flush the event if it matches a filter
+  for _, matcher := range c.config.matchers {
+    if c.config.Negate != matcher.MatchString(text) {
+      c.callback_func(start_offset, end_offset, line, text)
+      return
+    }
   }
 }
 

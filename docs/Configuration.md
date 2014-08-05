@@ -386,8 +386,9 @@ options can be provided if the specified codec allows.
 	{ "name": "codec-name" }
 	{ "name": "codec-name", "option1": "value", "option2": "42" }
 
-Aside from "plain", a single codec is available at this time.
+Aside from "plain", the following codecs are available at this time.
 
+* [Filter](codecs/Filter.md)
 * [Multiline](codecs/Multiline.md)
 
 ## `"includes"`
