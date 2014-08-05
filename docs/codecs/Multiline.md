@@ -12,10 +12,10 @@ option.
 
 - [Example](#example)
 - [Options](#options)
-  - [`pattern`](#pattern)
-  - [`negate`](#negate)
-  - [`what`](#what)
-  - [`previous timeout`](#previous-timeout)
+  - [`"pattern"`](#pattern)
+  - [`"negate"`](#negate)
+  - [`"what"`](#what)
+  - [`"previous timeout"`](#previous-timeout)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -31,7 +31,7 @@ option.
 
 ## Options
 
-### `pattern`
+### `"pattern"`
 
 *String. Required*
 
@@ -39,14 +39,14 @@ A regular expression to match against each line.
 
 The syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
 
-### `negate`
+### `"negate"`
 
 *Boolean. Optional. Default: false*
 
 Negates `pattern` so that a match becomes a non-match and a non-match becomes a
 match.
 
-### `what`
+### `"what"`
 
 *String. Optional. Default: "previous"  
 Available values: "previous", "next"*
@@ -65,7 +65,7 @@ A side effect of using `"previous"` is that an event will not be flushed until
 the first line of the next event is encountered. The `"previous timeout"` option
 offers a solution to this.
 
-### `previous timeout`
+### `"previous timeout"`
 
 *Duration. Optional. Default: 0. Ignored when "what" != "previous"*
 
