@@ -242,7 +242,7 @@ option.
 
 ### `"servers"`
 
-*Array of strings. Required*
+*Array of Strings. Required*
 
 Sets the list of servers to send logs to. DNS names are resolved into IP
 addresses each time connections are made and all available IP addresses are
