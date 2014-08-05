@@ -46,12 +46,14 @@ type CodecMultiline struct {
   last_offset   int64
   callback_func core.CodecCallbackFunc
 
-  end_offset   int64
-  start_offset int64
-  line         uint64
-  buffer       []string
-  timer_lock   *sync.Mutex
-  timer_chan   chan bool
+  end_offset     int64
+  start_offset   int64
+  line           uint64
+  buffer         []string
+  timer_lock     sync.Mutex
+  timer_stop     chan interface{}
+  timer_wait     sync.WaitGroup
+  timer_deadline time.Time
 }
 
 func NewMultilineCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
@@ -87,42 +89,24 @@ func (f *CodecMultilineFactory) NewCodec(callback_func core.CodecCallbackFunc, o
     callback_func: callback_func,
   }
 
-  // TODO: Make this more performant - use similiar methodology to Go's internal network deadlines
+  // Start the "previous timeout" routine that will auto flush at deadline
   if f.PreviousTimeout != 0 {
-    c.timer_lock = new(sync.Mutex)
-    c.timer_chan = make(chan bool, 1)
+    c.timer_stop = make(chan interface{})
+    c.timer_wait.Add(1)
 
-    go func() {
-      var active bool
+    c.timer_deadline = time.Now().Add(f.PreviousTimeout)
 
-      timer := time.NewTimer(0)
-
-      for {
-        select {
-        case shutdown := <-c.timer_chan:
-          timer.Stop()
-          if shutdown {
-            // Shutdown signal so end the routine
-            break
-          }
-          timer.Reset(c.config.PreviousTimeout)
-          active = true
-        case <-timer.C:
-          if active {
-            // Surround flush in mutex to prevent data getting modified by a new line while we flush
-            c.timer_lock.Lock()
-            c.flush()
-            c.timer_lock.Unlock()
-            active = false
-          }
-        }
-      }
-    }()
+    go c.deadlineRoutine()
   }
   return c
 }
 
 func (c *CodecMultiline) Teardown() int64 {
+  if c.config.PreviousTimeout != 0 {
+    close(c.timer_stop)
+    c.timer_wait.Wait()
+  }
+
   return c.last_offset
 }
 
@@ -154,7 +138,7 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64
   if c.config.what == codecMultiline_What_Previous {
     if c.config.PreviousTimeout != 0 {
       // Reset the timer and unlock
-      c.timer_chan <- false
+      c.timer_deadline = time.Now().Add(c.config.PreviousTimeout)
       c.timer_lock.Unlock()
     }
   } else if c.config.what == codecMultiline_What_Next && match_failed {
@@ -174,6 +158,35 @@ func (c *CodecMultiline) flush() {
   c.buffer = nil
 
   c.callback_func(c.start_offset, c.end_offset, c.line, text)
+}
+
+func (c *CodecMultiline) deadlineRoutine() {
+  timer := time.NewTimer(0)
+
+DeadlineLoop:
+  for {
+    select {
+    case <-c.timer_stop:
+      timer.Stop()
+
+      // Shutdown signal so end the routine
+      break DeadlineLoop
+    case now := <-timer.C:
+      c.timer_lock.Lock()
+
+      // Have we reached the target time?
+      if !now.After(c.timer_deadline) {
+        // Deadline moved, update the timer
+        timer.Reset(c.timer_deadline.Sub(now))
+      }
+
+      c.flush()
+
+      c.timer_lock.Unlock()
+    }
+  }
+
+  c.timer_wait.Done()
 }
 
 // Register the codec
