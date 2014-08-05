@@ -80,10 +80,10 @@ type CodecConfigStub struct {
 }
 
 type FileConfig struct {
-  Paths        []string               `config:"paths"`
-  Fields       map[string]interface{} `config:"fields"`
-  Codec        CodecConfigStub        `config:"codec"`
-  DeadTime     time.Duration `config:"dead time"`
+  Paths    []string               `config:"paths"`
+  Fields   map[string]interface{} `config:"fields"`
+  Codec    CodecConfigStub        `config:"codec"`
+  DeadTime time.Duration          `config:"dead time"`
 
   CodecFactory CodecFactory
 }

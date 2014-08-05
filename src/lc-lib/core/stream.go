@@ -12,7 +12,7 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
-*/
+ */
 
 package core
 
@@ -20,5 +20,5 @@ import "os"
 
 // A stream should be a pointer object that uniquely identified a file stream
 type Stream interface {
-	Info() (string, os.FileInfo)
+  Info() (string, os.FileInfo)
 }

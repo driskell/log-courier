@@ -30,7 +30,7 @@ import (
 
 type HarvesterStatus struct {
   Last_Offset int64
-  Failed bool
+  Failed      bool
 }
 
 type Harvester struct {

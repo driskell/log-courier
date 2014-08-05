@@ -39,7 +39,7 @@ const (
 )
 
 const (
-  Monitor_Part_Header     = iota
+  Monitor_Part_Header = iota
   Monitor_Part_Data
   Monitor_Part_Extraneous
 )
@@ -84,10 +84,10 @@ type ZMQMessage struct {
 }
 
 type ZMQEvent struct {
-  part      int
-  event     zmq.Event
-  val       int32
-  data      []byte
+  part  int
+  event zmq.Event
+  val   int32
+  data  []byte
 }
 
 func (e *ZMQEvent) Log() {
@@ -172,14 +172,22 @@ func (t *TransportZmq) Init() (err error) {
   if err != nil {
     return fmt.Errorf("Failed to create ZMQ context: %s", err)
   }
-  defer func() { if err != nil { t.context.Close() } }()
+  defer func() {
+    if err != nil {
+      t.context.Close()
+    }
+  }()
 
   // Control sockets to connect bridge to poller
   bridge_in, err := t.context.NewSocket(zmq.PUSH)
   if err != nil {
     return fmt.Errorf("Failed to create internal ZMQ PUSH socket: %s", err)
   }
-  defer func() { if err != nil { bridge_in.Close() } }()
+  defer func() {
+    if err != nil {
+      bridge_in.Close()
+    }
+  }()
 
   if err = bridge_in.Bind("inproc://notify"); err != nil {
     return fmt.Errorf("Failed to bind internal ZMQ PUSH socket: %s", err)
@@ -189,7 +197,11 @@ func (t *TransportZmq) Init() (err error) {
   if err != nil {
     return fmt.Errorf("Failed to create internal ZMQ PULL socket: %s", err)
   }
-  defer func() { if err != nil { bridge_out.Close() } }()
+  defer func() {
+    if err != nil {
+      bridge_out.Close()
+    }
+  }()
 
   if err = bridge_out.Connect("inproc://notify"); err != nil {
     return fmt.Errorf("Failed to connect internal ZMQ PULL socket: %s", err)
@@ -199,7 +211,11 @@ func (t *TransportZmq) Init() (err error) {
   if t.dealer, err = t.context.NewSocket(zmq.DEALER); err != nil {
     return fmt.Errorf("Failed to create ZMQ DEALER socket: %s", err)
   }
-  defer func() { if err != nil { t.dealer.Close() } }()
+  defer func() {
+    if err != nil {
+      t.dealer.Close()
+    }
+  }()
 
   if err = t.dealer.Monitor("inproc://monitor", zmq.EVENT_ALL); err != nil {
     return fmt.Errorf("Failed to bind DEALER socket to monitor: %s", err)
@@ -225,7 +241,11 @@ func (t *TransportZmq) Init() (err error) {
   if t.monitor, err = t.context.NewSocket(zmq.PULL); err != nil {
     return fmt.Errorf("Failed to create monitor ZMQ PULL socket: %s", err)
   }
-  defer func() { if err != nil { t.monitor.Close() } }()
+  defer func() {
+    if err != nil {
+      t.monitor.Close()
+    }
+  }()
 
   if err = t.monitor.Connect("inproc://monitor"); err != nil {
     return fmt.Errorf("Failed to connect monitor ZMQ PULL socket: %s", err)

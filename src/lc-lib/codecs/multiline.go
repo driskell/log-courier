@@ -17,9 +17,9 @@
 package codecs
 
 import (
-  "lc-lib/core"
   "errors"
   "fmt"
+  "lc-lib/core"
   "regexp"
   "strings"
   "sync"

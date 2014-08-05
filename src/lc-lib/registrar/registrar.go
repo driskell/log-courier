@@ -95,13 +95,15 @@ type Registrar struct {
   state          map[core.Stream]*FileState
 }
 
-func NewRegistrar(persistdir string) *Registrar {
+func NewRegistrar(pipeline *core.Pipeline, persistdir string) *Registrar {
   ret := &Registrar{
     registrar_chan: make(chan []RegistrarEvent, 16),
     persistdir:     persistdir,
     statefile:      ".log-courier",
     state:          make(map[core.Stream]*FileState),
   }
+
+  pipeline.Register(ret)
 
   return ret
 }
@@ -187,7 +189,7 @@ func (r *Registrar) toCanonical() (canonical map[string]*FileState) {
   return
 }
 
-func (r *Registrar) Register() {
+func (r *Registrar) Run() {
   defer func() {
     r.Done()
   }()

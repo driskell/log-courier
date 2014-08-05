@@ -26,9 +26,9 @@ import (
   "encoding/json"
   "errors"
   "fmt"
+  "io"
   "lc-lib/core"
   "lc-lib/registrar"
-  "io"
   "math/rand"
   "os"
   "time"
@@ -135,14 +135,16 @@ type Publisher struct {
   last_payload     *pendingPayload
   num_payloads     int
   out_of_sync      int
+  input            chan []*core.EventDescriptor
   registrar        *registrar.Registrar
   registrar_chan   chan<- []registrar.RegistrarEvent
   shutdown         bool
 }
 
-func NewPublisher(config *core.NetworkConfig, registrar_imp *registrar.Registrar) (*Publisher, error) {
+func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar_imp *registrar.Registrar) (*Publisher, error) {
   ret := &Publisher{
     config:         config,
+    input:          make(chan []*core.EventDescriptor, 1),
     registrar:      registrar_imp,
     registrar_chan: registrar_imp.Connect(),
   }
@@ -150,6 +152,8 @@ func NewPublisher(config *core.NetworkConfig, registrar_imp *registrar.Registrar
   if err := ret.init(); err != nil {
     return nil, err
   }
+
+  pipeline.Register(ret)
 
   return ret, nil
 }
@@ -184,7 +188,11 @@ func (p *Publisher) loadTransport() error {
   return nil
 }
 
-func (p *Publisher) Publish(input <-chan []*core.EventDescriptor) {
+func (p *Publisher) Connect() chan<- []*core.EventDescriptor {
+  return p.input
+}
+
+func (p *Publisher) Run() {
   defer func() {
     p.Done()
   }()
@@ -279,7 +287,7 @@ PublishLoop:
         }
 
         // Enable event wait
-        input_toggle = input
+        input_toggle = p.input
       case events := <-input_toggle:
         // Send
         if err = p.sendNewPayload(events); err != nil {

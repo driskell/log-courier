@@ -21,6 +21,7 @@ package spooler
 
 import (
   "lc-lib/core"
+  "lc-lib/publisher"
   "time"
 )
 
@@ -30,16 +31,28 @@ type Spooler struct {
 
   config *core.GeneralConfig
   spool  []*core.EventDescriptor
+  input  chan *core.EventDescriptor
+  output chan<- []*core.EventDescriptor
 }
 
-func NewSpooler(config *core.GeneralConfig) *Spooler {
-  return &Spooler{
+func NewSpooler(pipeline *core.Pipeline, config *core.GeneralConfig, publisher_imp *publisher.Publisher) *Spooler {
+  ret := &Spooler{
     config: config,
     spool:  make([]*core.EventDescriptor, 0, config.SpoolSize),
+    input:  make(chan *core.EventDescriptor, 16), // Make configurable?
+    output: publisher_imp.Connect(),
   }
+
+  pipeline.Register(ret)
+
+  return ret
 }
 
-func (s *Spooler) Spool(input <-chan *core.EventDescriptor, output chan<- []*core.EventDescriptor) {
+func (s *Spooler) Connect() chan<- *core.EventDescriptor {
+  return s.input
+}
+
+func (s *Spooler) Run() {
   defer func() {
     s.Done()
   }()
@@ -50,12 +63,12 @@ func (s *Spooler) Spool(input <-chan *core.EventDescriptor, output chan<- []*cor
 SpoolerLoop:
   for {
     select {
-    case event := <-input:
+    case event := <-s.input:
       s.spool = append(s.spool, event)
 
       // Flush if full
       if len(s.spool) == cap(s.spool) {
-        if !s.sendSpool(output) {
+        if !s.sendSpool() {
           break SpoolerLoop
         }
         timer_start = time.Now()
@@ -64,7 +77,7 @@ SpoolerLoop:
     case <-timer.C:
       // Flush what we have, if anything
       if len(s.spool) > 0 {
-        if !s.sendSpool(output) {
+        if !s.sendSpool() {
           break SpoolerLoop
         }
       }
@@ -79,7 +92,7 @@ SpoolerLoop:
       // Immediate flush?
       passed := time.Now().Sub(timer_start)
       if passed >= s.config.SpoolTimeout || len(s.spool) >= int(s.config.SpoolSize) {
-        if !s.sendSpool(output) {
+        if !s.sendSpool() {
           break SpoolerLoop
         }
         timer_start = time.Now()
@@ -93,11 +106,11 @@ SpoolerLoop:
   log.Info("Spooler exiting")
 }
 
-func (s *Spooler) sendSpool(output chan<- []*core.EventDescriptor) bool {
+func (s *Spooler) sendSpool() bool {
   select {
   case <-s.ShutdownSignal():
     return false
-  case output <- s.spool:
+  case s.output <- s.spool:
   }
   s.spool = make([]*core.EventDescriptor, 0, s.config.SpoolSize)
   return true

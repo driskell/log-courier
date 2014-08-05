@@ -12,26 +12,26 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
-*/
+ */
 
 package core
 
 type Event map[string]interface{}
 
 type EventDescriptor struct {
-	Stream Stream
-	Offset int64
-	Event  Event
+  Stream Stream
+  Offset int64
+  Event  Event
 }
 
 func NewEvent(fields map[string]interface{}, file string, offset int64, line uint64, message string) Event {
-	event := Event{
-		"file":    file,
-		"offset":  offset,
-		"message": message,
-	}
-	for k := range fields {
-		event[k] = fields[k]
-	}
-	return event
+  event := Event{
+    "file":    file,
+    "offset":  offset,
+    "message": message,
+  }
+  for k := range fields {
+    event[k] = fields[k]
+  }
+  return event
 }

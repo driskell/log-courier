@@ -12,69 +12,102 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
-*/
+ */
 
 package core
 
 import "sync"
 
 type Pipeline struct {
-	signal chan interface{}
-	sinks  map[*PipelineConfigReceiver]chan *Config
-	group  sync.WaitGroup
+  signal chan interface{}
+  pipes  []IPipelineSegment
+  sinks  map[*PipelineConfigReceiver]chan *Config
+  group  sync.WaitGroup
 }
 
 func NewPipeline() *Pipeline {
-	return &Pipeline{
-		signal: make(chan interface{}),
-		sinks:  make(map[*PipelineConfigReceiver]chan *Config),
-	}
+  return &Pipeline{
+    signal: make(chan interface{}),
+    sinks:  make(map[*PipelineConfigReceiver]chan *Config),
+    pipes:  make([]IPipelineSegment, 0, 5),
+  }
+}
+
+func (p *Pipeline) Register(ipipe IPipelineSegment) {
+  p.group.Add(1)
+
+  pipe := ipipe.getStruct()
+  pipe.signal = p.signal
+  pipe.group = &p.group
+
+  p.pipes = append(p.pipes, ipipe)
+
+  if ipipe_ext, ok := ipipe.(IPipelineConfigReceiver); ok {
+    pipe_ext := ipipe_ext.getConfigReceiverStruct()
+    config_chan := make(chan *Config)
+    p.sinks[pipe_ext] = config_chan
+    pipe_ext.sink = config_chan
+  }
+}
+
+func (p *Pipeline) Start() {
+  for _, ipipe := range p.pipes {
+    go ipipe.Run()
+  }
 }
 
 func (p *Pipeline) Shutdown() {
-	close(p.signal)
-}
-
-func (p *Pipeline) SendConfig(config *Config) {
-	for _, sink := range p.sinks {
-		sink <- config
-	}
-}
-
-func (p *Pipeline) Register(pipe *PipelineSegment) {
-	p.group.Add(1)
-
-	pipe.signal = p.signal
-	pipe.group = &p.group
-}
-
-func (p *Pipeline) RegisterConfigReceiver(pipe *PipelineConfigReceiver) {
-	config_chan := make(chan *Config)
-	p.sinks[pipe] = config_chan
-	pipe.sink = config_chan
+  close(p.signal)
 }
 
 func (p *Pipeline) Wait() {
-	p.group.Wait()
+  p.group.Wait()
+}
+
+func (p *Pipeline) SendConfig(config *Config) {
+  for _, sink := range p.sinks {
+    sink <- config
+  }
+}
+
+type IPipelineSegment interface {
+  Run()
+  getStruct() *PipelineSegment
 }
 
 type PipelineSegment struct {
-	signal <-chan interface{}
-	group  *sync.WaitGroup
+  signal <-chan interface{}
+  group  *sync.WaitGroup
+}
+
+func (s *PipelineSegment) Run() {
+  panic("Run() not implemented")
+}
+
+func (s *PipelineSegment) getStruct() *PipelineSegment {
+  return s
 }
 
 func (s *PipelineSegment) ShutdownSignal() <-chan interface{} {
-	return s.signal
+  return s.signal
 }
 
 func (s *PipelineSegment) Done() {
-	s.group.Done()
+  s.group.Done()
+}
+
+type IPipelineConfigReceiver interface {
+  getConfigReceiverStruct() *PipelineConfigReceiver
 }
 
 type PipelineConfigReceiver struct {
-	sink <-chan *Config
+  sink <-chan *Config
+}
+
+func (s *PipelineConfigReceiver) getConfigReceiverStruct() *PipelineConfigReceiver {
+  return s
 }
 
 func (s *PipelineConfigReceiver) RecvConfig() <-chan *Config {
-	return s.sink
+  return s.sink
 }

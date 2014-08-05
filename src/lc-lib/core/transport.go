@@ -17,7 +17,7 @@
 package core
 
 const (
-  Reload_None      = iota
+  Reload_None = iota
   Reload_Servers
   Reload_Transport
 )

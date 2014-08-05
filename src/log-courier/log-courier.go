@@ -39,12 +39,6 @@ import _ "lc-lib/transports"
 
 const Log_Courier_Version string = "0.12"
 
-var log *logging.Logger
-
-func init() {
-  log = logging.MustGetLogger("")
-}
-
 func main() {
   logcourier := NewLogCourier()
   logcourier.Run()
@@ -70,40 +64,23 @@ func NewLogCourier() *LogCourier {
 func (lc *LogCourier) Run() {
   lc.startUp()
 
-  event_chan := make(chan *core.EventDescriptor, 16)
-  publisher_chan := make(chan []*core.EventDescriptor, 1)
-
   log.Info("Starting pipeline")
 
-  registrar := registrar.NewRegistrar(lc.config.General.PersistDir)
-  lc.pipeline.Register(&registrar.PipelineSegment)
+  registrar := registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
 
-  publisher, err := publisher.NewPublisher(&lc.config.Network, registrar)
+  publisher, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar)
   if err != nil {
     log.Fatalf("Failed to initialise: %s", err)
   }
-  lc.pipeline.Register(&publisher.PipelineSegment)
-  lc.pipeline.RegisterConfigReceiver(&publisher.PipelineConfigReceiver)
 
-  spooler := spooler.NewSpooler(&lc.config.General)
-  lc.pipeline.Register(&spooler.PipelineSegment)
-  lc.pipeline.RegisterConfigReceiver(&spooler.PipelineConfigReceiver)
+  spooler := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher)
 
-  prospector, err := prospector.NewProspector(lc.config, lc.from_beginning, registrar)
-  if err != nil {
+  if _, err := prospector.NewProspector(lc.pipeline, lc.config, lc.from_beginning, registrar, spooler); err != nil {
     log.Fatalf("Failed to initialise: %s", err)
   }
-  lc.pipeline.Register(&prospector.PipelineSegment)
-  lc.pipeline.RegisterConfigReceiver(&prospector.PipelineConfigReceiver)
 
   // Start the pipeline
-  go prospector.Prospect(event_chan)
-
-  go spooler.Spool(event_chan, publisher_chan)
-
-  go publisher.Publish(publisher_chan)
-
-  go registrar.Register()
+  lc.pipeline.Start()
 
   log.Notice("Pipeline ready")
 
