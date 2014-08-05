@@ -17,8 +17,7 @@ The filter codec strips out unwanted events, shipping only those desired.
 
 	{
 		"name": "filter",
-		"patterns": [ "^(.*connect from.*)$", "^(.*status=sent.*)$" ],
-		"negates": [ false, false ],
+		"patterns": [ "^(.*connect from.*)$", "^(.*status=sent.*)$" ]
 	}
 
 ## Options
