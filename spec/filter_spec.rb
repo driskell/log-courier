@@ -33,7 +33,7 @@ describe 'log-courier with filter codec' do
       "files": [
         {
           "paths": [ "-" ],
-          "codec": { "name": "filter", "pattern": "^stdin line test [12]" }
+          "codec": { "name": "filter", "patterns": [ "^stdin line test [12]" ], "negate": true }
         }
       ]
     }
