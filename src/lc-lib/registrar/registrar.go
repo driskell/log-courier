@@ -22,71 +22,17 @@ package registrar
 import (
   "encoding/json"
   "fmt"
-  "github.com/op/go-logging"
   "lc-lib/core"
   "os"
+  "sync"
 )
-
-func (e *DiscoverEvent) Process(state map[core.Stream]*FileState) {
-  log.Debug("Registrar received a new file event for %s", e.source)
-
-  // A new file we need to save offset information for so we can resume
-  state[e.stream] = &FileState{
-    Source: &e.source,
-    Offset: e.offset,
-  }
-  state[e.stream].PopulateFileIds(e.fileinfo)
-}
-
-func (e *DeletedEvent) Process(state map[core.Stream]*FileState) {
-  if log.IsEnabledFor(logging.DEBUG) {
-    if _, ok := state[e.stream]; ok {
-      log.Debug("Registrar received a deletion event for %s", *state[e.stream].Source)
-    } else {
-      log.Warning("Registrar received a deletion event for UNKNOWN (%p)", e.stream)
-    }
-  }
-
-  // Purge the registrar entry - means the file is deleted so we can't resume
-  // This keeps the state clean so it doesn't build up after thousands of log files
-  delete(state, e.stream)
-}
-
-func (e *RenamedEvent) Process(state map[core.Stream]*FileState) {
-  _, is_found := state[e.stream]
-  if !is_found {
-    // This is probably stdin or a deleted file we can't resume
-    return
-  }
-
-  log.Debug("Registrar received a rename event for %s -> %s", state[e.stream].Source, e.source)
-
-  // Update the stored file name
-  state[e.stream].Source = &e.source
-}
-
-func (e *EventsEvent) Process(state map[core.Stream]*FileState) {
-  if len(e.events) == 1 {
-    log.Debug("Registrar received offsets for %d log entries", len(e.events))
-  } else {
-    log.Debug("Registrar received offsets for %d log entries", len(e.events))
-  }
-
-  for _, event := range e.events {
-    _, is_found := state[event.Stream]
-    if !is_found {
-      // This is probably stdin then or a deleted file we can't resume
-      continue
-    }
-
-    state[event.Stream].Offset = event.Offset
-  }
-}
 
 type LoadPreviousFunc func(string, *FileState) (core.Stream, error)
 
 type Registrar struct {
   core.PipelineSegment
+
+  sync.Mutex
 
   registrar_chan chan []RegistrarEvent
   references     int
@@ -97,7 +43,7 @@ type Registrar struct {
 
 func NewRegistrar(pipeline *core.Pipeline, persistdir string) *Registrar {
   ret := &Registrar{
-    registrar_chan: make(chan []RegistrarEvent, 16),
+    registrar_chan: make(chan []RegistrarEvent, 16), // TODO: Make configurable?
     persistdir:     persistdir,
     statefile:      ".log-courier",
     state:          make(map[core.Stream]*FileState),
@@ -163,18 +109,22 @@ func (r *Registrar) LoadPrevious(callback_func LoadPreviousFunc) (have_previous 
   return
 }
 
-func (r *Registrar) Connect() chan<- []RegistrarEvent {
-  // TODO: Is there a better way to do this?
+func (r *Registrar) Connect() *RegistrarEventSpool {
+  r.Lock()
+  ret := newRegistrarEventSpool(r)
   r.references++
-  return r.registrar_chan
+  r.Unlock()
+  return ret
 }
 
-func (r *Registrar) Disconnect() {
+func (r *Registrar) dereferenceSpooler() {
+  r.Lock()
   r.references--
   if r.references == 0 {
     // Shutdown registrar, all references are closed
     close(r.registrar_chan)
   }
+  r.Unlock()
 }
 
 func (r *Registrar) toCanonical() (canonical map[string]*FileState) {
@@ -195,8 +145,8 @@ func (r *Registrar) Run() {
   }()
 
   // Ignore shutdown channel - wait for registrar to close
-  for events := range r.registrar_chan {
-    for _, event := range events {
+  for spool := range r.registrar_chan {
+    for _, event := range spool {
       event.Process(r.state)
     }
 

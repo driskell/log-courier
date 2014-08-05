@@ -39,7 +39,7 @@ func NewSpooler(pipeline *core.Pipeline, config *core.GeneralConfig, publisher_i
   ret := &Spooler{
     config: config,
     spool:  make([]*core.EventDescriptor, 0, config.SpoolSize),
-    input:  make(chan *core.EventDescriptor, 16), // Make configurable?
+    input:  make(chan *core.EventDescriptor, 16), // TODO: Make configurable?
     output: publisher_imp.Connect(),
   }
 

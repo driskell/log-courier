@@ -52,17 +52,15 @@ type Publisher struct {
   num_payloads     int
   out_of_sync      int
   input            chan []*core.EventDescriptor
-  registrar        *registrar.Registrar
-  registrar_chan   chan<- []registrar.RegistrarEvent
+  registrar_spool  *registrar.RegistrarEventSpool
   shutdown         bool
 }
 
 func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar_imp *registrar.Registrar) (*Publisher, error) {
   ret := &Publisher{
-    config:         config,
-    input:          make(chan []*core.EventDescriptor, 1),
-    registrar:      registrar_imp,
-    registrar_chan: registrar_imp.Connect(),
+    config:          config,
+    input:           make(chan []*core.EventDescriptor, 1),
+    registrar_spool: registrar_imp.Connect(),
   }
 
   if err := ret.init(); err != nil {
@@ -243,7 +241,7 @@ PublishLoop:
             break SelectLoop
           }
         case bytes.Compare(signature, []byte("ACKN")) == 0:
-          if err = p.processAck(message, p.registrar_chan); err != nil {
+          if err = p.processAck(message); err != nil {
             break SelectLoop
           }
         default:
@@ -357,7 +355,7 @@ PublishLoop:
   p.transport.Shutdown()
 
   // Disconnect from registrar
-  p.registrar.Disconnect()
+  p.registrar_spool.Close()
 
   log.Info("Publisher exiting")
 }
@@ -464,7 +462,7 @@ func (p *Publisher) processPong(message []byte) error {
   return nil
 }
 
-func (p *Publisher) processAck(message []byte, registrar_chan chan<- []registrar.RegistrarEvent) (err error) {
+func (p *Publisher) processAck(message []byte) (err error) {
   if len(message) != 20 {
     err = fmt.Errorf("ACKN message corruption (%d)", len(message))
     return
@@ -504,7 +502,8 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []registrar
     out_of_sync := p.out_of_sync + 1
     for payload.ack_events != 0 {
       if payload.ack_events != len(payload.events) {
-        registrar_chan <- []registrar.RegistrarEvent{registrar.NewEventsEvent(payload.events[:payload.ack_events])}
+        p.registrar_spool.Add(registrar.NewAckEvent(payload.events[:payload.ack_events]))
+        p.registrar_spool.Send()
         payload.events = payload.events[payload.ack_events:]
         payload.num_events = len(payload.events)
         payload.ack_events = 0
@@ -512,7 +511,8 @@ func (p *Publisher) processAck(message []byte, registrar_chan chan<- []registrar
         break
       }
 
-      registrar_chan <- []registrar.RegistrarEvent{registrar.NewEventsEvent(payload.events)}
+      p.registrar_spool.Add(registrar.NewAckEvent(payload.events))
+      p.registrar_spool.Send()
       payload = payload.next
       p.first_payload = payload
       p.num_payloads--

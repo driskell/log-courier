@@ -29,128 +29,33 @@ import (
   "time"
 )
 
-const (
-  Status_Ok = iota
-  Status_Resume
-  Status_Failed
-
-  Orphaned_No = iota
-  Orphaned_Maybe
-  Orphaned_Yes
-)
-
-type prospectorInfo struct {
-  file          string
-  identity      registrar.FileIdentity
-  last_seen     uint32
-  status        int
-  running       bool
-  orphaned      int
-  finish_offset int64
-  harvester     *harvester.Harvester
-}
-
-func newProspectorInfoFromFileState(file string, filestate *registrar.FileState) *prospectorInfo {
-  return &prospectorInfo{
-    file:          file,
-    identity:      filestate,
-    status:        Status_Resume,
-    finish_offset: filestate.Offset,
-  }
-}
-
-func newProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *prospectorInfo {
-  return &prospectorInfo{
-    file:     file,
-    identity: registrar.NewFileInfo(fileinfo), // fileinfo is nil for stdin
-  }
-}
-
-func (pi *prospectorInfo) Info() (string, os.FileInfo) {
-  return pi.file, pi.identity.Stat()
-}
-
-func (pi *prospectorInfo) isRunning() bool {
-  if !pi.running {
-    return false
-  }
-  select {
-  case status := <-pi.harvester.Status():
-    pi.setHarvesterStopped(status)
-  default:
-  }
-  return pi.running
-}
-
-/*func (pi *prospectorInfo) ShutdownSignal() <-chan interface{} {
-  return pi.harvester_stop
-}*/
-
-func (pi *prospectorInfo) stop() {
-  if !pi.running {
-    return
-  }
-  if pi.file == "-" {
-    // Just in case someone started us outside a pipeline with stdin
-    // to stop confusion at why we don't exit after Ctrl+C
-    // There's no deadline on Stdin reads :-(
-    log.Notice("Waiting for Stdin to close (EOF or Ctrl+D)")
-  }
-  pi.harvester.Stop()
-}
-
-func (pi *prospectorInfo) wait() {
-  if !pi.running {
-    return
-  }
-  status := <-pi.harvester.Status()
-  pi.setHarvesterStopped(status)
-}
-
-func (pi *prospectorInfo) setHarvesterStopped(status *harvester.HarvesterStatus) {
-  pi.running = false
-  pi.finish_offset = status.Last_Offset
-  if status.Failed {
-    pi.status = Status_Failed
-  }
-  pi.harvester = nil
-}
-
-func (pi *prospectorInfo) update(fileinfo os.FileInfo, iteration uint32) {
-  // Allow identity to replace itself with a new identity (this allows a FileState to promote itself to a FileInfo)
-  pi.identity.Update(fileinfo, &pi.identity)
-  pi.last_seen = iteration
-}
-
 type Prospector struct {
   core.PipelineSegment
   core.PipelineConfigReceiver
 
-  generalconfig    *core.GeneralConfig
-  fileconfigs      []core.FileConfig
-  prospectorindex  map[string]*prospectorInfo
-  prospectors      map[*prospectorInfo]*prospectorInfo
-  from_beginning   bool
-  iteration        uint32
-  lastscan         time.Time
-  registrar        *registrar.Registrar
-  registrar_chan   chan<- []registrar.RegistrarEvent
-  registrar_events []registrar.RegistrarEvent
+  generalconfig   *core.GeneralConfig
+  fileconfigs     []core.FileConfig
+  prospectorindex map[string]*prospectorInfo
+  prospectors     map[*prospectorInfo]*prospectorInfo
+  from_beginning  bool
+  iteration       uint32
+  lastscan        time.Time
+  registrar       *registrar.Registrar
+  registrar_spool *registrar.RegistrarEventSpool
 
   output chan<- *core.EventDescriptor
 }
 
 func NewProspector(pipeline *core.Pipeline, config *core.Config, from_beginning bool, registrar_imp *registrar.Registrar, spooler_imp *spooler.Spooler) (*Prospector, error) {
   ret := &Prospector{
-    generalconfig:    &config.General,
-    fileconfigs:      config.Files,
-    prospectorindex:  make(map[string]*prospectorInfo),
-    prospectors:      make(map[*prospectorInfo]*prospectorInfo),
-    from_beginning:   from_beginning,
-    registrar:        registrar_imp,
-    registrar_chan:   registrar_imp.Connect(),
-    registrar_events: make([]registrar.RegistrarEvent, 0),
-    output:           spooler_imp.Connect(),
+    generalconfig:   &config.General,
+    fileconfigs:     config.Files,
+    prospectorindex: make(map[string]*prospectorInfo),
+    prospectors:     make(map[*prospectorInfo]*prospectorInfo),
+    from_beginning:  from_beginning,
+    registrar:       registrar_imp,
+    registrar_spool: registrar_imp.Connect(),
+    output:          spooler_imp.Connect(),
   }
 
   if err := ret.init(); err != nil {
@@ -255,15 +160,12 @@ ProspectLoop:
       }
       if info.orphaned == Orphaned_Maybe {
         info.orphaned = Orphaned_Yes
-        p.registrar_events = append(p.registrar_events, registrar.NewDeletedEvent(info))
+        p.registrar_spool.Add(registrar.NewDeletedEvent(info))
       }
     }
 
     // Flush the accumulated registrar events
-    if len(p.registrar_events) != 0 {
-      p.registrar_chan <- p.registrar_events
-      p.registrar_events = make([]registrar.RegistrarEvent, 0)
-    }
+    p.registrar_spool.Send()
 
     p.lastscan = newlastscan
 
@@ -287,7 +189,7 @@ ProspectLoop:
   }
 
   // Disconnect from the registrar
-  p.registrar.Disconnect()
+  p.registrar_spool.Close()
 
   log.Info("Prospector exiting")
 }
@@ -331,7 +233,7 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
         info = previousinfo
         info.file = file
 
-        p.registrar_events = append(p.registrar_events, registrar.NewRenamedEvent(info, file))
+        p.registrar_spool.Add(registrar.NewRenamedEvent(info, file))
       } else {
         // This is a new entry
         info = newProspectorInfoFromFileInfo(file, fileinfo)
@@ -342,7 +244,7 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
 
           // Store the offset that we should resume from if we notice a modification
           info.finish_offset = fileinfo.Size()
-          p.registrar_events = append(p.registrar_events, registrar.NewDiscoverEvent(info, file, fileinfo.Size(), fileinfo))
+          p.registrar_spool.Add(registrar.NewDiscoverEvent(info, file, fileinfo.Size(), fileinfo))
         } else {
           // Process new file
           log.Info("Launching harvester on new file: %s", file)
@@ -363,7 +265,7 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
           info = previousinfo
           info.file = file
 
-          p.registrar_events = append(p.registrar_events, registrar.NewRenamedEvent(info, file))
+          p.registrar_spool.Add(registrar.NewRenamedEvent(info, file))
         } else {
           // File is not the same file we saw previously, it must have rotated and is a new file
           log.Info("Launching harvester on rotated file: %s", file)
@@ -417,7 +319,7 @@ func (p *Prospector) startHarvester(info *prospectorInfo, config *core.FileConfi
   }
 
   // Send a new file event to allow registrar to begin persisting for this harvester
-  p.registrar_events = append(p.registrar_events, registrar.NewDiscoverEvent(info, info.file, offset, info.identity.Stat()))
+  p.registrar_spool.Add(registrar.NewDiscoverEvent(info, info.file, offset, info.identity.Stat()))
 
   p.startHarvesterWithOffset(info, config, offset)
 }
