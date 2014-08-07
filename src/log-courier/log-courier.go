@@ -97,7 +97,7 @@ SignalLoop:
     case <-lc.reload_chan:
       lc.reloadConfig()
       // TODO: make part of a comm channel of some sort
-    case <-time.After(5 * time.Second):
+    case <-time.After(2 * time.Second):
       lc.fetchSnapshot()
     }
   }
@@ -245,10 +245,14 @@ func (lc *LogCourier) reloadConfig() {
 }
 
 func (lc *LogCourier) fetchSnapshot() {
-  snapshot := lc.pipeline.Snapshot()
+  snapshots := lc.pipeline.Snapshot()
 
-  for _, v := range snapshot {
-    log.Info("Snapshot: %v", v)
+  for _, snap := range snapshots {
+    log.Notice("%s", snap.Description())
+    for i, j := 0, snap.NumEntries(); i < j; i = i+1 {
+      k, v := snap.Entry(i)
+      log.Info("  %s = %s", k, v)
+    }
   }
 }
 

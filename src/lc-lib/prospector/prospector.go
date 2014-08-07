@@ -176,9 +176,7 @@ ProspectLoop:
     case <-p.OnShutdown():
       break ProspectLoop
     case <-p.OnSnapshot():
-      // Gather snapshot information
-      // TODO - from harvesters
-      p.SendSnapshot()
+      p.handleSnapshot()
     case config := <-p.OnConfig():
       p.generalconfig = &config.General
       p.fileconfigs = config.Files
@@ -356,4 +354,20 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *pros
   }
 
   return "", nil
+}
+
+func (p *Prospector) handleSnapshot() {
+  snapshots := make([]core.Snapshot, 1)
+
+  infosnaps := make([]*prospectorInfoSnapshot, len(p.prospectorindex))
+
+  i := 0
+  for _, info := range p.prospectorindex {
+    infosnaps[i] = newProspectorInfoSnapshot(info)
+    i++
+  }
+
+  snapshots[0] = newProspectorSnapshot(infosnaps)
+
+  p.SendSnapshot(snapshots)
 }

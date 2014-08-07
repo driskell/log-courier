@@ -115,8 +115,6 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, bool) {
   last_measurement := last_read_time
   event_count := 0
 
-  log.Info("%v", last_read_time.Sub(last_measurement))
-
 ReadLoop:
   for {
     text, bytesread, err := h.readline(reader, buffer)
@@ -137,7 +135,6 @@ ReadLoop:
       }
       event_count = 0
       last_measurement = time.Now()
-      log.Notice("Processing %.2f per second", h.speed)
     }
 
     if err != nil {

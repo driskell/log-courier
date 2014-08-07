@@ -23,7 +23,7 @@ type Pipeline struct {
   signal         chan interface{}
   group          sync.WaitGroup
   config_sinks   map[*PipelineConfigReceiver]chan *Config
-  snapshot_chan  chan interface{}
+  snapshot_chan  chan []Snapshot
   snapshot_sinks map[*PipelineSnapshotProvider]chan interface{}
 }
 
@@ -32,7 +32,7 @@ func NewPipeline() *Pipeline {
     pipes:          make([]IPipelineSegment, 0, 5),
     signal:         make(chan interface{}),
     config_sinks:   make(map[*PipelineConfigReceiver]chan *Config),
-    snapshot_chan:  make(chan interface{}),
+    snapshot_chan:  make(chan []Snapshot),
     snapshot_sinks: make(map[*PipelineSnapshotProvider]chan interface{}),
   }
 }
@@ -82,24 +82,26 @@ func (p *Pipeline) SendConfig(config *Config) {
   }
 }
 
-func (p *Pipeline) Snapshot() []interface{} {
+func (p *Pipeline) Snapshot() []Snapshot {
   for _, sink := range p.snapshot_sinks {
     sink <- 1
   }
 
   left := len(p.snapshot_sinks)
-  ret := make([]interface{}, left)
+  snapshots := make([]Snapshot, 0)
 
   for {
     left--
-    ret[left] = <- p.snapshot_chan
+    ret := <- p.snapshot_chan
+
+    snapshots = append(snapshots, ret...)
 
     if left == 0 {
       break
     }
   }
 
-  return ret
+  return snapshots
 }
 
 type IPipelineSegment interface {
@@ -150,7 +152,7 @@ type IPipelineSnapshotProvider interface {
 
 type PipelineSnapshotProvider struct {
   snapshot_chan <-chan interface{}
-  sink          chan<- interface{}
+  sink          chan<- []Snapshot
 }
 
 func (s *PipelineSnapshotProvider) getSnapshotProviderStruct() *PipelineSnapshotProvider {
@@ -161,6 +163,6 @@ func (s *PipelineSnapshotProvider) OnSnapshot() <-chan interface{} {
   return s.snapshot_chan
 }
 
-func (s *PipelineSnapshotProvider) SendSnapshot() {
-  s.sink <- "SNAPSHOT NOT IMPLEMENTED"
+func (s *PipelineSnapshotProvider) SendSnapshot(snapshot []Snapshot) {
+  s.sink <- snapshot
 }

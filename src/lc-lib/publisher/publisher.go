@@ -40,7 +40,6 @@ const (
 type Publisher struct {
   core.PipelineSegment
   core.PipelineConfigReceiver
-  core.PipelineSnapshotProvider
 
   config           *core.NetworkConfig
   transport        core.Transport
@@ -168,8 +167,6 @@ PublishLoop:
         if reload != core.Reload_None && p.num_payloads == 0 {
           continue
         }
-      case <-p.OnSnapshot():
-        p.handleSnapshot()
       }
     }
 
@@ -353,8 +350,6 @@ PublishLoop:
         }
 
         p.can_send = nil
-      case <-p.OnSnapshot():
-        p.handleSnapshot()
       }
     }
 
@@ -562,8 +557,4 @@ func (p *Publisher) processAck(message []byte) (err error) {
   }
 
   return
-}
-
-func (p *Publisher) handleSnapshot() {
-  p.SendSnapshot()
 }

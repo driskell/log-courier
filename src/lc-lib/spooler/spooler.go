@@ -28,7 +28,6 @@ import (
 type Spooler struct {
   core.PipelineSegment
   core.PipelineConfigReceiver
-  core.PipelineSnapshotProvider
 
   config      *core.GeneralConfig
   spool       []*core.EventDescriptor
@@ -89,8 +88,6 @@ SpoolerLoop:
       s.timer.Reset(s.config.SpoolTimeout)
     case <-s.OnShutdown():
       break SpoolerLoop
-    case <-s.OnSnapshot():
-      s.handleSnapshot()
     case config := <-s.OnConfig():
       if !s.reloadConfig(config) {
         break SpoolerLoop
@@ -105,8 +102,6 @@ func (s *Spooler) sendSpool() bool {
   select {
   case <-s.OnShutdown():
     return false
-  case <-s.OnSnapshot():
-    s.handleSnapshot()
   case config := <-s.OnConfig():
     if !s.reloadConfig(config) {
       return false
@@ -135,8 +130,4 @@ func (s *Spooler) reloadConfig(config *core.Config) bool {
   }
 
   return true
-}
-
-func (s *Spooler) handleSnapshot() {
-  s.SendSnapshot()
 }

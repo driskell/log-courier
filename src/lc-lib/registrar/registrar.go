@@ -31,7 +31,6 @@ type LoadPreviousFunc func(string, *FileState) (core.Stream, error)
 
 type Registrar struct {
   core.PipelineSegment
-  core.PipelineSnapshotProvider
 
   sync.Mutex
 
@@ -161,8 +160,6 @@ RegistrarLoop:
       if err := r.writeRegistry(); err != nil {
         log.Error("Registry write failed: %s", err)
       }
-    case <-r.OnSnapshot():
-      r.SendSnapshot()
     }
   }
 
