@@ -60,7 +60,8 @@ go-check:
 	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.2 or 1.3 required, you have a version of Go that is not supported."; false)
 	@echo "GOPATH: $${GOPATH}"
 
-.SECONDEXPANSION:
-bin/%: $$(wildcard src/%/*.go) | go-check
+bin/%: FORCE | go-check
 	go get -d -tags "$(TAGS)" $*
 	go install -tags "$(TAGS)" $*
+
+FORCE:

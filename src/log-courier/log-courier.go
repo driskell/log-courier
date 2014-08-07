@@ -23,142 +23,30 @@ import (
   "flag"
   "fmt"
   "github.com/op/go-logging"
+  "lc-lib/core"
+  "lc-lib/prospector"
+  "lc-lib/spooler"
+  "lc-lib/publisher"
+  "lc-lib/registrar"
   stdlog "log"
   "os"
   "runtime/pprof"
-  "sync"
   "time"
 )
 
-const Log_Courier_Version string = "0.11"
+import _ "lc-lib/codecs"
+import _ "lc-lib/transports"
 
-var log *logging.Logger
-
-func init() {
-  log = logging.MustGetLogger("")
-}
+const Log_Courier_Version string = "0.12"
 
 func main() {
   logcourier := NewLogCourier()
   logcourier.Run()
 }
 
-type LogCourierMasterControl struct {
-  signal         chan interface{}
-  config_sinks   map[*LogCourierControl]chan *Config
-  snapshot_chan  chan interface{}
-  shutdown_group sync.WaitGroup
-  snapshot_group sync.WaitGroup
-  group_count    int
-}
-
-func NewLogCourierMasterControl() *LogCourierMasterControl {
-  return &LogCourierMasterControl{
-    signal:        make(chan interface{}),
-    snapshot_chan: make(chan interface{}),
-    config_sinks:  make(map[*LogCourierControl]chan *Config),
-  }
-}
-
-func (lcs *LogCourierMasterControl) Shutdown() {
-  close(lcs.signal)
-}
-
-func (lcs *LogCourierMasterControl) SendConfig(config *Config) {
-  for _, sink := range lcs.config_sinks {
-    sink <- config
-  }
-}
-
-func (lcs *LogCourierMasterControl) Snapshot() {
-  lcs.snapshot_group.Add(lcs.group_count)
-  sent, received := lcs.group_count, lcs.group_count
-
-  // Send and receive snapshot information
-  for {
-    select {
-    case snapshot := <-lcs.snapshot_chan:
-      // TODO
-      log.Notice("Received: %v", snapshot)
-
-      // Finished receiving?
-      received--
-      if received == 0 {
-        break
-      }
-    case func() {
-      
-    }() <- 1:
-      // Finished sending?
-      sent--
-      if sent == 0 {
-        signal = nil
-      }
-    }
-  }
-
-  log.Notice("Snapshot complete")
-}
-
-func (lcs *LogCourierMasterControl) Register() *LogCourierControl {
-  return lcs.register()
-}
-
-func (lcs *LogCourierMasterControl) RegisterWithRecvConfig() *LogCourierControl {
-  ret := lcs.register()
-
-  config_chan := make(chan *Config)
-  lcs.config_sinks[ret] = config_chan
-  ret.config_sink = config_chan
-
-  return ret
-}
-
-func (lcs *LogCourierMasterControl) register() *LogCourierControl {
-  lcs.shutdown_group.Add(1)
-  lcs.group_count++
-
-  return &LogCourierControl{
-    signal:         lcs.signal,
-    snapshot_chan:  lcs.snapshot_chan,
-    shutdown_group: &lcs.shutdown_group,
-    snapshot_group: &lcs.snapshot_group,
-  }
-}
-
-func (lcs *LogCourierMasterControl) Wait() {
-  lcs.group.Wait()
-}
-
-type LogCourierControl struct {
-  signal         <-chan interface{}
-  config_sink    <-chan *Config
-  snapshot_chan  ->chan interface{}
-  shutdown_group *sync.WaitGroup
-}
-
-func (lcs *LogCourierControl) Signal() <-chan interface{} {
-  return lcs.signal
-}
-
-func (lcs *LogCourierControl) SendSnapshot() {
-  lcs.snapshot_chan <- "SNAPSHOT"
-}
-
-func (lcs *LogCourierControl) RecvConfig() <-chan *Config {
-  if lcs.config_sink == nil {
-    panic("RecvConfig invalid: LogCourierControl was not registered with RegisterWithRecvConfig")
-  }
-  return lcs.config_sink
-}
-
-func (lcs *LogCourierControl) Done() {
-  lcs.shutdown_group.Done()
-}
-
 type LogCourier struct {
-  control        *LogCourierMasterControl
-  config         *Config
+  pipeline       *core.Pipeline
+  config         *core.Config
   shutdown_chan  chan os.Signal
   reload_chan    chan os.Signal
   config_file    string
@@ -168,7 +56,7 @@ type LogCourier struct {
 
 func NewLogCourier() *LogCourier {
   ret := &LogCourier{
-    control: NewLogCourierMasterControl(),
+    pipeline: core.NewPipeline(),
   }
   return ret
 }
@@ -176,33 +64,23 @@ func NewLogCourier() *LogCourier {
 func (lc *LogCourier) Run() {
   lc.startUp()
 
-  event_chan := make(chan *FileEvent, 16)
-  publisher_chan := make(chan []*FileEvent, 1)
-
   log.Info("Starting pipeline")
 
-  registrar := NewRegistrar(lc.config.General.PersistDir, lc.control)
+  registrar := registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
 
-  publisher, err := NewPublisher(&lc.config.Network, registrar, lc.control)
+  publisher, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar)
   if err != nil {
     log.Fatalf("Failed to initialise: %s", err)
   }
 
-  spooler := NewSpooler(&lc.config.General, lc.control)
+  spooler := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher)
 
-  prospector, err := NewProspector(lc.config, lc.from_beginning, registrar, lc.control)
-  if err != nil {
+  if _, err := prospector.NewProspector(lc.pipeline, lc.config, lc.from_beginning, registrar, spooler); err != nil {
     log.Fatalf("Failed to initialise: %s", err)
   }
 
   // Start the pipeline
-  go prospector.Prospect(event_chan)
-
-  go spooler.Spool(event_chan, publisher_chan)
-
-  go publisher.Publish(publisher_chan)
-
-  go registrar.Register()
+  lc.pipeline.Start()
 
   log.Notice("Pipeline ready")
 
@@ -254,12 +132,12 @@ func (lc *LogCourier) startUp() {
 
   if list_supported {
     fmt.Printf("Available transports:\n")
-    for _, transport := range AvailableTransports() {
+    for _, transport := range core.AvailableTransports() {
       fmt.Printf("  %s\n", transport)
     }
 
     fmt.Printf("Available codecs:\n")
-    for _, codec := range AvailableCodecs() {
+    for _, codec := range core.AvailableCodecs() {
       fmt.Printf("  %s\n", codec)
     }
     os.Exit(0)
@@ -339,7 +217,7 @@ func (lc *LogCourier) configureLogging() (err error) {
 }
 
 func (lc *LogCourier) loadConfig() error {
-  lc.config = NewConfig()
+  lc.config = core.NewConfig()
   if err := lc.config.Load(lc.config_file); err != nil {
     return err
   }
@@ -363,16 +241,19 @@ func (lc *LogCourier) reloadConfig() {
   logging.SetLevel(lc.config.General.LogLevel, "")
 
   // Pass the new config to the pipeline workers
-  lc.control.SendConfig(lc.config)
+  lc.pipeline.SendConfig(lc.config)
 }
 
 func (lc *LogCourier) fetchSnapshot() {
-  lc.control.Snapshot()
-  // TODO
+  snapshot := lc.pipeline.Snapshot()
+
+  for _, v := range snapshot {
+    log.Info("Snapshot: %v", v)
+  }
 }
 
 func (lc *LogCourier) cleanShutdown() {
   log.Notice("Initiating shutdown")
-  lc.control.Shutdown()
-  lc.control.Wait()
+  lc.pipeline.Shutdown()
+  lc.pipeline.Wait()
 }
