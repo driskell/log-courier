@@ -14,36 +14,31 @@
  * limitations under the License.
  */
 
-package main
+package codecs
 
-type CodecPlainRegistrar struct {
-}
+import (
+  "lc-lib/core"
+)
 
 type CodecPlainFactory struct {
 }
 
 type CodecPlain struct {
-  path        string
-  fileconfig  *FileConfig
-  info        *ProspectorInfo
-  last_offset int64
-  output      chan<- *FileEvent
+  last_offset   int64
+  callback_func core.CodecCallbackFunc
 }
 
-func (r *CodecPlainRegistrar) NewFactory(config_path string, config map[string]interface{}) (CodecFactory, error) {
-  if err := ReportUnusedConfig(config_path, config); err != nil {
+func NewPlainCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
+  if err := config.ReportUnusedConfig(config_path, unused); err != nil {
     return nil, err
   }
   return &CodecPlainFactory{}, nil
 }
 
-func (f *CodecPlainFactory) NewCodec(path string, fileconfig *FileConfig, info *ProspectorInfo, offset int64, output chan<- *FileEvent) Codec {
+func (f *CodecPlainFactory) NewCodec(callback_func core.CodecCallbackFunc, offset int64) core.Codec {
   return &CodecPlain{
-    path:        path,
-    fileconfig:  fileconfig,
-    info:        info,
-    last_offset: offset,
-    output:      output,
+    last_offset:   offset,
+    callback_func: callback_func,
   }
 }
 
@@ -51,25 +46,13 @@ func (c *CodecPlain) Teardown() int64 {
   return c.last_offset
 }
 
-func (c *CodecPlain) Event(start_offset int64, end_offset int64, line uint64, text *string) bool {
+func (c *CodecPlain) Event(start_offset int64, end_offset int64, line uint64, text string) {
   c.last_offset = end_offset
 
-  // Ship downstream
-  event := &FileEvent{
-    ProspectorInfo: c.info,
-    Offset:         end_offset,
-    Event:          NewEvent(c.fileconfig.Fields, &c.path, start_offset, line, text),
-  }
-  select {
-  case <-c.info.ShutdownSignal():
-    return false
-  case c.output <- event:
-  }
-
-  return true
+  c.callback_func(start_offset, end_offset, line, text)
 }
 
 // Register the codec
 func init() {
-  RegisterCodec(&CodecPlainRegistrar{}, "plain")
+  core.RegisterCodec("plain", NewPlainCodecFactory)
 }

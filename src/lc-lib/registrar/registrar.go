@@ -17,92 +17,45 @@
  * limitations under the License.
  */
 
-package main
+package registrar
 
 import (
   "encoding/json"
   "fmt"
-  "github.com/op/go-logging"
+  "lc-lib/core"
   "os"
+  "sync"
 )
 
-func (e *NewFileEvent) Process(state map[*ProspectorInfo]*FileState) {
-  log.Debug("Registrar received a new file event for %s", e.Source)
-
-  // A new file we need to save offset information for so we can resume
-  state[e.ProspectorInfo] = &FileState{
-    Source: &e.Source,
-    Offset: e.Offset,
-  }
-  state[e.ProspectorInfo].PopulateFileIds(e.fileinfo)
-}
-
-func (e *DeletedEvent) Process(state map[*ProspectorInfo]*FileState) {
-  if log.IsEnabledFor(logging.DEBUG) {
-    if _, ok := state[e.ProspectorInfo]; ok {
-      log.Debug("Registrar received a deletion event for %s", *state[e.ProspectorInfo].Source)
-    } else {
-      log.Warning("Registrar received a deletion event for UNKNOWN (%p)", e.ProspectorInfo)
-    }
-  }
-
-  // Purge the registrar entry - means the file is deleted so we can't resume
-  // This keeps the state clean so it doesn't build up after thousands of log files
-  delete(state, e.ProspectorInfo)
-}
-
-func (e *RenamedEvent) Process(state map[*ProspectorInfo]*FileState) {
-  _, is_found := state[e.ProspectorInfo]
-  if !is_found {
-    // This is probably stdin or a deleted file we can't resume
-    return
-  }
-
-  log.Debug("Registrar received a rename event for %s -> %s", state[e.ProspectorInfo].Source, e.Source)
-
-  // Update the stored file name
-  state[e.ProspectorInfo].Source = &e.Source
-}
-
-func (e *EventsEvent) Process(state map[*ProspectorInfo]*FileState) {
-  if len(e.Events) == 1 {
-    log.Debug("Registrar received offsets for %d log entries", len(e.Events))
-  } else {
-    log.Debug("Registrar received offsets for %d log entries", len(e.Events))
-  }
-
-  for _, event := range e.Events {
-    _, is_found := state[event.ProspectorInfo]
-    if !is_found {
-      // This is probably stdin then or a deleted file we can't resume
-      continue
-    }
-
-    state[event.ProspectorInfo].Offset = event.Offset
-  }
-}
+type LoadPreviousFunc func(string, *FileState) (core.Stream, error)
 
 type Registrar struct {
-  control        *LogCourierControl
+  core.PipelineSegment
+  core.PipelineSnapshotProvider
+
+  sync.Mutex
+
   registrar_chan chan []RegistrarEvent
   references     int
   persistdir     string
   statefile      string
-  state          map[*ProspectorInfo]*FileState
+  state          map[core.Stream]*FileState
 }
 
-func NewRegistrar(persistdir string, control *LogCourierMasterControl) *Registrar {
-  return &Registrar{
-    control:        control.Register(),
-    registrar_chan: make(chan []RegistrarEvent, 16),
+func NewRegistrar(pipeline *core.Pipeline, persistdir string) *Registrar {
+  ret := &Registrar{
+    registrar_chan: make(chan []RegistrarEvent, 16), // TODO: Make configurable?
     persistdir:     persistdir,
     statefile:      ".log-courier",
-    state:          make(map[*ProspectorInfo]*FileState),
+    state:          make(map[core.Stream]*FileState),
   }
+
+  pipeline.Register(ret)
+
+  return ret
 }
 
-func (r *Registrar) LoadPrevious() (map[string]*ProspectorInfo, error) {
-  // Generate ProspectorInfo structures for registrar and prosector to communicate with
+func (r *Registrar) LoadPrevious(callback_func LoadPreviousFunc) (have_previous bool, err error) {
   data := make(map[string]*FileState)
 
   // Load the previous state - opening RDWR ensures we can write too and fail early
@@ -110,11 +63,12 @@ func (r *Registrar) LoadPrevious() (map[string]*ProspectorInfo, error) {
   filename := r.persistdir + string(os.PathSeparator) + ".log-courier"
   c_filename := r.persistdir + string(os.PathSeparator) + ".log-courier.new"
 
-  f, err := os.OpenFile(filename, os.O_RDWR, 0600)
+  var f *os.File
+  f, err = os.OpenFile(filename, os.O_RDWR, 0600)
   if err != nil {
     // Fail immediately if this is not a path not found error
     if !os.IsNotExist(err) {
-      return nil, err
+      return
     }
 
     // Try the .new file - maybe we failed mid-move
@@ -125,46 +79,53 @@ func (r *Registrar) LoadPrevious() (map[string]*ProspectorInfo, error) {
   if err != nil {
     // Did we fail, or did it just not exist?
     if !os.IsNotExist(err) {
-      return nil, err
+      return
     }
-    return nil, nil
+    return false, nil
   }
 
   // Parse the data
   log.Notice("Loading registrar data from %s", filename)
+  have_previous = true
 
   decoder := json.NewDecoder(f)
   decoder.Decode(&data)
   f.Close()
 
-  r.state = make(map[*ProspectorInfo]*FileState, len(data))
-  resume := make(map[string]*ProspectorInfo, len(data))
+  r.state = make(map[core.Stream]*FileState, len(data))
 
+  var stream core.Stream
   for file, state := range data {
-    resume[file] = NewProspectorInfoFromFileState(file, state)
-    r.state[resume[file]] = state
+    if stream, err = callback_func(file, state); err != nil {
+      return
+    }
+    r.state[stream] = state
   }
 
   // Test we can successfully save new states by attempting to save now
-  if err := r.writeRegistry(); err != nil {
-    return nil, fmt.Errorf("Registry write failed: %s", err)
+  if err = r.writeRegistry(); err != nil {
+    return false, fmt.Errorf("Registry write failed: %s", err)
   }
 
-  return resume, nil
+  return
 }
 
-func (r *Registrar) Connect() chan<- []RegistrarEvent {
-  // TODO: Is there a better way to do this?
+func (r *Registrar) Connect() *RegistrarEventSpool {
+  r.Lock()
+  ret := newRegistrarEventSpool(r)
   r.references++
-  return r.registrar_chan
+  r.Unlock()
+  return ret
 }
 
-func (r *Registrar) Disconnect() {
+func (r *Registrar) dereferenceSpooler() {
+  r.Lock()
   r.references--
   if r.references == 0 {
     // Shutdown registrar, all references are closed
     close(r.registrar_chan)
   }
+  r.Unlock()
 }
 
 func (r *Registrar) toCanonical() (canonical map[string]*FileState) {
@@ -179,29 +140,29 @@ func (r *Registrar) toCanonical() (canonical map[string]*FileState) {
   return
 }
 
-func (r *Registrar) Register() {
+func (r *Registrar) Run() {
   defer func() {
-    r.control.Done()
+    r.Done()
   }()
 
+RegistrarLoop:
   for {
+    // Ignore shutdown channel - wait for registrar to close
     select {
-    case events := <-r.registrar_chan:
-      for _, event := range events {
+    case spool := <-r.registrar_chan:
+      if spool == nil {
+        break RegistrarLoop
+      }
+
+      for _, event := range spool {
         event.Process(r.state)
       }
 
       if err := r.writeRegistry(); err != nil {
         log.Error("Registry write failed: %s", err)
       }
-    case signal := <-r.control.Signal():
-      if signal == nil {
-        // We ignore shutdown in registrar and instead wait for registrar_chan
-        // which will be closed once all other pipeline workers shutdown
-        continue
-      }
-
-      r.control.SendSnapshot()
+    case <-r.OnSnapshot():
+      r.SendSnapshot()
     }
   }
 
