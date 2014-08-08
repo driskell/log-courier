@@ -17,6 +17,7 @@
 package prospector
 
 import (
+  "lc-lib/core"
   "lc-lib/harvester"
   "lc-lib/registrar"
   "os"
@@ -68,7 +69,7 @@ func (pi *prospectorInfo) isRunning() bool {
     return false
   }
   select {
-  case status := <-pi.harvester.Status():
+  case status := <-pi.harvester.OnFinish():
     pi.setHarvesterStopped(status)
   default:
   }
@@ -96,11 +97,25 @@ func (pi *prospectorInfo) wait() {
   if !pi.running {
     return
   }
-  status := <-pi.harvester.Status()
+  status := <-pi.harvester.OnFinish()
   pi.setHarvesterStopped(status)
 }
 
-func (pi *prospectorInfo) setHarvesterStopped(status *harvester.HarvesterStatus) {
+func (pi *prospectorInfo) requestSnapshot() {
+  pi.harvester.RequestSnapshot()
+}
+
+func (pi *prospectorInfo) getSnapshot() core.Snapshot {
+  select {
+  case snap := <-pi.harvester.OnSnapshot():
+    return snap
+  case status := <-pi.harvester.OnFinish():
+    pi.setHarvesterStopped(status)
+  }
+  return nil
+}
+
+func (pi *prospectorInfo) setHarvesterStopped(status *harvester.HarvesterFinish) {
   pi.running = false
   pi.finish_offset = status.Last_Offset
   if status.Failed {

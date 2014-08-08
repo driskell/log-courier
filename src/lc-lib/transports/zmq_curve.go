@@ -16,10 +16,11 @@
  * limitations under the License.
  */
 
-package main
+package transports
 
 import (
   "fmt"
+  "lc-lib/core"
 )
 
 func (t *TransportZmq) configureSocket() (err error) {

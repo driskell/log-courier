@@ -21,12 +21,14 @@ import "fmt"
 type HarvesterSnapshot struct {
 	file  string
 	speed float64
+	count int64
 }
 
-func NewHarvesterSnapshot(file string, speed float64) *HarvesterSnapshot {
+func NewHarvesterSnapshot(file string, speed float64, count int64) *HarvesterSnapshot {
 	return &HarvesterSnapshot{
 		file:  file,
 		speed: speed,
+		count: count,
 	}
 }
 
@@ -35,9 +37,13 @@ func (h *HarvesterSnapshot) Description() string {
 }
 
 func (h *HarvesterSnapshot) NumEntries() int {
-	return 1
+	return 2
 }
 
 func (h *HarvesterSnapshot) Entry(n int) (string, string) {
-	return "Speed", fmt.Sprintf("%.2f", h.speed)
+	if n == 0 {
+		return "Speed", fmt.Sprintf("%.2f", h.speed)
+	} else {
+		return "Count", fmt.Sprintf("%d", h.count)
+	}
 }

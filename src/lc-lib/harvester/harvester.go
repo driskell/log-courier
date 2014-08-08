@@ -29,23 +29,26 @@ import (
   "time"
 )
 
-type HarvesterStatus struct {
+type HarvesterFinish struct {
   Last_Offset int64
   Failed      bool
 }
 
 type Harvester struct {
-  stop_chan   chan interface{}
-  return_chan chan *HarvesterStatus
-  stream      core.Stream
-  fileinfo    os.FileInfo
-  path        string
-  fileconfig  *core.FileConfig
-  offset      int64
-  codec       core.Codec
-  output      chan<- *core.EventDescriptor
-  file        *os.File
-  speed       float64
+  stop_chan     chan interface{}
+  return_chan   chan *HarvesterFinish
+  snapshot_chan chan interface{}
+  snapshot_sink chan core.Snapshot
+  stream        core.Stream
+  fileinfo      os.FileInfo
+  path          string
+  fileconfig    *core.FileConfig
+  offset        int64
+  codec         core.Codec
+  output        chan<- *core.EventDescriptor
+  file          *os.File
+  speed         float64
+  count         int64
 }
 
 func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64) *Harvester {
@@ -59,19 +62,21 @@ func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64)
     path, fileinfo = "-", nil
   }
   return &Harvester{
-    stop_chan:   make(chan interface{}),
-    return_chan: make(chan *HarvesterStatus, 1),
-    stream:      stream,
-    fileinfo:    fileinfo,
-    path:        path,
-    fileconfig:  fileconfig,
-    offset:      offset,
+    stop_chan:     make(chan interface{}),
+    return_chan:   make(chan *HarvesterFinish, 1),
+    snapshot_chan: make(chan interface{}, 1),
+    snapshot_sink: make(chan core.Snapshot, 1),
+    stream:        stream,
+    fileinfo:      fileinfo,
+    path:          path,
+    fileconfig:    fileconfig,
+    offset:        offset,
   }
 }
 
 func (h *Harvester) Start(output chan<- *core.EventDescriptor) {
   go func() {
-    status := &HarvesterStatus{}
+    status := &HarvesterFinish{}
     status.Last_Offset, status.Failed = h.harvest(output)
     h.return_chan <- status
   }()
@@ -81,8 +86,16 @@ func (h *Harvester) Stop() {
   close(h.stop_chan)
 }
 
-func (h *Harvester) Status() <-chan *HarvesterStatus {
+func (h *Harvester) OnFinish() <-chan *HarvesterFinish {
   return h.return_chan
+}
+
+func (h *Harvester) RequestSnapshot() {
+  h.snapshot_chan <- 1
+}
+
+func (h *Harvester) OnSnapshot() <-chan core.Snapshot {
+  return h.snapshot_sink
 }
 
 func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, bool) {
@@ -113,28 +126,43 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, bool) {
 
   last_read_time := time.Now()
   last_measurement := last_read_time
-  event_count := 0
+  last_event_count := int64(0)
+  seconds_without_events := 0
 
 ReadLoop:
   for {
     text, bytesread, err := h.readline(reader, buffer)
 
     if duration := time.Since(last_measurement); duration >= time.Second {
+      count := float64(h.count - last_event_count)
+
+      if h.speed == 0. {
+        h.speed = count
+      } else {
+        if count == 0 {
+          seconds_without_events++
+        } else {
+          seconds_without_events = 0
+        }
+
+        if seconds_without_events == 5 {
+          h.speed = 0.
+        } else {
+          // Calculate a moving average over 5 seconds - use similiar weight as load average
+          h.speed = count + math.Exp(float64(duration) / float64(time.Second) / -5.) * (h.speed - count)
+        }
+      }
+      last_event_count = h.count
+      last_measurement = time.Now()
+
       // Check shutdown
       select {
       case <-h.stop_chan:
         break ReadLoop
+      case <-h.snapshot_chan:
+        h.handleSnapshot()
       default:
       }
-
-      if h.speed == 0 {
-        h.speed = float64(event_count)
-      } else {
-        // Calculate a moving average over 5 seconds - use similiar weight as load average
-        h.speed = float64(event_count) + math.Exp(float64(duration / time.Second) / -5) * (h.speed - float64(event_count))
-      }
-      event_count = 0
-      last_measurement = time.Now()
     }
 
     if err != nil {
@@ -192,7 +220,7 @@ ReadLoop:
     h.codec.Event(line_offset, h.offset, line, text)
 
     last_read_time = time.Now()
-    event_count++
+    h.count++
   }
 
   log.Info("Harvester for %s exiting", h.path)
@@ -206,9 +234,16 @@ func (h *Harvester) eventCallback(start_offset int64, end_offset int64, line uin
     Event:  core.NewEvent(h.fileconfig.Fields, h.path, start_offset, line, text),
   }
 
-  select {
-  case <-h.stop_chan:
-  case h.output <- event:
+EventLoop:
+  for {
+    select {
+    case <-h.stop_chan:
+      break EventLoop
+    case <-h.snapshot_chan:
+      h.handleSnapshot()
+    case h.output <- event:
+      break EventLoop
+    }
   }
 }
 
@@ -289,4 +324,8 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer) (string
   } /* forever read chunks */
 
   return "", 0, nil
+}
+
+func (h *Harvester) handleSnapshot() {
+  h.snapshot_sink <- NewHarvesterSnapshot(h.path, h.speed, h.count)
 }

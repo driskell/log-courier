@@ -97,7 +97,7 @@ SignalLoop:
     case <-lc.reload_chan:
       lc.reloadConfig()
       // TODO: make part of a comm channel of some sort
-    case <-time.After(2 * time.Second):
+    case <-time.After(time.Second):
       lc.fetchSnapshot()
     }
   }

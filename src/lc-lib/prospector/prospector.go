@@ -369,5 +369,21 @@ func (p *Prospector) handleSnapshot() {
 
   snapshots[0] = newProspectorSnapshot(infosnaps)
 
+  for _, info := range p.prospectors {
+    if !info.running {
+      continue
+    }
+    info.requestSnapshot()
+  }
+
+  for _, info := range p.prospectors {
+    if !info.running {
+      continue
+    }
+    if snap := info.getSnapshot(); snap != nil {
+      snapshots = append(snapshots, snap)
+    }
+  }
+
   p.SendSnapshot(snapshots)
 }
