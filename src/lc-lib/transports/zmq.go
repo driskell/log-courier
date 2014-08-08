@@ -104,7 +104,7 @@ func (e *ZMQEvent) Log() {
 type TransportZmqRegistrar struct {
 }
 
-func NewZmqTransportFactory(core *core.Config, config_path string, config map[string]interface{}, name string) (TransportFactory, error) {
+func NewZmqTransportFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.TransportFactory, error) {
   var err error
 
   ret := &TransportZmqFactory{
@@ -113,27 +113,27 @@ func NewZmqTransportFactory(core *core.Config, config_path string, config map[st
   }
 
   if name == "zmq" {
-    if err = PopulateConfig(ret, config_path, config); err != nil {
+    if err = config.PopulateConfig(ret, config_path, unused); err != nil {
       return nil, err
     }
 
     if len(ret.CurveServerkey) == 0 {
       return nil, fmt.Errorf("Option %scurve server key is required", config_path)
-    } else if len(ret.CurveServerkey) != 40 || !Z85Validate(ret.CurveServerkey) {
+    } else if len(ret.CurveServerkey) != 40 || !z85Validate(ret.CurveServerkey) {
       return nil, fmt.Errorf("Option %scurve server key must be a valid 40 character Z85 encoded string", config_path)
     }
     if len(ret.CurvePublickey) == 0 {
       return nil, fmt.Errorf("Option %scurve public key is required", config_path)
-    } else if len(ret.CurvePublickey) != 40 || !Z85Validate(ret.CurvePublickey) {
+    } else if len(ret.CurvePublickey) != 40 || !z85Validate(ret.CurvePublickey) {
       return nil, fmt.Errorf("Option %scurve public key must be a valid 40 character Z85 encoded string", config_path)
     }
     if len(ret.CurveSecretkey) == 0 {
       return nil, fmt.Errorf("Option %scurve secret key is required", config_path)
-    } else if len(ret.CurveSecretkey) != 40 || !Z85Validate(ret.CurveSecretkey) {
+    } else if len(ret.CurveSecretkey) != 40 || !z85Validate(ret.CurveSecretkey) {
       return nil, fmt.Errorf("Option %scurve secret key must be a valid 40 character Z85 encoded string", config_path)
     }
   } else {
-    if err := ReportUnusedConfig(config_path, config); err != nil {
+    if err := config.ReportUnusedConfig(config_path, unused); err != nil {
       return nil, err
     }
   }
@@ -141,25 +141,25 @@ func NewZmqTransportFactory(core *core.Config, config_path string, config map[st
   return ret, nil
 }
 
-func (f *TransportZmqFactory) NewTransport(config *NetworkConfig) (Transport, error) {
+func (f *TransportZmqFactory) NewTransport(config *core.NetworkConfig) (core.Transport, error) {
   return &TransportZmq{config: f, net_config: config}, nil
 }
 
-func (t *TransportZmq) ReloadConfig(new_net_config *NetworkConfig) int {
+func (t *TransportZmq) ReloadConfig(new_net_config *core.NetworkConfig) int {
   // Check we can grab new ZMQ config to compare, if not force transport reinit
-  new_config, ok := new_net_config.transport.(*TransportZmqFactory)
+  new_config, ok := new_net_config.TransportFactory.(*TransportZmqFactory)
   if !ok {
-    return Reload_Transport
+    return core.Reload_Transport
   }
 
   if new_config.CurveServerkey != t.config.CurveServerkey || new_config.CurvePublickey != t.config.CurvePublickey || new_config.CurveSecretkey != t.config.CurveSecretkey {
-    return Reload_Transport
+    return core.Reload_Transport
   }
 
   // Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
   t.net_config = new_net_config
 
-  return Reload_None
+  return core.Reload_None
 }
 
 func (t *TransportZmq) Init() (err error) {
@@ -725,5 +725,5 @@ func (t *TransportZmq) Shutdown() {
 
 // Register the transport
 func init() {
-  RegisterTransport("plainzmq", NewZmqTransportFactory)
+  core.RegisterTransport("plainzmq", NewZmqTransportFactory)
 }
