@@ -23,6 +23,7 @@ import (
   "flag"
   "fmt"
   "github.com/op/go-logging"
+  "lc-lib/admin"
   "lc-lib/core"
   "lc-lib/prospector"
   "lc-lib/spooler"
@@ -66,6 +67,11 @@ func (lc *LogCourier) Run() {
 
   log.Info("Starting pipeline")
 
+  _, err := admin.NewListener(lc.pipeline, lc)
+  if err != nil {
+    log.Fatalf("Failed to initialise: %s", err)
+  }
+
   registrar := registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
 
   publisher, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar)
@@ -96,9 +102,6 @@ SignalLoop:
       break SignalLoop
     case <-lc.reload_chan:
       lc.reloadConfig()
-      // TODO: make part of a comm channel of some sort
-    case <-time.After(time.Second):
-      lc.fetchSnapshot()
     }
   }
 
@@ -244,16 +247,8 @@ func (lc *LogCourier) reloadConfig() {
   lc.pipeline.SendConfig(lc.config)
 }
 
-func (lc *LogCourier) fetchSnapshot() {
-  snapshots := lc.pipeline.Snapshot()
-
-  for _, snap := range snapshots {
-    log.Notice("%s", snap.Description())
-    for i, j := 0, snap.NumEntries(); i < j; i = i+1 {
-      k, v := snap.Entry(i)
-      log.Info("  %s = %s", k, v)
-    }
-  }
+func (lc *LogCourier) FetchSnapshot() []core.Snapshot {
+  return lc.pipeline.Snapshot()
 }
 
 func (lc *LogCourier) cleanShutdown() {
