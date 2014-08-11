@@ -17,24 +17,101 @@
 package admin
 
 import (
+  "encoding/gob"
   "net"
 	"sync"
+  "time"
 )
 
 type server struct {
+  lc         LogCourierAdmin
   conn       *net.TCPConn
-	conn_group *sync.WaitGroup
+  conn_group *sync.WaitGroup
+  encoder    *gob.Encoder
 }
 
-func newServer(conn_group *sync.WaitGroup, conn *net.TCPConn) *server {
+func newServer(lc LogCourierAdmin, conn_group *sync.WaitGroup, conn *net.TCPConn) *server {
   return &server{
+    lc:         lc,
     conn:       conn,
 		conn_group: conn_group,
   }
 }
 
 func (s *server) Run() {
+  if err := s.loop(); err != nil {
+    log.Warning("Error on admin connection from %s: %s", s.conn.RemoteAddr(), err)
+  } else {
+    log.Info("Admin connection from %s closed", s.conn.RemoteAddr())
+  }
+
   s.conn.Close()
 
   s.conn_group.Done()
+}
+
+func (s *server) loop() (err error) {
+  var result interface{}
+
+  s.encoder = gob.NewEncoder(s.conn)
+
+  command := make([]byte, 4)
+
+  for {
+    if err = s.readCommand(command); err != nil {
+      return
+    }
+
+    if string(command) == "PING" {
+      result = &PongResponse{}
+    } else {
+      if result, err = s.lc.ProcessCommand(string(command)); err != nil {
+        result = &ErrorResponse{Error: err.Error()}
+      }
+    }
+
+    if err = s.sendResponse(result); err != nil {
+      return
+    }
+  }
+}
+
+func (s *server) readCommand(command []byte) error {
+  if err := s.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+    return err
+  }
+
+  total_read := 0
+  start_time := time.Now()
+
+  for {
+    read, err := s.conn.Read(command[total_read:4])
+    if err != nil {
+      if op_err, ok := err.(*net.OpError); ok && op_err.Timeout() {
+        if time.Now().Sub(start_time) <= 1800 * time.Second {
+          continue
+        }
+      }
+      return err
+    }
+
+    total_read += read
+    if total_read == 4 {
+      break
+    }
+  }
+
+  return nil
+}
+
+func (s *server) sendResponse(response interface{}) error {
+  if err := s.conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+    return err
+  }
+
+  if err := s.encoder.Encode(response); err != nil {
+    return err
+  }
+
+  return nil
 }

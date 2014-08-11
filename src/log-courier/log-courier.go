@@ -247,8 +247,12 @@ func (lc *LogCourier) reloadConfig() {
   lc.pipeline.SendConfig(lc.config)
 }
 
-func (lc *LogCourier) FetchSnapshot() []core.Snapshot {
-  return lc.pipeline.Snapshot()
+func (lc *LogCourier) ProcessCommand(command string) (interface{}, error) {
+  if command == "SNAP" {
+    return lc.pipeline.Snapshot(), nil
+  }
+
+  return nil, &admin.UnknownCommandErr{}
 }
 
 func (lc *LogCourier) cleanShutdown() {

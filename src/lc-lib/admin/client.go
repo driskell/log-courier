@@ -17,31 +17,89 @@
 package admin
 
 import (
+  "encoding/gob"
+  "fmt"
   "lc-lib/core"
+  "net"
+  "time"
 )
 
 type Client struct {
-  host string
-  port int
+  addr    net.TCPAddr
+  conn    *net.TCPConn
+  decoder *gob.Decoder
 }
 
 func NewClient(host string, port int) (*Client, error) {
-  ret := &Client{
-    host: host,
-    port: port,
+  ret := &Client{}
+
+  ret.addr.IP = net.ParseIP(host)
+  if ret.addr.IP == nil {
+    return nil, fmt.Errorf("Invalid admin connect address")
   }
 
-  if err := ret.Connect(); err != nil {
+  ret.addr.Port = port
+
+  if err := ret.connect(); err != nil {
     return nil, err
   }
 
   return ret, nil
 }
 
-func (c *Client) Connect() error {
+func (c *Client) connect() (err error) {
+  if c.conn, err = net.DialTCP("tcp", nil, &c.addr); err != nil {
+    return
+  }
+
+  c.decoder = gob.NewDecoder(c.conn)
+
   return nil
 }
 
-func (c *Client) FetchSnapshot() []core.Snapshot {
-  return []core.Snapshot{}
+func (c *Client) sendRequest(command string) error {
+  if err := c.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+    return err
+  }
+
+  total_written := 0
+
+  for {
+    wrote, err := c.conn.Write([]byte(command[total_written:4]))
+    if err != nil {
+      return err
+    }
+
+    total_written += wrote
+    if total_written == 4 {
+      break
+    }
+  }
+
+  return nil
+}
+
+func (c *Client) recvResponse(response interface{}) error {
+  if err := c.conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+    return err
+  }
+
+  if err := c.decoder.Decode(response); err != nil {
+    return err
+  }
+
+  return nil
+}
+
+func (c *Client) FetchSnapshot() ([]core.Snapshot, error) {
+  if err := c.sendRequest("SNAP"); err != nil {
+    return nil, err
+  }
+
+  response := make([]core.Snapshot, 0)
+  if err := c.recvResponse(&response); err != nil {
+    return nil, err
+  }
+
+  return response, nil
 }

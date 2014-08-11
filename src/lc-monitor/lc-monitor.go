@@ -33,16 +33,21 @@ func main() {
 
   admin, err := admin.NewClient(host, port)
   if err != nil {
-    fmt.Printf("Failed to connect to Log Courier: %s", err)
+    fmt.Printf("Failed to connect to Log Courier: %s\n", err)
+    return
   }
 
-  snapshots := admin.FetchSnapshot()
+  snapshots, err := admin.FetchSnapshot()
+  if err != nil {
+    fmt.Printf("An error occurred: %s\n", err)
+    return
+  }
 
   for _, snap := range snapshots {
     fmt.Printf("%s", snap.Description())
     for i, j := 0, snap.NumEntries(); i < j; i = i+1 {
       k, v := snap.Entry(i)
-      fmt.Printf("  %s = %s", k, v)
+      fmt.Printf("  %s = %s\n", k, v)
     }
   }
 }

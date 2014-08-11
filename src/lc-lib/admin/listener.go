@@ -17,6 +17,7 @@
 package admin
 
 import (
+  "fmt"
   "lc-lib/core"
   "net"
   "sync"
@@ -24,41 +25,40 @@ import (
 )
 
 type LogCourierAdmin interface {
-  FetchSnapshot() []core.Snapshot
+  ProcessCommand(command string) (interface{}, error)
 }
 
 type Listener struct {
   core.PipelineSegment
 
-  host       string
-  port       int
+  lc         LogCourierAdmin
+  addr       net.TCPAddr
   listener   *net.TCPListener
   conn_group sync.WaitGroup
 }
 
 func NewListener(pipeline *core.Pipeline, lc LogCourierAdmin) (*Listener, error) {
+  var err error
+
   ret := &Listener{
-    host: "127.0.0.1",
-    port: 1234,
+    lc: lc,
   }
 
-  if err := ret.init(); err != nil {
+  ret.addr.IP = net.ParseIP("127.0.0.1")
+
+  if ret.addr.IP == nil {
+    return nil, fmt.Errorf("Invalid admin listen address")
+  }
+
+  ret.addr.Port = 1234
+
+  if ret.listener, err = net.ListenTCP("tcp", &ret.addr); err != nil {
     return nil, err
   }
 
   pipeline.Register(ret)
 
   return ret, nil
-}
-
-func (l *Listener) init() (err error) {
-  addr := &net.TCPAddr{
-    IP:   net.ParseIP(l.host),
-    Port: l.port,
-  }
-
-  l.listener, err = net.ListenTCP("tcp", addr)
-  return
 }
 
 func (l *Listener) Run() {
@@ -81,7 +81,7 @@ ListenerLoop:
       if net_err, ok := err.(*net.OpError); ok && net_err.Timeout() {
         continue
       }
-      log.Warning("Admin connection failure: %s", err)
+      log.Warning("Failed to accept admin connection: %s", err)
     }
 
     log.Info("New admin connection from %s", conn.RemoteAddr())
@@ -95,6 +95,6 @@ ListenerLoop:
 func (l *Listener) startServer(conn *net.TCPConn) {
   l.conn_group.Add(1)
 
-  server := newServer(&l.conn_group, conn)
+  server := newServer(l.lc, &l.conn_group, conn)
   go server.Run()
 }
