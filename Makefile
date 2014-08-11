@@ -5,7 +5,7 @@ GOPATH := $(patsubst %/,%,$(dir $(abspath $(MAKEFILE))))
 export GOPATH := $(GOPATH)
 
 TAGS :=
-BINS := bin/log-courier bin/lc-tlscert bin/lc-monitor
+BINS := bin/log-courier bin/lc-tlscert bin/lc-admin
 TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
 
 ifeq ($(with),zmq3)
