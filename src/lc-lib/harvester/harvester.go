@@ -22,6 +22,7 @@ package harvester
 import (
   "bufio"
   "bytes"
+  "fmt"
   "io"
   "lc-lib/core"
   "math"
@@ -38,7 +39,7 @@ type Harvester struct {
   stop_chan     chan interface{}
   return_chan   chan *HarvesterFinish
   snapshot_chan chan interface{}
-  snapshot_sink chan core.Snapshot
+  snapshot_sink chan *core.Snapshot
   stream        core.Stream
   fileinfo      os.FileInfo
   path          string
@@ -65,7 +66,7 @@ func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64)
     stop_chan:     make(chan interface{}),
     return_chan:   make(chan *HarvesterFinish, 1),
     snapshot_chan: make(chan interface{}, 1),
-    snapshot_sink: make(chan core.Snapshot, 1),
+    snapshot_sink: make(chan *core.Snapshot, 1),
     stream:        stream,
     fileinfo:      fileinfo,
     path:          path,
@@ -94,7 +95,7 @@ func (h *Harvester) RequestSnapshot() {
   h.snapshot_chan <- 1
 }
 
-func (h *Harvester) OnSnapshot() <-chan core.Snapshot {
+func (h *Harvester) OnSnapshot() <-chan *core.Snapshot {
   return h.snapshot_sink
 }
 
@@ -327,5 +328,9 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer) (string
 }
 
 func (h *Harvester) handleSnapshot() {
-  h.snapshot_sink <- NewHarvesterSnapshot(h.path, h.speed, h.count)
+  ret := core.NewSnapshot(fmt.Sprintf("Harvester (%s)", h.path))
+  ret.AddEntry("Speed", h.speed)
+  ret.AddEntry("Count", h.count)
+
+  h.snapshot_sink <- ret
 }

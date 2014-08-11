@@ -38,8 +38,6 @@ import (
 import _ "lc-lib/codecs"
 import _ "lc-lib/transports"
 
-const Log_Courier_Version string = "0.12"
-
 func main() {
   logcourier := NewLogCourier()
   logcourier.Run()
@@ -65,7 +63,7 @@ func NewLogCourier() *LogCourier {
 func (lc *LogCourier) Run() {
   lc.startUp()
 
-  log.Info("Starting pipeline")
+  log.Info("Log Courier version %s pipeline starting", core.Log_Courier_Version)
 
   _, err := admin.NewListener(lc.pipeline, lc)
   if err != nil {
@@ -129,7 +127,7 @@ func (lc *LogCourier) startUp() {
   flag.Parse()
 
   if version {
-    fmt.Printf("Log Courier version %s\n", Log_Courier_Version)
+    fmt.Printf("Log Courier version %s\n", core.Log_Courier_Version)
     os.Exit(0)
   }
 
@@ -249,10 +247,15 @@ func (lc *LogCourier) reloadConfig() {
 
 func (lc *LogCourier) ProcessCommand(command string) (interface{}, error) {
   if command == "SNAP" {
-    return lc.pipeline.Snapshot(), nil
+    snaps, err := lc.pipeline.Snapshot()
+    if err != nil {
+      return nil, err
+    }
+
+    return snaps, nil
   }
 
-  return nil, &admin.UnknownCommandErr{}
+  return nil, fmt.Errorf("Unknown command")
 }
 
 func (lc *LogCourier) cleanShutdown() {

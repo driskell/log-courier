@@ -18,6 +18,8 @@ package admin
 
 import (
   "encoding/gob"
+  "fmt"
+  "io"
   "net"
 	"sync"
   "time"
@@ -42,7 +44,7 @@ func (s *server) Run() {
   if err := s.loop(); err != nil {
     log.Warning("Error on admin connection from %s: %s", s.conn.RemoteAddr(), err)
   } else {
-    log.Info("Admin connection from %s closed", s.conn.RemoteAddr())
+    log.Debug("Admin connection from %s closed", s.conn.RemoteAddr())
   }
 
   s.conn.Close()
@@ -59,14 +61,21 @@ func (s *server) loop() (err error) {
 
   for {
     if err = s.readCommand(command); err != nil {
+      if err == io.EOF {
+        err = nil
+      }
       return
     }
 
+    log.Debug("Command from %s: %s", s.conn.RemoteAddr(), command)
+
     if string(command) == "PING" {
-      result = &PongResponse{}
+      result = &Response{&PongResponse{}}
     } else {
       if result, err = s.lc.ProcessCommand(string(command)); err != nil {
-        result = &ErrorResponse{Error: err.Error()}
+        result = &Response{Response: &ErrorResponse{Message: err.Error()}}
+      } else {
+        result = &Response{Response: result}
       }
     }
 
@@ -77,20 +86,22 @@ func (s *server) loop() (err error) {
 }
 
 func (s *server) readCommand(command []byte) error {
-  if err := s.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
-    return err
-  }
-
   total_read := 0
   start_time := time.Now()
 
   for {
+    if err := s.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+      return err
+    }
+
     read, err := s.conn.Read(command[total_read:4])
     if err != nil {
       if op_err, ok := err.(*net.OpError); ok && op_err.Timeout() {
         if time.Now().Sub(start_time) <= 1800 * time.Second {
           continue
         }
+      } else if total_read != 0 && op_err == io.EOF {
+        return fmt.Errorf("EOF")
       }
       return err
     }

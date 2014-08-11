@@ -105,7 +105,7 @@ func (pi *prospectorInfo) requestSnapshot() {
   pi.harvester.RequestSnapshot()
 }
 
-func (pi *prospectorInfo) getSnapshot() core.Snapshot {
+func (pi *prospectorInfo) getSnapshot() *core.Snapshot {
   select {
   case snap := <-pi.harvester.OnSnapshot():
     return snap

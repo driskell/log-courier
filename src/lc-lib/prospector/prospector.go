@@ -357,17 +357,24 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *pros
 }
 
 func (p *Prospector) handleSnapshot() {
-  snapshots := make([]core.Snapshot, 1)
+  snapshots := make([]*core.Snapshot, 1)
+  snapshots[0] = core.NewSnapshot("Prospector")
 
-  infosnaps := make([]*prospectorInfoSnapshot, len(p.prospectorindex))
-
-  i := 0
   for _, info := range p.prospectorindex {
-    infosnaps[i] = newProspectorInfoSnapshot(info)
-    i++
-  }
+    var status string
 
-  snapshots[0] = newProspectorSnapshot(infosnaps)
+    if info.status == Status_Failed {
+      status = "Failed"
+    } else {
+      if info.running {
+        status = "Running"
+      } else {
+        status = "Dead"
+      }
+    }
+
+    snapshots[0].AddEntry(info.file, status)
+  }
 
   for _, info := range p.prospectors {
     if !info.running {

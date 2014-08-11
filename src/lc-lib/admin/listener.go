@@ -84,7 +84,7 @@ ListenerLoop:
       log.Warning("Failed to accept admin connection: %s", err)
     }
 
-    log.Info("New admin connection from %s", conn.RemoteAddr())
+    log.Debug("New admin connection from %s", conn.RemoteAddr())
 
     l.startServer(conn)
   }

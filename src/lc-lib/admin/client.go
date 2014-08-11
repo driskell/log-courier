@@ -57,9 +57,9 @@ func (c *Client) connect() (err error) {
   return nil
 }
 
-func (c *Client) sendRequest(command string) error {
-  if err := c.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
-    return err
+func (c *Client) request(command string) (*Response, error) {
+  if err := c.conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+    return nil, err
   }
 
   total_written := 0
@@ -67,7 +67,7 @@ func (c *Client) sendRequest(command string) error {
   for {
     wrote, err := c.conn.Write([]byte(command[total_written:4]))
     if err != nil {
-      return err
+      return nil, err
     }
 
     total_written += wrote
@@ -76,30 +76,50 @@ func (c *Client) sendRequest(command string) error {
     }
   }
 
-  return nil
-}
+  var response Response
 
-func (c *Client) recvResponse(response interface{}) error {
-  if err := c.conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
-    return err
-  }
-
-  if err := c.decoder.Decode(response); err != nil {
-    return err
-  }
-
-  return nil
-}
-
-func (c *Client) FetchSnapshot() ([]core.Snapshot, error) {
-  if err := c.sendRequest("SNAP"); err != nil {
+  if err := c.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
     return nil, err
   }
 
-  response := make([]core.Snapshot, 0)
-  if err := c.recvResponse(&response); err != nil {
+  if err := c.decoder.Decode(&response); err != nil {
     return nil, err
   }
 
-  return response, nil
+  return &response, nil
+}
+
+func (c *Client) resolveError(response *Response) error {
+  ret, ok := response.Response.(*ErrorResponse)
+  if ok {
+    return ret
+  }
+
+  return &ErrorResponse{Message: fmt.Sprintf("Unrecognised response: %v\n", ret)}
+}
+
+func (c *Client) Ping() error {
+  response, err := c.request("PING")
+  if err != nil {
+    return err
+  }
+
+  if _, ok := response.Response.(*PongResponse); ok {
+    return nil
+  }
+
+  return c.resolveError(response)
+}
+
+func (c *Client) FetchSnapshot() ([]*core.Snapshot, error) {
+  response, err := c.request("SNAP")
+  if err != nil {
+    return nil, err
+  }
+
+  if ret, ok := response.Response.([]*core.Snapshot); ok {
+    return ret, nil
+  }
+
+  return nil, c.resolveError(response)
 }

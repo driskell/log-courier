@@ -14,30 +14,6 @@
 * limitations under the License.
 */
 
-package admin
+package core
 
-import (
-  "encoding/gob"
-  "lc-lib/core"
-)
-
-type Response struct {
-  Response interface{}
-}
-
-type PongResponse struct {
-}
-
-type ErrorResponse struct {
-  Message string
-}
-
-func (e *ErrorResponse) Error() string {
-  return e.Message
-}
-
-func init() {
-  gob.Register(&PongResponse{})
-  gob.Register(&ErrorResponse{})
-  gob.Register([]*core.Snapshot{&core.Snapshot{}})
-}
+const Log_Courier_Version string = "0.12"

@@ -16,14 +16,17 @@
 
 package core
 
-import "sync"
+import (
+  "fmt"
+  "sync"
+)
 
 type Pipeline struct {
   pipes          []IPipelineSegment
   signal         chan interface{}
   group          sync.WaitGroup
   config_sinks   map[*PipelineConfigReceiver]chan *Config
-  snapshot_chan  chan []Snapshot
+  snapshot_chan  chan []*Snapshot
   snapshot_sinks map[*PipelineSnapshotProvider]chan interface{}
 }
 
@@ -32,7 +35,7 @@ func NewPipeline() *Pipeline {
     pipes:          make([]IPipelineSegment, 0, 5),
     signal:         make(chan interface{}),
     config_sinks:   make(map[*PipelineConfigReceiver]chan *Config),
-    snapshot_chan:  make(chan []Snapshot),
+    snapshot_chan:  make(chan []*Snapshot),
     snapshot_sinks: make(map[*PipelineSnapshotProvider]chan interface{}),
   }
 }
@@ -82,17 +85,23 @@ func (p *Pipeline) SendConfig(config *Config) {
   }
 }
 
-func (p *Pipeline) Snapshot() []Snapshot {
+func (p *Pipeline) Snapshot() ([]*Snapshot, error) {
   for _, sink := range p.snapshot_sinks {
     sink <- 1
   }
 
-  left := len(p.snapshot_sinks)
-  snapshots := make([]Snapshot, 0)
+  var ret []*Snapshot
 
+  left := len(p.snapshot_sinks)
+  snapshots := make([]*Snapshot, 0)
+// TODO: Fix race condition here with shutdown that causes hang/crash
   for {
     left--
-    ret := <- p.snapshot_chan
+    select {
+    case ret = <-p.snapshot_chan:
+    case <-p.signal:
+      return nil, fmt.Errorf("Log Courier is shutting down")
+    }
 
     snapshots = append(snapshots, ret...)
 
@@ -101,7 +110,7 @@ func (p *Pipeline) Snapshot() []Snapshot {
     }
   }
 
-  return snapshots
+  return snapshots, nil
 }
 
 type IPipelineSegment interface {
@@ -152,7 +161,7 @@ type IPipelineSnapshotProvider interface {
 
 type PipelineSnapshotProvider struct {
   snapshot_chan <-chan interface{}
-  sink          chan<- []Snapshot
+  sink          chan<- []*Snapshot
 }
 
 func (s *PipelineSnapshotProvider) getSnapshotProviderStruct() *PipelineSnapshotProvider {
@@ -163,6 +172,6 @@ func (s *PipelineSnapshotProvider) OnSnapshot() <-chan interface{} {
   return s.snapshot_chan
 }
 
-func (s *PipelineSnapshotProvider) SendSnapshot(snapshot []Snapshot) {
+func (s *PipelineSnapshotProvider) SendSnapshot(snapshot []*Snapshot) {
   s.sink <- snapshot
 }

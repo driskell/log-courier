@@ -16,8 +16,45 @@
 
 package core
 
-type Snapshot interface {
-	Description() string
-	NumEntries() int
-	Entry(int) (string, string)
+type Snapshot struct {
+  Desc    string
+  Entries map[string]interface{}
+  Keys    []string
+}
+
+func NewSnapshot(desc string) *Snapshot {
+  return &Snapshot{
+    Desc:    desc,
+    Entries: make(map[string]interface{}),
+    Keys:    make([]string, 0),
+  }
+}
+
+func (s *Snapshot) Description() string {
+  return s.Desc
+}
+
+func (s *Snapshot) AddEntry(name string, value interface{}) {
+  s.Entries[name] = value
+  s.Keys = append(s.Keys, name)
+}
+
+func (s *Snapshot) EntryByName(name string) (interface{}, bool) {
+  if v, ok := s.Entries[name]; ok {
+    return v, true
+  }
+
+  return nil, false
+}
+
+func (s *Snapshot) Entry(i int) (string, interface{}) {
+  if i < 0 || i >= len(s.Keys) {
+    panic("Out of bounds")
+  }
+
+  return s.Keys[i], s.Entries[s.Keys[i]]
+}
+
+func (s *Snapshot) NumEntries() int {
+  return len(s.Keys)
 }
