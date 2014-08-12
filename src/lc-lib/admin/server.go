@@ -21,22 +21,19 @@ import (
   "fmt"
   "io"
   "net"
-	"sync"
   "time"
 )
 
 type server struct {
-  lc         LogCourierAdmin
-  conn       *net.TCPConn
-  conn_group *sync.WaitGroup
-  encoder    *gob.Encoder
+  listener *Listener
+  conn     *net.TCPConn
+  encoder  *gob.Encoder
 }
 
-func newServer(lc LogCourierAdmin, conn_group *sync.WaitGroup, conn *net.TCPConn) *server {
+func newServer(listener *Listener,conn *net.TCPConn) *server {
   return &server{
-    lc:         lc,
-    conn:       conn,
-		conn_group: conn_group,
+    listener: listener,
+    conn:     conn,
   }
 }
 
@@ -49,7 +46,7 @@ func (s *server) Run() {
 
   s.conn.Close()
 
-  s.conn_group.Done()
+  s.listener.conn_group.Done()
 }
 
 func (s *server) loop() (err error) {
@@ -72,11 +69,7 @@ func (s *server) loop() (err error) {
     if string(command) == "PING" {
       result = &Response{&PongResponse{}}
     } else {
-      if result, err = s.lc.ProcessCommand(string(command)); err != nil {
-        result = &Response{Response: &ErrorResponse{Message: err.Error()}}
-      } else {
-        result = &Response{Response: result}
-      }
+      result = s.processCommand(string(command))
     }
 
     if err = s.sendResponse(result); err != nil {
@@ -125,4 +118,14 @@ func (s *server) sendResponse(response interface{}) error {
   }
 
   return nil
+}
+
+func (s *server) processCommand(command string) interface{} {
+  select {
+  case s.listener.command_chan <- command:
+  case <-s.listener.OnShutdown():
+    return &ErrorResponse{Message: "Log Courier is shutting down"}
+  }
+
+  return <-s.listener.response_chan
 }

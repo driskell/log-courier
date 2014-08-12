@@ -65,7 +65,7 @@ func (lc *LogCourier) Run() {
 
   log.Info("Log Courier version %s pipeline starting", core.Log_Courier_Version)
 
-  _, err := admin.NewListener(lc.pipeline, lc)
+  admin, err := admin.NewListener(lc.pipeline)
   if err != nil {
     log.Fatalf("Failed to initialise: %s", err)
   }
@@ -100,6 +100,8 @@ SignalLoop:
       break SignalLoop
     case <-lc.reload_chan:
       lc.reloadConfig()
+    case command := <-admin.OnCommand():
+      admin.Respond(lc.processCommand(command))
     }
   }
 
@@ -245,17 +247,17 @@ func (lc *LogCourier) reloadConfig() {
   lc.pipeline.SendConfig(lc.config)
 }
 
-func (lc *LogCourier) ProcessCommand(command string) (interface{}, error) {
+func (lc *LogCourier) processCommand(command string) interface{} {
   if command == "SNAP" {
     snaps, err := lc.pipeline.Snapshot()
     if err != nil {
-      return nil, err
+      return &admin.ErrorResponse{Message: err.Error()}
     }
 
-    return snaps, nil
+    return &admin.Response{Response: snaps}
   }
 
-  return nil, fmt.Errorf("Unknown command")
+  return &admin.ErrorResponse{Message: "Unknown command"}
 }
 
 func (lc *LogCourier) cleanShutdown() {

@@ -86,13 +86,14 @@ func (p *Pipeline) SendConfig(config *Config) {
 }
 
 func (p *Pipeline) Snapshot() ([]*Snapshot, error) {
+  left := 0
   for _, sink := range p.snapshot_sinks {
     sink <- 1
+    left++
   }
 
   var ret []*Snapshot
 
-  left := len(p.snapshot_sinks)
   snapshots := make([]*Snapshot, 0)
 // TODO: Fix race condition here with shutdown that causes hang/crash
   for {

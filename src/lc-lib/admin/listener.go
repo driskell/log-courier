@@ -24,24 +24,22 @@ import (
   "time"
 )
 
-type LogCourierAdmin interface {
-  ProcessCommand(command string) (interface{}, error)
-}
-
 type Listener struct {
   core.PipelineSegment
 
-  lc         LogCourierAdmin
-  addr       net.TCPAddr
-  listener   *net.TCPListener
-  conn_group sync.WaitGroup
+  command_chan  chan string
+  response_chan chan interface{}
+  addr          net.TCPAddr
+  listener      *net.TCPListener
+  conn_group    sync.WaitGroup
 }
 
-func NewListener(pipeline *core.Pipeline, lc LogCourierAdmin) (*Listener, error) {
+func NewListener(pipeline *core.Pipeline) (*Listener, error) {
   var err error
 
   ret := &Listener{
-    lc: lc,
+    command_chan:  make(chan string),
+    response_chan: make(chan interface{}),
   }
 
   ret.addr.IP = net.ParseIP("127.0.0.1")
@@ -59,6 +57,14 @@ func NewListener(pipeline *core.Pipeline, lc LogCourierAdmin) (*Listener, error)
   pipeline.Register(ret)
 
   return ret, nil
+}
+
+func (l *Listener) OnCommand() <-chan string {
+  return l.command_chan
+}
+
+func (l *Listener) Respond(response interface{}) {
+  l.response_chan <- response
 }
 
 func (l *Listener) Run() {
@@ -95,6 +101,6 @@ ListenerLoop:
 func (l *Listener) startServer(conn *net.TCPConn) {
   l.conn_group.Add(1)
 
-  server := newServer(l.lc, &l.conn_group, conn)
+  server := newServer(l, conn)
   go server.Run()
 }
