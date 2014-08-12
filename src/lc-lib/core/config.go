@@ -32,6 +32,8 @@ import (
 )
 
 const (
+  default_GeneralConfig_AdminEnabled     bool          = false
+  default_GeneralConfig_AdminBind        string        = "localhost"
   default_GeneralConfig_PersistDir       string        = "."
   default_GeneralConfig_ProspectInterval time.Duration = 10 * time.Second
   default_GeneralConfig_SpoolSize        int64         = 1024
@@ -54,6 +56,9 @@ type Config struct {
 }
 
 type GeneralConfig struct {
+  AdminEnabled     bool          `config:"admin enabled"`
+  AdminBind        string        `config:"admin bind address"`
+  AdminPort        int           `config:"admin port"`
   PersistDir       string        `config:"persist directory"`
   ProspectInterval time.Duration `config:"prospect interval"`
   SpoolSize        int64         `config:"spool size"`
@@ -209,6 +214,7 @@ func (c *Config) Load(path string) (err error) {
   }
 
   // Fill in defaults where the zero-value is a valid setting
+  c.General.AdminEnabled = default_GeneralConfig_AdminEnabled
   c.General.LogLevel = default_GeneralConfig_LogLevel
   c.General.LogStdout = default_GeneralConfig_LogStdout
   c.General.LogSyslog = default_GeneralConfig_LogSyslog
@@ -245,21 +251,34 @@ func (c *Config) Load(path string) (err error) {
     }
   }
 
-  // Fill in defaults for GeneralConfig
+  // Validations and defaults
+  if c.General.AdminEnabled {
+    if c.General.AdminPort == 0 {
+      err = fmt.Errorf("An admin port must be specified when admin is enabled")
+      return
+    }
+  }
+
+  if c.General.AdminBind == "" {
+    c.General.AdminBind = default_GeneralConfig_AdminBind
+  }
+
   if c.General.PersistDir == "" {
     c.General.PersistDir = default_GeneralConfig_PersistDir
   }
+
   if c.General.ProspectInterval == time.Duration(0) {
     c.General.ProspectInterval = default_GeneralConfig_ProspectInterval
   }
+
   if c.General.SpoolSize == 0 {
     c.General.SpoolSize = default_GeneralConfig_SpoolSize
   }
+
   if c.General.SpoolTimeout == time.Duration(0) {
     c.General.SpoolTimeout = default_GeneralConfig_SpoolTimeout
   }
 
-  // Process through NetworkConfig
   if c.Network.Transport == "" {
     c.Network.Transport = default_NetworkConfig_Transport
   }

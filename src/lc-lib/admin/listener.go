@@ -26,37 +26,50 @@ import (
 
 type Listener struct {
   core.PipelineSegment
+  core.PipelineConfigReceiver
 
+  config        *core.GeneralConfig
   command_chan  chan string
   response_chan chan interface{}
-  addr          net.TCPAddr
   listener      *net.TCPListener
   conn_group    sync.WaitGroup
 }
 
-func NewListener(pipeline *core.Pipeline) (*Listener, error) {
+func NewListener(pipeline *core.Pipeline, config *core.GeneralConfig) (*Listener, error) {
   var err error
 
   ret := &Listener{
+    config:        config,
     command_chan:  make(chan string),
     response_chan: make(chan interface{}),
   }
 
-  ret.addr.IP = net.ParseIP("127.0.0.1")
-
-  if ret.addr.IP == nil {
-    return nil, fmt.Errorf("Invalid admin listen address")
-  }
-
-  ret.addr.Port = 1234
-
-  if ret.listener, err = net.ListenTCP("tcp", &ret.addr); err != nil {
+  if ret.listener, err = ret.startListening(config); err != nil {
     return nil, err
   }
 
   pipeline.Register(ret)
 
   return ret, nil
+}
+
+func (l *Listener) startListening(config *core.GeneralConfig) (*net.TCPListener, error) {
+  var addr net.TCPAddr
+
+  addr.IP = net.ParseIP(config.AdminBind)
+
+  if addr.IP == nil {
+    return nil, fmt.Errorf("The admin bind address specified is not a valid IP address")
+  }
+
+  addr.Port = config.AdminPort
+
+  listener, err := net.ListenTCP("tcp", &addr)
+  if err != nil {
+    return nil, err
+  }
+
+  return listener, nil
 }
 
 func (l *Listener) OnCommand() <-chan string {
@@ -77,6 +90,21 @@ ListenerLoop:
     select {
     case <-l.OnShutdown():
       break ListenerLoop
+    case config := <-l.OnConfig():
+      // We can't yet disable admin during a reload
+      if config.General.AdminEnabled {
+        if config.General.AdminBind != l.config.AdminBind || config.General.AdminPort != l.config.AdminPort {
+          new_listener, err := l.startListening(&config.General)
+          if err != nil {
+            log.Error("The new admin configuration failed to apply: %s", err)
+            continue
+          }
+
+          l.listener.Close()
+          l.listener = new_listener
+          l.config = &config.General
+        }
+      }
     default:
     }
 

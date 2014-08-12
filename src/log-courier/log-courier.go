@@ -61,13 +61,22 @@ func NewLogCourier() *LogCourier {
 }
 
 func (lc *LogCourier) Run() {
+  var admin_listener *admin.Listener
+  var on_command <-chan string
+
   lc.startUp()
 
   log.Info("Log Courier version %s pipeline starting", core.Log_Courier_Version)
 
-  admin, err := admin.NewListener(lc.pipeline)
-  if err != nil {
-    log.Fatalf("Failed to initialise: %s", err)
+  if lc.config.General.AdminEnabled {
+    var err error
+
+    admin_listener, err = admin.NewListener(lc.pipeline, &lc.config.General)
+    if err != nil {
+      log.Fatalf("Failed to initialise: %s", err)
+    }
+
+    on_command = admin_listener.OnCommand()
   }
 
   registrar := registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
@@ -100,8 +109,8 @@ SignalLoop:
       break SignalLoop
     case <-lc.reload_chan:
       lc.reloadConfig()
-    case command := <-admin.OnCommand():
-      admin.Respond(lc.processCommand(command))
+    case command := <-on_command:
+      admin_listener.Respond(lc.processCommand(command))
     }
   }
 
