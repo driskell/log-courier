@@ -84,9 +84,6 @@ module LogStash
       public
 
       def run(output_queue)
-        # TODO: How do we handle Logstash shutdown? An unknown exception raised
-        #       in run will trigger it but what waits for it?
-        # TODO: Check this is correct with the new protocol results
         @log_courier.run do |event|
           event = LogStash::Event.new(event)
           decorate event
