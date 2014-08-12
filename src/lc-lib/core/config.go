@@ -33,7 +33,7 @@ import (
 
 const (
   default_GeneralConfig_AdminEnabled     bool          = false
-  default_GeneralConfig_AdminBind        string        = "localhost"
+  default_GeneralConfig_AdminBind        string        = "127.0.0.1"
   default_GeneralConfig_PersistDir       string        = "."
   default_GeneralConfig_ProspectInterval time.Duration = 10 * time.Second
   default_GeneralConfig_SpoolSize        int64         = 1024
@@ -257,6 +257,11 @@ func (c *Config) Load(path string) (err error) {
       err = fmt.Errorf("An admin port must be specified when admin is enabled")
       return
     }
+
+    if c.General.AdminPort <= 0 || c.General.AdminPort >= 65535 {
+      err = fmt.Errorf("Invalid admin port specified")
+      return
+    }
   }
 
   if c.General.AdminBind == "" {
@@ -405,6 +410,19 @@ func (c *Config) PopulateConfig(config interface{}, config_path string, raw_conf
           err = fmt.Errorf("Option %s%s is not a valid integer", config_path, tag, field.Type())
           return
         }
+      } else if field.Kind() == reflect.Int {
+        fail := true
+        if value.Kind() == reflect.Float64 {
+          number := value.Float()
+          if math.Floor(number) == number {
+            fail = false
+            field.Set(reflect.ValueOf(int(number)))
+          }
+        }
+        if fail {
+          err = fmt.Errorf("Option %s%s is not a valid integer", config_path, tag, field.Type())
+          return
+        }
       } else if field.Type().String() == "logging.Level" {
         fail := true
         if value.Kind() == reflect.String {
@@ -419,7 +437,7 @@ func (c *Config) PopulateConfig(config interface{}, config_path string, raw_conf
           return
         }
       } else {
-        err = fmt.Errorf("Option %s%s must be %s or similar", config_path, tag, field.Type())
+        err = fmt.Errorf("Option %s%s must be %s or similar (%s provided)", config_path, tag, field.Type(), value.Type())
         return
       }
       delete(raw_config, tag)

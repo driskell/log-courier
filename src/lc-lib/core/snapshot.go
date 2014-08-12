@@ -20,6 +20,7 @@ type Snapshot struct {
   Desc    string
   Entries map[string]interface{}
   Keys    []string
+  Subs    []*Snapshot
 }
 
 func NewSnapshot(desc string) *Snapshot {
@@ -27,6 +28,7 @@ func NewSnapshot(desc string) *Snapshot {
     Desc:    desc,
     Entries: make(map[string]interface{}),
     Keys:    make([]string, 0),
+    Subs:    make([]*Snapshot, 0),
   }
 }
 
@@ -57,4 +59,20 @@ func (s *Snapshot) Entry(i int) (string, interface{}) {
 
 func (s *Snapshot) NumEntries() int {
   return len(s.Keys)
+}
+
+func (s *Snapshot) AddSub(sub *Snapshot) {
+  s.Subs = append(s.Subs, sub)
+}
+
+func (s *Snapshot) Sub(i int) *Snapshot {
+  if i < 0 || i >= len(s.Subs) {
+    panic("Out of bounds")
+  }
+
+  return s.Subs[i]
+}
+
+func (s *Snapshot) NumSubs() int {
+  return len(s.Subs)
 }

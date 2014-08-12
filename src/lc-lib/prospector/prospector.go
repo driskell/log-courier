@@ -357,8 +357,14 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *pros
 }
 
 func (p *Prospector) handleSnapshot() {
-  snapshots := make([]*core.Snapshot, 1)
-  snapshots[0] = core.NewSnapshot("Prospector")
+  snapshots := make([]*core.Snapshot, 0)
+
+  for _, info := range p.prospectors {
+    if !info.running {
+      continue
+    }
+    info.requestSnapshot()
+  }
 
   for _, info := range p.prospectorindex {
     var status string
@@ -373,22 +379,31 @@ func (p *Prospector) handleSnapshot() {
       }
     }
 
-    snapshots[0].AddEntry(info.file, status)
+    snap := core.NewSnapshot(info.file)
+    snap.AddEntry("Status", status)
+
+    if info.running {
+      if sub_snap := info.getSnapshot(); sub_snap != nil {
+        snap.AddSub(sub_snap)
+      }
+    }
+
+    snapshots = append(snapshots, snap)
   }
 
-  for _, info := range p.prospectors {
-    if !info.running {
-      continue
-    }
-    info.requestSnapshot()
-  }
+  var snap *core.Snapshot
 
   for _, info := range p.prospectors {
-    if !info.running {
+    if info.orphaned != Orphaned_No {
       continue
     }
-    if snap := info.getSnapshot(); snap != nil {
-      snapshots = append(snapshots, snap)
+
+    if snap == nil {
+      snap = core.NewSnapshot(info.file + " (Orphaned)")
+    }
+
+    if sub_snap := info.getSnapshot(); sub_snap != nil {
+      snap.AddSub(sub_snap)
     }
   }
 

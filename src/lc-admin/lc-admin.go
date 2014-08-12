@@ -93,10 +93,7 @@ func (a *Admin) ProcessCommand(command string) bool {
 
     for _, snap := range snapshots {
       fmt.Printf("%s:\n", snap.Description())
-      for i, j := 0, snap.NumEntries(); i < j; i = i+1 {
-        k, v := snap.Entry(i)
-        fmt.Printf("  %s = %v\n", k, v)
-      }
+      a.renderSnap("  ", snap)
     }
   default:
     fmt.Printf("Unknown command: %s\n", command)
@@ -114,6 +111,20 @@ func (a *Admin) ProcessCommand(command string) bool {
   }
 
   return false
+}
+
+func (a *Admin) renderSnap(indent string, snap *core.Snapshot) {
+  if snap.NumEntries() != 0 {
+    for i, j := 0, snap.NumEntries(); i < j; i = i+1 {
+      k, v := snap.Entry(i)
+      fmt.Printf(indent + "%s = %v\n", k, v)
+    }
+  }
+  if snap.NumSubs() != 0 {
+    for i, j := 0, snap.NumSubs(); i < j; i = i+1 {
+      a.renderSnap(indent + "  ", snap.Sub(i))
+    }
+  }
 }
 
 func (a *Admin) Run() {
