@@ -63,6 +63,13 @@ module LogCourier
         # Non-blocking means we can keep clients informed of progress, and response in a timely fashion. We could create this with
         # a timeout wrapper around the &block call but we'd then be generating exceptions in someone else's code
         # So we allow the caller to block us - but only our spooler thread - our other threads are safe and we can use timeout
+
+        # TODO: Spooler thread becomes run() thread - then any exception falls through to the LogStash plugin
+        # The only exception that raises in this small chunk of code should be a Logstash Shutdown exception
+        # Therefore, when Logstash plugin receives the exception, it can call a teardown here which pulls
+        # down the other threads with the correct exceptions
+        # This resolves the problem where we want to keep all Logstash-ness outside of this library, and as a result
+        # have problems with shutdown as we start receiving Logstash shutdown exceptions in here
         spooler_thread = Thread.new do
           loop do
             events = event_queue.pop
