@@ -73,11 +73,16 @@ func (c *CodecFilter) Teardown() int64 {
 
 func (c *CodecFilter) Event(start_offset int64, end_offset int64, line uint64, text string) {
   // Only flush the event if it matches a filter
+  var match bool
   for _, matcher := range c.config.matchers {
-    if c.config.Negate != matcher.MatchString(text) {
-      c.callback_func(start_offset, end_offset, line, text)
-      return
+    if matcher.MatchString(text) {
+      match = true
+      break
     }
+  }
+
+  if c.config.Negate != match {
+    c.callback_func(start_offset, end_offset, line, text)
   }
 }
 
