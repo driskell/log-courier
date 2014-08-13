@@ -29,9 +29,9 @@ The filter codec strips out unwanted events, shipping only those desired.
 A set of regular expressions to match against each line.
 
 These are applied in the order that they are specified. As soon as a matching
-pattern is found (after taking into account the `"negate"` option) the event is
-shipped and the remaining patterns are skipped until the next event. As such,
-patterns with higher hit rates should be specified first.
+pattern is found the event is shipped and the remaining patterns are skipped
+until the next event. As such, patterns with higher hit rates should be
+specified first.
 
 The pattern syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
 
@@ -39,5 +39,5 @@ The pattern syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
 
 *Boolean. Optional. Default: false*
 
-Negates `patterns` so that each match becomes a non-match and a non-match
-becomes a match.
+Negates `patterns` so that an event is only shipped if none of the patterns
+matched.
