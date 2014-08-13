@@ -58,7 +58,7 @@ func (c *Client) connect() (err error) {
 }
 
 func (c *Client) request(command string) (*Response, error) {
-  if err := c.conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+  if err := c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
     return nil, err
   }
 
@@ -78,7 +78,7 @@ func (c *Client) request(command string) (*Response, error) {
 
   var response Response
 
-  if err := c.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+  if err := c.conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
     return nil, err
   }
 

@@ -30,7 +30,7 @@ type Listener struct {
 
   config        *core.GeneralConfig
   command_chan  chan string
-  response_chan chan interface{}
+  response_chan chan *Response
   listener      *net.TCPListener
   conn_group    sync.WaitGroup
 }
@@ -41,7 +41,7 @@ func NewListener(pipeline *core.Pipeline, config *core.GeneralConfig) (*Listener
   ret := &Listener{
     config:        config,
     command_chan:  make(chan string),
-    response_chan: make(chan interface{}),
+    response_chan: make(chan *Response),
   }
 
   if ret.listener, err = ret.startListening(config); err != nil {
@@ -76,7 +76,7 @@ func (l *Listener) OnCommand() <-chan string {
   return l.command_chan
 }
 
-func (l *Listener) Respond(response interface{}) {
+func (l *Listener) Respond(response *Response) {
   l.response_chan <- response
 }
 

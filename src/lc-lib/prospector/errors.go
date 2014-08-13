@@ -16,10 +16,14 @@
 
 package prospector
 
-import "github.com/op/go-logging"
+type ProspectorSkipError struct {
+  message string
+}
 
-var log *logging.Logger
+func newProspectorSkipError(message string) *ProspectorSkipError {
+  return &ProspectorSkipError{message: message}
+}
 
-func init() {
-  log = logging.MustGetLogger("prospector")
+func (e *ProspectorSkipError) Error() string {
+  return e.message
 }

@@ -20,6 +20,7 @@
 package prospector
 
 import (
+  "fmt"
   "lc-lib/core"
   "lc-lib/harvester"
   "lc-lib/registrar"
@@ -131,7 +132,6 @@ func (p *Prospector) Run() {
 
 ProspectLoop:
   for {
-
     newlastscan := time.Now()
     p.iteration++ // Overflow is allowed
 
@@ -171,15 +171,27 @@ ProspectLoop:
     p.lastscan = newlastscan
 
     // Defer next scan for a bit
-    select {
-    case <-time.After(p.generalconfig.ProspectInterval):
-    case <-p.OnShutdown():
-      break ProspectLoop
-    case <-p.OnSnapshot():
-      p.handleSnapshot()
-    case config := <-p.OnConfig():
-      p.generalconfig = &config.General
-      p.fileconfigs = config.Files
+    now := time.Now()
+    scan_deadline := now.Add(p.generalconfig.ProspectInterval)
+
+  DelayLoop:
+    for {
+      select {
+      case <-time.After(scan_deadline.Sub(now)):
+        break DelayLoop
+      case <-p.OnShutdown():
+        break ProspectLoop
+      case <-p.OnSnapshot():
+        p.handleSnapshot()
+      case config := <-p.OnConfig():
+        p.generalconfig = &config.General
+        p.fileconfigs = config.Files
+      }
+
+      now = time.Now()
+      if now.After(scan_deadline) {
+        break
+      }
     }
   }
 
@@ -207,22 +219,56 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
 
   // Check any matched files to see if we need to start a harvester
   for _, file := range matches {
+    // Check the current info against our index
+    info, is_known := p.prospectorindex[file]
+
     // Stat the file, following any symlinks
     // TODO: Low priority. Trigger loadFileId here for Windows instead of
     //       waiting for Harvester or Registrar to do it
     fileinfo, err := os.Stat(file)
+    if err == nil {
+      if fileinfo.IsDir() {
+        err = newProspectorSkipError("Directory")
+      }
+    }
+
     if err != nil {
-      log.Error("stat(%s) failed: %s", file, err)
-      continue
-    }
+      // Do we know this entry?
+      if is_known {
+        if info.status != Status_Invalid {
+          // The current entry is not an error, orphan it so we can log one
+          info.orphaned = Orphaned_Yes
+        } else if info.err != err {
+          // The error is different, remove this entry we'll log a new one
+          delete(p.prospectors, info)
+        } else {
+          // The same error occurred - don't log it again
+          info.update(nil, p.iteration)
+          continue
+        }
+      }
 
-    if fileinfo.IsDir() {
-      log.Info("Skipping directory: %s", file)
-      continue
-    }
+      // This is a new error
+      info = newProspectorInfoInvalid(file, err)
+      info.update(nil, p.iteration)
 
-    // Check the current info against our index
-    info, is_known := p.prospectorindex[file]
+      // Print a friendly log message
+      if _, ok := err.(*ProspectorSkipError); ok {
+        log.Info("Skipping %s: %s", file, err)
+      } else {
+        log.Error("Error prospecting %s: %s", file, err)
+      }
+
+      p.prospectors[info] = info
+      p.prospectorindex[file] = info
+      continue
+    } else if is_known && info.status == Status_Invalid {
+      // We have an error stub and we've just successfully got fileinfo
+      // So wipe the error away
+      is_known = false
+      delete(p.prospectors, info)
+      delete(p.prospectorindex, file)
+    }
 
     // Conditions for starting a new harvester:
     // - file path hasn't been seen before
@@ -231,6 +277,17 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
       // Check for dead time, but only if the file modification time is before the last scan started
       // This ensures we don't skip genuine creations with dead times less than 10s
       if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
+        // Symlinks could mean we see the same file twice - skip if we have
+        if previousinfo == nil {
+          // TODO: Improve. This could be hit on every prospector run due to how we clear errors above
+          delete(p.prospectors, info)
+          info = newProspectorInfoInvalid(file, newProspectorSkipError("Duplicate"))
+          info.update(nil, p.iteration)
+          p.prospectors[info] = info
+          p.prospectorindex[file] = info
+          continue
+        }
+
         // This file was simply renamed (known inode+dev) - link the same harvester channel as the old file
         log.Info("File rename was detected: %s -> %s", previous, file)
         info = previousinfo
@@ -253,16 +310,27 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
           log.Info("Launching harvester on new file: %s", file)
           p.startHarvester(info, config)
         }
-
-        // Store the new entry
-        p.prospectors[info] = info
       }
+
+      // Store the new entry
+      p.prospectors[info] = info
     } else {
       if !info.identity.SameAs(fileinfo) {
         // Keep the old file in case we find it again shortly
         info.orphaned = Orphaned_Maybe
 
         if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
+          // Symlinks could mean we see the same file twice - skip if we have
+          if previousinfo == nil {
+            // TODO: Improve. This could be hit on every prospector run due to how we clear errors above
+            delete(p.prospectors, info)
+            info = newProspectorInfoInvalid(file, newProspectorSkipError("Duplicate"))
+            info.update(nil, p.iteration)
+            p.prospectors[info] = info
+            p.prospectorindex[file] = info
+            continue
+          }
+
           // This file was renamed from another file we know - link the same harvester channel as the old file
           log.Info("File rename was detected: %s -> %s", previous, file)
           info = previousinfo
@@ -278,10 +346,10 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
 
           // Process new file
           p.startHarvester(info, config)
-
-          // Store it
-          p.prospectors[info] = info
         }
+
+        // Store it
+        p.prospectors[info] = info
       }
     }
 
@@ -337,11 +405,20 @@ func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, config *core
 
 func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *prospectorInfo) {
   for _, ki := range p.prospectors {
+    if ki.status == Status_Invalid {
+      // Don't consider error placeholders
+      continue
+    }
     if ki.orphaned == Orphaned_No && ki.file == file {
       // We already know the prospector info for this file doesn't match, so don't check again
       continue
     }
     if ki.identity.SameAs(info) {
+      // Already seen?
+      if ki.last_seen == p.iteration {
+        return ki.file, nil
+      }
+
       // Found previous information, remove it and return it (it will be added again)
       delete(p.prospectors, ki)
       if ki.orphaned == Orphaned_No {
@@ -367,45 +444,57 @@ func (p *Prospector) handleSnapshot() {
   }
 
   for _, info := range p.prospectorindex {
-    var status string
-
-    if info.status == Status_Failed {
-      status = "Failed"
-    } else {
-      if info.running {
-        status = "Running"
-      } else {
-        status = "Dead"
-      }
-    }
-
-    snap := core.NewSnapshot(info.file)
-    snap.AddEntry("Status", status)
-
-    if info.running {
-      if sub_snap := info.getSnapshot(); sub_snap != nil {
-        snap.AddSub(sub_snap)
-      }
-    }
-
-    snapshots = append(snapshots, snap)
+    snapshots = append(snapshots, p.snapshotInfo(info))
   }
 
-  var snap *core.Snapshot
-
   for _, info := range p.prospectors {
-    if info.orphaned != Orphaned_No {
+    if info.orphaned == Orphaned_No {
       continue
     }
+    snapshots = append(snapshots, p.snapshotInfo(info))
+  }
 
-    if snap == nil {
-      snap = core.NewSnapshot(info.file + " (Orphaned)")
+  p.SendSnapshot(snapshots)
+}
+
+func (p *Prospector) snapshotInfo(info *prospectorInfo) *core.Snapshot {
+  var extra string
+  var status string
+
+  switch (info.orphaned) {
+  case Orphaned_Maybe:
+    extra = "Orphan? / "
+  case Orphaned_Yes:
+    extra = "Orphan / "
+  }
+
+  switch (info.status) {
+  default:
+    if info.running {
+      status = "Running"
+    } else {
+      status = "Dead"
     }
+  case Status_Resume:
+    status = "Resuming"
+  case Status_Failed:
+    status = fmt.Sprintf("Failed: %s", info.err)
+  case Status_Invalid:
+    if _, ok := info.err.(*ProspectorSkipError); ok {
+      status = fmt.Sprintf("Skipped (%s)", info.err)
+    } else {
+      status = fmt.Sprintf("Error: %s", info.err)
+    }
+  }
 
+  snap := core.NewSnapshot(fmt.Sprintf("%s (%s%p)", info.file, extra, info))
+  snap.AddEntry("Status", status)
+
+  if info.running {
     if sub_snap := info.getSnapshot(); sub_snap != nil {
       snap.AddSub(sub_snap)
     }
   }
 
-  p.SendSnapshot(snapshots)
+  return snap
 }

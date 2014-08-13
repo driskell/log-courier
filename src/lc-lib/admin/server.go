@@ -50,7 +50,7 @@ func (s *server) Run() {
 }
 
 func (s *server) loop() (err error) {
-  var result interface{}
+  var result *Response
 
   s.encoder = gob.NewEncoder(s.conn)
 
@@ -83,7 +83,7 @@ func (s *server) readCommand(command []byte) error {
   start_time := time.Now()
 
   for {
-    if err := s.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+    if err := s.conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
       return err
     }
 
@@ -109,7 +109,7 @@ func (s *server) readCommand(command []byte) error {
 }
 
 func (s *server) sendResponse(response interface{}) error {
-  if err := s.conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+  if err := s.conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
     return err
   }
 
@@ -120,11 +120,11 @@ func (s *server) sendResponse(response interface{}) error {
   return nil
 }
 
-func (s *server) processCommand(command string) interface{} {
+func (s *server) processCommand(command string) *Response {
   select {
   case s.listener.command_chan <- command:
   case <-s.listener.OnShutdown():
-    return &ErrorResponse{Message: "Log Courier is shutting down"}
+    return &Response{&ErrorResponse{Message: "Log Courier is shutting down"}}
   }
 
   return <-s.listener.response_chan

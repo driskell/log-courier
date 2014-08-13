@@ -32,7 +32,7 @@ import (
 
 type HarvesterFinish struct {
   Last_Offset int64
-  Failed      bool
+  Error       error
 }
 
 type Harvester struct {
@@ -65,8 +65,6 @@ func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64)
   return &Harvester{
     stop_chan:     make(chan interface{}),
     return_chan:   make(chan *HarvesterFinish, 1),
-    snapshot_chan: make(chan interface{}, 1),
-    snapshot_sink: make(chan *core.Snapshot, 1),
     stream:        stream,
     fileinfo:      fileinfo,
     path:          path,
@@ -76,9 +74,14 @@ func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64)
 }
 
 func (h *Harvester) Start(output chan<- *core.EventDescriptor) {
+  // Reset these channels on each harvester restart to ensure that any pending
+  // snapshot request or response that was ignored/interrupted is cleared
+  h.snapshot_chan = make(chan interface{}, 1)
+  h.snapshot_sink = make(chan *core.Snapshot, 1)
+
   go func() {
     status := &HarvesterFinish{}
-    status.Last_Offset, status.Failed = h.harvest(output)
+    status.Last_Offset, status.Error = h.harvest(output)
     h.return_chan <- status
   }()
 }
@@ -99,9 +102,9 @@ func (h *Harvester) OnSnapshot() <-chan *core.Snapshot {
   return h.snapshot_sink
 }
 
-func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, bool) {
-  if !h.prepareHarvester() {
-    return h.offset, true
+func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) {
+  if err := h.prepareHarvester(); err != nil {
+    return h.offset, err
   }
 
   h.output = output
@@ -200,7 +203,7 @@ ReadLoop:
             // In prospector we use that for comparison to resume
             // This prevents a potential race condition if we stop just as the
             // file is modified with extra lines...
-            return h.codec.Teardown(), false
+            return h.codec.Teardown(), nil
           }
 
           continue
@@ -210,7 +213,7 @@ ReadLoop:
       } else {
         log.Error("Unexpected error reading from %s: %s", h.path, err)
       }
-      return h.codec.Teardown(), true
+      return h.codec.Teardown(), err
     }
 
     line++
@@ -225,7 +228,7 @@ ReadLoop:
   }
 
   log.Info("Harvester for %s exiting", h.path)
-  return h.codec.Teardown(), false
+  return h.codec.Teardown(), nil
 }
 
 func (h *Harvester) eventCallback(start_offset int64, end_offset int64, line uint64, text string) {
@@ -248,31 +251,36 @@ EventLoop:
   }
 }
 
-func (h *Harvester) prepareHarvester() bool {
+func (h *Harvester) prepareHarvester() error {
   // Special handling that "-" means to read from standard input
   if h.path == "-" {
     h.file = os.Stdin
-    return true
+    return nil
   }
 
   var err error
   h.file, err = h.openFile(h.path)
   if err != nil {
     log.Error("Failed opening %s: %s", h.path, err)
-    return false
+    return err
   }
 
   // Check we opened the right file
   info, err := h.file.Stat()
-  if err != nil || !os.SameFile(info, h.fileinfo) {
+  if err != nil {
     h.file.Close()
-    return false
+    return err
+  }
+
+  if !os.SameFile(info, h.fileinfo) {
+    h.file.Close()
+    return fmt.Errorf("Not the same file")
   }
 
   // TODO: Check error?
   h.file.Seek(h.offset, os.SEEK_SET)
 
-  return true
+  return nil
 }
 
 func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer) (string, int, error) {

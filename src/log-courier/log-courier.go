@@ -256,17 +256,17 @@ func (lc *LogCourier) reloadConfig() {
   lc.pipeline.SendConfig(lc.config)
 }
 
-func (lc *LogCourier) processCommand(command string) interface{} {
+func (lc *LogCourier) processCommand(command string) *admin.Response {
   if command == "SNAP" {
     snaps, err := lc.pipeline.Snapshot()
     if err != nil {
-      return &admin.ErrorResponse{Message: err.Error()}
+      return &admin.Response{&admin.ErrorResponse{Message: err.Error()}}
     }
 
-    return &admin.Response{Response: snaps}
+    return &admin.Response{snaps}
   }
 
-  return &admin.ErrorResponse{Message: "Unknown command"}
+  return &admin.Response{&admin.ErrorResponse{Message: "Unknown command"}}
 }
 
 func (lc *LogCourier) cleanShutdown() {
