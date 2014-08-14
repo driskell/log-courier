@@ -172,14 +172,49 @@ CommandLoop:
   }
 }
 
+func (a *Admin) argsCommand(args []string, watch bool) {
+  var signal_chan chan os.Signal
+
+  if watch {
+    signal_chan = make(chan os.Signal, 1)
+    signal.Notify(signal_chan, os.Interrupt)
+  }
+
+WatchLoop:
+  for {
+    if !a.ProcessCommand(strings.Join(args, " ")) {
+      if !watch {
+        os.Exit(1)
+      }
+    }
+
+    if !watch {
+      break
+    }
+
+    // Gap between repeats
+    fmt.Printf("\n")
+
+    select {
+    case <-signal_chan:
+      break WatchLoop
+    case <-time.After(time.Second):
+    }
+  }
+
+  os.Exit(0)
+}
+
 func main() {
   var version bool
   var quiet bool
+  var watch bool
   var host string
   var port int
 
   flag.BoolVar(&version, "version", false, "display the Log Courier client version")
   flag.BoolVar(&quiet, "quiet", false, "quietly execute the command line argument and output only the result")
+  flag.BoolVar(&watch, "watch", false, "repeat the command specified on the command line every second")
   flag.StringVar(&host, "host", "127.0.0.1", "the Log Courier host to connect to (default 127.0.0.1)")
   flag.IntVar(&port, "port", 1234, "the Log Courier monitor port (default 1234)")
 
@@ -198,14 +233,16 @@ func main() {
 
   args := flag.Args()
   if len(args) != 0 {
-    if !admin.ProcessCommand(strings.Join(args, " ")) {
-      os.Exit(1)
-    }
-    os.Exit(0)
+    admin.argsCommand(args, watch)
   }
 
   if quiet {
     fmt.Printf("No command specified on the command line for quiet execution\n")
+    os.Exit(1)
+  }
+
+  if watch {
+    fmt.Printf("No command specified on the command line to watch\n")
     os.Exit(1)
   }
 
