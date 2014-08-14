@@ -31,9 +31,10 @@ type CodecFilterFactory struct {
 }
 
 type CodecFilter struct {
-  config        *CodecFilterFactory
-  last_offset   int64
-  callback_func core.CodecCallbackFunc
+  config         *CodecFilterFactory
+  last_offset    int64
+  filtered_lines uint64
+  callback_func  core.CodecCallbackFunc
 }
 
 func NewFilterCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
@@ -83,7 +84,15 @@ func (c *CodecFilter) Event(start_offset int64, end_offset int64, line uint64, t
 
   if c.config.Negate != match {
     c.callback_func(start_offset, end_offset, line, text)
+  } else {
+    c.filtered_lines++
   }
+}
+
+func (c *CodecFilter) Snapshot() *core.Snapshot {
+  snap := core.NewSnapshot("Filter Codec")
+  snap.AddEntry("Filtered lines", c.filtered_lines)
+  return snap
 }
 
 // Register the codec

@@ -19,6 +19,7 @@ package core
 type Codec interface {
   Teardown() int64
   Event(int64, int64, uint64, string)
+  Snapshot() *Snapshot
 }
 
 type CodecCallbackFunc func(int64, int64, uint64, string)

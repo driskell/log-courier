@@ -19,6 +19,7 @@ package admin
 import (
   "encoding/gob"
   "lc-lib/core"
+  "time"
 )
 
 type Response struct {
@@ -37,7 +38,16 @@ func (e *ErrorResponse) Error() string {
 }
 
 func init() {
-  gob.Register(&PongResponse{})
+  // Response structure
+  gob.Register(&Response{})
+
+  // General error
   gob.Register(&ErrorResponse{})
+
+  // PONG
+  gob.Register(&PongResponse{})
+
+  // SNAP
   gob.Register([]*core.Snapshot{&core.Snapshot{}})
+  gob.Register(time.Now())
 }

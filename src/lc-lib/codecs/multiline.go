@@ -50,6 +50,7 @@ type CodecMultiline struct {
   start_offset   int64
   line           uint64
   buffer         []string
+  buffer_lines   uint64
   timer_lock     sync.Mutex
   timer_stop     chan interface{}
   timer_wait     sync.WaitGroup
@@ -85,6 +86,7 @@ func NewMultilineCodecFactory(config *core.Config, config_path string, unused ma
 func (f *CodecMultilineFactory) NewCodec(callback_func core.CodecCallbackFunc, offset int64) core.Codec {
   c := &CodecMultiline{
     config:        f,
+    end_offset:    offset,
     last_offset:   offset,
     callback_func: callback_func,
   }
@@ -135,6 +137,7 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64
   }
   c.end_offset = end_offset
   c.buffer = append(c.buffer, text)
+  c.buffer_lines++
   if c.config.what == codecMultiline_What_Previous {
     if c.config.PreviousTimeout != 0 {
       // Reset the timer and unlock
@@ -156,8 +159,16 @@ func (c *CodecMultiline) flush() {
   // Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
   c.last_offset = c.end_offset
   c.buffer = nil
+  c.buffer_lines = 0
 
   c.callback_func(c.start_offset, c.end_offset, c.line, text)
+}
+
+func (c *CodecMultiline) Snapshot() *core.Snapshot {
+  snap := core.NewSnapshot("Multiline Codec")
+  snap.AddEntry("Pending lines", c.buffer_lines)
+  snap.AddEntry("Pending bytes", c.last_offset - c.end_offset)
+  return snap
 }
 
 func (c *CodecMultiline) deadlineRoutine() {

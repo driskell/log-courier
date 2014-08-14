@@ -25,9 +25,8 @@ import (
   "os"
   "os/signal"
   "strings"
+  "time"
 )
-
-
 
 type Admin struct {
   client    *admin.Client
@@ -117,12 +116,22 @@ func (a *Admin) renderSnap(indent string, snap *core.Snapshot) {
   if snap.NumEntries() != 0 {
     for i, j := 0, snap.NumEntries(); i < j; i = i+1 {
       k, v := snap.Entry(i)
-      fmt.Printf(indent + "%s = %v\n", k, v)
+      if t, ok := v.(string); ok {
+        fmt.Printf(indent + "%s: %s\n", k, t)
+      } else if t, ok := v.(float64); ok {
+        fmt.Printf(indent + "%s: %.2f\n", k, t)
+      } else if t, ok := v.(time.Time); ok {
+        fmt.Printf(indent + "%s: %s\n", k, t.Format("_2 Jan 2006 15.04.05"))
+      } else {
+        fmt.Printf(indent + "%s: %v\n", k, v)
+      }
     }
   }
   if snap.NumSubs() != 0 {
     for i, j := 0, snap.NumSubs(); i < j; i = i+1 {
-      a.renderSnap(indent + "  ", snap.Sub(i))
+      sub_snap := snap.Sub(i)
+      fmt.Printf(indent + "%s:\n", sub_snap.Description())
+      a.renderSnap(indent + "  ", sub_snap)
     }
   }
 }

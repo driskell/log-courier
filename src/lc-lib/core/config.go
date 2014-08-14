@@ -399,6 +399,19 @@ func (c *Config) PopulateConfig(config interface{}, config_path string, raw_conf
           err = fmt.Errorf("Option %s%s must be a valid numeric or string duration", config_path, tag)
           return
         }
+      } else if field.Type().String() == "logging.Level" {
+        fail := true
+        if value.Kind() == reflect.String {
+          var llevel logging.Level
+          if llevel, err = logging.LogLevel(value.String()); err == nil {
+            fail = false
+            field.Set(reflect.ValueOf(llevel))
+          }
+        }
+        if fail {
+          err = fmt.Errorf("Option %s%s is not a valid log level (critical, error, warning, notice, info, debug)", config_path, tag)
+          return
+        }
       } else if field.Kind() == reflect.Int64 {
         fail := true
         if value.Kind() == reflect.Float64 {
@@ -423,19 +436,6 @@ func (c *Config) PopulateConfig(config interface{}, config_path string, raw_conf
         }
         if fail {
           err = fmt.Errorf("Option %s%s is not a valid integer", config_path, tag, field.Type())
-          return
-        }
-      } else if field.Type().String() == "logging.Level" {
-        fail := true
-        if value.Kind() == reflect.String {
-          var llevel logging.Level
-          if llevel, err = logging.LogLevel(value.String()); err == nil {
-            fail = false
-            field.Set(reflect.ValueOf(llevel))
-          }
-        }
-        if fail {
-          err = fmt.Errorf("Option %s%s is not a valid log level (critical, error, warning, notice, info, debug)", config_path, tag)
           return
         }
       } else {

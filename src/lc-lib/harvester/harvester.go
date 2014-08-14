@@ -48,8 +48,11 @@ type Harvester struct {
   codec         core.Codec
   output        chan<- *core.EventDescriptor
   file          *os.File
-  speed         float64
-  count         int64
+  line_speed    float64
+  byte_speed    float64
+  line_count    uint64
+  byte_count    uint64
+  last_eof      time.Time
 }
 
 func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64) *Harvester {
@@ -129,8 +132,9 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) 
   read_timeout := 10 * time.Second
 
   last_read_time := time.Now()
+  last_line_count := uint64(0)
+  last_byte_count := uint64(0)
   last_measurement := last_read_time
-  last_event_count := int64(0)
   seconds_without_events := 0
 
 ReadLoop:
@@ -138,25 +142,21 @@ ReadLoop:
     text, bytesread, err := h.readline(reader, buffer)
 
     if duration := time.Since(last_measurement); duration >= time.Second {
-      count := float64(h.count - last_event_count)
+      count := float64(h.line_count - last_line_count)
 
-      if h.speed == 0. {
-        h.speed = count
-      } else {
-        if count == 0 {
+      if count == 0 {
+        if seconds_without_events != 5 {
           seconds_without_events++
-        } else {
-          seconds_without_events = 0
         }
-
-        if seconds_without_events == 5 {
-          h.speed = 0.
-        } else {
-          // Calculate a moving average over 5 seconds - use similiar weight as load average
-          h.speed = count + math.Exp(float64(duration) / float64(time.Second) / -5.) * (h.speed - count)
-        }
+      } else {
+        seconds_without_events = 0
       }
-      last_event_count = h.count
+
+      h.line_speed = h.calculateSpeed(duration, h.line_speed, count, seconds_without_events)
+      h.byte_speed = h.calculateSpeed(duration, h.byte_speed, float64(h.byte_count - last_byte_count), seconds_without_events)
+
+      last_byte_count = h.byte_count
+      last_line_count = h.line_count
       last_measurement = time.Now()
 
       // Check shutdown
@@ -177,6 +177,8 @@ ReadLoop:
           break ReadLoop
         default:
         }
+
+        h.last_eof = time.Now()
 
         // Timed out waiting for data, got EOF
         if h.path == "-" {
@@ -224,11 +226,25 @@ ReadLoop:
     h.codec.Event(line_offset, h.offset, line, text)
 
     last_read_time = time.Now()
-    h.count++
+    h.line_count++
+    h.byte_count += uint64(bytesread)
   }
 
   log.Info("Harvester for %s exiting", h.path)
   return h.codec.Teardown(), nil
+}
+
+func (h *Harvester) calculateSpeed(duration time.Duration, speed float64, count float64, seconds_without_events int) float64 {
+  if speed == 0. {
+    return count
+  }
+
+  if seconds_without_events == 5 {
+    return 0.
+  }
+
+  // Calculate a moving average over 5 seconds - use similiar weight as load average
+  return count + math.Exp(float64(duration) / float64(time.Second) / -5.) * (speed - count)
 }
 
 func (h *Harvester) eventCallback(start_offset int64, end_offset int64, line uint64, text string) {
@@ -336,9 +352,20 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer) (string
 }
 
 func (h *Harvester) handleSnapshot() {
-  ret := core.NewSnapshot(fmt.Sprintf("Harvester (%s)", h.path))
-  ret.AddEntry("Speed", h.speed)
-  ret.AddEntry("Count", h.count)
+  ret := core.NewSnapshot("Harvester")
+  ret.AddEntry("Speed (Lps)", h.line_speed)
+  ret.AddEntry("Speed (Bps)", h.byte_speed)
+  ret.AddEntry("Processed lines", h.line_count)
+  ret.AddEntry("Last offset", h.offset)
+  if h.last_eof.IsZero() {
+    ret.AddEntry("Last EOF", "Never")
+  } else {
+    ret.AddEntry("Last EOF", h.last_eof)
+  }
+
+  if sub_snap := h.codec.Snapshot(); sub_snap != nil {
+    ret.AddSub(sub_snap)
+  }
 
   h.snapshot_sink <- ret
 }

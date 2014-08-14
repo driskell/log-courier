@@ -108,7 +108,7 @@ func (s *server) readCommand(command []byte) error {
   return nil
 }
 
-func (s *server) sendResponse(response interface{}) error {
+func (s *server) sendResponse(response *Response) error {
   if err := s.conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
     return err
   }

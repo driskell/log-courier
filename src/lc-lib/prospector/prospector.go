@@ -264,10 +264,8 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
       continue
     } else if is_known && info.status == Status_Invalid {
       // We have an error stub and we've just successfully got fileinfo
-      // So wipe the error away
+      // Mark is_known so we treat as a new file still
       is_known = false
-      delete(p.prospectors, info)
-      delete(p.prospectorindex, file)
     }
 
     // Conditions for starting a new harvester:
@@ -279,12 +277,7 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
       if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
         // Symlinks could mean we see the same file twice - skip if we have
         if previousinfo == nil {
-          // TODO: Improve. This could be hit on every prospector run due to how we clear errors above
-          delete(p.prospectors, info)
-          info = newProspectorInfoInvalid(file, newProspectorSkipError("Duplicate"))
-          info.update(nil, p.iteration)
-          p.prospectors[info] = info
-          p.prospectorindex[file] = info
+          p.flagDuplicateError(file, info)
           continue
         }
 
@@ -322,12 +315,7 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
         if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
           // Symlinks could mean we see the same file twice - skip if we have
           if previousinfo == nil {
-            // TODO: Improve. This could be hit on every prospector run due to how we clear errors above
-            delete(p.prospectors, info)
-            info = newProspectorInfoInvalid(file, newProspectorSkipError("Duplicate"))
-            info.update(nil, p.iteration)
-            p.prospectors[info] = info
-            p.prospectorindex[file] = info
+            p.flagDuplicateError(file, nil)
             continue
           }
 
@@ -378,6 +366,26 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
 
     p.prospectorindex[file] = info
   } // for each file matched by the glob
+}
+
+func (p *Prospector) flagDuplicateError(file string, info *prospectorInfo) {
+  // Have we already logged this error?
+  if info != nil {
+    if info.status == Status_Invalid {
+      if skip_err, ok := info.err.(*ProspectorSkipError); ok && skip_err.message == "Duplicate" {
+        return
+      }
+    }
+
+    // Remove the old info
+    delete(p.prospectors, info)
+  }
+
+  // Flag duplicate error and save it
+  info = newProspectorInfoInvalid(file, newProspectorSkipError("Duplicate"))
+  info.update(nil, p.iteration)
+  p.prospectors[info] = info
+  p.prospectorindex[file] = info
 }
 
 func (p *Prospector) startHarvester(info *prospectorInfo, config *core.FileConfig) {
