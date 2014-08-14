@@ -123,6 +123,7 @@ ListenerLoop:
     l.startServer(conn)
   }
 
+  // TODO: Force shutdown all connections so this does not block too long
   l.conn_group.Wait()
 }
 
