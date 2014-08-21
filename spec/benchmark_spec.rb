@@ -57,10 +57,6 @@ describe 'benchmark' do
 
     startup verbose: false, args: '-from-beginning=true', config: <<-config
     {
-      "general": {
-        "admin enabled": true,
-        "admin port": 1234
-      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -75,10 +71,6 @@ describe 'benchmark' do
 
     #startup args: '-from-beginning=true', config: <<-config
     #{
-    #  "general": {
-    #    "admin enabled": true,
-    #    "admin port": 1234
-    #  },
     #  "network": {
     #    "transport": "zmq",
     #    "curve server key": "i@tV)lm/:sbI-ODWpD[*7kn2[19[DcUBWnZ2)LJ>",
@@ -116,5 +108,6 @@ describe 'benchmark' do
     # Output time
     elapsed_time = ((Time.now - start_time) * 1000.0).to_i
     puts ":: Received #{BENCHMARK_LINES} lines in #{elapsed_time} ms"
+    puts ":: That's #{BENCHMARK_LINES * 1000 / elapsed_time} per second"
   end
 end
