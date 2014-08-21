@@ -17,12 +17,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'thread'
-require 'timeout'
-require 'zlib'
+require 'log-courier/event_queue'
 require 'multi_json'
+require 'thread'
+require 'zlib'
 
 module LogCourier
+  class TimeoutError < StandardError; end
   class ShutdownSignal < StandardError; end
   class ProtocolError < StandardError; end
 
@@ -55,7 +56,7 @@ module LogCourier
 
     def run(&block)
       # TODO: Make queue size configurable
-      event_queue = SizedQueue.new 10
+      event_queue = EventQueue.new 10
       server_thread = nil
 
       begin
@@ -168,10 +169,8 @@ module LogCourier
 
       # Queue the events
       begin
-        Timeout.timeout(@ack_timeout - Time.now.to_i) do
-          event_queue << events
-        end
-      rescue Timeout::Error
+        event_queue.push events, @ack_timeout - Time.now.to_i
+      rescue EventQueue::TimeoutError
         # Full pipeline, partial ack
         # NOTE: comm.send can raise a Timeout::Error of its own
         comm.send('ACKN', [nonce, sequence].pack('A*N'))
