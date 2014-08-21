@@ -17,10 +17,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'json'
 require 'thread'
 require 'timeout'
 require 'zlib'
+require 'multi_json'
 
 module LogCourier
   # TODO: Make these shared
@@ -298,7 +298,7 @@ module LogCourier
     end
 
     def buffer_jdat_data_event(buffer, event)
-      json_data = event.to_json
+      json_data = MultiJson.dump(event)
 
       # Add length and then the data
       buffer << [json_data.length].pack('N') << json_data
