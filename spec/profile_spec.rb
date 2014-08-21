@@ -58,10 +58,6 @@ describe 'profile' do
 
     startup verbose: false, args: '-from-beginning=true', config: <<-config
     {
-      "general": {
-        "admin enabled": true,
-        "admin port": 1234
-      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -76,10 +72,6 @@ describe 'profile' do
 
     #startup args: '-from-beginning=true', config: <<-config
     #{
-    #  "general": {
-    #    "admin enabled": true,
-    #    "admin port": 1234
-    #  },
     #  "network": {
     #    "transport": "zmq",
     #    "curve server key": "i@tV)lm/:sbI-ODWpD[*7kn2[19[DcUBWnZ2)LJ>",
