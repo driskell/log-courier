@@ -36,7 +36,7 @@ shared_context 'Helpers_Log_Courier' do
     File.unlink('.log-courier') if File.file?('.log-courier')
   end
 
-  def startup(config: nil, args: '', stdin: false)
+  def startup(config: nil, args: '', stdin: false, verbose: true)
     # A standard configuration when we don't want anything special
     if config.nil?
       config = <<-config
@@ -56,7 +56,11 @@ shared_context 'Helpers_Log_Courier' do
       config
     end
 
-    puts "Starting with configuration:\n#{config}"
+    if verbose
+      puts "Starting Log Courier with configuration:\n#{config}"
+    else
+      puts 'Starting Log Courier'
+    end
 
     _write_config config
 
