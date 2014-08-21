@@ -14,12 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'thread'
 require 'logger'
 require 'log-courier/server'
 
 # Common helpers for testing both ruby client and the courier
 shared_context 'Helpers' do
   before :all do
+    Thread.abort_on_exception = true
+
     @transport = 'tls'
 
     @ssl_cert = File.open(File.join(TEMP_PATH, 'ssl_cert'), 'w')
