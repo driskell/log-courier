@@ -34,7 +34,6 @@ import (
 const (
   default_publisher_hostname string        = "localhost.localdomain"
   keepalive_timeout          time.Duration = 900 * time.Second
-  max_pending_payloads       int           = 100
 )
 
 type Publisher struct {
@@ -49,7 +48,7 @@ type Publisher struct {
   pending_payloads map[string]*pendingPayload
   first_payload    *pendingPayload
   last_payload     *pendingPayload
-  num_payloads     int
+  num_payloads     int64
   out_of_sync      int
   input            chan []*core.EventDescriptor
   registrar_spool  *registrar.RegistrarEventSpool
@@ -142,7 +141,7 @@ PublishLoop:
     p.pending_ping = false
     input_toggle = nil
 
-    if p.shutdown || p.num_payloads >= max_pending_payloads {
+    if p.shutdown || p.num_payloads >= p.config.MaxPendingPayloads {
       p.can_send = nil
     } else {
       p.can_send = p.transport.CanSend()
@@ -211,7 +210,7 @@ PublishLoop:
         // Wait for send signal again
         input_toggle = nil
 
-        if p.num_payloads >= max_pending_payloads {
+        if p.num_payloads >= p.config.MaxPendingPayloads {
           // Too many pending payloads, disable send temporarily
           p.can_send = nil
         }
