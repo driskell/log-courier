@@ -144,7 +144,7 @@ shared_context 'Helpers' do
     create_log(f.class, old_name)
   end
 
-  def receive_and_check(total: nil, check_file: true, check_order: true, &block)
+  def receive_and_check(total: nil, check: true, check_file: true, check_order: true, &block)
     # Quick check of the total events we are expecting - but allow time to receive them
     if total.nil?
       total = @files.reduce(0) do |sum, f|
@@ -165,6 +165,8 @@ shared_context 'Helpers' do
       waited = 0
       while @event_queue.length != 0
         e = @event_queue.pop
+        total -= 1
+        next unless check
         if block.nil?
           found = @files.find do |f|
             next unless f.pending?
@@ -174,7 +176,6 @@ shared_context 'Helpers' do
         else
           block.call e
         end
-        total -= 1
       end
     end
 
