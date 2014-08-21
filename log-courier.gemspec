@@ -18,4 +18,5 @@ Gem::Specification.new do |gem|
   )
 
   gem.add_runtime_dependency 'ffi-rzmq', '>= 2.0'
+  gem.add_runtime_dependency 'multi_json'
 end

@@ -20,7 +20,7 @@
 require 'thread'
 require 'timeout'
 require 'zlib'
-require 'json'
+require 'multi_json'
 
 module LogCourier
   class ShutdownSignal < StandardError; end
@@ -155,8 +155,8 @@ module LogCourier
 
         # Decode the JSON
         begin
-          event = JSON.parse(data)
-        rescue JSON::ParserError => e
+          event = MultiJson.load(data)
+        rescue MultiJson::ParserError => e
           @logger.warn("[LogCourierServer] JSON parse failure, falling back to plain-text: #{e}") unless @logger.nil?
           event = { 'message' => data }
         end
