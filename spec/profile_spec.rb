@@ -47,7 +47,7 @@ describe 'profile' do
     puts ":: Preparing #{PROFILE_LINES} lines in a log file"
     f = create_log
     c = 0
-    BENCHMARK_LINES.times do
+    PROFILE_LINES.times do
       c += 1
       f.log
       puts ":: #{c} lines written" if c % (PROFILE_LINES / 10) == 0
@@ -108,7 +108,7 @@ describe 'profile' do
 
     # Output time
     profile = RubyProf.stop
-    puts ":: Received #{BENCHMARK_LINES} lines"
+    puts ":: Received #{PROFILE_LINES} lines"
 
     # Print a flat profile to text
     puts ":: Profile results:"
