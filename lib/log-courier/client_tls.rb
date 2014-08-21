@@ -17,9 +17,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'openssl'
 require 'socket'
 require 'thread'
-require 'openssl'
 
 module LogCourier
   # TLS transport implementation

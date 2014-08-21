@@ -17,10 +17,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'thread'
-require 'timeout'
-require 'zlib'
+require 'log-courier/event_queue'
 require 'multi_json'
+require 'thread'
+require 'zlib'
 
 module LogCourier
   # TODO: Make these shared
@@ -61,7 +61,7 @@ module LogCourier
       require 'log-courier/client_tls'
       @client = ClientTls.new(@options)
 
-      @event_queue = SizedQueue.new @options[:spool_size]
+      @event_queue = EventQueue.new @options[:spool_size]
       @pending_payloads = {}
       @first_payload = nil
       @last_payload = nil
@@ -77,7 +77,7 @@ module LogCourier
       @pending_ping = false
 
       # Start the IO thread
-      @io_control = SizedQueue.new 1
+      @io_control = EventQueue.new 1
       @io_thread = Thread.new do
         run_io
       end
@@ -104,13 +104,11 @@ module LogCourier
         # The spooler loop
         begin
           loop do
-            event = Timeout.timeout(next_flush - Time.now.to_i) do
-              @event_queue.pop
-            end
+            event = @event_queue.pop next_flush - Time.now.to_i
             spooled.push(event)
             break if spooled.length >= @options[:spool_size]
           end
-        rescue Timeout::Error
+        rescue EventQueue::TimeoutError
           # Hit timeout but no events, keep waiting
           next if spooled.length == 0
         end
@@ -129,8 +127,8 @@ module LogCourier
 
     def run_io
       # TODO: Make keepalive configurable?
-      keepalive_timeout = 1800
-      keepalive_next = Time.now.to_i + keepalive_timeout
+      @keepalive_timeout = 1800
+      reset_keepalive
 
       # TODO: Make pending payload max configurable?
       max_pending_payloads = 100
@@ -149,9 +147,7 @@ module LogCourier
           loop do
             catch :keepalive do
               begin
-                action = Timeout.timeout(keepalive_next) do
-                  @io_control.pop
-                end
+                action = @io_control.pop Time.now.to_i - keepalive_next
 
                 # Process the action
                 case action[0]
@@ -202,16 +198,16 @@ module LogCourier
                   # Reconnect, an error occurred
                   break
                 end
-              rescue Timeout::Error
+              rescue EventQueue::TimeoutError
                 # Keepalive timeout hit, send a PING unless we were awaiting a PONG
                 if @pending_ping
                   # Timed out, break into reconnect
-                  raise Timeout::Error
+                  raise EventQueue::TimeoutError
                 end
 
                 # Is send full? can_send will be false if so
                 # We should've started receiving ACK by now so time out
-                raise Timeout::Error unless can_send
+                raise EventQueue::TimeoutError unless can_send
 
                 # Send PING
                 send_ping
@@ -222,12 +218,12 @@ module LogCourier
             end
 
             # Reset keepalive timeout
-            keepalive_next = Time.now.to_i + keepalive_timeout
+            reset_keepalive
           end
         rescue ClientProtocolError => e
           # Reconnect required due to a protocol error
           @logger.warn("[LogCourierClient] Protocol error: #{e}") unless @logger.nil?
-        rescue Timeout::Error
+        rescue EventQueue::TimeoutError
           # Reconnect due to timeout
           @logger.warn('[LogCourierClient] Timeout occurred') unless @logger.nil?
         rescue ClientShutdownSignal
@@ -248,6 +244,10 @@ module LogCourier
       end
 
       @client.disconnect
+    end
+
+    def reset_keepalive
+      @keepalive_next = Time.now.to_i + @keepalive_timeout
     end
 
     def generate_nonce

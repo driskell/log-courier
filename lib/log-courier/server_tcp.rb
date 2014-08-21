@@ -17,10 +17,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'openssl'
 require 'socket'
 require 'thread'
-require 'timeout'
-require 'openssl'
 
 module LogCourier
   # Wrap around TCPServer to grab last error for use in reporting which peer had an error
@@ -186,7 +185,7 @@ module LogCourier
         # If we EOF next it's a graceful close
         @in_progress = false
       end
-    rescue Timeout::Error
+    rescue TimeoutError
       # Timeout of the connection, we were idle too long without a ping/pong
       @logger.warn("[LogCourierServer] Connection from #{@peer} timed out") unless @logger.nil?
     rescue EOFError
@@ -214,8 +213,14 @@ module LogCourier
 
     def recv(need)
       reset_timeout
-      buffer = Timeout.timeout(@timeout - Time.now.to_i) do
-        @fd.read need
+      begin
+        buffer = @fd.read_nonblock need
+      rescue IO::WaitReadable
+        raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+        retry
+      rescue IO::WaitWritable
+        raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+        retry
       end
       if buffer.nil?
         raise EOFError
@@ -228,10 +233,16 @@ module LogCourier
     def send(signature, message)
       reset_timeout
 
+      written = 0
       data = signature + [message.length].pack('N') + message
-      Timeout.timeout(@timeout - Time.now.to_i) do
-        written = @fd.write(data)
-        raise ProtocolError if written != data.length
+      begin
+        written = @fd.write_nonblock(data[written...data.length])
+      rescue IO::WaitReadable
+        raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+        retry
+      rescue IO::WaitWritable
+        raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+        retry
       end
     end
 

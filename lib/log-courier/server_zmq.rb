@@ -15,7 +15,6 @@
 # limitations under the License.
 
 require 'ffi-rzmq'
-require 'timeout'
 
 module LogCourier
   # ZMQ transport implementation for the server
