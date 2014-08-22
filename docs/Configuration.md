@@ -12,6 +12,9 @@
   - [Duration](#duration)
   - [Fileglob](#fileglob)
 - [`"general"`](#general)
+  - [`"admin enabled"`](#admin-enabled)
+  - [`"admin bind address"`](#admin-bind-address)
+  - [`"admin port"`](#admin-port)
   - [`"persist directory"`](#persist-directory)
   - [`"prospect interval"`](#prospect-interval)
   - [`"spool size"`](#spool-size)
@@ -146,6 +149,25 @@ character-range:
 The general configuration affects the general behaviour of Log Courier, such
 as where to store its persistence data or how often to scan for the appearence
 of new log files.
+
+### `"admin enabled"`
+
+*Boolean. Optional. Default: false*
+*Requires restart*
+
+Enables the administration listener that the `lc-admin` utility can connect to.
+
+### `"admin bind address"`
+
+*String. Optional. Default: 127.0.0.1*
+
+The TCP address the administration listener should listen on.
+
+### `"admin port"`
+
+*Number. Required with "admin enabled" = true*
+
+The TCP port the administration listener should listen on.
 
 ### `"persist directory"`
 
