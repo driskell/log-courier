@@ -25,12 +25,12 @@ module LogCourier
 
     def initialize(options = {})
       @options = {
-        :logger           => nil,
-        :transport        => 'zmq',
-        :port             => 0,
-        :address          => '0.0.0.0',
-        :curve_secret_key => nil
-      }.merge(options)
+        logger:           nil,
+        transport:        'zmq',
+        port:             0,
+        address:          '0.0.0.0',
+        curve_secret_key: nil
+      }.merge!(options)
 
       @logger = @options[:logger]
 
@@ -100,7 +100,7 @@ module LogCourier
               @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
               @poller.register @socket, ZMQ::POLLIN
               while @poller.poll(1_000) == 0
-                raise Timeout::Error if Time.now.to_i >= @timeout
+                raise TimeoutError if Time.now.to_i >= @timeout
               end
               next
             end
@@ -115,7 +115,7 @@ module LogCourier
             send_with_poll msg, true
             if ZMQ::Util.errno != ZMQ::EAGAIN
               @logger.warn "[LogCourierServer] Message send failed: #{ZMQ::Util.error_string}" unless @logger.nil?
-              raise Timeout::Error
+              raise TimeoutError
             end
             break if msg == ""
             true
@@ -127,7 +127,7 @@ module LogCourier
           else
             recv(data.first, &block)
           end
-        rescue Timeout::Error
+        rescue TimeoutError
           # We'll let ZeroMQ manage reconnections and new connections
           # There is no point in us doing any form of reconnect ourselves
           # We will keep this timeout in however, for shutdown checks
@@ -179,14 +179,14 @@ module LogCourier
         break if ZMQ::Util.resultcode_ok?(rc)
         if ZMQ::Util.errno != ZMQ::EAGAIN
           @logger.warn "[LogCourierServer] Message send failed: #{ZMQ::Util.error_string}" unless @logger.nil?
-          raise Timeout::Error
+          raise TimeoutError
         end
 
         # Wait for send to become available, handling timeouts
         @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
         @poller.register @socket, ZMQ::POLLOUT
         while @poller.poll(1_000) == 0
-          raise Timeout::Error if Time.now.to_i >= @timeout
+          raise TimeoutError if Time.now.to_i >= @timeout
         end
       end
     end

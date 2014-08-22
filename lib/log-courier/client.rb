@@ -51,10 +51,10 @@ module LogCourier
   class Client
     def initialize(options = {})
       @options = {
-        :logger       => nil,
-        :spool_size   => 1024,
-        :idle_timeout => 5
-      }.merge(options)
+        logger:       nil,
+        spool_size:   1024,
+        idle_timeout: 5
+      }.merge!(options)
 
       @logger = @options[:logger]
 
@@ -111,7 +111,7 @@ module LogCourier
             spooled.push(event)
             break if spooled.length >= @options[:spool_size]
           end
-        rescue EventQueue::TimeoutError
+        rescue TimeoutError
           # Hit timeout but no events, keep waiting
           next if spooled.length == 0
         end
@@ -202,16 +202,16 @@ module LogCourier
                   # Reconnect, an error occurred
                   break
                 end
-              rescue EventQueue::TimeoutError
+              rescue TimeoutError
                 # Keepalive timeout hit, send a PING unless we were awaiting a PONG
                 if @pending_ping
                   # Timed out, break into reconnect
-                  raise EventQueue::TimeoutError
+                  raise TimeoutError
                 end
 
                 # Is send full? can_send will be false if so
                 # We should've started receiving ACK by now so time out
-                raise EventQueue::TimeoutError unless can_send
+                raise TimeoutError unless can_send
 
                 # Send PING
                 send_ping
@@ -227,7 +227,7 @@ module LogCourier
         rescue ClientProtocolError => e
           # Reconnect required due to a protocol error
           @logger.warn("[LogCourierClient] Protocol error: #{e}") unless @logger.nil?
-        rescue EventQueue::TimeoutError
+        rescue TimeoutError
           # Reconnect due to timeout
           @logger.warn('[LogCourierClient] Timeout occurred') unless @logger.nil?
         rescue ClientShutdownSignal

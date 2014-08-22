@@ -26,14 +26,14 @@ module LogCourier
   class ClientTls
     def initialize(options = {})
       @options = {
-        :logger             => nil,
-        :port               => nil,
-        :addresses          => [],
-        :ssl_ca             => nil,
-        :ssl_certificate    => nil,
-        :ssl_key            => nil,
-        :ssl_key_passphrase => nil
-      }.merge(options)
+        logger:             nil,
+        port:               nil,
+        addresses:          [],
+        ssl_ca:             nil,
+        ssl_certificate:    nil,
+        ssl_key:            nil,
+        ssl_key_passphrase: nil
+      }.merge!(options)
 
       @logger = @options[:logger]
 

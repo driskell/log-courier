@@ -65,22 +65,27 @@ shared_context 'Helpers' do
   end
 
   # A helper that starts a Log Courier server
-  def start_server(id: '__default__', transport: nil)
+  def start_server(args = {})
+    args = {
+      id:        '__default__',
+      transport: nil
+    }.merge!(args)
+
+    id = args[:id]
+
     logger = Logger.new(STDOUT)
     logger.progname = "Server #{id}"
     logger.level = Logger::DEBUG
 
     raise 'Server already initialised' if @servers.key?(id)
 
-    transport = @transport if transport.nil?
-
     # Reset server for each test
     @servers[id] = LogCourier::Server.new(
-      :transport        => transport,
-      :ssl_certificate  => @ssl_cert.path,
-      :ssl_key          => @ssl_key.path,
-      :curve_secret_key => '1XQgjDjkw?YP=$f61HKe%g+AEbe<VZt%{#8).G0j',
-      :logger           => logger
+      transport:        args[:transport].nil? ? @transport : args[:transport],
+      ssl_certificate:  @ssl_cert.path,
+      ssl_key:          @ssl_key.path,
+      curve_secret_key: '1XQgjDjkw?YP=$f61HKe%g+AEbe<VZt%{#8).G0j',
+      logger:           logger
     )
 
     @server_counts[id] = 0
@@ -147,15 +152,25 @@ shared_context 'Helpers' do
     create_log(f.class, old_name)
   end
 
-  def receive_and_check(total: nil, check: true, check_file: true, check_order: true, &block)
+  def receive_and_check(args = {}, &block)
+    args = {
+      total:       nil,
+      check:       true,
+      check_file:  true,
+      check_order: true
+    }.merge!(args)
+
     # Quick check of the total events we are expecting - but allow time to receive them
-    if total.nil?
+    if args[:total].nil?
       total = @files.reduce(0) do |sum, f|
         sum + f.count
       end
+    else
+      total = args[:total]
     end
 
     orig_total = total
+    check = args[:check]
 
     waited = 0
     while total > 0 && waited < EVENT_WAIT_COUNT
@@ -173,7 +188,7 @@ shared_context 'Helpers' do
         if block.nil?
           found = @files.find do |f|
             next unless f.pending?
-            f.logged?(event: e, check_file: check_file, check_order: check_order)
+            f.logged?(*args, event: e)
           end
           expect(found).to_not be_nil, "Event received not recognised: #{e}"
         else
