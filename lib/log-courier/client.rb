@@ -131,7 +131,6 @@ module LogCourier
     def run_io
       # TODO: Make keepalive configurable?
       @keepalive_timeout = 1800
-      reset_keepalive
 
       # TODO: Make pending payload max configurable?
       max_pending_payloads = 100
@@ -144,13 +143,15 @@ module LogCourier
         # Reconnect loop
         @client.connect @io_control
 
+        reset_keepalive
+
         # Capture send exceptions
         begin
           # IO loop
           loop do
             catch :keepalive do
               begin
-                action = @io_control.pop Time.now.to_i - keepalive_next
+                action = @io_control.pop @keepalive_next - Time.now.to_i
 
                 # Process the action
                 case action[0]
