@@ -40,17 +40,17 @@ module LogCourier
     # Create a new TLS transport endpoint
     def initialize(options = {})
       @options = {
-        :logger                => nil,
-        :transport             => 'tls',
-        :port                  => 0,
-        :address               => '0.0.0.0',
-        :ssl_certificate       => nil,
-        :ssl_key               => nil,
-        :ssl_key_passphrase    => nil,
-        :ssl_verify            => false,
-        :ssl_verify_default_ca => false,
-        :ssl_verify_ca         => nil
-      }.merge(options)
+        logger:                nil,
+        transport:             'tls',
+        port:                  0,
+        address:               '0.0.0.0',
+        ssl_certificate:       nil,
+        ssl_key:               nil,
+        ssl_key_passphrase:    nil,
+        ssl_verify:            false,
+        ssl_verify_default_ca: false,
+        ssl_verify_ca:         nil
+      }.merge!(options)
 
       @logger = @options[:logger]
 

@@ -33,9 +33,9 @@ module LogCourier
 
     def initialize(options = {})
       @options = {
-        :logger => nil,
-        :transport => 'tls'
-      }.merge(options)
+        logger:    nil,
+        transport: 'tls'
+      }.merge!(options)
 
       @logger = @options[:logger]
 
@@ -178,7 +178,7 @@ module LogCourier
       # Queue the events
       begin
         event_queue.push events, @ack_timeout - Time.now.to_i
-      rescue EventQueue::TimeoutError
+      rescue TimeoutError
         # Full pipeline, partial ack
         # NOTE: comm.send can raise a Timeout::Error of its own
         comm.send('ACKN', [nonce, sequence].pack('A*N'))
