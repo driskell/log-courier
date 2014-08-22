@@ -15,7 +15,6 @@
 # limitations under the License.
 
 require 'ffi-rzmq'
-require 'timeout'
 
 module LogCourier
   # ZMQ transport implementation for the server
@@ -26,12 +25,12 @@ module LogCourier
 
     def initialize(options = {})
       @options = {
-        :logger           => nil,
-        :transport        => 'zmq',
-        :port             => 0,
-        :address          => '0.0.0.0',
-        :curve_secret_key => nil
-      }.merge(options)
+        logger:           nil,
+        transport:        'zmq',
+        port:             0,
+        address:          '0.0.0.0',
+        curve_secret_key: nil
+      }.merge!(options)
 
       @logger = @options[:logger]
 
@@ -43,7 +42,8 @@ module LogCourier
 
       begin
         @context = ZMQ::Context.new
-        @socket = @context.socket(ZMQ::REP)
+        # Router so we can send multiple responses
+        @socket = @context.socket(ZMQ::ROUTER)
 
         if @options[:transport] == 'zmq'
           rc = @socket.setsockopt(ZMQ::CURVE_SERVER, 1)
@@ -89,35 +89,50 @@ module LogCourier
     def run(&block)
       loop do
         begin
-          # Try to receive a message
-          data = ''
-          rc = @socket.recv_string(data, ZMQ::DONTWAIT)
-          unless ZMQ::Util.resultcode_ok?(rc)
-            raise ZMQError, 'recv_string error: ' + ZMQ::Util.error_string if ZMQ::Util.errno != ZMQ::EAGAIN
+          begin
+            # Try to receive a message
+            data = []
+            rc = @socket.recv_strings(data, ZMQ::DONTWAIT)
+            unless ZMQ::Util.resultcode_ok?(rc)
+              raise ZMQError, 'recv_string error: ' + ZMQ::Util.error_string if ZMQ::Util.errno != ZMQ::EAGAIN
 
-            # Wait for a message to arrive, handling timeouts
-            @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
-            @poller.register @socket, ZMQ::POLLIN
-            while @poller.poll(1_000) == 0
-              raise Timeout::Error if Time.now.to_i >= @timeout
+              # Wait for a message to arrive, handling timeouts
+              @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
+              @poller.register @socket, ZMQ::POLLIN
+              while @poller.poll(1_000) == 0
+                raise TimeoutError if Time.now.to_i >= @timeout
+              end
+              next
             end
+          rescue ZMQError => e
+            @logger.warn "[LogCourierServer] ZMQ recv_string failed: #{e}" unless @logger.nil?
             next
           end
-        rescue Timeout::Error
+
+          # Pre-send the routing information and remove it from data
+          data.delete_if do |msg|
+            reset_timeout
+            send_with_poll msg, true
+            if ZMQ::Util.errno != ZMQ::EAGAIN
+              @logger.warn "[LogCourierServer] Message send failed: #{ZMQ::Util.error_string}" unless @logger.nil?
+              raise TimeoutError
+            end
+            break if msg == ""
+            true
+          end
+          data.shift
+
+          if data.length != 1
+            @logger.warn '[LogCourierServer] Invalid message: multipart unexpected' unless @logger.nil?
+          else
+            recv(data.first, &block)
+          end
+        rescue TimeoutError
           # We'll let ZeroMQ manage reconnections and new connections
           # There is no point in us doing any form of reconnect ourselves
           # We will keep this timeout in however, for shutdown checks
           reset_timeout
           next
-        rescue ZMQError => e
-          @logger.warn "[LogCourierServer] ZMQ recv_string failed: #{e}" unless @logger.nil?
-          next
-        end
-        # We only work with one part messages at the moment
-        if @socket.more_parts?
-          @logger.warn '[LogCourierServer] Invalid message: multipart unexpected' unless @logger.nil?
-        else
-          recv(data, &block)
         end
       end
     rescue ShutdownSignal
@@ -154,20 +169,24 @@ module LogCourier
     def send(signature, message)
       reset_timeout
       data = signature + [message.length].pack('N') + message
+      send_with_poll data
+    end
+
+    def send_with_poll(data, more = false)
       loop do
         # Try to send a message but never block
-        rc = @socket.send_string(data, ZMQ::DONTWAIT)
+        rc = @socket.send_string(data, (more ? ZMQ::SNDMORE : 0) | ZMQ::DONTWAIT)
         break if ZMQ::Util.resultcode_ok?(rc)
         if ZMQ::Util.errno != ZMQ::EAGAIN
           @logger.warn "[LogCourierServer] Message send failed: #{ZMQ::Util.error_string}" unless @logger.nil?
-          raise Timeout::Error
+          raise TimeoutError
         end
 
         # Wait for send to become available, handling timeouts
         @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
         @poller.register @socket, ZMQ::POLLOUT
         while @poller.poll(1_000) == 0
-          raise Timeout::Error if Time.now.to_i >= @timeout
+          raise TimeoutError if Time.now.to_i >= @timeout
         end
       end
     end

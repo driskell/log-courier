@@ -77,11 +77,19 @@ class LogFile
     @count != 0 || !@gaps.empty?
   end
 
-  def logged?(event: event, check_file: true, check_order: true)
-    return false if event['host'] != @host
-    return false if check_file && event['file'] != @orig_path
+  def logged?(args = {})
+    args = {
+      event: { 'host' => nil },
+      check_file: true,
+      check_order: true
+    }.merge!(args)
 
-    if check_order
+    event = args[:event]
+
+    return false if event['host'] != @host
+    return false if args[:check_file] && event['file'] != @orig_path
+
+    if args[:check_order]
       # Regular simple test that follows the event number
       return false if event['message'] != @orig_path + " test event #{@next}"
     else

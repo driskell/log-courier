@@ -36,7 +36,16 @@ shared_context 'Helpers_Log_Courier' do
     File.unlink('.log-courier') if File.file?('.log-courier')
   end
 
-  def startup(config: nil, args: '', stdin: false)
+  def startup(args = {})
+    args = {
+      config:  nil,
+      args:    '',
+      stdin:   false,
+      verbose: true
+    }.merge!(args)
+
+    config = args[:config]
+
     # A standard configuration when we don't want anything special
     if config.nil?
       config = <<-config
@@ -56,18 +65,22 @@ shared_context 'Helpers_Log_Courier' do
       config
     end
 
-    puts "Starting with configuration:\n#{config}"
+    if args[:verbose]
+      puts "Starting Log Courier with configuration:\n#{config}"
+    else
+      puts 'Starting Log Courier'
+    end
 
     _write_config config
 
-    if stdin
+    if args[:stdin]
       @log_courier_mode = 'r+'
     else
       @log_courier_mode = 'r'
     end
 
     # Start LSF
-    @log_courier = IO.popen("bin/log-courier -config #{@config.path}" + (args.empty? ? '' : ' ' + args), @log_courier_mode)
+    @log_courier = IO.popen("bin/log-courier -config #{@config.path}" + (args[:args].empty? ? '' : ' ' + args[:args]), @log_courier_mode)
 
     # Start a thread to flush the STDOUT from the pipe
     log_courier = @log_courier

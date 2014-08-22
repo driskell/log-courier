@@ -17,23 +17,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'openssl'
 require 'socket'
 require 'thread'
-require 'openssl'
 
 module LogCourier
   # TLS transport implementation
   class ClientTls
     def initialize(options = {})
       @options = {
-        :logger             => nil,
-        :port               => nil,
-        :addresses          => [],
-        :ssl_ca             => nil,
-        :ssl_certificate    => nil,
-        :ssl_key            => nil,
-        :ssl_key_passphrase => nil
-      }.merge(options)
+        logger:             nil,
+        port:               nil,
+        addresses:          [],
+        ssl_ca:             nil,
+        ssl_certificate:    nil,
+        ssl_key:            nil,
+        ssl_key_passphrase: nil
+      }.merge!(options)
 
       @logger = @options[:logger]
 
