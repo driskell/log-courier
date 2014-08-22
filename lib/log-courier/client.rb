@@ -61,6 +61,9 @@ module LogCourier
       require 'log-courier/client_tls'
       @client = ClientTls.new(@options)
 
+      # Load the json adapter
+      @json_adapter = MultiJson.adapter.instance
+
       @event_queue = EventQueue.new @options[:spool_size]
       @pending_payloads = {}
       @first_payload = nil
@@ -298,7 +301,7 @@ module LogCourier
     end
 
     def buffer_jdat_data_event(buffer, event)
-      json_data = MultiJson.dump(event)
+      json_data = @json_adapter.dump(event)
 
       # Add length and then the data
       buffer << [json_data.length].pack('N') << json_data
