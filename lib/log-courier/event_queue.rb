@@ -78,7 +78,7 @@ class EventQueue < Queue
     end
     Thread.handle_interrupt(RuntimeError => :on_blocking) do
       @mutex.synchronize do
-        while true
+        loop do
           break if @que.length < @max
           @num_enqueue_waiting += 1
           begin
@@ -86,7 +86,7 @@ class EventQueue < Queue
           ensure
             @num_enqueue_waiting -= 1
           end
-          raise Timeout if !timeout.nil? and Time.now - start >= timeout
+          raise TimeoutError if !timeout.nil? and Time.now - start >= timeout
         end
 
         @que.push obj
@@ -126,17 +126,21 @@ class EventQueue < Queue
   # raised.
   #
   def _pop_timeout(timeout = nil)
+    unless timeout.nil?
+      start = Time.now
+    end
     Thread.handle_interrupt(StandardError => :on_blocking) do
       @mutex.synchronize do
         loop do
           return @que.shift unless @que.empty?
-          raise ThreadError, 'queue empty' if timeout == 0
+          raise TimeoutError if timeout == 0
           begin
             @num_waiting += 1
             @cond.wait @mutex, timeout
           ensure
             @num_waiting -= 1
           end
+          raise TimeoutError if !timeout.nil? and Time.now - start >= timeout
         end
       end
     end
