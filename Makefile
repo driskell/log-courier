@@ -52,8 +52,11 @@ vendor/bundle/.GemfileModT: Gemfile
 	bundle install --path vendor/bundle
 	@touch $@
 
+jrprofile: all vendor/bundle/.GemfileModT
+	jruby --profile -G vendor/bundle/jruby/1.9/bin/rspec spec/benchmark_spec.rb
+
 jrbenchmark: all vendor/bundle/.GemfileJRubyModT
-	jruby -S bundle exec rspec spec/benchmark_spec.rb
+	jruby -G vendor/bundle/jruby/1.9/bin/rspec spec/benchmark_spec.rb
 
 vendor/bundle/.GemfileJRubyModT: Gemfile
 	jruby -S bundle install --path vendor/bundle
