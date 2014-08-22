@@ -25,58 +25,62 @@
 # thread that waits and then raises exception or has to be stopped on exiting
 # the block.
 #
-# The majority of the code is taken from Ruby's SizedQueue implementation.
+# The majority of the code is taken from Ruby's SizedQueue<Queue implementation.
 #
-class EventQueue < Queue
-  class TimeoutError < StandardError; end
+module LogCourier
+  class EventQueue
+    #
+    # Creates a fixed-length queue with a maximum size of +max+.
+    #
+    def initialize(max)
+      raise ArgumentError, "queue size must be positive" unless max > 0
+      @max = max
+      @enque_cond = ConditionVariable.new
+      @num_enqueue_waiting = 0
 
-  #
-  # Creates a fixed-length queue with a maximum size of +max+.
-  #
-  def initialize(max)
-    raise ArgumentError, "queue size must be positive" unless max > 0
-    @max = max
-    @enque_cond = ConditionVariable.new
-    @num_enqueue_waiting = 0
-    super()
-  end
+      @que = []
+      @que.taint          # enable tainted communication
+      @num_waiting = 0
+      self.taint
+      @mutex = Mutex.new
+      @cond = ConditionVariable.new
+    end
 
-  #
-  # Returns the maximum size of the queue.
-  #
-  def max
-    @max
-  end
+    #
+    # Returns the maximum size of the queue.
+    #
+    def max
+      @max
+    end
 
-  #
-  # Sets the maximum size of the queue.
-  #
-  def max=(max)
-    raise ArgumentError, "queue size must be positive" unless max > 0
+    #
+    # Sets the maximum size of the queue.
+    #
+    def max=(max)
+      raise ArgumentError, "queue size must be positive" unless max > 0
 
-    @mutex.synchronize do
-      if max <= @max
-        @max = max
-      else
-        diff = max - @max
-        @max = max
-        diff.times do
-          @enque_cond.signal
+      @mutex.synchronize do
+        if max <= @max
+          @max = max
+        else
+          diff = max - @max
+          @max = max
+          diff.times do
+            @enque_cond.signal
+          end
         end
       end
+      max
     end
-    max
-  end
 
-  #
-  # Pushes +obj+ to the queue.  If there is no space left in the queue, waits
-  # until space becomes available, up to a maximum of +timeout+ seconds.
-  #
-  def push(obj, timeout = nil)
-    unless timeout.nil?
-      start = Time.now
-    end
-    Thread.handle_interrupt(RuntimeError => :on_blocking) do
+    #
+    # Pushes +obj+ to the queue.  If there is no space left in the queue, waits
+    # until space becomes available, up to a maximum of +timeout+ seconds.
+    #
+    def push(obj, timeout = nil)
+      unless timeout.nil?
+        start = Time.now
+      end
       @mutex.synchronize do
         loop do
           break if @que.length < @max
@@ -94,42 +98,40 @@ class EventQueue < Queue
       end
       self
     end
-  end
 
-  #
-  # Alias of push
-  #
-  alias << push
+    #
+    # Alias of push
+    #
+    alias << push
 
-  #
-  # Alias of push
-  #
-  alias enq push
+    #
+    # Alias of push
+    #
+    alias enq push
 
-  #
-  # Retrieves data from the queue and runs a waiting thread, if any.
-  #
-  def pop(*args)
-    retval = _pop_timeout *args
-    @mutex.synchronize do
-      if @que.length < @max
-        @enque_cond.signal
+    #
+    # Retrieves data from the queue and runs a waiting thread, if any.
+    #
+    def pop(*args)
+      retval = _pop_timeout *args
+      @mutex.synchronize do
+        if @que.length < @max
+          @enque_cond.signal
+        end
       end
+      retval
     end
-    retval
-  end
 
-  #
-  # Retrieves data from the queue.  If the queue is empty, the calling thread is
-  # suspended until data is pushed onto the queue or, if set, +timeout+ seconds
-  # passes.  If +timeout+ is 0, the thread isn't suspended, and an exception is
-  # raised.
-  #
-  def _pop_timeout(timeout = nil)
-    unless timeout.nil?
-      start = Time.now
-    end
-    Thread.handle_interrupt(StandardError => :on_blocking) do
+    #
+    # Retrieves data from the queue.  If the queue is empty, the calling thread is
+    # suspended until data is pushed onto the queue or, if set, +timeout+ seconds
+    # passes.  If +timeout+ is 0, the thread isn't suspended, and an exception is
+    # raised.
+    #
+    def _pop_timeout(timeout = nil)
+      unless timeout.nil?
+        start = Time.now
+      end
       @mutex.synchronize do
         loop do
           return @que.shift unless @que.empty?
@@ -144,22 +146,49 @@ class EventQueue < Queue
         end
       end
     end
-  end
 
-  #
-  # Alias of pop
-  #
-  alias shift pop
+    #
+    # Alias of pop
+    #
+    alias shift pop
 
-  #
-  # Alias of pop
-  #
-  alias deq pop
+    #
+    # Alias of pop
+    #
+    alias deq pop
 
-  #
-  # Returns the number of threads waiting on the queue.
-  #
-  def num_waiting
-    @num_waiting + @num_enqueue_waiting
+    #
+    # Returns +true+ if the queue is empty.
+    #
+    def empty?
+      @que.empty?
+    end
+
+    #
+    # Removes all objects from the queue.
+    #
+    def clear
+      @que.clear
+      self
+    end
+
+    #
+    # Returns the length of the queue.
+    #
+    def length
+      @que.length
+    end
+
+    #
+    # Alias of length.
+    #
+    alias size length
+
+    #
+    # Returns the number of threads waiting on the queue.
+    #
+    def num_waiting
+      @num_waiting + @num_enqueue_waiting
+    end
   end
 end
