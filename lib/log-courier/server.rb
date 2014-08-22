@@ -17,12 +17,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'log-courier/event_queue'
+require 'multi_json'
 require 'thread'
-require 'timeout'
 require 'zlib'
-require 'json'
 
 module LogCourier
+  class TimeoutError < StandardError; end
   class ShutdownSignal < StandardError; end
   class ProtocolError < StandardError; end
 
@@ -32,9 +33,9 @@ module LogCourier
 
     def initialize(options = {})
       @options = {
-        :logger => nil,
-        :transport => 'tls'
-      }.merge(options)
+        logger:    nil,
+        transport: 'tls'
+      }.merge!(options)
 
       @logger = @options[:logger]
 
@@ -51,11 +52,14 @@ module LogCourier
 
       # Grab the port back
       @port = @server.port
+
+      # Load the json adapter
+      @json_adapter = MultiJson.adapter.instance
     end
 
     def run(&block)
       # TODO: Make queue size configurable
-      event_queue = SizedQueue.new 10
+      event_queue = EventQueue.new 10
       server_thread = nil
 
       begin
@@ -118,47 +122,52 @@ module LogCourier
       nonce = message[0...16]
 
       # The remainder of the message is the compressed data block
-      message = Zlib::Inflate.inflate(message[16...message.length])
+      message = StringIO.new Zlib::Inflate.inflate(message[16...message.length])
 
       # Message now contains JSON encoded events
       # They are aligned as [length][event]... so on
       # We acknowledge them by their 1-index position in the stream
       # A 0 sequence acknowledgement means we haven't processed any yet
-      p = 0
       sequence = 0
       events = []
-      while p < message.length
-        if message.length - p < 4
+      length_buf = ''
+      data_buf = ''
+      loop do
+        ret = message.read 4, length_buf
+        if ret.nil?
+          # Finished!
+          break
+        elsif length_buf.length < 4
+          @logger.warn("length extraction failed #{ret} #{length_buf.length}")
           # TODO: log something
           raise ProtocolError
         end
 
-        length = message[p...p + 4].unpack('N').first
-        p += 4
-
-        # Check length is valid
-        if message.length - p < length
-          # TODO: log something
-          raise ProtocolError
-        end
+        length = length_buf.unpack('N').first
 
         # Extract message
-        data = message[p...p + length].force_encoding('utf-8')
+        ret = message.read length, data_buf
+        if ret.nil? or data_buf.length < length
+          @logger.warn("message extraction failed #{ret} #{data_buf.length}")
+          # TODO: log something
+          raise ProtocolError
+        end
+
+        data_buf.force_encoding('utf-8')
 
         # Ensure valid encoding
-        unless data.valid_encoding?
-          data.chars.map do |c|
+        unless data_buf.valid_encoding?
+          data_buf.chars.map do |c|
             c.valid_encoding? ? c : "\xEF\xBF\xBD"
           end
         end
-        p += length
 
         # Decode the JSON
         begin
-          event = JSON.parse(data)
-        rescue JSON::ParserError => e
+          event = @json_adapter.load(data_buf)
+        rescue MultiJson::ParserError => e
           @logger.warn("[LogCourierServer] JSON parse failure, falling back to plain-text: #{e}") unless @logger.nil?
-          event = { 'message' => data }
+          event = { 'message' => data_buf }
         end
 
         events << event
@@ -168,10 +177,8 @@ module LogCourier
 
       # Queue the events
       begin
-        Timeout.timeout(@ack_timeout - Time.now.to_i) do
-          event_queue << events
-        end
-      rescue Timeout::Error
+        event_queue.push events, @ack_timeout - Time.now.to_i
+      rescue TimeoutError
         # Full pipeline, partial ack
         # NOTE: comm.send can raise a Timeout::Error of its own
         comm.send('ACKN', [nonce, sequence].pack('A*N'))

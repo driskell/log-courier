@@ -12,6 +12,18 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## 0.13
+
+*???*
+
+* Added new filter codec to allow selective shipping and reduce LogStash loads
+* Fix LogStash plugin entering infinite loop during LogStash shutdown sequence
+when using ZMQ. The plugin now shuts down gracefully along with LogStash (#30)
+* Fixed LogStash crashing with "Operation cannot be accomplished in current
+state" when using ZMQ and LogStash hits a bottleneck requiring partial ACKs to
+be sent to Log Courier
+* Various other minor rework and improvements
+
 ## 0.12
 
 *4th August 2014*

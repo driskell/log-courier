@@ -32,20 +32,21 @@ import (
 )
 
 const (
-  default_GeneralConfig_AdminEnabled     bool          = true
-  default_GeneralConfig_AdminBind        string        = "127.0.0.1"
-  default_GeneralConfig_PersistDir       string        = "."
-  default_GeneralConfig_ProspectInterval time.Duration = 10 * time.Second
-  default_GeneralConfig_SpoolSize        int64         = 1024
-  default_GeneralConfig_SpoolTimeout     time.Duration = 5 * time.Second
-  default_GeneralConfig_LogLevel         logging.Level = logging.INFO
-  default_GeneralConfig_LogStdout        bool          = true
-  default_GeneralConfig_LogSyslog        bool          = false
-  default_NetworkConfig_Transport        string        = "tls"
-  default_NetworkConfig_Timeout          time.Duration = 15 * time.Second
-  default_NetworkConfig_Reconnect        time.Duration = 1 * time.Second
-  default_FileConfig_Codec               string        = "plain"
-  default_FileConfig_DeadTime            int64         = 86400
+  default_GeneralConfig_AdminEnabled       bool          = true
+  default_GeneralConfig_AdminBind          string        = "127.0.0.1"
+  default_GeneralConfig_PersistDir         string        = "."
+  default_GeneralConfig_ProspectInterval   time.Duration = 10 * time.Second
+  default_GeneralConfig_SpoolSize          int64         = 1024
+  default_GeneralConfig_SpoolTimeout       time.Duration = 5 * time.Second
+  default_GeneralConfig_LogLevel           logging.Level = logging.INFO
+  default_GeneralConfig_LogStdout          bool          = true
+  default_GeneralConfig_LogSyslog          bool          = false
+  default_NetworkConfig_Transport          string        = "tls"
+  default_NetworkConfig_Timeout            time.Duration = 15 * time.Second
+  default_NetworkConfig_Reconnect          time.Duration = 1 * time.Second
+  default_NetworkConfig_MaxPendingPayloads int64         = 10
+  default_FileConfig_Codec                 string        = "plain"
+  default_FileConfig_DeadTime              int64         = 86400
 )
 
 type Config struct {
@@ -70,10 +71,11 @@ type GeneralConfig struct {
 }
 
 type NetworkConfig struct {
-  Transport string        `config:"transport"`
-  Servers   []string      `config:"servers"`
-  Timeout   time.Duration `config:"timeout"`
-  Reconnect time.Duration `config:"reconnect"`
+  Transport          string        `config:"transport"`
+  Servers            []string      `config:"servers"`
+  Timeout            time.Duration `config:"timeout"`
+  Reconnect          time.Duration `config:"reconnect"`
+  MaxPendingPayloads int64         `config:"max pending payloads"`
 
   Unused           map[string]interface{}
   TransportFactory TransportFactory
@@ -304,6 +306,9 @@ func (c *Config) Load(path string) (err error) {
   }
   if c.Network.Reconnect == time.Duration(0) {
     c.Network.Reconnect = default_NetworkConfig_Reconnect
+  }
+  if c.Network.MaxPendingPayloads == 0 {
+    c.Network.MaxPendingPayloads = default_NetworkConfig_MaxPendingPayloads
   }
 
   for k := range c.Files {

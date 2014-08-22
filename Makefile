@@ -42,9 +42,24 @@ doc:
 	@node_modules/.bin/doctoc README.md
 	@for F in docs/*.md docs/codecs/*.md; do node_modules/.bin/doctoc $$F; done
 
-# Only update bundle if Gemfile changes
+profile: all vendor/bundle/.GemfileModT
+	bundle exec rspec spec/profile_spec.rb
+
+benchmark: all vendor/bundle/.GemfileModT
+	bundle exec rspec spec/benchmark_spec.rb
+
 vendor/bundle/.GemfileModT: Gemfile
 	bundle install --path vendor/bundle
+	@touch $@
+
+jrprofile: all vendor/bundle/.GemfileModT
+	jruby --profile -G vendor/bundle/jruby/1.9/bin/rspec spec/benchmark_spec.rb
+
+jrbenchmark: all vendor/bundle/.GemfileJRubyModT
+	jruby -G vendor/bundle/jruby/1.9/bin/rspec spec/benchmark_spec.rb
+
+vendor/bundle/.GemfileJRubyModT: Gemfile
+	jruby -S bundle install --path vendor/bundle
 	@touch $@
 
 clean:
