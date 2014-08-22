@@ -31,6 +31,7 @@
   - [`"curve secret key"`](#curve-secret-key)
   - [`"timeout"`](#timeout)
   - [`"reconnect"`](#reconnect)
+  - [`"max pending payloads"`](#max-pending-payloads)
 - [`"files"`](#files)
   - [`"paths"`](#paths)
   - [`"fields"`](#fields)
