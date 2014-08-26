@@ -52,6 +52,9 @@ func (c *CodecPlain) Event(start_offset int64, end_offset int64, line uint64, te
   c.callback_func(start_offset, end_offset, line, text)
 }
 
+func (c *CodecPlain) Meter() {
+}
+
 func (c *CodecPlain) Snapshot() *core.Snapshot {
   return nil
 }

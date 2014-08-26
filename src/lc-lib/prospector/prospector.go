@@ -444,13 +444,6 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *pros
 func (p *Prospector) handleSnapshot() {
   snapshots := make([]*core.Snapshot, 0)
 
-  for _, info := range p.prospectors {
-    if !info.running {
-      continue
-    }
-    info.requestSnapshot()
-  }
-
   for _, info := range p.prospectorindex {
     snapshots = append(snapshots, p.snapshotInfo(info))
   }

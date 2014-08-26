@@ -55,6 +55,9 @@ type CodecMultiline struct {
   timer_stop     chan interface{}
   timer_wait     sync.WaitGroup
   timer_deadline time.Time
+
+  meter_lines uint64
+  meter_bytes int64
 }
 
 func NewMultilineCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
@@ -164,10 +167,15 @@ func (c *CodecMultiline) flush() {
   c.callback_func(c.start_offset, c.end_offset, c.line, text)
 }
 
+func (c *CodecMultiline) Meter() {
+  c.meter_lines = c.buffer_lines
+  c.meter_bytes = c.last_offset - c.end_offset
+}
+
 func (c *CodecMultiline) Snapshot() *core.Snapshot {
   snap := core.NewSnapshot("Multiline Codec")
-  snap.AddEntry("Pending lines", c.buffer_lines)
-  snap.AddEntry("Pending bytes", c.last_offset - c.end_offset)
+  snap.AddEntry("Pending lines", c.meter_lines)
+  snap.AddEntry("Pending bytes", c.meter_bytes)
   return snap
 }
 
