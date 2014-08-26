@@ -241,10 +241,9 @@ func (lc *LogCourier) loadConfig() error {
   return nil
 }
 
-func (lc *LogCourier) reloadConfig() {
+func (lc *LogCourier) reloadConfig() error {
   if err := lc.loadConfig(); err != nil {
-    log.Warning("Configuration error, reload unsuccessful: %s", err)
-    return
+    return err
   }
 
   log.Notice("Configuration reload successful")
@@ -254,10 +253,19 @@ func (lc *LogCourier) reloadConfig() {
 
   // Pass the new config to the pipeline workers
   lc.pipeline.SendConfig(lc.config)
+
+  return nil
 }
 
 func (lc *LogCourier) processCommand(command string) *admin.Response {
-  if command == "SNAP" {
+  switch command {
+  case "RELD":
+    if err := lc.reloadConfig(); err != nil {
+      return &admin.Response{&admin.ErrorResponse{Message: fmt.Sprintf("Configuration error, reload unsuccessful: %s", err.Error())}}
+    }
+
+    return &admin.Response{&admin.ReloadResponse{}}
+  case "SNAP":
     snaps, err := lc.pipeline.Snapshot()
     if err != nil {
       return &admin.Response{&admin.ErrorResponse{Message: err.Error()}}
@@ -265,6 +273,7 @@ func (lc *LogCourier) processCommand(command string) *admin.Response {
 
     return &admin.Response{snaps}
   }
+
 
   return &admin.Response{&admin.ErrorResponse{Message: "Unknown command"}}
 }

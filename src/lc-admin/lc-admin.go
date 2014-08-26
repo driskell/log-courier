@@ -82,6 +82,13 @@ func (a *Admin) ProcessCommand(command string) bool {
     }
 
     fmt.Printf("Pong\n")
+  case "reload":
+    err = a.client.Reload()
+    if err != nil {
+      break
+    }
+
+    fmt.Printf("Configuration reload successful\n")
   case "snapshot":
     var snapshots []*core.Snapshot
 

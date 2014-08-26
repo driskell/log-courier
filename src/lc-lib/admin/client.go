@@ -111,6 +111,19 @@ func (c *Client) Ping() error {
   return c.resolveError(response)
 }
 
+func (c *Client) Reload() error {
+  response, err := c.request("RELD")
+  if err != nil {
+    return err
+  }
+
+  if _, ok := response.Response.(*ReloadResponse); ok {
+    return nil
+  }
+
+  return c.resolveError(response)
+}
+
 func (c *Client) FetchSnapshot() ([]*core.Snapshot, error) {
   response, err := c.request("SNAP")
   if err != nil {
