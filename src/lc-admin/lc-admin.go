@@ -89,7 +89,7 @@ func (a *Admin) ProcessCommand(command string) bool {
     }
 
     fmt.Printf("Configuration reload successful\n")
-  case "snapshot":
+  case "status":
     var snapshots []*core.Snapshot
 
     snapshots, err = a.client.FetchSnapshot()
@@ -101,6 +101,10 @@ func (a *Admin) ProcessCommand(command string) bool {
       fmt.Printf("%s:\n", snap.Description())
       a.renderSnap("  ", snap)
     }
+  case "help":
+    fmt.Printf("Available commands:\n")
+    fmt.Printf("  reload    Reload configuration\n")
+    fmt.Printf("  status    Display the current shipping status\n")
   default:
     fmt.Printf("Unknown command: %s\n", command)
   }
