@@ -26,6 +26,7 @@
   - [`"ssl ca"`](#ssl-ca)
   - [`"ssl certificate"`](#ssl-certificate)
   - [`"ssl key"`](#ssl-key)
+  - [`"ssl skip verify"`](#ssl-skip-verify)
   - [`"curve server key"`](#curve-server-key)
   - [`"curve public key"`](#curve-public-key)
   - [`"curve secret key"`](#curve-secret-key)
@@ -275,6 +276,13 @@ Path to a PEM encoded certificate file to use as the client certificate.
 "tls"*
 
 Path to a PEM encoded private key to use with the client certificate.
+
+### `"ssl skip verify"`
+*Boolean. Optional with "transport" = "tls". Not allowed otherwise*
+
+Skip SSL verification. Lumberjack logstash input plugin doesn't support
+non-SSLed connections use this if you are using SSL just becuase Lumberjack
+forces you and your network is internal.
 
 ### `"curve server key"`
 

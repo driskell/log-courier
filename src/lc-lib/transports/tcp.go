@@ -54,6 +54,7 @@ type TransportTcpFactory struct {
   SSLCertificate string `config:"ssl certificate"`
   SSLKey         string `config:"ssl key"`
   SSLCA          string `config:"ssl ca"`
+  SSLSkipVerify  bool   `config:"ssl skip verify"`
 
   hostport_re *regexp.Regexp
   tls_config  tls.Config
@@ -140,7 +141,7 @@ func (t *TransportTcp) ReloadConfig(new_net_config *core.NetworkConfig) int {
     return core.Reload_Transport
   }
 
-  if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
+  if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA || new_config.SSLSkipVerify != t.config.SSLSkipVerify {
     return core.Reload_Transport
   }
 
@@ -185,6 +186,13 @@ func (t *TransportTcp) Init() error {
   if t.config.transport == "tls" {
     // Set the tlsconfig server name for server validation (since Go 1.3)
     t.config.tls_config.ServerName = host
+
+    // skip SSL verification. Lumberjack logstash input plugin doesn't support
+    // non-SSLed connections use this if you are using SSL just becuase
+    // Lumberjack forces you and your network is internal.
+    if t.config.SSLSkipVerify {
+        t.config.tls_config.InsecureSkipVerify = true
+    }
 
     t.tlssocket = tls.Client(&transportTcpWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
     t.tlssocket.SetDeadline(time.Now().Add(t.net_config.Timeout))
