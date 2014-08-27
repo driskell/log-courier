@@ -45,7 +45,6 @@ type prospectorInfo struct {
   orphaned         int
   finish_offset    int64
   harvester        *harvester.Harvester
-  snapshot_pending bool
   err              error
 }
 
@@ -116,30 +115,8 @@ func (pi *prospectorInfo) wait() {
   pi.setHarvesterStopped(status)
 }
 
-func (pi *prospectorInfo) requestSnapshot() bool {
-  if pi.snapshot_pending {
-    return false
-  }
-
-  pi.harvester.RequestSnapshot()
-  pi.snapshot_pending = true
-  return true
-}
-
 func (pi *prospectorInfo) getSnapshot() *core.Snapshot {
-  if !pi.snapshot_pending {
-    return core.NewSnapshot("Bug: Snapshot already received")
-  }
-
-  select {
-  case snap := <-pi.harvester.OnSnapshot():
-    pi.snapshot_pending = false
-    return snap
-  case status := <-pi.harvester.OnFinish():
-    pi.setHarvesterStopped(status)
-  }
-  pi.snapshot_pending = false
-  return nil
+  return pi.harvester.Snapshot()
 }
 
 func (pi *prospectorInfo) setHarvesterStopped(status *harvester.HarvesterFinish) {

@@ -27,6 +27,7 @@ import (
   "lc-lib/core"
   "math"
   "os"
+  "sync"
   "time"
 )
 
@@ -38,26 +39,27 @@ type HarvesterFinish struct {
 type Harvester struct {
   stop_chan     chan interface{}
   return_chan   chan *HarvesterFinish
-  snapshot_chan chan interface{}
-  snapshot_sink chan *core.Snapshot
   stream        core.Stream
   fileinfo      os.FileInfo
   path          string
   fileconfig    *core.FileConfig
   offset        int64
-  codec         core.Codec
   output        chan<- *core.EventDescriptor
+  codec         core.Codec
   file          *os.File
+
+  mutex         sync.Mutex
   line_speed    float64
   byte_speed    float64
   line_count    uint64
   byte_count    uint64
-  last_eof      time.Time
+  last_eof      *int64
 }
 
 func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64) *Harvester {
   var fileinfo os.FileInfo
   var path string
+
   if stream != nil {
     // Grab now so we can safely use them even if prospector changes them
     path, fileinfo = stream.Info()
@@ -65,7 +67,8 @@ func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64)
     // This is stdin
     path, fileinfo = "-", nil
   }
-  return &Harvester{
+
+  ret := &Harvester{
     stop_chan:     make(chan interface{}),
     return_chan:   make(chan *HarvesterFinish, 1),
     stream:        stream,
@@ -74,14 +77,13 @@ func NewHarvester(stream core.Stream, fileconfig *core.FileConfig, offset int64)
     fileconfig:    fileconfig,
     offset:        offset,
   }
+
+  ret.codec = fileconfig.CodecFactory.NewCodec(ret.eventCallback, ret.offset)
+
+  return ret
 }
 
 func (h *Harvester) Start(output chan<- *core.EventDescriptor) {
-  // Reset these channels on each harvester restart to ensure that any pending
-  // snapshot request or response that was ignored/interrupted is cleared
-  h.snapshot_chan = make(chan interface{}, 1)
-  h.snapshot_sink = make(chan *core.Snapshot, 1)
-
   go func() {
     status := &HarvesterFinish{}
     status.Last_Offset, status.Error = h.harvest(output)
@@ -97,21 +99,12 @@ func (h *Harvester) OnFinish() <-chan *HarvesterFinish {
   return h.return_chan
 }
 
-func (h *Harvester) RequestSnapshot() {
-  h.snapshot_chan <- 1
-}
-
-func (h *Harvester) OnSnapshot() <-chan *core.Snapshot {
-  return h.snapshot_sink
-}
-
 func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) {
   if err := h.prepareHarvester(); err != nil {
     return h.offset, err
   }
 
   h.output = output
-  h.codec = h.fileconfig.CodecFactory.NewCodec(h.eventCallback, h.offset)
 
   defer h.file.Close()
 
@@ -142,6 +135,8 @@ ReadLoop:
     text, bytesread, err := h.readline(reader, buffer)
 
     if duration := time.Since(last_measurement); duration >= time.Second {
+      h.mutex.Lock()
+
       count := float64(h.line_count - last_line_count)
 
       if count == 0 {
@@ -159,12 +154,14 @@ ReadLoop:
       last_line_count = h.line_count
       last_measurement = time.Now()
 
+      h.codec.Meter()
+
+      h.mutex.Unlock()
+
       // Check shutdown
       select {
       case <-h.stop_chan:
         break ReadLoop
-      case <-h.snapshot_chan:
-        h.handleSnapshot()
       default:
       }
     }
@@ -178,7 +175,10 @@ ReadLoop:
         default:
         }
 
-        h.last_eof = time.Now()
+        h.mutex.Lock()
+        last_eof := h.offset
+        h.last_eof = &last_eof
+        h.mutex.Unlock()
 
         // Timed out waiting for data, got EOF
         if h.path == "-" {
@@ -259,8 +259,6 @@ EventLoop:
     select {
     case <-h.stop_chan:
       break EventLoop
-    case <-h.snapshot_chan:
-      h.handleSnapshot()
     case h.output <- event:
       break EventLoop
     }
@@ -351,13 +349,15 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer) (string
   return "", 0, nil
 }
 
-func (h *Harvester) handleSnapshot() {
+func (h *Harvester) Snapshot() *core.Snapshot {
+  h.mutex.Lock()
+
   ret := core.NewSnapshot("Harvester")
   ret.AddEntry("Speed (Lps)", h.line_speed)
   ret.AddEntry("Speed (Bps)", h.byte_speed)
   ret.AddEntry("Processed lines", h.line_count)
   ret.AddEntry("Last offset", h.offset)
-  if h.last_eof.IsZero() {
+  if h.last_eof == nil {
     ret.AddEntry("Last EOF", "Never")
   } else {
     ret.AddEntry("Last EOF", h.last_eof)
@@ -367,5 +367,7 @@ func (h *Harvester) handleSnapshot() {
     ret.AddSub(sub_snap)
   }
 
-  h.snapshot_sink <- ret
+  h.mutex.Unlock()
+
+  return ret
 }

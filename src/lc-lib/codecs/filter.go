@@ -35,6 +35,7 @@ type CodecFilter struct {
   last_offset    int64
   filtered_lines uint64
   callback_func  core.CodecCallbackFunc
+  meter_filtered uint64
 }
 
 func NewFilterCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
@@ -89,9 +90,13 @@ func (c *CodecFilter) Event(start_offset int64, end_offset int64, line uint64, t
   }
 }
 
+func (c *CodecFilter) Meter() {
+  c.meter_filtered = c.filtered_lines
+}
+
 func (c *CodecFilter) Snapshot() *core.Snapshot {
   snap := core.NewSnapshot("Filter Codec")
-  snap.AddEntry("Filtered lines", c.filtered_lines)
+  snap.AddEntry("Filtered lines", c.meter_filtered)
   return snap
 }
 

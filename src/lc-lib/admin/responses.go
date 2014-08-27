@@ -29,6 +29,9 @@ type Response struct {
 type PongResponse struct {
 }
 
+type ReloadResponse struct {
+}
+
 type ErrorResponse struct {
   Message string
 }
@@ -46,6 +49,9 @@ func init() {
 
   // PONG
   gob.Register(&PongResponse{})
+
+  // RELD
+  gob.Register(&ReloadResponse{})
 
   // SNAP
   gob.Register([]*core.Snapshot{&core.Snapshot{}})
