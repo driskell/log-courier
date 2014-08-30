@@ -76,8 +76,12 @@ For CurveZMQ support (ZMQ with public key encryption) replace `zmq3` with
 
 ### Logstash Integration
 
-Details instructions on how to integrate with Logstash can be found on the
-[Logstash Integration](docs/LogstashIntegration.md) page.
+Log Courier does not utilise the lumberjack Logstash plugin and instead uses its
+own custom plugin. This allows significant enhancements to the integration far
+beyond the lumberjack protocol allows.
+
+Details instructions on the plugin and how to install it into Logstash can be
+found on the [Logstash Integration](docs/LogstashIntegration.md) page.
 
 ### Generating Certificates and Keys
 
