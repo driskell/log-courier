@@ -27,10 +27,11 @@ import (
 type server struct {
   listener *Listener
   conn     *net.TCPConn
-  encoder  *gob.Encoder
+
+  encoder *gob.Encoder
 }
 
-func newServer(listener *Listener,conn *net.TCPConn) *server {
+func newServer(listener *Listener, conn *net.TCPConn) *server {
   return &server{
     listener: listener,
     conn:     conn,
@@ -44,6 +45,8 @@ func (s *server) Run() {
     log.Debug("Admin connection from %s closed", s.conn.RemoteAddr())
   }
 
+  // TODO: Make linger time configurable?
+  s.conn.SetLinger(5)
   s.conn.Close()
 
   s.listener.client_ended <- 1
@@ -83,14 +86,23 @@ func (s *server) readCommand(command []byte) error {
   start_time := time.Now()
 
   for {
-    if err := s.conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+    // Poll every second for shutdown
+    if err := s.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
       return err
     }
 
     read, err := s.conn.Read(command[total_read:4])
     if err != nil {
       if op_err, ok := err.(*net.OpError); ok && op_err.Timeout() {
+        // TODO: Make idle timeout configurable
         if time.Now().Sub(start_time) <= 1800 * time.Second {
+          // Check shutdown at each interval
+          select {
+          case <-s.listener.client_shutdown:
+            return io.EOF
+          default:
+          }
+
           continue
         }
       } else if total_read != 0 && op_err == io.EOF {
@@ -123,7 +135,8 @@ func (s *server) sendResponse(response *Response) error {
 func (s *server) processCommand(command string) *Response {
   select {
   case s.listener.command_chan <- command:
-  case <-s.listener.OnShutdown():
+  // Listener immediately stops processing commands on shutdown, so catch it here
+  case <-s.listener.client_shutdown:
     return &Response{&ErrorResponse{Message: "Log Courier is shutting down"}}
   }
 
