@@ -188,7 +188,7 @@ shared_context 'Helpers' do
         if block.nil?
           found = @files.find do |f|
             next unless f.pending?
-            f.logged?(*args, event: e)
+            f.logged?(check_file: args[:check_file], check_order: args[:check_order], event: e)
           end
           expect(found).to_not be_nil, "Event received not recognised: #{e}"
         else
