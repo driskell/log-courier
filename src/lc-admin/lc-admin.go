@@ -44,7 +44,7 @@ func NewAdmin(quiet bool, host string, port int) *Admin {
   }
 }
 
-func (a *Admin) ensureConnected() error {
+func (a *Admin) connect() error {
   if !a.connected {
     var err error
 
@@ -68,57 +68,70 @@ func (a *Admin) ensureConnected() error {
 }
 
 func (a *Admin) ProcessCommand(command string) bool {
-  if err := a.ensureConnected(); err != nil {
-    return false
-  }
+  var reconnected bool
 
-  var err error
+  for {
+    if !a.connected {
+      if err := a.connect(); err != nil {
+        return false
+      }
 
-  switch command {
-  case "ping":
-    err = a.client.Ping()
-    if err != nil {
+      reconnected = true
+    }
+
+    var err error
+
+    switch command {
+    case "ping":
+      err = a.client.Ping()
+      if err != nil {
+        break
+      }
+
+      fmt.Printf("Pong\n")
+    case "reload":
+      err = a.client.Reload()
+      if err != nil {
+        break
+      }
+
+      fmt.Printf("Configuration reload successful\n")
+    case "status":
+      var snapshots []*core.Snapshot
+
+      snapshots, err = a.client.FetchSnapshot()
+      if err != nil {
+        break
+      }
+
+      for _, snap := range snapshots {
+        fmt.Printf("%s:\n", snap.Description())
+        a.renderSnap("  ", snap)
+      }
+    case "help":
+      fmt.Printf("Available commands:\n")
+      fmt.Printf("  reload    Reload configuration\n")
+      fmt.Printf("  status    Display the current shipping status\n")
+      fmt.Printf("  exit      Exit\n")
+    default:
+      fmt.Printf("Unknown command: %s\n", command)
+    }
+
+    if err == nil {
+      return true
+    }
+
+    if _, ok := err.(*admin.ErrorResponse); ok {
+      fmt.Printf("Log Courier returned an error: %s\n", err)
+      return false
+    } else {
+      a.connected = false
+      fmt.Printf("Connection error: %s\n", err)
+    }
+
+    if reconnected {
       break
     }
-
-    fmt.Printf("Pong\n")
-  case "reload":
-    err = a.client.Reload()
-    if err != nil {
-      break
-    }
-
-    fmt.Printf("Configuration reload successful\n")
-  case "status":
-    var snapshots []*core.Snapshot
-
-    snapshots, err = a.client.FetchSnapshot()
-    if err != nil {
-      break
-    }
-
-    for _, snap := range snapshots {
-      fmt.Printf("%s:\n", snap.Description())
-      a.renderSnap("  ", snap)
-    }
-  case "help":
-    fmt.Printf("Available commands:\n")
-    fmt.Printf("  reload    Reload configuration\n")
-    fmt.Printf("  status    Display the current shipping status\n")
-    fmt.Printf("  exit      Exit\n")
-  default:
-    fmt.Printf("Unknown command: %s\n", command)
-  }
-
-  if err == nil {
-    return true
-  }
-
-  if _, ok := err.(*admin.ErrorResponse); ok {
-    fmt.Printf("Log Courier returned an error: %s\n", err)
-  } else {
-    a.connected = false
-    fmt.Printf("Connection error: %s\n", err)
   }
 
   return false
@@ -187,7 +200,7 @@ CommandLoop:
   }
 }
 
-func (a *Admin) argsCommand(args []string, watch bool) {
+func (a *Admin) argsCommand(args []string, watch bool) bool {
   var signal_chan chan os.Signal
 
   if watch {
@@ -199,7 +212,7 @@ WatchLoop:
   for {
     if !a.ProcessCommand(strings.Join(args, " ")) {
       if !watch {
-        os.Exit(1)
+        return false
       }
     }
 
@@ -217,7 +230,7 @@ WatchLoop:
     }
   }
 
-  os.Exit(0)
+  return true
 }
 
 func main() {
@@ -248,7 +261,10 @@ func main() {
 
   args := flag.Args()
   if len(args) != 0 {
-    admin.argsCommand(args, watch)
+    if admin.argsCommand(args, watch) {
+      os.Exit(0)
+    }
+    os.Exit(1)
   }
 
   if quiet {
@@ -261,7 +277,7 @@ func main() {
     os.Exit(1)
   }
 
-  if err := admin.ensureConnected(); err != nil {
+  if err := admin.connect(); err != nil {
     return
   }
 

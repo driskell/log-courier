@@ -34,6 +34,7 @@ import (
 const (
   default_GeneralConfig_AdminEnabled       bool          = false
   default_GeneralConfig_AdminBind          string        = "127.0.0.1"
+  default_GeneralConfig_AdminPort          int           = 0
   default_GeneralConfig_PersistDir         string        = "."
   default_GeneralConfig_ProspectInterval   time.Duration = 10 * time.Second
   default_GeneralConfig_SpoolSize          int64         = 1024
@@ -255,6 +256,8 @@ func (c *Config) Load(path string) (err error) {
 
   // Validations and defaults
   if c.General.AdminEnabled {
+    c.General.AdminPort = default_GeneralConfig_AdminPort
+
     if c.General.AdminPort == 0 {
       err = fmt.Errorf("An admin port must be specified when admin is enabled")
       return
