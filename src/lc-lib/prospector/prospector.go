@@ -459,7 +459,11 @@ func (p *Prospector) Snapshot() []*core.Snapshot {
 }
 
 func (p *Prospector) handleSnapshot() {
-  snapshots := make([]*core.Snapshot, 0)
+  snapshots := make([]*core.Snapshot, 1)
+
+  snapshots[0] = core.NewSnapshot("Prospector")
+  snapshots[0].AddEntry("Watched files", len(p.prospectorindex))
+  snapshots[0].AddEntry("Active states", len(p.prospectors))
 
   for _, info := range p.prospectorindex {
     snapshots = append(snapshots, p.snapshotInfo(info))
@@ -479,11 +483,15 @@ func (p *Prospector) snapshotInfo(info *prospectorInfo) *core.Snapshot {
   var extra string
   var status string
 
-  switch (info.orphaned) {
-  case Orphaned_Maybe:
-    extra = "Orphan? / "
-  case Orphaned_Yes:
-    extra = "Orphan / "
+  if info.file == "-" {
+    extra = "Stdin / "
+  } else {
+    switch (info.orphaned) {
+    case Orphaned_Maybe:
+      extra = "Orphan? / "
+    case Orphaned_Yes:
+      extra = "Orphan / "
+    }
   }
 
   switch (info.status) {
@@ -505,7 +513,7 @@ func (p *Prospector) snapshotInfo(info *prospectorInfo) *core.Snapshot {
     }
   }
 
-  snap := core.NewSnapshot(fmt.Sprintf("%s (%s%p)", info.file, extra, info))
+  snap := core.NewSnapshot(fmt.Sprintf("\"%s (%s%p)\"", info.file, extra, info))
   snap.AddEntry("Status", status)
 
   if info.running {
