@@ -513,7 +513,7 @@ func (p *Prospector) snapshotInfo(info *prospectorInfo) *core.Snapshot {
     }
   }
 
-  snap := core.NewSnapshot(fmt.Sprintf("\"%s (%s%p)\"", info.file, extra, info))
+  snap := core.NewSnapshot(fmt.Sprintf("\"State: %s (%s%p)\"", info.file, extra, info))
   snap.AddEntry("Status", status)
 
   if info.running {
