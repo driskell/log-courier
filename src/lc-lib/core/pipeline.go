@@ -17,7 +17,6 @@
 package core
 
 import (
-  "fmt"
   "sync"
 )
 
@@ -27,7 +26,7 @@ type Pipeline struct {
   group          sync.WaitGroup
   config_sinks   map[*PipelineConfigReceiver]chan *Config
   snapshot_chan  chan []*Snapshot
-  snapshot_sinks map[*PipelineSnapshotProvider]chan interface{}
+  snapshot_pipes map[IPipelineSnapshotProvider]IPipelineSnapshotProvider
 }
 
 func NewPipeline() *Pipeline {
@@ -36,7 +35,7 @@ func NewPipeline() *Pipeline {
     signal:         make(chan interface{}),
     config_sinks:   make(map[*PipelineConfigReceiver]chan *Config),
     snapshot_chan:  make(chan []*Snapshot),
-    snapshot_sinks: make(map[*PipelineSnapshotProvider]chan interface{}),
+    snapshot_pipes: make(map[IPipelineSnapshotProvider]IPipelineSnapshotProvider),
   }
 }
 
@@ -57,11 +56,7 @@ func (p *Pipeline) Register(ipipe IPipelineSegment) {
   }
 
   if ipipe_ext, ok := ipipe.(IPipelineSnapshotProvider); ok {
-    pipe_ext := ipipe_ext.getSnapshotProviderStruct()
-    sink := make(chan interface{}, 1)
-    p.snapshot_sinks[pipe_ext] = sink
-    pipe_ext.snapshot_chan = sink
-    pipe_ext.sink = p.snapshot_chan
+    p.snapshot_pipes[ipipe_ext] = ipipe_ext
   }
 }
 
@@ -85,33 +80,14 @@ func (p *Pipeline) SendConfig(config *Config) {
   }
 }
 
-func (p *Pipeline) Snapshot() ([]*Snapshot, error) {
-  left := 0
-  for _, sink := range p.snapshot_sinks {
-    sink <- 1
-    left++
-  }
-
-  var ret []*Snapshot
-
+func (p *Pipeline) Snapshot() []*Snapshot {
   snapshots := make([]*Snapshot, 0)
-// TODO: Fix race condition here with shutdown that causes hang/crash
-  for {
-    left--
-    select {
-    case ret = <-p.snapshot_chan:
-    case <-p.signal:
-      return nil, fmt.Errorf("Log Courier is shutting down")
-    }
 
-    snapshots = append(snapshots, ret...)
-
-    if left == 0 {
-      break
-    }
+  for _, sink := range p.snapshot_pipes {
+    snapshots = append(snapshots, sink.Snapshot()...)
   }
 
-  return snapshots, nil
+  return snapshots
 }
 
 type IPipelineSegment interface {
@@ -157,22 +133,18 @@ func (s *PipelineConfigReceiver) OnConfig() <-chan *Config {
 }
 
 type IPipelineSnapshotProvider interface {
-  getSnapshotProviderStruct() *PipelineSnapshotProvider
+  Snapshot() []*Snapshot
 }
 
 type PipelineSnapshotProvider struct {
-  snapshot_chan <-chan interface{}
-  sink          chan<- []*Snapshot
 }
 
 func (s *PipelineSnapshotProvider) getSnapshotProviderStruct() *PipelineSnapshotProvider {
   return s
 }
 
-func (s *PipelineSnapshotProvider) OnSnapshot() <-chan interface{} {
-  return s.snapshot_chan
-}
-
-func (s *PipelineSnapshotProvider) SendSnapshot(snapshot []*Snapshot) {
-  s.sink <- snapshot
+func (s *PipelineSnapshotProvider) Snapshot() []*Snapshot {
+  ret := NewSnapshot("Unknown")
+  ret.AddEntry("Error", "NotImplemented")
+  return []*Snapshot{ret}
 }

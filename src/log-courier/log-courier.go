@@ -263,14 +263,9 @@ func (lc *LogCourier) processCommand(command string) *admin.Response {
     if err := lc.reloadConfig(); err != nil {
       return &admin.Response{&admin.ErrorResponse{Message: fmt.Sprintf("Configuration error, reload unsuccessful: %s", err.Error())}}
     }
-
     return &admin.Response{&admin.ReloadResponse{}}
   case "SNAP":
-    snaps, err := lc.pipeline.Snapshot()
-    if err != nil {
-      return &admin.Response{&admin.ErrorResponse{Message: err.Error()}}
-    }
-
+    snaps := lc.pipeline.Snapshot()
     return &admin.Response{snaps}
   }
 

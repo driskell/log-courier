@@ -44,6 +44,8 @@ type Prospector struct {
   lastscan        time.Time
   registrar       *registrar.Registrar
   registrar_spool *registrar.RegistrarEventSpool
+  snapshot_chan   chan interface{}
+  snapshot_sink   chan []*core.Snapshot
 
   output chan<- *core.EventDescriptor
 }
@@ -57,6 +59,8 @@ func NewProspector(pipeline *core.Pipeline, config *core.Config, from_beginning 
     from_beginning:  from_beginning,
     registrar:       registrar_imp,
     registrar_spool: registrar_imp.Connect(),
+    snapshot_chan:   make(chan interface{}),
+    snapshot_sink:   make(chan []*core.Snapshot),
     output:          spooler_imp.Connect(),
   }
 
@@ -181,7 +185,7 @@ ProspectLoop:
         break DelayLoop
       case <-p.OnShutdown():
         break ProspectLoop
-      case <-p.OnSnapshot():
+      case <-p.snapshot_chan:
         p.handleSnapshot()
       case config := <-p.OnConfig():
         p.generalconfig = &config.General
@@ -441,6 +445,19 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *pros
   return "", nil
 }
 
+func (p *Prospector) Snapshot() []*core.Snapshot {
+  select {
+    case p.snapshot_chan <- 1:
+    // Timeout after 5 seconds
+    case <-time.After(5 * time.Second):
+      ret := core.NewSnapshot("Prospector")
+      ret.AddEntry("Error", "Timeout")
+      return []*core.Snapshot{ret}
+  }
+
+  return <-p.snapshot_sink
+}
+
 func (p *Prospector) handleSnapshot() {
   snapshots := make([]*core.Snapshot, 0)
 
@@ -455,7 +472,7 @@ func (p *Prospector) handleSnapshot() {
     snapshots = append(snapshots, p.snapshotInfo(info))
   }
 
-  p.SendSnapshot(snapshots)
+  p.snapshot_sink <- snapshots
 }
 
 func (p *Prospector) snapshotInfo(info *prospectorInfo) *core.Snapshot {
