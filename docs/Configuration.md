@@ -34,6 +34,7 @@
   - [`"curve secret key"`](#curve-secret-key)
   - [`"timeout"`](#timeout)
   - [`"reconnect"`](#reconnect)
+  - [`"max pending payloads"`](#max-pending-payloads)
 - [`"files"`](#files)
   - [`"paths"`](#paths)
   - [`"fields"`](#fields)
@@ -198,6 +199,14 @@ How many events to spool together and flush at once. This improves efficiency
 when processing large numbers of events by submitting them for processing in
 bulk.
 
+Internal benchmarks have shown that increasing to 5120, for example, can
+give around a 25% boost of events per second, at the expense of more memory
+usage.
+
+*For most installations you should leave this at the default as it can
+easily cope with over 10,000 events a second on most machines and uses little
+memory. It is useful only in very specific circumstances.*
+
 ### `"spool timeout"`
 
 *Duration. Optional. Default: 5*
@@ -332,6 +341,22 @@ this slows down the rate of reconnection attempts.
 
 When using the ZMQ transport, this is how long to wait before restarting the ZMQ
 stack when it was reset.
+
+### `"max pending payloads"`
+
+*Number. Optional. Default: 10*
+
+The maximum number of spools that can be in transit at any one time. Each spool
+will be kept in memory until the remote server acknowledges it.
+
+If Log Courier has sent this many spools to the remote server, and has not yet
+received acknowledgement responses for them (either because the remote server
+is busy or because the link has high latency), it will pause and wait before
+sending anymore data.
+
+*For most installations you should leave this at the default as it is high
+enough to maintain throughput even on high latency links and low enough not to
+cause excessive memory usage.*
 
 ## `"files"`
 
