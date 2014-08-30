@@ -20,7 +20,6 @@ import (
   "fmt"
   "lc-lib/core"
   "net"
-  "sync"
   "time"
 )
 
@@ -28,20 +27,26 @@ type Listener struct {
   core.PipelineSegment
   core.PipelineConfigReceiver
 
-  config        *core.GeneralConfig
-  command_chan  chan string
-  response_chan chan *Response
-  listener      *net.TCPListener
-  conn_group    sync.WaitGroup
+  config          *core.GeneralConfig
+  command_chan    chan string
+  response_chan   chan *Response
+  listener        *net.TCPListener
+  client_shutdown chan interface{}
+  client_started  chan interface{}
+  client_ended    chan interface{}
 }
 
 func NewListener(pipeline *core.Pipeline, config *core.GeneralConfig) (*Listener, error) {
   var err error
 
   ret := &Listener{
-    config:        config,
-    command_chan:  make(chan string),
-    response_chan: make(chan *Response),
+    config:          config,
+    command_chan:    make(chan string),
+    response_chan:   make(chan *Response),
+    client_shutdown: make(chan interface{}),
+    // TODO: Make this limit configurable
+    client_started:  make(chan interface{}, 50),
+    client_ended:    make(chan interface{}, 50),
   }
 
   if ret.listener, err = ret.startListening(config); err != nil {
@@ -123,13 +128,39 @@ ListenerLoop:
     l.startServer(conn)
   }
 
-  // TODO: Force shutdown all connections so this does not block too long
-  l.conn_group.Wait()
+  // Trigger shutdowns
+  close(l.client_shutdown)
+
+  // Wait for shutdowns
+  for {
+    if len(l.client_started) == 0 {
+      break
+    }
+
+    select {
+      case <-l.client_ended:
+        <-l.client_started
+      default:
+    }
+  }
 }
 
 func (l *Listener) startServer(conn *net.TCPConn) {
-  l.conn_group.Add(1)
-
   server := newServer(l, conn)
+
+  select {
+    case <-l.client_ended:
+      <-l.client_started
+    default:
+  }
+
+  select {
+    case l.client_started <- 1:
+    default:
+      // TODO: Make this limit configurable
+      log.Warning("Refused admin connection: Admin connection limit (50) reached")
+      return
+  }
+
   go server.Run()
 }

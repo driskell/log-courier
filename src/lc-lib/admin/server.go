@@ -46,12 +46,12 @@ func (s *server) Run() {
 
   s.conn.Close()
 
-  s.listener.conn_group.Done()
+  s.listener.client_ended <- 1
 }
 
 func (s *server) loop() (err error) {
   var result *Response
-
+// TODO : Obey shutdown request on s.listener.client_shutdown channel close
   s.encoder = gob.NewEncoder(s.conn)
 
   command := make([]byte, 4)
