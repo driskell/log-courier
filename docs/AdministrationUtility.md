@@ -5,6 +5,11 @@
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
 - [Overview](#overview)
+- [Available Commands](#available-commands)
+  - [`help`](#help)
+  - [`reload`](#reload)
+  - [`status`](#status)
+- [Command Line Options](#command-line-options)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 

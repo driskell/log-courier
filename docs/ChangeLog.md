@@ -15,14 +15,19 @@
 
 ## 0.13
 
-*???*
+*30th August 2014*
 
+* Added new administration utility that can connect to a running Log Courier
+instance and report on the current shipping status
 * Added new filter codec to allow selective shipping and reduce LogStash loads
-* Fix LogStash plugin entering infinite loop during LogStash shutdown sequence
+* Fixed LogStash plugin entering infinite loop during LogStash shutdown sequence
 when using ZMQ. The plugin now shuts down gracefully along with LogStash (#30)
+* Fixed unexpected registrar conflict messages appearing for a short time after
+a log rotation occurred (#34)
 * Fixed LogStash crashing with "Operation cannot be accomplished in current
 state" when using ZMQ and LogStash hits a bottleneck requiring partial ACKs to
 be sent to Log Courier
+* Improved performance of the Log Courier Logstash plugins
 * Various other minor rework and improvements
 
 ## 0.12
