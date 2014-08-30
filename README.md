@@ -96,7 +96,7 @@ configuration snippets.
 
 ## Command Line Options
 
-The log-courier command accepts the following command line options.
+The `log-courier` command accepts the following command line options.
 
 	-config="": The config file to load
 	-config-test=false: Test the configuration specified by -config and exit
@@ -107,5 +107,6 @@ The log-courier command accepts the following command line options.
 
 ## Documentation
 
+* [Administration Utility](docs/AdministrationUtility.md)
 * [Configuration](docs/Configuration.md)
 * [Change Log](docs/ChangeLog.md)

@@ -105,6 +105,7 @@ func (a *Admin) ProcessCommand(command string) bool {
     fmt.Printf("Available commands:\n")
     fmt.Printf("  reload    Reload configuration\n")
     fmt.Printf("  status    Display the current shipping status\n")
+    fmt.Printf("  exit      Exit\n")
   default:
     fmt.Printf("Unknown command: %s\n", command)
   }
@@ -175,6 +176,9 @@ CommandLoop:
     fmt.Printf("> ")
     select {
     case command := <-command_chan:
+      if command == "exit" {
+        break CommandLoop
+      }
       a.ProcessCommand(command)
     case <-signal_chan:
       fmt.Printf("\n> exit\n")
