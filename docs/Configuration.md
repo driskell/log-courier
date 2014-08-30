@@ -78,10 +78,10 @@ command replacing 1234 with the Process ID of Log Courier.
 	kill -HUP 1234
 
 Please note that files Log Courier has already started harvesting will continue
-to harvest after the reload until their dead time is reached. The reload process
-will only affect the scanning of new files and the network configuration. In the
-case of a network configuration change, Log Courier will disconnect and
-reconnect at the earliest opportunity.
+to harvest after the reload with their previous configuration. The reload
+process will only affect new files and the network configuration. In the case of
+a network configuration change, Log Courier will disconnect and reconnect at the
+earliest opportunity.
 
 *Configuration reload is not currently available on Windows builds of Log
 Courier.*
@@ -218,18 +218,21 @@ not filled within this time limit, the spool will be flushed regardless.
 
 *String. Optional. Default: "info".
 Available values: "critical", "error", "warning", "notice", "info", "debug"*
+*Requires restart*
 
 The maximum level of detail to produce in Log Courier's internal log.
 
 ### `"log stdout"`
 
 *Boolean. Optional. Default: true*
+*Requires restart*
 
 Enables sending of Log Courier's internal log to the console (stdout). May be used in conjunction with `"log syslog"` and `"log file"`.
 
 ### `"log syslog"`
 
 *Boolean. Optional. Default: false*
+*Requires restart*
 
 Enables sending of Log Courier's internal log to syslog. May be used in conjunction with `"log stdout"` and `"log file"`.
 
@@ -238,6 +241,7 @@ Enables sending of Log Courier's internal log to syslog. May be used in conjunct
 ### `"log file"`
 
 *Filepath. Optional*
+*Requires restart*
 
 A log file to save Log Courier's internal log into. May be used in conjunction with `"log stdout"` and `"log syslog"`.
 
@@ -393,6 +397,7 @@ Examples:
 ### `"fields"`
 
 *Dictionary. Optional*
+*Configuration reload will only affect new or resumed files*
 
 Extra fields to attach the event prior to shipping. These can be simple strings,
 numbers or even arrays and dictionaries.
@@ -406,6 +411,7 @@ Examples:
 ### `"dead time"`
 
 *Duration. Optional. Default: "24h"*
+*Configuration reload will only affect new or resumed files*
 
 If a log file has not been modified in this time period, it will be closed and
 Log Courier will simply watch it for modifications. If the file is modified it
@@ -418,6 +424,7 @@ ensure old log files are not kept open preventing deletion.
 ### `"codec"`
 
 *Codec configuration. Optional. Default: `{ "name": "plain" }`*
+*Configuration reload will only affect new or resumed files*
 
 *Depending on how log-courier was built, some codecs may not be available. Run
 `log-courier -list-supported` to see the list of codecs available in a specific
