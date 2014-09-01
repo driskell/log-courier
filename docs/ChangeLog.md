@@ -24,6 +24,7 @@
 'ssl_verify_ca' must be specified when ssl_verify is true"
 * Significantly improve Log Courier gem performance within JRuby by switching
 JrJackson parse mode from string to raw+bigdecimal
+* Restore message reliability and correctly perform partial ack (since 0.13)
 
 ## 0.13
 
