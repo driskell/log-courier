@@ -55,6 +55,7 @@ module LogCourier
 
       # Load the json adapter
       @json_adapter = MultiJson.adapter.instance
+      @json_options = { raw: true, use_bigdecimal: true }
     end
 
     def run(&block)
@@ -159,7 +160,7 @@ module LogCourier
 
         # Decode the JSON
         begin
-          event = @json_adapter.load(data_buf)
+          event = @json_adapter.load(data_buf, @json_options)
         rescue MultiJson::ParserError => e
           @logger.warn("[LogCourierServer] JSON parse failure, falling back to plain-text: #{e}") unless @logger.nil?
           event = { 'message' => data_buf }
