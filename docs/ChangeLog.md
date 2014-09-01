@@ -22,9 +22,11 @@
 * Provide more information when the gem encounters ProtocolError failures
 * Fix ssl_verify usage triggering error, "Either 'ssl_verify_default_ca' or
 'ssl_verify_ca' must be specified when ssl_verify is true"
+* Restore message reliability and correctly perform partial ack. Since 0.9 a
+full event spool from log-courier could be lose (default 1024) and partial ack
+would only be performed if 0 events could be queued
 * Significantly improve Log Courier gem performance within JRuby by switching
 JrJackson parse mode from string to raw+bigdecimal
-* Restore message reliability and correctly perform partial ack (since 0.13)
 
 ## 0.13
 
