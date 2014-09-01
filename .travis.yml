@@ -9,7 +9,7 @@ go:
 # Tests require ruby
 install:
   - rvm get stable
-  - rvm use 1.9.3 --install --binary --fuzzy
+  - rvm use 2.0 --install --binary --fuzzy
 
 # Make will compile, download bundles and run tests
 script:
