@@ -1,0 +1,96 @@
+#!/bin/sh
+#
+# log-courier Log Courier
+#
+# chkconfig: 2345 10 90
+# description: Controls the Log Courier daemon
+#
+### BEGIN INIT INFO
+# Provides:          log-courier
+# Required-Start:    $local_fs $remote_fs
+# Required-Stop:     $local_fs $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Log Courier
+### END INIT INFO
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+DAEMON='/usr/sbin/log-courier'
+DATA_DIR='/var/lib/log-courier'
+CONFIG_FILE='/etc/log-courier/log-courier.conf'
+PID_FILE='/var/run/log-courier.pid'
+
+do_start() {
+	echo -n "Starting Log Courier: "
+	status -p $PID_FILE $DAEMON &>/dev/null
+	RC=$?
+	if [ $RC -eq 0 ]; then
+		success
+	else
+		cd $DATA_DIR
+		nohup ${DAEMON} -config="${CONFIG_FILE}" </dev/null &>/dev/null &
+		RC=$?
+		echo $! > ${PID_FILE}
+		[ $RC -eq 0 ] && success || failure
+	fi
+	echo
+	return $?
+}
+
+do_reload() {
+	echo -n "Reloading Log Courier: "
+	killproc -p $PID_FILE $DAEMON -HUP
+	RC=$?
+	echo
+}
+
+case "$1" in
+	start)
+		$0 configtest && do_start
+		RC=$?
+	;;
+	stop)
+		echo -n "Stopping Log Courier: "
+		killproc -p $PID_FILE $DAEMON
+		RC=$?
+		echo
+	;;
+	status)
+		echo "Log Courier status:"
+		status -p $PID_FILE $DAEMON
+		RC=$?
+	;;
+	reload)
+		$0 configtest && do_reload
+	;;
+	restart)
+		$0 configtest
+		RC=$?
+		if [ $RC -eq 0 ]; then
+			$0 stop
+			do_start
+			RC=$?
+		fi
+	;;
+	configtest)
+		echo -n "Configuration test: "
+		TESTRESULT=$( ${DAEMON} -config="${CONFIG_FILE}" -config-test )
+		RC=$?
+		if [ $RC -ne 0 ]; then
+			failure
+			echo
+			echo "${TESTRESULT}"
+		else
+			success
+			echo
+		fi
+	;;
+	*)
+		echo "Usage: $0 start|stop|status|reload|restart|configtest"
+		exit 1
+	;;
+esac
+
+exit $RC
