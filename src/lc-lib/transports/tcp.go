@@ -296,12 +296,19 @@ func (t *TransportTcp) receiver() {
     }
 
     // Pass back the message
-    t.recv_chan <- [][]byte{header[0:4], message}
+    select {
+    case <-t.shutdown:
+      break
+    case t.recv_chan <- [][]byte{header[0:4], message}:
+    }
   } /* loop until shutdown */
 
   if err != nil {
     // Pass the error back and abort
-    t.recv_chan <- err
+    select {
+    case <-t.shutdown:
+    case t.recv_chan <- err:
+    }
   }
 
   t.wait.Done()
