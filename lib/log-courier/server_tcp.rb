@@ -180,7 +180,14 @@ module LogCourier
         @in_progress = true
 
         # Read the message
-        yield signature, recv(length), self
+        if length == 0
+          data = ''
+        else
+          data = recv(length)
+        end
+
+        # Send for processing
+        yield signature, data, self
 
         # If we EOF next it's a graceful close
         @in_progress = false
@@ -206,15 +213,17 @@ module LogCourier
     rescue => e
       # Some other unknown problem
       @logger.warn("[LogCourierServer] Unknown error on connection from #{@peer}: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
     ensure
       @fd.close rescue nil
     end
 
     def recv(need)
       reset_timeout
+      have = ''
+      loop do
       begin
-        buffer = @fd.read_nonblock need
+       	  buffer = @fd.read_nonblock need - have.length
       rescue IO::WaitReadable
         raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
         retry
@@ -224,25 +233,36 @@ module LogCourier
       end
       if buffer.nil?
         raise EOFError
-      elsif buffer.length < need
-        raise ProtocolError
+        elsif buffer.length == 0
+          raise ProtocolError, "Read failure (#{have.length}/#{need})"
+        end
+        if have.length == 0
+          have = buffer
+        else
+          have << buffer
+        end
+        break if have.length >= need
       end
-      buffer
+      have
     end
 
     def send(signature, message)
       reset_timeout
-
-      written = 0
       data = signature + [message.length].pack('N') + message
+      done = 0
+      loop do
       begin
-        written = @fd.write_nonblock(data[written...data.length])
+          written = @fd.write_nonblock(data[done...data.length])
       rescue IO::WaitReadable
         raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
         retry
       rescue IO::WaitWritable
         raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
         retry
+      end
+        raise ProtocolError, "Write failure (#{done}/#{data.length})" if written == 0
+        done += written
+        break if done >= data.length
       end
     end
 
