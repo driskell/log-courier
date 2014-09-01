@@ -13,6 +13,18 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## ?.??
+
+*???*
+
+* Fix hang that sometimes occurs during connection retries
+* Fix ProtocolError with large log packets and on idle connections (since 0.13)
+* Provide more information when the gem encounters ProtocolError failures
+* Fix ssl_verify usage triggering error, "Either 'ssl_verify_default_ca' or
+'ssl_verify_ca' must be specified when ssl_verify is true"
+* Significantly improve Log Courier gem performance within JRuby by switching
+JrJackson parse mode from string to raw+bigdecimal
+
 ## 0.13
 
 *30th August 2014*
