@@ -60,7 +60,7 @@ module LogCourier
 
     def run(&block)
       # TODO: Make queue size configurable
-      event_queue = EventQueue.new 10
+      event_queue = EventQueue.new 1
       server_thread = nil
 
       begin
@@ -82,10 +82,7 @@ module LogCourier
         end
 
         loop do
-          events = event_queue.pop
-          events.each do |event|
-            block.call event
-          end
+          block.call event_queue.pop
         end
       ensure
         # Signal the server thread to stop
@@ -166,25 +163,23 @@ module LogCourier
           event = { 'message' => data_buf }
         end
 
-        events << event
+        # Queue the event
+        begin
+          event_queue.push event, @ack_timeout - Time.now.to_i
+        rescue TimeoutError
+          # Full pipeline, partial ack
+          # NOTE: comm.send can raise a Timeout::Error of its own
+          comm.send 'ACKN', [nonce, sequence].pack('A*N')
+          reset_ack_timeout
+          retry
+        end
 
         sequence += 1
       end
 
-      # Queue the events
-      begin
-        event_queue.push events, @ack_timeout - Time.now.to_i
-      rescue TimeoutError
-        # Full pipeline, partial ack
-        # NOTE: comm.send can raise a Timeout::Error of its own
-        comm.send('ACKN', [nonce, sequence].pack('A*N'))
-        reset_ack_timeout
-        retry
-      end
-
       # Acknowledge the full message
       # NOTE: comm.send can raise a Timeout::Error
-      comm.send('ACKN', [nonce, sequence].pack('A*N'))
+      comm.send 'ACKN', [nonce, sequence].pack('A*N')
     end
 
     def reset_ack_timeout
