@@ -236,7 +236,7 @@ module LogCourier
         rescue => e
           # Unknown error occurred
           @logger.warn("[LogCourierClient] Unknown error: #{e}") unless @logger.nil?
-          @logger.debug("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+          @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
         end
 
         # Disconnect and retry payloads
@@ -311,8 +311,7 @@ module LogCourier
     def process_pong(message)
       # Sanity
       if message.length != 0
-        # TODO: log something
-        raise ClientProtocolError
+        raise ClientProtocolError, "Unexpected data attached to pong message (#{message.length})"
       end
 
       # No longer pending a PONG
@@ -322,8 +321,7 @@ module LogCourier
     def process_ackn(message)
       # Sanity
       if message.length != 20
-        # TODO: log something
-        raise ClientProtocolError
+        raise ClientProtocolError, "ACKN message size invalid (#{message.length})"
       end
 
       # Grab nonce

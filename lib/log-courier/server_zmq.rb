@@ -141,7 +141,7 @@ module LogCourier
     rescue => e
       # Some other unknown problem
       @logger.warn("[LogCourierServer] Unknown error: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
     ensure
       @socket.close
       @context.terminate

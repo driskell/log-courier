@@ -172,8 +172,7 @@ module LogCourier
 
         # Sanity
         if length > 1_048_576
-          # TODO: log something
-          raise ProtocolError
+          raise ProtocolError, "Packet too large (#{length})"
         end
 
         # While we're processing, EOF is bad as it may occur during send
@@ -222,17 +221,17 @@ module LogCourier
       reset_timeout
       have = ''
       loop do
-      begin
+        begin
        	  buffer = @fd.read_nonblock need - have.length
-      rescue IO::WaitReadable
-        raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
-        retry
-      rescue IO::WaitWritable
-        raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
-        retry
-      end
-      if buffer.nil?
-        raise EOFError
+        rescue IO::WaitReadable
+          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        rescue IO::WaitWritable
+          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        end
+        if buffer.nil?
+          raise EOFError
         elsif buffer.length == 0
           raise ProtocolError, "Read failure (#{have.length}/#{need})"
         end
@@ -251,15 +250,15 @@ module LogCourier
       data = signature + [message.length].pack('N') + message
       done = 0
       loop do
-      begin
+        begin
           written = @fd.write_nonblock(data[done...data.length])
-      rescue IO::WaitReadable
-        raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
-        retry
-      rescue IO::WaitWritable
-        raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
-        retry
-      end
+        rescue IO::WaitReadable
+          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        rescue IO::WaitWritable
+          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        end
         raise ProtocolError, "Write failure (#{done}/#{data.length})" if written == 0
         done += written
         break if done >= data.length

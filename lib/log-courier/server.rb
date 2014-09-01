@@ -98,8 +98,7 @@ module LogCourier
     def process_ping(message, comm)
       # Size of message should be 0
       if message.length != 0
-        # TODO: log something
-        raise ProtocolError
+        raise ProtocolError, "Unexpected data attached to ping message (#{message.length})"
       end
 
       # PONG!
@@ -115,8 +114,7 @@ module LogCourier
       # This allows the client to know what is being acknowledged
       # Nonce is 16 so check we have enough
       if message.length < 17
-        # TODO: log something
-        raise ProtocolError
+        raise ProtocolError, "JDAT message too small (#{message.length})"
       end
 
       nonce = message[0...16]
@@ -138,9 +136,7 @@ module LogCourier
           # Finished!
           break
         elsif length_buf.length < 4
-          @logger.warn("length extraction failed #{ret} #{length_buf.length}")
-          # TODO: log something
-          raise ProtocolError
+          raise ProtocolError, "JDAT length extraction failed (#{ret} #{length_buf.length})"
         end
 
         length = length_buf.unpack('N').first
@@ -148,9 +144,8 @@ module LogCourier
         # Extract message
         ret = message.read length, data_buf
         if ret.nil? or data_buf.length < length
-          @logger.warn("message extraction failed #{ret} #{data_buf.length}")
-          # TODO: log something
-          raise ProtocolError
+          @logger.warn()
+          raise ProtocolError, "JDAT message extraction failed #{ret} #{data_buf.length}"
         end
 
         data_buf.force_encoding('utf-8')
