@@ -25,7 +25,6 @@ import (
   "fmt"
   "io"
   "lc-lib/core"
-  "math"
   "os"
   "sync"
   "time"
@@ -37,6 +36,8 @@ type HarvesterFinish struct {
 }
 
 type Harvester struct {
+  sync.RWMutex
+
   stop_chan     chan interface{}
   return_chan   chan *HarvesterFinish
   stream        core.Stream
@@ -48,7 +49,6 @@ type Harvester struct {
   codec         core.Codec
   file          *os.File
 
-  mutex         sync.Mutex
   line_speed    float64
   byte_speed    float64
   line_count    uint64
@@ -135,20 +135,12 @@ ReadLoop:
     text, bytesread, err := h.readline(reader, buffer)
 
     if duration := time.Since(last_measurement); duration >= time.Second {
-      h.mutex.Lock()
+      h.Lock()
 
       count := float64(h.line_count - last_line_count)
 
-      if count == 0 {
-        if seconds_without_events != 5 {
-          seconds_without_events++
-        }
-      } else {
-        seconds_without_events = 0
-      }
-
-      h.line_speed = h.calculateSpeed(duration, h.line_speed, count, seconds_without_events)
-      h.byte_speed = h.calculateSpeed(duration, h.byte_speed, float64(h.byte_count - last_byte_count), seconds_without_events)
+      h.line_speed = core.CalculateSpeed(duration, h.line_speed, count, &seconds_without_events)
+      h.byte_speed = core.CalculateSpeed(duration, h.byte_speed, float64(h.byte_count - last_byte_count), &seconds_without_events)
 
       last_byte_count = h.byte_count
       last_line_count = h.line_count
@@ -156,7 +148,7 @@ ReadLoop:
 
       h.codec.Meter()
 
-      h.mutex.Unlock()
+      h.Unlock()
 
       // Check shutdown
       select {
@@ -175,10 +167,10 @@ ReadLoop:
         default:
         }
 
-        h.mutex.Lock()
+        h.Lock()
         last_eof := h.offset
         h.last_eof = &last_eof
-        h.mutex.Unlock()
+        h.Unlock()
 
         // Timed out waiting for data, got EOF
         if h.path == "-" {
@@ -232,19 +224,6 @@ ReadLoop:
 
   log.Info("Harvester for %s exiting", h.path)
   return h.codec.Teardown(), nil
-}
-
-func (h *Harvester) calculateSpeed(duration time.Duration, speed float64, count float64, seconds_without_events int) float64 {
-  if speed == 0. {
-    return count
-  }
-
-  if seconds_without_events == 5 {
-    return 0.
-  }
-
-  // Calculate a moving average over 5 seconds - use similiar weight as load average
-  return count + math.Exp(float64(duration) / float64(time.Second) / -5.) * (speed - count)
 }
 
 func (h *Harvester) eventCallback(start_offset int64, end_offset int64, line uint64, text string) {
@@ -350,7 +329,7 @@ func (h *Harvester) readline(reader *bufio.Reader, buffer *bytes.Buffer) (string
 }
 
 func (h *Harvester) Snapshot() *core.Snapshot {
-  h.mutex.Lock()
+  h.RLock()
 
   ret := core.NewSnapshot("Harvester")
   ret.AddEntry("Speed (Lps)", h.line_speed)
@@ -367,7 +346,7 @@ func (h *Harvester) Snapshot() *core.Snapshot {
     ret.AddSub(sub_snap)
   }
 
-  h.mutex.Unlock()
+  h.RUnlock()
 
   return ret
 }
