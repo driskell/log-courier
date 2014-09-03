@@ -58,6 +58,7 @@ const (
 	default_StreamConfig_AddOffsetField      bool          = true
 	default_StreamConfig_AddPathField        bool          = true
 	default_StreamConfig_AddTimezoneField    bool          = false
+	default_StreamConfig_ResetOnResume  	 bool          = false
 )
 
 var (
@@ -141,8 +142,8 @@ type StreamConfig struct {
 	AddTimezoneField bool                   `config:"add timezone field"`
 	Codec            CodecConfigStub        `config:"codec"`
 	DeadTime         time.Duration          `config:"dead time"`
-
-	CodecFactory CodecFactory
+	ResetOnResume    bool                   `config:"reset on resume"`
+	CodecFactory     CodecFactory
 }
 
 func (sc *StreamConfig) InitDefaults() {
@@ -152,11 +153,11 @@ func (sc *StreamConfig) InitDefaults() {
 	sc.AddOffsetField = default_StreamConfig_AddOffsetField
 	sc.AddPathField = default_StreamConfig_AddPathField
 	sc.AddTimezoneField = default_StreamConfig_AddTimezoneField
+	sc.ResetOnResume = default_StreamConfig_ResetOnResume
 }
 
 type FileConfig struct {
-	Paths []string `config:"paths"`
-
+	Paths        []string `config:"paths"`
 	StreamConfig `config:",embed"`
 }
 
