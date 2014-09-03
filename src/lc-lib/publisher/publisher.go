@@ -172,12 +172,7 @@ PublishLoop:
 
     p.pending_ping = false
     input_toggle = nil
-
-    if p.shutdown || reload != core.Reload_None || p.num_payloads >= p.config.MaxPendingPayloads {
-      p.can_send = nil
-    } else {
-      p.can_send = p.transport.CanSend()
-    }
+    p.can_send = p.transport.CanSend()
 
   SelectLoop:
     for {
