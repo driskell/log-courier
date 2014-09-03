@@ -13,8 +13,7 @@
   - [Fileglob](#fileglob)
 - [`"general"`](#general)
   - [`"admin enabled"`](#admin-enabled)
-  - [`"admin bind address"`](#admin-bind-address)
-  - [`"admin port"`](#admin-port)
+  - [`"admin listen address"`](#admin-listen-address)
   - [`"persist directory"`](#persist-directory)
   - [`"prospect interval"`](#prospect-interval)
   - [`"spool size"`](#spool-size)
@@ -153,26 +152,32 @@ of new log files.
 
 ### `"admin enabled"`
 
-*Boolean. Optional. Default: false*
+*Boolean. Optional. Default: false*  
 *Requires restart*
 
 Enables the administration listener that the `lc-admin` utility can connect to.
 
-### `"admin bind address"`
+### `"admin listen address"`
 
-*String. Optional. Default: 127.0.0.1*
+*String. Optional. Default: tcp:127.0.0.1:1234*
 
-The TCP address the administration listener should listen on.
+The address the administration listener should listen on in the format
+`transport:address`.
 
-### `"admin port"`
+Allowed transports are "tcp", "tcp4", "tcp6" and "unix". For the tcp transports
+the address format is `host:port`. For the unix transport the address should
+specify a filename to use when creating the unix domain socket. If no transport
+name is specified, "tcp" is assumed.
 
-*Number. Required with "admin enabled" = true*
+Examples:
 
-The TCP port the administration listener should listen on.
+	127.0.0.1:1234
+	tcp:127.0.0.1:1234
+	unix:/var/run/log-courier/admin.socket
 
 ### `"persist directory"`
 
-*String. Optional. Default: "."*
+*String. Optional. Default: "."*  
 *Requires restart*
 
 The directory that Log Courier should store its persistence data in. The default
@@ -216,22 +221,22 @@ not filled within this time limit, the spool will be flushed regardless.
 
 ### `"log level"`
 
-*String. Optional. Default: "info".
-Available values: "critical", "error", "warning", "notice", "info", "debug"*
+*String. Optional. Default: "info".  
+Available values: "critical", "error", "warning", "notice", "info", "debug"*  
 *Requires restart*
 
 The maximum level of detail to produce in Log Courier's internal log.
 
 ### `"log stdout"`
 
-*Boolean. Optional. Default: true*
+*Boolean. Optional. Default: true*  
 *Requires restart*
 
 Enables sending of Log Courier's internal log to the console (stdout). May be used in conjunction with `"log syslog"` and `"log file"`.
 
 ### `"log syslog"`
 
-*Boolean. Optional. Default: false*
+*Boolean. Optional. Default: false*  
 *Requires restart*
 
 Enables sending of Log Courier's internal log to syslog. May be used in conjunction with `"log stdout"` and `"log file"`.
@@ -240,7 +245,7 @@ Enables sending of Log Courier's internal log to syslog. May be used in conjunct
 
 ### `"log file"`
 
-*Filepath. Optional*
+*Filepath. Optional*  
 *Requires restart*
 
 A log file to save Log Courier's internal log into. May be used in conjunction with `"log stdout"` and `"log syslog"`.

@@ -60,8 +60,7 @@ Following is an example of the output this command provides.
 
 The `lc-admin` command accepts the following command line options.
 
-	-host="127.0.0.1": the Log Courier host to connect to (default 127.0.0.1)
-	-port=1234: the Log Courier monitor port (default 1234)
+	-connect="tcp:127.0.0.1:1234": the Log Courier host to connect to (tcp:ip:port or unix:path)
 	-quiet=false: quietly execute the command line argument and output only the result
 	-version=false: display the Log Courier client version
 	-watch=false: repeat the command specified on the command line every second

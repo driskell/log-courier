@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
+- [?.??](#)
 - [0.13](#013)
 - [0.12](#012)
 - [0.11](#011)
@@ -28,6 +29,8 @@ full event spool from log-courier could be lose (default 1024) and partial ack
 would only be performed if 0 events could be queued
 * Significantly improve Log Courier gem performance within JRuby by switching
 JrJackson parse mode from string to raw+bigdecimal
+* Add unix domain socket support to the administration connection
+* Provide publisher connection status via the administration connection
 
 ## 0.13
 
