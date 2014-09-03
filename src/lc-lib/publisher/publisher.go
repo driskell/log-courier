@@ -33,6 +33,7 @@ import (
 
 const (
   default_publisher_hostname string        = "localhost.localdomain"
+  // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   keepalive_timeout          time.Duration = 900 * time.Second
 )
 
@@ -114,9 +115,7 @@ func (p *Publisher) Run() {
   var retry_payload *pendingPayload
   var err error
   var reload int
-
-  // TODO(driskell): Make the idle timeout configurable like the network timeout is?
-  timer := time.NewTimer(keepalive_timeout)
+  var timer time.Timer
 
   control_signal := p.OnShutdown()
   delay_shutdown := func() {
@@ -168,6 +167,8 @@ PublishLoop:
         }
       }
     }
+
+    timer.Reset(keepalive_timeout)
 
     p.pending_ping = false
     input_toggle = nil
@@ -294,18 +295,6 @@ PublishLoop:
           timer.Reset(p.config.Timeout)
         }
       case <-timer.C:
-        // Do we need to resend first payload?
-        if p.out_of_sync != 0 {
-          var resent bool
-          if resent, err = p.checkResend(); err != nil {
-            break SelectLoop
-          } else if resent {
-            // Expect an ACK within network timeout
-            timer.Reset(p.config.Timeout)
-            break
-          }
-        }
-
         // If we have pending payloads, we should've received something by now
         if p.num_payloads != 0 {
           err = errors.New("Server did not respond within network timeout")
