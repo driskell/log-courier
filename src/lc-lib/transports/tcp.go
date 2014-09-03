@@ -157,6 +157,7 @@ func (t *TransportTcp) Init() error {
 
   // Pick a random server from the list.
   hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]
+  // TODO: Parse and lookup using net.ResolveTCPAddr
   submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
   if submatch == nil {
     return fmt.Errorf("Invalid host:port given: %s", hostport)
