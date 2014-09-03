@@ -169,7 +169,7 @@ func (c *CodecMultiline) flush() {
 
 func (c *CodecMultiline) Meter() {
   c.meter_lines = c.buffer_lines
-  c.meter_bytes = c.last_offset - c.end_offset
+  c.meter_bytes = c.end_offset - c.last_offset
 }
 
 func (c *CodecMultiline) Snapshot() *core.Snapshot {
