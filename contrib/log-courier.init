@@ -53,7 +53,7 @@ case "$1" in
 	;;
 	stop)
 		echo -n "Stopping Log Courier: "
-		killproc -p $PID_FILE $DAEMON
+		killproc -p $PID_FILE -d 30 $DAEMON
 		RC=$?
 		echo
 	;;
