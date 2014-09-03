@@ -32,9 +32,8 @@ import (
 )
 
 const (
-  default_GeneralConfig_AdminEnabled       bool          = false
-  default_GeneralConfig_AdminBind          string        = "127.0.0.1"
-  default_GeneralConfig_AdminPort          int           = 0
+  default_GeneralConfig_AdminEnabled       bool          = true
+  default_GeneralConfig_AdminBind          string        = "tcp:127.0.0.1:1234"
   default_GeneralConfig_PersistDir         string        = "."
   default_GeneralConfig_ProspectInterval   time.Duration = 10 * time.Second
   default_GeneralConfig_SpoolSize          int64         = 1024
@@ -59,8 +58,7 @@ type Config struct {
 
 type GeneralConfig struct {
   AdminEnabled     bool          `config:"admin enabled"`
-  AdminBind        string        `config:"admin bind address"`
-  AdminPort        int           `config:"admin port"`
+  AdminBind        string        `config:"admin listen address"`
   PersistDir       string        `config:"persist directory"`
   ProspectInterval time.Duration `config:"prospect interval"`
   SpoolSize        int64         `config:"spool size"`
@@ -251,21 +249,6 @@ func (c *Config) Load(path string) (err error) {
       if err = c.populateConfigSlice(reflect.ValueOf(c).Elem().FieldByName("Files"), fmt.Sprintf("%s/", include), raw_include); err != nil {
         return
       }
-    }
-  }
-
-  // Validations and defaults
-  if c.General.AdminEnabled {
-    c.General.AdminPort = default_GeneralConfig_AdminPort
-
-    if c.General.AdminPort == 0 {
-      err = fmt.Errorf("An admin port must be specified when admin is enabled")
-      return
-    }
-
-    if c.General.AdminPort <= 0 || c.General.AdminPort >= 65535 {
-      err = fmt.Errorf("Invalid admin port specified")
-      return
     }
   }
 

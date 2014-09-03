@@ -20,8 +20,16 @@ import (
   "fmt"
   "lc-lib/core"
   "net"
+  "strings"
   "time"
 )
+
+type NetListener interface {
+  Accept() (net.Conn, error)
+  Close() error
+  Addr() net.Addr
+  SetDeadline(time.Time) error
+}
 
 type Listener struct {
   core.PipelineSegment
@@ -30,7 +38,7 @@ type Listener struct {
   config          *core.GeneralConfig
   command_chan    chan string
   response_chan   chan *Response
-  listener        *net.TCPListener
+  listener        NetListener
   client_shutdown chan interface{}
   client_started  chan interface{}
   client_ended    chan interface{}
@@ -49,7 +57,7 @@ func NewListener(pipeline *core.Pipeline, config *core.GeneralConfig) (*Listener
     client_ended:    make(chan interface{}, 50),
   }
 
-  if ret.listener, err = ret.startListening(config); err != nil {
+  if ret.listener, err = ret.listen(config); err != nil {
     return nil, err
   }
 
@@ -58,18 +66,48 @@ func NewListener(pipeline *core.Pipeline, config *core.GeneralConfig) (*Listener
   return ret, nil
 }
 
-func (l *Listener) startListening(config *core.GeneralConfig) (*net.TCPListener, error) {
-  var addr net.TCPAddr
-
-  addr.IP = net.ParseIP(config.AdminBind)
-
-  if addr.IP == nil {
-    return nil, fmt.Errorf("The admin bind address specified is not a valid IP address")
+func (l *Listener) listen(config *core.GeneralConfig) (NetListener, error) {
+  bind := strings.SplitN(config.AdminBind, ":", 2)
+  if len(bind) == 1 {
+    bind = append(bind, bind[0])
+    bind[0] = "tcp"
   }
 
-  addr.Port = config.AdminPort
+  switch bind[0] {
+  case "tcp":
+    return l.listenTCP("tcp", bind[1])
+  case "tcp4":
+    return l.listenTCP("tcp4", bind[1])
+  case "tcp6":
+    return l.listenTCP("tcp6", bind[1])
+  case "unix":
+    return l.listenUnix(bind[1])
+  }
 
-  listener, err := net.ListenTCP("tcp", &addr)
+  return nil, fmt.Errorf("Unknown transport specified for admin bind: '%s'", bind[0])
+}
+
+func (l *Listener) listenTCP(transport, addr string) (NetListener, error) {
+  taddr, err := net.ResolveTCPAddr(transport, addr)
+  if err != nil {
+    return nil, fmt.Errorf("The admin bind address specified is not valid: %s", err)
+  }
+
+  listener, err := net.ListenTCP(transport, taddr)
+  if err != nil {
+    return nil, err
+  }
+
+  return listener, nil
+}
+
+func (l *Listener) listenUnix(addr string) (NetListener, error) {
+  uaddr, err := net.ResolveUnixAddr("unix", addr)
+  if err != nil {
+    return nil, fmt.Errorf("The admin bind address specified is not valid: %s", err)
+  }
+
+  listener, err := net.ListenUnix("unix", uaddr)
   if err != nil {
     return nil, err
   }
@@ -98,8 +136,8 @@ ListenerLoop:
     case config := <-l.OnConfig():
       // We can't yet disable admin during a reload
       if config.General.AdminEnabled {
-        if config.General.AdminBind != l.config.AdminBind || config.General.AdminPort != l.config.AdminPort {
-          new_listener, err := l.startListening(&config.General)
+        if config.General.AdminBind != l.config.AdminBind {
+          new_listener, err := l.listen(&config.General)
           if err != nil {
             log.Error("The new admin configuration failed to apply: %s", err)
             continue
@@ -115,7 +153,7 @@ ListenerLoop:
 
     l.listener.SetDeadline(time.Now().Add(time.Second))
 
-    conn, err := l.listener.AcceptTCP()
+    conn, err := l.listener.Accept()
     if err != nil {
       if net_err, ok := err.(*net.OpError); ok && net_err.Timeout() {
         continue
@@ -127,6 +165,9 @@ ListenerLoop:
 
     l.startServer(conn)
   }
+
+  // Shutdown listener
+  l.listener.Close()
 
   // Trigger shutdowns
   close(l.client_shutdown)
@@ -145,7 +186,7 @@ ListenerLoop:
   }
 }
 
-func (l *Listener) startServer(conn *net.TCPConn) {
+func (l *Listener) startServer(conn net.Conn) {
   server := newServer(l, conn)
 
   select {
