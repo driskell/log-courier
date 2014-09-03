@@ -28,6 +28,7 @@ import (
   "lc-lib/registrar"
   "math/rand"
   "os"
+  "sync"
   "time"
 )
 
@@ -37,12 +38,22 @@ const (
   keepalive_timeout          time.Duration = 900 * time.Second
 )
 
+const (
+  Status_Disconnected = iota
+  Status_Connected
+  Status_Reconnecting
+)
+
 type Publisher struct {
   core.PipelineSegment
   core.PipelineConfigReceiver
+  core.PipelineSnapshotProvider
+
+  sync.RWMutex
 
   config           *core.NetworkConfig
   transport        core.Transport
+  status           int
   hostname         string
   can_send         <-chan int
   pending_ping     bool
@@ -54,6 +65,12 @@ type Publisher struct {
   input            chan []*core.EventDescriptor
   registrar_spool  *registrar.RegistrarEventSpool
   shutdown         bool
+  line_count       int64
+  seconds_no_ack   int
+
+  line_speed       float64
+  last_line_count  int64
+  last_measurement time.Time
 }
 
 func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar_imp *registrar.Registrar) (*Publisher, error) {
@@ -115,7 +132,9 @@ func (p *Publisher) Run() {
   var retry_payload *pendingPayload
   var err error
   var reload int
-  var timer time.Timer
+
+  timer := time.NewTimer(keepalive_timeout)
+  stats_timer := time.NewTimer(time.Second)
 
   control_signal := p.OnShutdown()
   delay_shutdown := func() {
@@ -146,29 +165,48 @@ PublishLoop:
 
     if err = p.transport.Init(); err != nil {
       log.Error("Transport init failed: %s", err)
-      // TODO: implement shutdown select
-      select {
-      case <-time.After(p.config.Reconnect):
-        continue
-      case <-control_signal:
-        // TODO: Persist pending payloads and resume? Quicker shutdown
-        if p.num_payloads == 0 {
-          break PublishLoop
+
+      now := time.Now()
+      reconnect_due := now.Add(p.config.Reconnect)
+
+    ReconnectTimeLoop:
+      for {
+
+        select {
+        case <-time.After(now.Sub(reconnect_due)):
+          break ReconnectTimeLoop
+        case <-control_signal:
+          // TODO: Persist pending payloads and resume? Quicker shutdown
+          if p.num_payloads == 0 {
+            break PublishLoop
+          }
+
+          delay_shutdown()
+        case config := <-p.OnConfig():
+          // Apply and check for changes
+          reload = p.reloadConfig(&config.Network)
+
+          // If a change and no pending payloads, process immediately
+          if reload != core.Reload_None && p.num_payloads == 0 {
+            break ReconnectTimeLoop
+          }
         }
 
-        delay_shutdown()
-      case config := <-p.OnConfig():
-        // Apply and check for changes
-        reload = p.reloadConfig(&config.Network)
-
-        // If a change and no pending payloads, process immediately
-        if reload != core.Reload_None && p.num_payloads == 0 {
-          continue
+        now = time.Now()
+        if now.After(reconnect_due) {
+          break
         }
       }
+
+      continue
     }
 
+    p.Lock()
+    p.status = Status_Connected
+    p.Unlock()
+
     timer.Reset(keepalive_timeout)
+    stats_timer.Reset(time.Second)
 
     p.pending_ping = false
     input_toggle = nil
@@ -329,6 +367,9 @@ PublishLoop:
         }
 
         p.can_send = nil
+      case <-stats_timer.C:
+        p.updateStatistics(Status_Connected)
+        stats_timer.Reset(time.Second)
       }
     }
 
@@ -340,9 +381,15 @@ PublishLoop:
         break PublishLoop
       }
 
+      p.updateStatistics(Status_Reconnecting)
+
       // An error occurred, reconnect after timeout
       log.Error("Transport error, will try again: %s", err)
       time.Sleep(p.config.Reconnect)
+    } else {
+      log.Info("Reconnecting transport")
+
+      p.updateStatistics(Status_Reconnecting)
     }
 
     retry_payload = p.first_payload
@@ -378,6 +425,19 @@ func (p *Publisher) reloadConfig(new_config *core.NetworkConfig) int {
   }
 
   return reload
+}
+
+func (p *Publisher) updateStatistics(status int) {
+  p.Lock()
+
+  p.status = status
+
+  p.line_speed = core.CalculateSpeed(time.Since(p.last_measurement), p.line_speed, float64(p.line_count - p.last_line_count), &p.seconds_no_ack)
+
+  p.last_line_count = p.line_count
+  p.last_measurement = time.Now()
+
+  p.Unlock()
 }
 
 func (p *Publisher) checkResend() (bool, error) {
@@ -443,7 +503,10 @@ func (p *Publisher) sendNewPayload(events []*core.EventDescriptor) (err error) {
     p.last_payload.next = payload
   }
   p.last_payload = payload
+
+  p.Lock()
   p.num_payloads++
+  p.Unlock()
 
   return p.transport.Write("JDAT", payload.payload)
 }
@@ -483,11 +546,15 @@ func (p *Publisher) processAck(message []byte) (err error) {
   // Full ACK?
   // TODO: Protocol error if sequence is too large?
   if int(sequence) >= payload.num_events-payload.payload_start {
+    p.line_count += int64(payload.num_events-payload.ack_events)
+
     // No more events left for this payload, free the payload memory
     payload.ack_events = len(payload.events)
     payload.payload = nil
     delete(p.pending_payloads, nonce)
   } else {
+    p.line_count += int64(sequence)-int64(payload.ack_events-payload.payload_start)
+
     // Only process the ACK if something was actually processed
     if int(sequence) > payload.num_events-payload.ack_events {
       payload.ack_events = int(sequence) + payload.payload_start
@@ -500,6 +567,7 @@ func (p *Publisher) processAck(message []byte) (err error) {
   // This is where we enforce ordering again to ensure registrar receives ACK in order
   if payload == p.first_payload {
     out_of_sync := p.out_of_sync + 1
+
     for payload.ack_events != 0 {
       if payload.ack_events != len(payload.events) {
         p.registrar_spool.Add(registrar.NewAckEvent(payload.events[:payload.ack_events]))
@@ -515,9 +583,12 @@ func (p *Publisher) processAck(message []byte) (err error) {
       p.registrar_spool.Send()
       payload = payload.next
       p.first_payload = payload
-      p.num_payloads--
       out_of_sync--
       p.out_of_sync = out_of_sync
+
+      p.Lock()
+      p.num_payloads--
+      p.Unlock()
 
       // Resume sending if we stopped due to excessive pending payload count
       if !p.shutdown && p.can_send == nil {
@@ -534,4 +605,27 @@ func (p *Publisher) processAck(message []byte) (err error) {
   }
 
   return
+}
+
+func (p *Publisher) Snapshot() []*core.Snapshot {
+  p.RLock()
+
+  snapshot := core.NewSnapshot("Publisher")
+
+  switch p.status {
+  case Status_Connected:
+    snapshot.AddEntry("Status", "Connected")
+  case Status_Reconnecting:
+    snapshot.AddEntry("Status", "Reconnecting...")
+  default:
+    snapshot.AddEntry("Status", "Disconnected")
+  }
+
+  snapshot.AddEntry("Speed (Lps)", p.line_speed)
+  snapshot.AddEntry("Published lines", p.last_line_count)
+  snapshot.AddEntry("Pending Payloads", p.num_payloads)
+
+  p.RUnlock()
+
+  return []*core.Snapshot{snapshot}
 }
