@@ -193,7 +193,7 @@ PublishLoop:
           }
 
           // Reset timeout
-          retry_payload.timeout = nil
+          retry_payload.timeout = time.Now().Add(p.config.Timeout)
 
           // Send the payload again
           if err = p.transport.Write("JDAT", retry_payload.payload); err != nil {
@@ -209,11 +209,7 @@ PublishLoop:
           }
 
           // Expect an ACK within network timeout
-          if p.first_payload.timeout != nil {
-            timer.Reset(p.first_payload.timeout.Sub(time.Now()))
-          } else {
-            timer.Reset(p.config.Timeout)
-          }
+          timer.Reset(p.config.Timeout)
           break
         } else if p.out_of_sync != 0 {
           var resent bool
@@ -247,10 +243,9 @@ PublishLoop:
           p.can_send = nil
         }
 
-        // Expect an ACK within network timeout
-        if p.first_payload.timeout != nil {
-          timer.Reset(p.first_payload.timeout.Sub(time.Now()))
-        } else {
+        // Expect an ACK within network timeout if this is first payload after idle
+        // Otherwise leave the previous timer
+        if p.num_payloads == 1 {
           timer.Reset(p.config.Timeout)
         }
       case data := <-p.transport.Read():
@@ -289,8 +284,6 @@ PublishLoop:
             break SelectLoop
           }
           timer.Reset(keepalive_timeout)
-        } else if p.first_payload.timeout != nil {
-          timer.Reset(p.first_payload.timeout.Sub(time.Now()))
         } else {
           timer.Reset(p.config.Timeout)
         }
@@ -401,8 +394,12 @@ func (p *Publisher) checkResend() (bool, error) {
     }
 
     // Update timeout
-    timeout := time.Now().Add(p.config.Timeout)
-    payload.timeout = &timeout
+    payload.timeout = time.Now().Add(p.config.Timeout)
+
+    // Requeue the payload
+    p.first_payload = payload.next
+    p.last_payload.next = payload
+    p.last_payload = payload
 
     // Send the payload again
     if err := p.transport.Write("JDAT", payload.payload); err != nil {
@@ -436,7 +433,7 @@ func (p *Publisher) sendNewPayload(events []*core.EventDescriptor) (err error) {
   }
 
   var payload *pendingPayload
-  if payload, err = newPendingPayload(events, nonce, p.hostname); err != nil {
+  if payload, err = newPendingPayload(events, nonce, p.hostname, p.config.Timeout); err != nil {
     return
   }
 
@@ -536,12 +533,6 @@ func (p *Publisher) processAck(message []byte) (err error) {
   } else if ack_events == 0 {
     // Mark out of sync so we resend earlier packets in case they were lost
     p.out_of_sync++
-  }
-
-  // Set a timeout of the first payload if out of sync as we should be expecting it any time
-  if p.out_of_sync != 0 && p.first_payload.timeout == nil {
-    timeout := time.Now().Add(p.config.Timeout)
-    p.first_payload.timeout = &timeout
   }
 
   return

@@ -34,14 +34,15 @@ type pendingPayload struct {
   ack_events    int
   payload_start int
   payload       []byte
-  timeout       *time.Time
+  timeout       time.Time
 }
 
-func newPendingPayload(events []*core.EventDescriptor, nonce string, hostname string) (*pendingPayload, error) {
+func newPendingPayload(events []*core.EventDescriptor, nonce string, hostname string, timeout time.Duration) (*pendingPayload, error) {
   payload := &pendingPayload{
     events:     events,
     nonce:      nonce,
     num_events: len(events),
+    timeout:    time.Now().Add(timeout),
   }
 
   if err := payload.Generate(hostname); err != nil {
