@@ -200,6 +200,11 @@ PublishLoop:
             break SelectLoop
           }
 
+          // Expect an ACK within network timeout if this is the first of the retries
+          if p.first_payload == retry_payload {
+            timer.Reset(p.config.Timeout)
+          }
+
           // Move to next non-empty payload
           for {
             retry_payload = retry_payload.next
@@ -208,8 +213,6 @@ PublishLoop:
             }
           }
 
-          // Expect an ACK within network timeout
-          timer.Reset(p.config.Timeout)
           break
         } else if p.out_of_sync != 0 {
           var resent bool
