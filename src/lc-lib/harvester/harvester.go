@@ -137,9 +137,7 @@ ReadLoop:
     if duration := time.Since(last_measurement); duration >= time.Second {
       h.Lock()
 
-      count := float64(h.line_count - last_line_count)
-
-      h.line_speed = core.CalculateSpeed(duration, h.line_speed, count, &seconds_without_events)
+      h.line_speed = core.CalculateSpeed(duration, h.line_speed, float64(h.line_count - last_line_count), &seconds_without_events)
       h.byte_speed = core.CalculateSpeed(duration, h.byte_speed, float64(h.byte_count - last_byte_count), &seconds_without_events)
 
       last_byte_count = h.byte_count
@@ -335,7 +333,7 @@ func (h *Harvester) Snapshot() *core.Snapshot {
   ret.AddEntry("Speed (Lps)", h.line_speed)
   ret.AddEntry("Speed (Bps)", h.byte_speed)
   ret.AddEntry("Processed lines", h.line_count)
-  ret.AddEntry("Last offset", h.offset)
+  ret.AddEntry("Current offset", h.offset)
   if h.last_eof == nil {
     ret.AddEntry("Last EOF", "Never")
   } else {
