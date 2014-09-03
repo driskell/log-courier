@@ -17,7 +17,8 @@
 
 *???*
 
-* Fix hang that sometimes occurs during connection retries
+* Fix connection failure and retry sometimes entering an unrecoverable state
+that stops log shipping in its tracks
 * Fix ProtocolError with large log packets and on idle connections (since 0.13)
 * Provide more information when the gem encounters ProtocolError failures
 * Fix ssl_verify usage triggering error, "Either 'ssl_verify_default_ca' or
