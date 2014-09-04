@@ -52,48 +52,11 @@ func (c *Client) connect(admin_connect string) (net.Conn, error) {
     connect[0] = "tcp"
   }
 
-  switch connect[0] {
-  case "tcp":
-    return c.connectTCP("tcp", connect[1])
-  case "tcp4":
-    return c.connectTCP("tcp4", connect[1])
-  case "tcp6":
-    return c.connectTCP("tcp6", connect[1])
-  case "unix":
-    return c.connectUnix(connect[1])
+  if connector, ok := registeredConnectors[connect[0]]; ok {
+    return connector(connect[0], connect[1])
   }
 
   return nil, fmt.Errorf("Unknown transport specified in connection address: '%s'", connect[0])
-}
-
-func (c *Client) connectTCP(transport, addr string) (net.Conn, error) {
-  taddr, err := net.ResolveTCPAddr(transport, addr)
-  if err != nil {
-    return nil, fmt.Errorf("The connection address specified is not valid: %s", err)
-  }
-
-  conn, err := net.DialTCP(transport, nil, taddr)
-  if err != nil {
-    return nil, err
-  }
-
-  return conn, nil
-}
-
-func (c *Client) connectUnix(path string) (net.Conn, error) {
-  uaddr, err := net.ResolveUnixAddr("unix", path)
-  if err != nil {
-    return nil, fmt.Errorf("The connection address specified is not valid: %s", err)
-  }
-
-  // TODO: Change umask to 111 so all can write (need to move to _unix)
-  // Permission will be controlled by folder permissions instead of file
-  conn, err := net.DialUnix("unix", nil, uaddr)
-  if err != nil {
-    return nil, err
-  }
-
-  return conn, nil
 }
 
 func (c *Client) request(command string) (*Response, error) {

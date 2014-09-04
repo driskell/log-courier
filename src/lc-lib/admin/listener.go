@@ -24,13 +24,6 @@ import (
   "time"
 )
 
-type NetListener interface {
-  Accept() (net.Conn, error)
-  Close() error
-  Addr() net.Addr
-  SetDeadline(time.Time) error
-}
-
 type Listener struct {
   core.PipelineSegment
   core.PipelineConfigReceiver
@@ -73,46 +66,11 @@ func (l *Listener) listen(config *core.GeneralConfig) (NetListener, error) {
     bind[0] = "tcp"
   }
 
-  switch bind[0] {
-  case "tcp":
-    return l.listenTCP("tcp", bind[1])
-  case "tcp4":
-    return l.listenTCP("tcp4", bind[1])
-  case "tcp6":
-    return l.listenTCP("tcp6", bind[1])
-  case "unix":
-    return l.listenUnix(bind[1])
+  if listener, ok := registeredListeners[bind[0]]; ok {
+    return listener(bind[0], bind[1])
   }
 
   return nil, fmt.Errorf("Unknown transport specified for admin bind: '%s'", bind[0])
-}
-
-func (l *Listener) listenTCP(transport, addr string) (NetListener, error) {
-  taddr, err := net.ResolveTCPAddr(transport, addr)
-  if err != nil {
-    return nil, fmt.Errorf("The admin bind address specified is not valid: %s", err)
-  }
-
-  listener, err := net.ListenTCP(transport, taddr)
-  if err != nil {
-    return nil, err
-  }
-
-  return listener, nil
-}
-
-func (l *Listener) listenUnix(addr string) (NetListener, error) {
-  uaddr, err := net.ResolveUnixAddr("unix", addr)
-  if err != nil {
-    return nil, fmt.Errorf("The admin bind address specified is not valid: %s", err)
-  }
-
-  listener, err := net.ListenUnix("unix", uaddr)
-  if err != nil {
-    return nil, err
-  }
-
-  return listener, nil
 }
 
 func (l *Listener) OnCommand() <-chan string {

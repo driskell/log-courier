@@ -164,10 +164,10 @@ Enables the administration listener that the `lc-admin` utility can connect to.
 The address the administration listener should listen on in the format
 `transport:address`.
 
-Allowed transports are "tcp", "tcp4", "tcp6" and "unix". For the tcp transports
-the address format is `host:port`. For the unix transport the address should
-specify a filename to use when creating the unix domain socket. If no transport
-name is specified, "tcp" is assumed.
+Allowed transports are "tcp", "tcp4", "tcp6" (Windows and *nix) and "unix"
+(*nix only). For the tcp transports the address format is `host:port`. For the
+unix transport the address should specify a filename to use when creating the
+unix domain socket. If no transport name is specified, "tcp" is assumed.
 
 Examples:
 
