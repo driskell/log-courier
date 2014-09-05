@@ -140,6 +140,7 @@ func (t *TransportTcp) ReloadConfig(new_net_config *core.NetworkConfig) int {
     return core.Reload_Transport
   }
 
+  // TODO - This does not catch changes to the underlying certificate file!
   if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
     return core.Reload_Transport
   }
