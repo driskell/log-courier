@@ -173,7 +173,7 @@ PublishLoop:
       for {
 
         select {
-        case <-time.After(now.Sub(reconnect_due)):
+        case <-time.After(reconnect_due.Sub(now)):
           break ReconnectTimeLoop
         case <-control_signal:
           // TODO: Persist pending payloads and resume? Quicker shutdown
