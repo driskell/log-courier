@@ -54,14 +54,14 @@ module LogStash
         require 'log-courier/client'
 
         @client = LogCourier::Client.new(
-          :addresses          => @hosts,
-          :port               => @port,
-          :ssl_ca             => @ssl_ca,
-          :ssl_certificate    => @ssl_certificate,
-          :ssl_key            => @ssl_key,
-          :ssl_key_passphrase => @ssl_key_passphrase,
-          :spool_size         => @spool_size,
-          :idle_timeout       => @idle_timeout
+          addresses:          @hosts,
+          port:               @port,
+          ssl_ca:             @ssl_ca,
+          ssl_certificate:    @ssl_certificate,
+          ssl_key:            @ssl_key,
+          ssl_key_passphrase: @ssl_key_passphrase,
+          spool_size:         @spool_size,
+          idle_timeout:       @idle_timeout
         )
       end
 

@@ -96,7 +96,7 @@ module LogCourier
     def process_ping(message, comm)
       # Size of message should be 0
       if message.length != 0
-        raise ProtocolError, "Unexpected data attached to ping message (#{message.length})"
+        raise ProtocolError, "unexpected data attached to ping message (#{message.length})"
       end
 
       # PONG!
