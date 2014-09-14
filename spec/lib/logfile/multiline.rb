@@ -37,7 +37,7 @@ class LogFile
 
     def logged?(event: event, check_file: true, check_order: true)
       return false if event['host'] != @host
-      return false if check_file && event['file'] != @path
+      return false if check_file && event['path'] != @path
       return false if event['message'] != 'BEGIN ' + @path + " test event #{@next}" + $/ + " line 2 of test event #{@next}" + $/ + " line 3 of test event #{@next}" + $/ + ' END of test event'
       @count -= 1
       @next += 1
