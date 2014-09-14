@@ -16,22 +16,18 @@
 
 package core
 
+import (
+  "encoding/json"
+)
+
 type Event map[string]interface{}
 
 type EventDescriptor struct {
   Stream Stream
   Offset int64
-  Event  Event
+  Event  []byte
 }
 
-func NewEvent(fields map[string]interface{}, file string, offset int64, line uint64, message string) Event {
-  event := Event{
-    "file":    file,
-    "offset":  offset,
-    "message": message,
-  }
-  for k := range fields {
-    event[k] = fields[k]
-  }
-  return event
+func (e *Event) Encode() ([]byte, error) {
+  return json.Marshal(e)
 }

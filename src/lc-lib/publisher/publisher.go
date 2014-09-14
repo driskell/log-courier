@@ -27,13 +27,11 @@ import (
   "lc-lib/core"
   "lc-lib/registrar"
   "math/rand"
-  "os"
   "sync"
   "time"
 )
 
 const (
-  default_publisher_hostname string        = "localhost.localdomain"
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   keepalive_timeout          time.Duration = 900 * time.Second
 )
@@ -54,7 +52,6 @@ type Publisher struct {
   config           *core.NetworkConfig
   transport        core.Transport
   status           int
-  hostname         string
   can_send         <-chan int
   pending_ping     bool
   pending_payloads map[string]*pendingPayload
@@ -91,12 +88,6 @@ func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar
 
 func (p *Publisher) init() error {
   var err error
-
-  p.hostname, err = os.Hostname()
-  if err != nil {
-    log.Warning("Failed to determine the FQDN; using localhost.localdomain.")
-    p.hostname = default_publisher_hostname
-  }
 
   p.pending_payloads = make(map[string]*pendingPayload)
 
@@ -220,7 +211,7 @@ PublishLoop:
         if retry_payload != nil {
           // Do we need to regenerate the payload?
           if retry_payload.payload == nil {
-            if err = retry_payload.Generate(p.hostname); err != nil {
+            if err = retry_payload.Generate(); err != nil {
               break SelectLoop
             }
           }
@@ -446,7 +437,7 @@ func (p *Publisher) checkResend() (bool, error) {
   if payload := p.first_payload; payload.timeout.Before(time.Now()) {
     // Do we need to regenerate the payload?
     if payload.payload == nil {
-      if err := payload.Generate(p.hostname); err != nil {
+      if err := payload.Generate(); err != nil {
         return false, err
       }
     }
@@ -491,7 +482,7 @@ func (p *Publisher) sendNewPayload(events []*core.EventDescriptor) (err error) {
   }
 
   var payload *pendingPayload
-  if payload, err = newPendingPayload(events, nonce, p.hostname, p.config.Timeout); err != nil {
+  if payload, err = newPendingPayload(events, nonce, p.config.Timeout); err != nil {
     return
   }
 

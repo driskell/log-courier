@@ -35,8 +35,7 @@ type Prospector struct {
   core.PipelineConfigReceiver
   core.PipelineSnapshotProvider
 
-  generalconfig   *core.GeneralConfig
-  fileconfigs     []core.FileConfig
+  config          *core.Config
   prospectorindex map[string]*prospectorInfo
   prospectors     map[*prospectorInfo]*prospectorInfo
   from_beginning  bool
@@ -52,8 +51,7 @@ type Prospector struct {
 
 func NewProspector(pipeline *core.Pipeline, config *core.Config, from_beginning bool, registrar_imp *registrar.Registrar, spooler_imp *spooler.Spooler) (*Prospector, error) {
   ret := &Prospector{
-    generalconfig:   &config.General,
-    fileconfigs:     config.Files,
+    config:          config,
     prospectorindex: make(map[string]*prospectorInfo),
     prospectors:     make(map[*prospectorInfo]*prospectorInfo),
     from_beginning:  from_beginning,
@@ -104,7 +102,7 @@ func (p *Prospector) Run() {
 
   // Handle any "-" (stdin) paths - but only once
   stdin_started := false
-  for config_k, config := range p.fileconfigs {
+  for config_k, config := range p.config.Files {
     for i, path := range config.Paths {
       if path == "-" {
         if !stdin_started {
@@ -123,7 +121,7 @@ func (p *Prospector) Run() {
           p.prospectors[info] = info
 
           // Start the harvester
-          p.startHarvesterWithOffset(info, &p.fileconfigs[config_k], 0)
+          p.startHarvesterWithOffset(info, &p.config.Files[config_k], 0)
 
           stdin_started = true
         }
@@ -139,10 +137,10 @@ ProspectLoop:
     newlastscan := time.Now()
     p.iteration++ // Overflow is allowed
 
-    for config_k, config := range p.fileconfigs {
+    for config_k, config := range p.config.Files {
       for _, path := range config.Paths {
         // Scan - flag false so new files always start at beginning
-        p.scan(path, &p.fileconfigs[config_k])
+        p.scan(path, &p.config.Files[config_k])
       }
     }
 
@@ -176,7 +174,7 @@ ProspectLoop:
 
     // Defer next scan for a bit
     now := time.Now()
-    scan_deadline := now.Add(p.generalconfig.ProspectInterval)
+    scan_deadline := now.Add(p.config.General.ProspectInterval)
 
   DelayLoop:
     for {
@@ -188,8 +186,7 @@ ProspectLoop:
       case <-p.snapshot_chan:
         p.handleSnapshot()
       case config := <-p.OnConfig():
-        p.generalconfig = &config.General
-        p.fileconfigs = config.Files
+        p.config = config
       }
 
       now = time.Now()
@@ -392,7 +389,7 @@ func (p *Prospector) flagDuplicateError(file string, info *prospectorInfo) {
   p.prospectorindex[file] = info
 }
 
-func (p *Prospector) startHarvester(info *prospectorInfo, config *core.FileConfig) {
+func (p *Prospector) startHarvester(info *prospectorInfo, fileconfig *core.FileConfig) {
   var offset int64
 
   if p.from_beginning {
@@ -404,12 +401,12 @@ func (p *Prospector) startHarvester(info *prospectorInfo, config *core.FileConfi
   // Send a new file event to allow registrar to begin persisting for this harvester
   p.registrar_spool.Add(registrar.NewDiscoverEvent(info, info.file, offset, info.identity.Stat()))
 
-  p.startHarvesterWithOffset(info, config, offset)
+  p.startHarvesterWithOffset(info, fileconfig, offset)
 }
 
-func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, config *core.FileConfig, offset int64) {
+func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileconfig *core.FileConfig, offset int64) {
   // TODO - hook in a shutdown channel
-  info.harvester = harvester.NewHarvester(info, config, offset)
+  info.harvester = harvester.NewHarvester(info, p.config, fileconfig, offset)
   info.running = true
   info.status = Status_Ok
   info.harvester.Start(p.output)

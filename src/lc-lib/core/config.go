@@ -37,7 +37,9 @@ const (
   default_GeneralConfig_PersistDir         string        = "."
   default_GeneralConfig_ProspectInterval   time.Duration = 10 * time.Second
   default_GeneralConfig_SpoolSize          int64         = 1024
+  default_GeneralConfig_SpoolMaxBytes      int64         = 10485760
   default_GeneralConfig_SpoolTimeout       time.Duration = 5 * time.Second
+  default_GeneralConfig_MaxLineBytes       int64         = 1048576
   default_GeneralConfig_LogLevel           logging.Level = logging.INFO
   default_GeneralConfig_LogStdout          bool          = true
   default_GeneralConfig_LogSyslog          bool          = false
@@ -62,7 +64,9 @@ type GeneralConfig struct {
   PersistDir       string        `config:"persist directory"`
   ProspectInterval time.Duration `config:"prospect interval"`
   SpoolSize        int64         `config:"spool size"`
+  SpoolMaxBytes    int64         `config:"spool max bytes"`
   SpoolTimeout     time.Duration `config:"spool timeout"`
+  MaxLineBytes     int64         `config:"max line bytes"`
   LogLevel         logging.Level `config:"log level"`
   LogStdout        bool          `config:"log stdout"`
   LogSyslog        bool          `config:"log syslog"`
@@ -268,8 +272,17 @@ func (c *Config) Load(path string) (err error) {
     c.General.SpoolSize = default_GeneralConfig_SpoolSize
   }
 
+  if c.General.SpoolMaxBytes == 0 {
+    c.General.SpoolMaxBytes = default_GeneralConfig_SpoolMaxBytes
+  }
+
   if c.General.SpoolTimeout == time.Duration(0) {
     c.General.SpoolTimeout = default_GeneralConfig_SpoolTimeout
+  }
+
+  // TODO: Event transmit length is uint32 - if this is bigger a rediculously large line will fail
+  if c.General.MaxLineBytes == 0 {
+    c.General.MaxLineBytes = default_GeneralConfig_MaxLineBytes
   }
 
   if c.Network.Transport == "" {
@@ -305,13 +318,15 @@ func (c *Config) Load(path string) (err error) {
         return
       }
     } else {
-      err = fmt.Errorf("Unrecognised codec '%s'", c.Files[k].Codec.Name)
+      err = fmt.Errorf("Unrecognised codec '%s' for 'files' entry %d", c.Files[k].Codec.Name, k)
       return
     }
 
     if c.Files[k].DeadTime == time.Duration(0) {
       c.Files[k].DeadTime = time.Duration(default_FileConfig_DeadTime) * time.Second
     }
+
+    // TODO: Event transmit length is uint32, if fields length is rediculous we will fail
   }
 
   return

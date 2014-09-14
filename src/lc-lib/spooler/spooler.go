@@ -25,12 +25,18 @@ import (
   "time"
 )
 
+const (
+  event_header_size   = 4
+  payload_header_size = 16
+)
+
 type Spooler struct {
   core.PipelineSegment
   core.PipelineConfigReceiver
 
   config      *core.GeneralConfig
   spool       []*core.EventDescriptor
+  spool_size  int
   input       chan *core.EventDescriptor
   output      chan<- []*core.EventDescriptor
   timer_start time.Time
@@ -66,26 +72,45 @@ SpoolerLoop:
   for {
     select {
     case event := <-s.input:
-      s.spool = append(s.spool, event)
+      if int64(s.spool_size) + len(event.Event) + event_header_size >= s.config.SpoolMaxBytes - payload_header_size {
+        log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spool_size, s.config.SpoolMaxBytes, len(event.Event) + 4)
 
-      // Flush if full
-      if len(s.spool) == cap(s.spool) {
+        // Can't fit this event in the spool - flush and then queue
         if !s.sendSpool() {
           break SpoolerLoop
         }
-        s.timer_start = time.Now()
-        s.timer.Reset(s.config.SpoolTimeout)
+
+        s.resetTimer()
+        s.spool_size += len(event.Event) + event_header_size
+        s.spool = append(s.spool, event)
+
+        continue
+      }
+
+      s.spool_size += len(event.Event) + event_header_size
+      s.spool = append(s.spool, event)
+
+      // Flush if full
+      if len(s.spool) >= cap(s.spool) {
+        log.Debug("Spooler flushing %d events due to spool size reached", len(s.spool))
+
+        if !s.sendSpool() {
+          break SpoolerLoop
+        }
+
+        s.resetTimer()
       }
     case <-s.timer.C:
       // Flush what we have, if anything
       if len(s.spool) > 0 {
+        log.Debug("Spooler flushing %d events due to spool timeout exceeded", len(s.spool))
+
         if !s.sendSpool() {
           break SpoolerLoop
         }
       }
 
-      s.timer_start = time.Now()
-      s.timer.Reset(s.config.SpoolTimeout)
+      s.resetTimer()
     case <-s.OnShutdown():
       break SpoolerLoop
     case config := <-s.OnConfig():
@@ -110,8 +135,14 @@ func (s *Spooler) sendSpool() bool {
   }
 
   s.spool = make([]*core.EventDescriptor, 0, s.config.SpoolSize)
+  s.spool_size = 0
 
   return true
+}
+
+func (s *Spooler) resetTimer() {
+  s.timer_start = time.Now()
+  s.timer.Reset(s.config.SpoolTimeout)
 }
 
 func (s *Spooler) reloadConfig(config *core.Config) bool {

@@ -50,7 +50,7 @@ describe 'log-courier gem' do
     # Allow 60 seconds
     Timeout.timeout(60) do
       5_000.times do |i|
-        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'file' => 'gemfile.log'
+        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'path' => 'gemfile.log'
       end
     end
 
@@ -59,7 +59,7 @@ describe 'log-courier gem' do
     receive_and_check(total: 5_000) do |e|
       expect(e['message']).to eq "gem line test #{i}"
       expect(e['host']).to eq @host
-      expect(e['file']).to eq 'gemfile.log'
+      expect(e['path']).to eq 'gemfile.log'
       i += 1
     end
 

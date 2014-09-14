@@ -47,7 +47,7 @@ describe 'log-courier' do
     receive_and_check(total: 5_000) do |e|
       expect(e['message']).to eq "stdin line test #{i}"
       expect(e['host']).to eq host
-      expect(e['file']).to eq '-'
+      expect(e['path']).to eq '-'
       i += 1
     end
   end
@@ -458,11 +458,11 @@ describe 'log-courier' do
 
     # Receive and check
     receive_and_check(total: 10_000) do |e|
-      if e['file'] == "#{TEMP_PATH}/logs/log-0"
+      if e['path'] == "#{TEMP_PATH}/logs/log-0"
         expect(e['first']).to eq "value"
         expect(e['second']).to eq "more"
       else
-        expect(e['file']).to eq "#{TEMP_PATH}/logs/log-1"
+        expect(e['path']).to eq "#{TEMP_PATH}/logs/log-1"
         expect(e['first']).to eq "different"
         expect(e['second']).to eq "something"
       end
@@ -498,7 +498,7 @@ describe 'log-courier' do
       expect(e['array'][0]).to eq 1
       expect(e['array'][1]).to eq 2
       expect(e['host']).to eq host
-      expect(e['file']).to eq '-'
+      expect(e['path']).to eq '-'
       i += 1
     end
   end
@@ -532,7 +532,7 @@ describe 'log-courier' do
       expect(e['dict']['first']).to eq 'first'
       expect(e['dict']['second']).to eq 5
       expect(e['host']).to eq host
-      expect(e['file']).to eq '-'
+      expect(e['path']).to eq '-'
       i += 1
     end
   end
