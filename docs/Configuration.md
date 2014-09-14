@@ -212,12 +212,34 @@ usage.
 easily cope with over 10,000 events a second on most machines and uses little
 memory. It is useful only in very specific circumstances.*
 
+### `"spool max bytes"`
+
+*Number. Optional. Default: 10485760*
+
+The maximum size of an event spool, before compression. If an incomplete spool
+does not have enough room for the next event, it will be flushed immediately.
+
+If this value is modified, the receiving end should also be configured with the
+new limit. For the Logstash plugin, this is the `max_packet_size` setting.
+
 ### `"spool timeout"`
 
 *Duration. Optional. Default: 5*
 
 The maximum amount of time to wait for a full spool. If an incomplete spool is
-not filled within this time limit, the spool will be flushed regardless.
+not filled within this time limit, the spool will be flushed immediately.
+
+### `"max line bytes"`
+
+*Number. Optional. Default: 1048576*
+
+The maxmimum line length to process. If a line exceeds this length, it will be
+split across multiple events. Each split line will have a "tag" field added
+containing the tag "splitline". The final part of the line will not have a "tag"
+field added.
+
+If the `fields` configuration already contained a "tags" entry, and it is an
+array, it will be appended to. Otherwise, the "tag" field will be left as is.
 
 ### `"log level"`
 
