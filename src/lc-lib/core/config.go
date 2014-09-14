@@ -272,6 +272,7 @@ func (c *Config) Load(path string) (err error) {
     c.General.SpoolSize = default_GeneralConfig_SpoolSize
   }
 
+  // TODO: If max line bytes plus fields size is too big, this could be exceeded
   if c.General.SpoolMaxBytes == 0 {
     c.General.SpoolMaxBytes = default_GeneralConfig_SpoolMaxBytes
   }

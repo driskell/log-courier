@@ -26,8 +26,10 @@ import (
 )
 
 const (
+  // Event header is just uint32 at the moment
   event_header_size   = 4
-  payload_header_size = 16
+  // Payload header is the nonce plus the ZLIB overheads (http://www.zlib.net/zlib_tech.html)
+  payload_header_size = 16 + 11
 )
 
 type Spooler struct {
@@ -72,7 +74,7 @@ SpoolerLoop:
   for {
     select {
     case event := <-s.input:
-      if int64(s.spool_size) + len(event.Event) + event_header_size >= s.config.SpoolMaxBytes - payload_header_size {
+      if len(s.spool) > 0 && int64(s.spool_size) + int64(len(event.Event)) + event_header_size >= s.config.SpoolMaxBytes - payload_header_size {
         log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spool_size, s.config.SpoolMaxBytes, len(event.Event) + 4)
 
         // Can't fit this event in the spool - flush and then queue

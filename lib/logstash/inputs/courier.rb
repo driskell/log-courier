@@ -60,6 +60,9 @@ module LogStash
       # Curve secret key
       config :curve_secret_key, :validate => :string
 
+      # Max packet size
+      config :max_packet_size, :validate => :number
+
       public
 
       def register
@@ -67,17 +70,18 @@ module LogStash
 
         require 'log-courier/server'
         @log_courier = LogCourier::Server.new(
-          :logger                => @logger,
-          :address               => @host,
-          :port                  => @port,
-          :transport             => @transport,
-          :ssl_certificate       => @ssl_certificate,
-          :ssl_key               => @ssl_key,
-          :ssl_key_passphrase    => @ssl_key_passphrase,
-          :ssl_verify            => @ssl_verify,
-          :ssl_verify_default_ca => @ssl_verify_default_ca,
-          :ssl_verify_ca         => @ssl_verify_ca,
-          :curve_secret_key      => @curve_secret_key
+          logger:                @logger,
+          address:               @host,
+          port:                  @port,
+          transport:             @transport,
+          ssl_certificate:       @ssl_certificate,
+          ssl_key:               @ssl_key,
+          ssl_key_passphrase:    @ssl_key_passphrase,
+          ssl_verify:            @ssl_verify,
+          ssl_verify_default_ca: @ssl_verify_default_ca,
+          ssl_verify_ca:         @ssl_verify_ca,
+          curve_secret_key:      @curve_secret_key,
+          max_packet_size:       @max_packet_size
         )
       end
 

@@ -49,7 +49,8 @@ module LogCourier
         ssl_key_passphrase:    nil,
         ssl_verify:            false,
         ssl_verify_default_ca: false,
-        ssl_verify_ca:         nil
+        ssl_verify_ca:         nil,
+        max_packet_size:       10_485_760,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -132,7 +133,7 @@ module LogCourier
 
         # Start a new connection thread
         client_threads[client] = Thread.new(client, peer) do |client_copy, peer_copy|
-          ConnectionTcp.new(@logger, client_copy, peer_copy).run(&block)
+          ConnectionTcp.new(@logger, client_copy, peer_copy, @options).run(&block)
         end
       end
     rescue ShutdownSignal
@@ -154,11 +155,12 @@ module LogCourier
   class ConnectionTcp
     attr_accessor :peer
 
-    def initialize(logger, fd, peer)
+    def initialize(logger, fd, peer, options)
       @logger = logger
       @fd = fd
       @peer = peer
       @in_progress = false
+      @options = options
     end
 
     def run
@@ -171,8 +173,8 @@ module LogCourier
         signature, length = recv(8).unpack('A4N')
 
         # Sanity
-        if length > 1_048_576
-          raise ProtocolError, "Packet too large (#{length})"
+        if length > @options[:max_packet_size]
+          raise ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
         end
 
         # While we're processing, EOF is bad as it may occur during send
@@ -233,7 +235,7 @@ module LogCourier
         if buffer.nil?
           raise EOFError
         elsif buffer.length == 0
-          raise ProtocolError, "Read failure (#{have.length}/#{need})"
+          raise ProtocolError, "read failure (#{have.length}/#{need})"
         end
         if have.length == 0
           have = buffer
@@ -259,7 +261,7 @@ module LogCourier
           raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
           retry
         end
-        raise ProtocolError, "Write failure (#{done}/#{data.length})" if written == 0
+        raise ProtocolError, "write failure (#{done}/#{data.length})" if written == 0
         done += written
         break if done >= data.length
       end
