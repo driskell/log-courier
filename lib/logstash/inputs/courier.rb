@@ -68,8 +68,7 @@ module LogStash
       def register
         @logger.info('Starting courier input listener', :address => "#{@host}:#{@port}")
 
-        require 'log-courier/server'
-        @log_courier = LogCourier::Server.new(
+        options = {
           logger:                @logger,
           address:               @host,
           port:                  @port,
@@ -80,9 +79,13 @@ module LogStash
           ssl_verify:            @ssl_verify,
           ssl_verify_default_ca: @ssl_verify_default_ca,
           ssl_verify_ca:         @ssl_verify_ca,
-          curve_secret_key:      @curve_secret_key,
-          max_packet_size:       @max_packet_size
-        )
+          curve_secret_key:      @curve_secret_key
+        }
+
+        options[:max_packet_size] = @max_packet_size unless @max_packet_size.nil?
+
+        require 'log-courier/server'
+        @log_courier = LogCourier::Server.new options
       end
 
       public
