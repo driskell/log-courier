@@ -336,7 +336,7 @@ func (h *Harvester) prepareHarvester() error {
 }
 
 func (h *Harvester) readline(reader *LineReader) (string, int, error) {
-  var newline int = 1
+  var newline int
 
   line, err := reader.ReadSlice()
 
@@ -344,7 +344,9 @@ func (h *Harvester) readline(reader *LineReader) (string, int, error) {
     if err == nil {
       // Line will always end in '\n' if no error, but check also for CR
       if len(line) > 1 && line[len(line)-2] == '\r' {
-        newline++
+        newline = 2
+      } else {
+        newline = 1
       }
     }
 

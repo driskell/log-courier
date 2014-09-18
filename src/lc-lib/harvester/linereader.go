@@ -51,6 +51,10 @@ func (lr *LineReader) Reset() {
 func (lr *LineReader) ReadSlice() ([]byte, error) {
   var err error
 
+  if lr.end == 0 {
+    err = lr.fill()
+  }
+
   for {
     if n := bytes.IndexByte(lr.buf[lr.start:lr.end], '\n'); n > 0 {
       line := lr.buf[lr.start:lr.start+n+1]
