@@ -96,7 +96,7 @@ describe 'log-courier with multiline codec' do
       "files": [
         {
           "paths": [ "#{TEMP_PATH}/logs/log-*" ],
-          "codec": { "name": "multiline", "what": "previous", "pattern": "^\\\\s", "previous timeout": "10s" }
+          "codec": { "name": "multiline", "what": "previous", "pattern": "^\\\\s", "previous timeout": "3s" }
         }
       ]
     }
@@ -104,7 +104,13 @@ describe 'log-courier with multiline codec' do
 
     f = create_log(LogFile::Multiline)
 
-    5_000.times do
+    1_500.times do
+      f.log
+    end
+
+    sleep 15
+
+    1_500.times do
       f.log
     end
 
