@@ -87,7 +87,7 @@ class LogFile
     event = args[:event]
 
     return false if event['host'] != @host
-    return false if args[:check_file] && event['file'] != @orig_path
+    return false if args[:check_file] && event['path'] != @orig_path
 
     if args[:check_order]
       # Regular simple test that follows the event number

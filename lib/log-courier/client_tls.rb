@@ -115,7 +115,7 @@ module LogCourier
       # Just shutdown
     rescue => e
       @logger.warn("[LogCourierClient] Unknown SSL write error: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
       io_control << ['F']
     end
 
@@ -151,7 +151,7 @@ module LogCourier
       # Just shutdown
     rescue => e
       @logger.warn("[LogCourierClient] Unknown SSL read error: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
       io_control << ['F']
     end
 
@@ -211,7 +211,7 @@ module LogCourier
       0
     rescue => e
       @logger.warn("[LogCourierClient] Unknown connection failure to #{@options[:addresses][0]}:#{@options[:port]}: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
     end
   end
 end

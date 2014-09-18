@@ -49,7 +49,8 @@ module LogCourier
         ssl_key_passphrase:    nil,
         ssl_verify:            false,
         ssl_verify_default_ca: false,
-        ssl_verify_ca:         nil
+        ssl_verify_ca:         nil,
+        max_packet_size:       10_485_760,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -59,7 +60,7 @@ module LogCourier
           raise "[LogCourierServer] '#{k}' is required" if @options[k].nil?
         end
 
-        if @options[:ssl_verify] and (not @options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
+        if @options[:ssl_verify] and (!@options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
           raise '[LogCourierServer] Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
         end
       end
@@ -132,7 +133,7 @@ module LogCourier
 
         # Start a new connection thread
         client_threads[client] = Thread.new(client, peer) do |client_copy, peer_copy|
-          ConnectionTcp.new(@logger, client_copy, peer_copy).run(&block)
+          ConnectionTcp.new(@logger, client_copy, peer_copy, @options).run(&block)
         end
       end
     rescue ShutdownSignal
@@ -154,11 +155,12 @@ module LogCourier
   class ConnectionTcp
     attr_accessor :peer
 
-    def initialize(logger, fd, peer)
+    def initialize(logger, fd, peer, options)
       @logger = logger
       @fd = fd
       @peer = peer
       @in_progress = false
+      @options = options
     end
 
     def run
@@ -171,16 +173,22 @@ module LogCourier
         signature, length = recv(8).unpack('A4N')
 
         # Sanity
-        if length > 1_048_576
-          # TODO: log something
-          raise ProtocolError
+        if length > @options[:max_packet_size]
+          raise ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
         end
 
         # While we're processing, EOF is bad as it may occur during send
         @in_progress = true
 
         # Read the message
-        yield signature, recv(length), self
+        if length == 0
+          data = ''
+        else
+          data = recv(length)
+        end
+
+        # Send for processing
+        yield signature, data, self
 
         # If we EOF next it's a graceful close
         @in_progress = false
@@ -206,43 +214,56 @@ module LogCourier
     rescue => e
       # Some other unknown problem
       @logger.warn("[LogCourierServer] Unknown error on connection from #{@peer}: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
     ensure
       @fd.close rescue nil
     end
 
     def recv(need)
       reset_timeout
-      begin
-        buffer = @fd.read_nonblock need
-      rescue IO::WaitReadable
-        raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
-        retry
-      rescue IO::WaitWritable
-        raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
-        retry
+      have = ''
+      loop do
+        begin
+       	  buffer = @fd.read_nonblock need - have.length
+        rescue IO::WaitReadable
+          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        rescue IO::WaitWritable
+          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        end
+        if buffer.nil?
+          raise EOFError
+        elsif buffer.length == 0
+          raise ProtocolError, "read failure (#{have.length}/#{need})"
+        end
+        if have.length == 0
+          have = buffer
+        else
+          have << buffer
+        end
+        break if have.length >= need
       end
-      if buffer.nil?
-        raise EOFError
-      elsif buffer.length < need
-        raise ProtocolError
-      end
-      buffer
+      have
     end
 
     def send(signature, message)
       reset_timeout
-
-      written = 0
       data = signature + [message.length].pack('N') + message
-      begin
-        written = @fd.write_nonblock(data[written...data.length])
-      rescue IO::WaitReadable
-        raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
-        retry
-      rescue IO::WaitWritable
-        raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
-        retry
+      done = 0
+      loop do
+        begin
+          written = @fd.write_nonblock(data[done...data.length])
+        rescue IO::WaitReadable
+          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        rescue IO::WaitWritable
+          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        end
+        raise ProtocolError, "write failure (#{done}/#{data.length})" if written == 0
+        done += written
+        break if done >= data.length
       end
     end
 

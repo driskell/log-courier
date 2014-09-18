@@ -49,7 +49,7 @@ describe 'log-courier with filter codec' do
     receive_and_check(total: 2_778) do |e|
       expect(e['message']).to eq "stdin line test #{i}"
       expect(e['host']).to eq host
-      expect(e['file']).to eq '-'
+      expect(e['path']).to eq '-'
       i += 1
       i += 1 while /^[12]/ =~ i.to_s
     end
