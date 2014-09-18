@@ -13,12 +13,13 @@
   - [Fileglob](#fileglob)
 - [`"general"`](#general)
   - [`"admin enabled"`](#admin-enabled)
-  - [`"admin bind address"`](#admin-bind-address)
-  - [`"admin port"`](#admin-port)
+  - [`"admin listen address"`](#admin-listen-address)
   - [`"persist directory"`](#persist-directory)
   - [`"prospect interval"`](#prospect-interval)
   - [`"spool size"`](#spool-size)
+  - [`"spool max bytes"`](#spool-max-bytes)
   - [`"spool timeout"`](#spool-timeout)
+  - [`"max line bytes"`](#max-line-bytes)
   - [`"log level"`](#log-level)
   - [`"log stdout"`](#log-stdout)
   - [`"log syslog"`](#log-syslog)
@@ -153,26 +154,32 @@ of new log files.
 
 ### `"admin enabled"`
 
-*Boolean. Optional. Default: false*
+*Boolean. Optional. Default: false*  
 *Requires restart*
 
 Enables the administration listener that the `lc-admin` utility can connect to.
 
-### `"admin bind address"`
+### `"admin listen address"`
 
-*String. Optional. Default: 127.0.0.1*
+*String. Optional. Default: tcp:127.0.0.1:1234*
 
-The TCP address the administration listener should listen on.
+The address the administration listener should listen on in the format
+`transport:address`.
 
-### `"admin port"`
+Allowed transports are "tcp", "tcp4", "tcp6" (Windows and *nix) and "unix"
+(*nix only). For the tcp transports the address format is `host:port`. For the
+unix transport the address should specify a filename to use when creating the
+unix domain socket. If no transport name is specified, "tcp" is assumed.
 
-*Number. Required with "admin enabled" = true*
+Examples:
 
-The TCP port the administration listener should listen on.
+	127.0.0.1:1234
+	tcp:127.0.0.1:1234
+	unix:/var/run/log-courier/admin.socket
 
 ### `"persist directory"`
 
-*String. Optional. Default: "."*
+*String. Optional. Default: "."*  
 *Requires restart*
 
 The directory that Log Courier should store its persistence data in. The default
@@ -207,31 +214,53 @@ usage.
 easily cope with over 10,000 events a second on most machines and uses little
 memory. It is useful only in very specific circumstances.*
 
+### `"spool max bytes"`
+
+*Number. Optional. Default: 10485760*
+
+The maximum size of an event spool, before compression. If an incomplete spool
+does not have enough room for the next event, it will be flushed immediately.
+
+If this value is modified, the receiving end should also be configured with the
+new limit. For the Logstash plugin, this is the `max_packet_size` setting.
+
 ### `"spool timeout"`
 
 *Duration. Optional. Default: 5*
 
 The maximum amount of time to wait for a full spool. If an incomplete spool is
-not filled within this time limit, the spool will be flushed regardless.
+not filled within this time limit, the spool will be flushed immediately.
+
+### `"max line bytes"`
+
+*Number. Optional. Default: 1048576*
+
+The maxmimum line length to process. If a line exceeds this length, it will be
+split across multiple events. Each split line will have a "tag" field added
+containing the tag "splitline". The final part of the line will not have a "tag"
+field added.
+
+If the `fields` configuration already contained a "tags" entry, and it is an
+array, it will be appended to. Otherwise, the "tag" field will be left as is.
 
 ### `"log level"`
 
-*String. Optional. Default: "info".
-Available values: "critical", "error", "warning", "notice", "info", "debug"*
+*String. Optional. Default: "info".  
+Available values: "critical", "error", "warning", "notice", "info", "debug"*  
 *Requires restart*
 
 The maximum level of detail to produce in Log Courier's internal log.
 
 ### `"log stdout"`
 
-*Boolean. Optional. Default: true*
+*Boolean. Optional. Default: true*  
 *Requires restart*
 
 Enables sending of Log Courier's internal log to the console (stdout). May be used in conjunction with `"log syslog"` and `"log file"`.
 
 ### `"log syslog"`
 
-*Boolean. Optional. Default: false*
+*Boolean. Optional. Default: false*  
 *Requires restart*
 
 Enables sending of Log Courier's internal log to syslog. May be used in conjunction with `"log stdout"` and `"log file"`.
@@ -240,7 +269,7 @@ Enables sending of Log Courier's internal log to syslog. May be used in conjunct
 
 ### `"log file"`
 
-*Filepath. Optional*
+*Filepath. Optional*  
 *Requires restart*
 
 A log file to save Log Courier's internal log into. May be used in conjunction with `"log stdout"` and `"log syslog"`.

@@ -29,18 +29,16 @@ import (
 )
 
 type Admin struct {
-  client    *admin.Client
-  connected bool
-  quiet     bool
-  host      string
-  port      int
+  client        *admin.Client
+  connected     bool
+  quiet         bool
+  admin_connect string
 }
 
-func NewAdmin(quiet bool, host string, port int) *Admin {
+func NewAdmin(quiet bool, admin_connect string) *Admin {
   return &Admin{
-    quiet: quiet,
-    host:  host,
-    port:  port,
+    quiet:         quiet,
+    admin_connect: admin_connect,
   }
 }
 
@@ -49,10 +47,10 @@ func (a *Admin) connect() error {
     var err error
 
     if !a.quiet {
-      fmt.Printf("Attempting connection to %s:%d...\n", a.host, a.port)
+      fmt.Printf("Attempting connection to %s...\n", a.admin_connect)
     }
 
-    if a.client, err = admin.NewClient(a.host, a.port); err != nil {
+    if a.client, err = admin.NewClient(a.admin_connect); err != nil {
       fmt.Printf("Failed to connect: %s\n", err)
       return err
     }
@@ -237,14 +235,12 @@ func main() {
   var version bool
   var quiet bool
   var watch bool
-  var host string
-  var port int
+  var admin_connect string
 
   flag.BoolVar(&version, "version", false, "display the Log Courier client version")
   flag.BoolVar(&quiet, "quiet", false, "quietly execute the command line argument and output only the result")
   flag.BoolVar(&watch, "watch", false, "repeat the command specified on the command line every second")
-  flag.StringVar(&host, "host", "127.0.0.1", "the Log Courier host to connect to (default 127.0.0.1)")
-  flag.IntVar(&port, "port", 1234, "the Log Courier monitor port (default 1234)")
+  flag.StringVar(&admin_connect, "connect", "tcp:127.0.0.1:1234", "the Log Courier instance to connect to (default tcp:127.0.0.1:1234)")
 
   flag.Parse()
 
@@ -257,7 +253,7 @@ func main() {
     fmt.Printf("Log Courier version %s client\n\n", core.Log_Courier_Version)
   }
 
-  admin := NewAdmin(quiet, host, port)
+  admin := NewAdmin(quiet, admin_connect)
 
   args := flag.Args()
   if len(args) != 0 {

@@ -18,9 +18,11 @@
 The `lc-admin` command allows you to remotely (or locally) connect to a running
 Log Courier instance to monitor and control log shipping.
 
-In order to connect, the `admin enabled` general configuration entry must be set
-to `true` and an `admin port` specified. See [Configuration](Configuration.md)
-for more information on these options.
+To enable a Log Courier instance to receive administration connections, set the
+`admin enabled` general configuration entry to `true`. To specify a custom
+listen address, set the `admin listen address` entry. See
+[Configuration](Configuration.md) for more information on these options and the
+default listen address.
 
 ## Available Commands
 
@@ -60,8 +62,7 @@ Following is an example of the output this command provides.
 
 The `lc-admin` command accepts the following command line options.
 
-	-host="127.0.0.1": the Log Courier host to connect to (default 127.0.0.1)
-	-port=1234: the Log Courier monitor port (default 1234)
+	-connect="tcp:127.0.0.1:1234": the Log Courier address to connect to
 	-quiet=false: quietly execute the command line argument and output only the result
 	-version=false: display the Log Courier client version
 	-watch=false: repeat the command specified on the command line every second

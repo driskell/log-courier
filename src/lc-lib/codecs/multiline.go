@@ -48,7 +48,6 @@ type CodecMultiline struct {
 
   end_offset     int64
   start_offset   int64
-  line           uint64
   buffer         []string
   buffer_lines   uint64
   timer_lock     sync.Mutex
@@ -115,7 +114,7 @@ func (c *CodecMultiline) Teardown() int64 {
   return c.last_offset
 }
 
-func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64, text string) {
+func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string) {
   // TODO(driskell): If we are using previous and we match on the very first line read,
   // then this is because we've started in the middle of a multiline event (the first line
   // should never match) - so we could potentially offer an option to discard this.
@@ -135,7 +134,6 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, line uint64
     }
   }
   if len(c.buffer) == 0 {
-    c.line = line
     c.start_offset = start_offset
   }
   c.end_offset = end_offset
@@ -164,12 +162,12 @@ func (c *CodecMultiline) flush() {
   c.buffer = nil
   c.buffer_lines = 0
 
-  c.callback_func(c.start_offset, c.end_offset, c.line, text)
+  c.callback_func(c.start_offset, c.end_offset, text)
 }
 
 func (c *CodecMultiline) Meter() {
   c.meter_lines = c.buffer_lines
-  c.meter_bytes = c.last_offset - c.end_offset
+  c.meter_bytes = c.end_offset - c.last_offset
 }
 
 func (c *CodecMultiline) Snapshot() *core.Snapshot {
@@ -197,10 +195,12 @@ DeadlineLoop:
       if !now.After(c.timer_deadline) {
         // Deadline moved, update the timer
         timer.Reset(c.timer_deadline.Sub(now))
+        c.timer_lock.Unlock()
+        continue
       }
 
       c.flush()
-
+      timer.Reset(c.config.PreviousTimeout)
       c.timer_lock.Unlock()
     }
   }

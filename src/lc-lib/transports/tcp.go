@@ -140,6 +140,7 @@ func (t *TransportTcp) ReloadConfig(new_net_config *core.NetworkConfig) int {
     return core.Reload_Transport
   }
 
+  // TODO - This does not catch changes to the underlying certificate file!
   if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
     return core.Reload_Transport
   }
@@ -157,6 +158,7 @@ func (t *TransportTcp) Init() error {
 
   // Pick a random server from the list.
   hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]
+  // TODO: Parse and lookup using net.ResolveTCPAddr
   submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
   if submatch == nil {
     return fmt.Errorf("Invalid host:port given: %s", hostport)
@@ -296,12 +298,19 @@ func (t *TransportTcp) receiver() {
     }
 
     // Pass back the message
-    t.recv_chan <- [][]byte{header[0:4], message}
+    select {
+    case <-t.shutdown:
+      break
+    case t.recv_chan <- [][]byte{header[0:4], message}:
+    }
   } /* loop until shutdown */
 
   if err != nil {
     // Pass the error back and abort
-    t.recv_chan <- err
+    select {
+    case <-t.shutdown:
+    case t.recv_chan <- err:
+    }
   }
 
   t.wait.Done()

@@ -29,7 +29,8 @@ module LogCourier
         transport:        'zmq',
         port:             0,
         address:          '0.0.0.0',
-        curve_secret_key: nil
+        curve_secret_key: nil,
+        max_packet_size:  10_485_760,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -141,7 +142,7 @@ module LogCourier
     rescue => e
       # Some other unknown problem
       @logger.warn("[LogCourierServer] Unknown error: #{e}") unless @logger.nil?
-      @logger.debug("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil? || !@logger.debug?
+      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
     ensure
       @socket.close
       @context.terminate
@@ -159,6 +160,9 @@ module LogCourier
       # Verify length
       if data.length - 8 != length
         @logger.warn "[LogCourierServer] Invalid message: data has invalid length (#{data.length - 8} != #{length})" unless @logger.nil?
+        return
+      elsif length > @options[:max_packet_size]
+        @logger.warn "[LogCourierServer] Invalid message: packet too large (#{length} > #{@options[:max_packet_size]})" unless @logger.nil?
         return
       end
 

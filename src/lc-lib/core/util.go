@@ -12,22 +12,31 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
- */
+*/
 
 package core
 
 import (
-  "encoding/json"
+  "math"
+  "time"
 )
 
-type Event map[string]interface{}
+func CalculateSpeed(duration time.Duration, speed float64, count float64, seconds_no_change *int) float64 {
+  if count == 0 {
+    *seconds_no_change++
+  } else {
+    *seconds_no_change = 0
+  }
 
-type EventDescriptor struct {
-  Stream Stream
-  Offset int64
-  Event  []byte
-}
+  if speed == 0. {
+    return count
+  }
 
-func (e *Event) Encode() ([]byte, error) {
-  return json.Marshal(e)
+  if *seconds_no_change >= 5 {
+    *seconds_no_change = 0
+    return 0.
+  }
+
+  // Calculate a moving average over 5 seconds - use similiar weight as load average
+  return count + math.Exp(float64(duration) / float64(time.Second) / -5.) * (speed - count)
 }

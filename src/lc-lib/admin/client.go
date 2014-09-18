@@ -21,40 +21,42 @@ import (
   "fmt"
   "lc-lib/core"
   "net"
+  "strings"
   "time"
 )
 
 type Client struct {
-  addr    net.TCPAddr
-  conn    *net.TCPConn
-  decoder *gob.Decoder
+  admin_connect string
+  conn          net.Conn
+  decoder       *gob.Decoder
 }
 
-func NewClient(host string, port int) (*Client, error) {
+func NewClient(admin_connect string) (*Client, error) {
+  var err error
+
   ret := &Client{}
 
-  ret.addr.IP = net.ParseIP(host)
-  if ret.addr.IP == nil {
-    return nil, fmt.Errorf("Invalid admin connect address")
-  }
-
-  ret.addr.Port = port
-
-  if err := ret.connect(); err != nil {
+  if ret.conn, err = ret.connect(admin_connect); err != nil {
     return nil, err
   }
+
+  ret.decoder = gob.NewDecoder(ret.conn)
 
   return ret, nil
 }
 
-func (c *Client) connect() (err error) {
-  if c.conn, err = net.DialTCP("tcp", nil, &c.addr); err != nil {
-    return
+func (c *Client) connect(admin_connect string) (net.Conn, error) {
+  connect := strings.SplitN(admin_connect, ":", 2)
+  if len(connect) == 1 {
+    connect = append(connect, connect[0])
+    connect[0] = "tcp"
   }
 
-  c.decoder = gob.NewDecoder(c.conn)
+  if connector, ok := registeredConnectors[connect[0]]; ok {
+    return connector(connect[0], connect[1])
+  }
 
-  return nil
+  return nil, fmt.Errorf("Unknown transport specified in connection address: '%s'", connect[0])
 }
 
 func (c *Client) request(command string) (*Response, error) {

@@ -20,8 +20,6 @@ import (
   "bytes"
   "compress/zlib"
   "encoding/binary"
-  "encoding/json"
-  "io"
   "lc-lib/core"
   "time"
 )
@@ -34,28 +32,29 @@ type pendingPayload struct {
   ack_events    int
   payload_start int
   payload       []byte
-  timeout       *time.Time
+  timeout       time.Time
 }
 
-func newPendingPayload(events []*core.EventDescriptor, nonce string, hostname string) (*pendingPayload, error) {
+func newPendingPayload(events []*core.EventDescriptor, nonce string, timeout time.Duration) (*pendingPayload, error) {
   payload := &pendingPayload{
     events:     events,
     nonce:      nonce,
     num_events: len(events),
+    timeout:    time.Now().Add(timeout),
   }
 
-  if err := payload.Generate(hostname); err != nil {
+  if err := payload.Generate(); err != nil {
     return nil, err
   }
 
   return payload, nil
 }
 
-func (pp *pendingPayload) Generate(hostname string) (err error) {
+func (pp *pendingPayload) Generate() (err error) {
   var buffer bytes.Buffer
 
   // Begin with the nonce
-  if _, err = buffer.Write([]byte(pp.nonce)); err != nil {
+  if _, err = buffer.Write([]byte(pp.nonce)[0:16]); err != nil {
     return
   }
 
@@ -66,9 +65,10 @@ func (pp *pendingPayload) Generate(hostname string) (err error) {
 
   // Append all the events
   for _, event := range pp.events[pp.ack_events:] {
-    // Add host field
-    event.Event["host"] = hostname
-    if err = pp.bufferJdatDataEvent(compressor, event); err != nil {
+    if err = binary.Write(compressor, binary.BigEndian, uint32(len(event.Event))); err != nil {
+      return
+    }
+    if _, err = compressor.Write(event.Event); err != nil {
       return
     }
   }
@@ -79,30 +79,4 @@ func (pp *pendingPayload) Generate(hostname string) (err error) {
   pp.payload_start = pp.ack_events
 
   return
-}
-
-func (pp *pendingPayload) bufferJdatDataEvent(output io.Writer, event *core.EventDescriptor) (err error) {
-  var value []byte
-  value, err = json.Marshal(event.Event)
-  if err != nil {
-    log.Error("JSON event encoding error: %s", err)
-
-    if err = binary.Write(output, binary.BigEndian, 2); err != nil {
-      return
-    }
-    if _, err = output.Write([]byte("{}")); err != nil {
-      return
-    }
-
-    return
-  }
-
-  if err = binary.Write(output, binary.BigEndian, uint32(len(value))); err != nil {
-    return
-  }
-  if _, err = output.Write(value); err != nil {
-    return
-  }
-
-  return nil
 }

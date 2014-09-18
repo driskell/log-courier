@@ -27,22 +27,31 @@ import (
   "lc-lib/core"
   "lc-lib/registrar"
   "math/rand"
-  "os"
+  "sync"
   "time"
 )
 
 const (
-  default_publisher_hostname string        = "localhost.localdomain"
+  // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   keepalive_timeout          time.Duration = 900 * time.Second
+)
+
+const (
+  Status_Disconnected = iota
+  Status_Connected
+  Status_Reconnecting
 )
 
 type Publisher struct {
   core.PipelineSegment
   core.PipelineConfigReceiver
+  core.PipelineSnapshotProvider
+
+  sync.RWMutex
 
   config           *core.NetworkConfig
   transport        core.Transport
-  hostname         string
+  status           int
   can_send         <-chan int
   pending_ping     bool
   pending_payloads map[string]*pendingPayload
@@ -53,6 +62,12 @@ type Publisher struct {
   input            chan []*core.EventDescriptor
   registrar_spool  *registrar.RegistrarEventSpool
   shutdown         bool
+  line_count       int64
+  seconds_no_ack   int
+
+  line_speed       float64
+  last_line_count  int64
+  last_measurement time.Time
 }
 
 func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar_imp *registrar.Registrar) (*Publisher, error) {
@@ -73,12 +88,6 @@ func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar
 
 func (p *Publisher) init() error {
   var err error
-
-  p.hostname, err = os.Hostname()
-  if err != nil {
-    log.Warning("Failed to determine the FQDN; using localhost.localdomain.")
-    p.hostname = default_publisher_hostname
-  }
 
   p.pending_payloads = make(map[string]*pendingPayload)
 
@@ -115,8 +124,8 @@ func (p *Publisher) Run() {
   var err error
   var reload int
 
-  // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   timer := time.NewTimer(keepalive_timeout)
+  stats_timer := time.NewTimer(time.Second)
 
   control_signal := p.OnShutdown()
   delay_shutdown := func() {
@@ -147,36 +156,52 @@ PublishLoop:
 
     if err = p.transport.Init(); err != nil {
       log.Error("Transport init failed: %s", err)
-      // TODO: implement shutdown select
-      select {
-      case <-time.After(p.config.Reconnect):
-        continue
-      case <-control_signal:
-        // TODO: Persist pending payloads and resume? Quicker shutdown
-        if p.num_payloads == 0 {
-          break PublishLoop
+
+      now := time.Now()
+      reconnect_due := now.Add(p.config.Reconnect)
+
+    ReconnectTimeLoop:
+      for {
+
+        select {
+        case <-time.After(reconnect_due.Sub(now)):
+          break ReconnectTimeLoop
+        case <-control_signal:
+          // TODO: Persist pending payloads and resume? Quicker shutdown
+          if p.num_payloads == 0 {
+            break PublishLoop
+          }
+
+          delay_shutdown()
+        case config := <-p.OnConfig():
+          // Apply and check for changes
+          reload = p.reloadConfig(&config.Network)
+
+          // If a change and no pending payloads, process immediately
+          if reload != core.Reload_None && p.num_payloads == 0 {
+            break ReconnectTimeLoop
+          }
         }
 
-        delay_shutdown()
-      case config := <-p.OnConfig():
-        // Apply and check for changes
-        reload = p.reloadConfig(&config.Network)
-
-        // If a change and no pending payloads, process immediately
-        if reload != core.Reload_None && p.num_payloads == 0 {
-          continue
+        now = time.Now()
+        if now.After(reconnect_due) {
+          break
         }
       }
+
+      continue
     }
+
+    p.Lock()
+    p.status = Status_Connected
+    p.Unlock()
+
+    timer.Reset(keepalive_timeout)
+    stats_timer.Reset(time.Second)
 
     p.pending_ping = false
     input_toggle = nil
-
-    if p.shutdown || reload != core.Reload_None || p.num_payloads >= p.config.MaxPendingPayloads {
-      p.can_send = nil
-    } else {
-      p.can_send = p.transport.CanSend()
-    }
+    p.can_send = p.transport.CanSend()
 
   SelectLoop:
     for {
@@ -186,17 +211,22 @@ PublishLoop:
         if retry_payload != nil {
           // Do we need to regenerate the payload?
           if retry_payload.payload == nil {
-            if err = retry_payload.Generate(p.hostname); err != nil {
+            if err = retry_payload.Generate(); err != nil {
               break SelectLoop
             }
           }
 
           // Reset timeout
-          retry_payload.timeout = nil
+          retry_payload.timeout = time.Now().Add(p.config.Timeout)
 
           // Send the payload again
           if err = p.transport.Write("JDAT", retry_payload.payload); err != nil {
             break SelectLoop
+          }
+
+          // Expect an ACK within network timeout if this is the first of the retries
+          if p.first_payload == retry_payload {
+            timer.Reset(p.config.Timeout)
           }
 
           // Move to next non-empty payload
@@ -207,12 +237,6 @@ PublishLoop:
             }
           }
 
-          // Expect an ACK within network timeout
-          if p.first_payload.timeout != nil {
-            timer.Reset(p.first_payload.timeout.Sub(time.Now()))
-          } else {
-            timer.Reset(p.config.Timeout)
-          }
           break
         } else if p.out_of_sync != 0 {
           var resent bool
@@ -246,10 +270,9 @@ PublishLoop:
           p.can_send = nil
         }
 
-        // Expect an ACK within network timeout
-        if p.first_payload.timeout != nil {
-          timer.Reset(p.first_payload.timeout.Sub(time.Now()))
-        } else {
+        // Expect an ACK within network timeout if this is first payload after idle
+        // Otherwise leave the previous timer
+        if p.num_payloads == 1 {
           timer.Reset(p.config.Timeout)
         }
       case data := <-p.transport.Read():
@@ -288,24 +311,10 @@ PublishLoop:
             break SelectLoop
           }
           timer.Reset(keepalive_timeout)
-        } else if p.first_payload.timeout != nil {
-          timer.Reset(p.first_payload.timeout.Sub(time.Now()))
         } else {
           timer.Reset(p.config.Timeout)
         }
       case <-timer.C:
-        // Do we need to resend first payload?
-        if p.out_of_sync != 0 {
-          var resent bool
-          if resent, err = p.checkResend(); err != nil {
-            break SelectLoop
-          } else if resent {
-            // Expect an ACK within network timeout
-            timer.Reset(p.config.Timeout)
-            break
-          }
-        }
-
         // If we have pending payloads, we should've received something by now
         if p.num_payloads != 0 {
           err = errors.New("Server did not respond within network timeout")
@@ -349,6 +358,9 @@ PublishLoop:
         }
 
         p.can_send = nil
+      case <-stats_timer.C:
+        p.updateStatistics(Status_Connected)
+        stats_timer.Reset(time.Second)
       }
     }
 
@@ -360,9 +372,15 @@ PublishLoop:
         break PublishLoop
       }
 
+      p.updateStatistics(Status_Reconnecting)
+
       // An error occurred, reconnect after timeout
       log.Error("Transport error, will try again: %s", err)
       time.Sleep(p.config.Reconnect)
+    } else {
+      log.Info("Reconnecting transport")
+
+      p.updateStatistics(Status_Reconnecting)
     }
 
     retry_payload = p.first_payload
@@ -400,20 +418,37 @@ func (p *Publisher) reloadConfig(new_config *core.NetworkConfig) int {
   return reload
 }
 
+func (p *Publisher) updateStatistics(status int) {
+  p.Lock()
+
+  p.status = status
+
+  p.line_speed = core.CalculateSpeed(time.Since(p.last_measurement), p.line_speed, float64(p.line_count - p.last_line_count), &p.seconds_no_ack)
+
+  p.last_line_count = p.line_count
+  p.last_measurement = time.Now()
+
+  p.Unlock()
+}
+
 func (p *Publisher) checkResend() (bool, error) {
   // We're out of sync (received ACKs for later payloads but not earlier ones)
   // Check timeouts of earlier payloads and resend if necessary
   if payload := p.first_payload; payload.timeout.Before(time.Now()) {
     // Do we need to regenerate the payload?
     if payload.payload == nil {
-      if err := payload.Generate(p.hostname); err != nil {
+      if err := payload.Generate(); err != nil {
         return false, err
       }
     }
 
     // Update timeout
-    timeout := time.Now().Add(p.config.Timeout)
-    payload.timeout = &timeout
+    payload.timeout = time.Now().Add(p.config.Timeout)
+
+    // Requeue the payload
+    p.first_payload = payload.next
+    p.last_payload.next = payload
+    p.last_payload = payload
 
     // Send the payload again
     if err := p.transport.Write("JDAT", payload.payload); err != nil {
@@ -447,7 +482,7 @@ func (p *Publisher) sendNewPayload(events []*core.EventDescriptor) (err error) {
   }
 
   var payload *pendingPayload
-  if payload, err = newPendingPayload(events, nonce, p.hostname); err != nil {
+  if payload, err = newPendingPayload(events, nonce, p.config.Timeout); err != nil {
     return
   }
 
@@ -459,7 +494,10 @@ func (p *Publisher) sendNewPayload(events []*core.EventDescriptor) (err error) {
     p.last_payload.next = payload
   }
   p.last_payload = payload
+
+  p.Lock()
   p.num_payloads++
+  p.Unlock()
 
   return p.transport.Write("JDAT", payload.payload)
 }
@@ -499,11 +537,15 @@ func (p *Publisher) processAck(message []byte) (err error) {
   // Full ACK?
   // TODO: Protocol error if sequence is too large?
   if int(sequence) >= payload.num_events-payload.payload_start {
+    p.line_count += int64(payload.num_events-payload.ack_events)
+
     // No more events left for this payload, free the payload memory
     payload.ack_events = len(payload.events)
     payload.payload = nil
     delete(p.pending_payloads, nonce)
   } else {
+    p.line_count += int64(sequence)-int64(payload.ack_events-payload.payload_start)
+
     // Only process the ACK if something was actually processed
     if int(sequence) > payload.num_events-payload.ack_events {
       payload.ack_events = int(sequence) + payload.payload_start
@@ -516,6 +558,7 @@ func (p *Publisher) processAck(message []byte) (err error) {
   // This is where we enforce ordering again to ensure registrar receives ACK in order
   if payload == p.first_payload {
     out_of_sync := p.out_of_sync + 1
+
     for payload.ack_events != 0 {
       if payload.ack_events != len(payload.events) {
         p.registrar_spool.Add(registrar.NewAckEvent(payload.events[:payload.ack_events]))
@@ -531,9 +574,12 @@ func (p *Publisher) processAck(message []byte) (err error) {
       p.registrar_spool.Send()
       payload = payload.next
       p.first_payload = payload
-      p.num_payloads--
       out_of_sync--
       p.out_of_sync = out_of_sync
+
+      p.Lock()
+      p.num_payloads--
+      p.Unlock()
 
       // Resume sending if we stopped due to excessive pending payload count
       if !p.shutdown && p.can_send == nil {
@@ -549,11 +595,28 @@ func (p *Publisher) processAck(message []byte) (err error) {
     p.out_of_sync++
   }
 
-  // Set a timeout of the first payload if out of sync as we should be expecting it any time
-  if p.out_of_sync != 0 && p.first_payload.timeout == nil {
-    timeout := time.Now().Add(p.config.Timeout)
-    p.first_payload.timeout = &timeout
+  return
+}
+
+func (p *Publisher) Snapshot() []*core.Snapshot {
+  p.RLock()
+
+  snapshot := core.NewSnapshot("Publisher")
+
+  switch p.status {
+  case Status_Connected:
+    snapshot.AddEntry("Status", "Connected")
+  case Status_Reconnecting:
+    snapshot.AddEntry("Status", "Reconnecting...")
+  default:
+    snapshot.AddEntry("Status", "Disconnected")
   }
 
-  return
+  snapshot.AddEntry("Speed (Lps)", p.line_speed)
+  snapshot.AddEntry("Published lines", p.last_line_count)
+  snapshot.AddEntry("Pending Payloads", p.num_payloads)
+
+  p.RUnlock()
+
+  return []*core.Snapshot{snapshot}
 }

@@ -81,6 +81,8 @@ The following options are available for the input plugin:
 * ssl_verify_ca - Path to an SSL CA certificate to use for client certificate
 verification (tls)
 * curve_secret_key - CurveZMQ secret key for the server (zmq)
+* max_packet_size - The maximum packet size to accept (default 10485760,
+corresponds to Log Courier's `"spool max bytes"`)
 
 The following options are available for the output plugin:
 

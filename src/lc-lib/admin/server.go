@@ -26,12 +26,12 @@ import (
 
 type server struct {
   listener *Listener
-  conn     *net.TCPConn
+  conn     net.Conn
 
   encoder *gob.Encoder
 }
 
-func newServer(listener *Listener, conn *net.TCPConn) *server {
+func newServer(listener *Listener, conn net.Conn) *server {
   return &server{
     listener: listener,
     conn:     conn,
@@ -45,8 +45,11 @@ func (s *server) Run() {
     log.Debug("Admin connection from %s closed", s.conn.RemoteAddr())
   }
 
-  // TODO: Make linger time configurable?
-  s.conn.SetLinger(5)
+  if conn, ok := s.conn.(*net.TCPConn); ok {
+    // TODO: Make linger time configurable?
+    conn.SetLinger(5)
+  }
+
   s.conn.Close()
 
   s.listener.client_ended <- 1
