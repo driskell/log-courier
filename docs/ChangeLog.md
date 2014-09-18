@@ -4,7 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
-- [?.??](#)
+- [0.14](#014)
 - [0.13](#013)
 - [0.12](#012)
 - [0.11](#011)
@@ -14,9 +14,9 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## ?.??
+## 0.14
 
-*???*
+*18th September 2014*
 
 **Breaking Changes**
 
@@ -31,7 +31,8 @@ that freezes log shipping
 * Fix ProtocolError with large log packets and on idle connections (since 0.13)
 * Provide more information when the gem encounters ProtocolError failures
 * Fix ssl_verify usage triggering error, "Either 'ssl_verify_default_ca' or
-'ssl_verify_ca' must be specified when ssl_verify is true"
+'ssl_verify_ca' must be specified when ssl_verify is true" (#41)
+* Fix  (#45)
 * Restore message reliability and correctly perform partial ack. Since 0.9 a
 full event spool from log-courier could be lost (default 1024) instead of just
 * Significantly improve Log Courier gem performance within JRuby by switching
@@ -39,7 +40,7 @@ JrJackson parse mode from string to raw+bigdecimal
 * Add unix domain socket support to the administration connection
 * Provide publisher connection status via the administration connection
 * Gracefully handle lines greater than 1 MiB in size by splitting and tagging
-them, and make the size configurable
+them, and make the size configurable (#40)
 
 ## 0.13
 
