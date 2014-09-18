@@ -142,8 +142,8 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) 
     h.offset = offset
   }
 
-  // The buffer size limits the maximum line length we can read - include the biggest line delimiter
-  reader := NewLineReader(h.file, h.config.General.MaxLineBytes + 2)
+  // The buffer size limits the maximum line length we can read, including terminator
+  reader := NewLineReader(h.file, h.config.General.MaxLineBytes)
 
   // TODO: Make configurable?
   read_timeout := 10 * time.Second
