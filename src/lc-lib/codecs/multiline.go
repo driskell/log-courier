@@ -195,10 +195,12 @@ DeadlineLoop:
       if !now.After(c.timer_deadline) {
         // Deadline moved, update the timer
         timer.Reset(c.timer_deadline.Sub(now))
+        c.timer_lock.Unlock()
+        continue
       }
 
       c.flush()
-
+      timer.Reset(c.config.PreviousTimeout)
       c.timer_lock.Unlock()
     }
   }
