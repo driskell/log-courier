@@ -52,6 +52,45 @@ describe 'log-courier' do
     end
   end
 
+  it 'should split lines that are too long' do
+    startup stdin: true, config: <<-config
+    {
+      "network": {
+        "ssl ca": "#{@ssl_cert.path}",
+        "servers": [ "127.0.0.1:#{server_port}" ]
+      },
+      "files": [
+        {
+          "paths": [ "-" ]
+        }
+      ]
+    }
+    config
+
+    # This should send over the 10 MiB packet limit but not break it
+    # Since we are sending 10 * 2 = 20 MiB
+    10.times do |i|
+      # 1048575 since the line terminater adds 1 - ensures second part fits
+      @log_courier.puts 'X' * 1_048_575 * 2
+    end
+
+    # Receive and check
+    i = 0
+    host = Socket.gethostname
+    receive_and_check(total: 20) do |e|
+      if i.even?
+        expect(e['message'].length).to eq 1_048_576
+        expect(e['tags']).to eq ['splitline']
+      else
+        expect(e['message'].length).to eq 1_048_574
+        expect(e.has_key?('tags')).to eq false
+      end
+      expect(e['host']).to eq host
+      expect(e['path']).to eq '-'
+      i += 1
+    end
+  end
+
   it 'should follow a file from the end' do
     # Hide lines in the file - this makes sure we start at the end of the file
     f = create_log.log(50).skip
