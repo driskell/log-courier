@@ -4,15 +4,20 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
+- [Latest Development](#latest-development)
 - [0.14](#014)
 - [0.13](#013)
 - [0.12](#012)
 - [0.11](#011)
 - [0.10](#010)
 - [0.9](#09)
-- [Pre-release](#pre-release)
+- [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Latest Development
+
+* Fix admin being enabled by default when it shouldn't be (#46)
 
 ## 0.14
 
@@ -41,6 +46,11 @@ JrJackson parse mode from string to raw+bigdecimal
 * Provide publisher connection status via the administration connection
 * Gracefully handle lines greater than 1 MiB in size by splitting and tagging
 them, and make the size configurable (#40)
+
+**Known Issues**
+
+* Admin is enabled by default when it shouldn't be. Workaround: Set the
+"admin enabled" general configuration option to false.
 
 ## 0.13
 
@@ -139,7 +149,7 @@ not forever
 * Enable comments inside the configuration file
 * Reduce unnecessary logging
 
-## Pre-release
+## Pre-0.10
 
 The following are fixes present in the Driskell fork of Logstash Forwarder 0.3.1
 which Log Courier builds upon.
