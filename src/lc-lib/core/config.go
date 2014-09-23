@@ -32,7 +32,7 @@ import (
 )
 
 const (
-  default_GeneralConfig_AdminEnabled       bool          = true
+  default_GeneralConfig_AdminEnabled       bool          = false
   default_GeneralConfig_AdminBind          string        = "tcp:127.0.0.1:1234"
   default_GeneralConfig_PersistDir         string        = "."
   default_GeneralConfig_ProspectInterval   time.Duration = 10 * time.Second
