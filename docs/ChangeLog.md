@@ -15,7 +15,9 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## Latest Development
+## 0.15
+
+*23rd September 2014*
 
 * Fix admin being enabled by default when it shouldn't be (#46)
 
