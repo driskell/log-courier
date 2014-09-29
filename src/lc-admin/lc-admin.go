@@ -80,13 +80,6 @@ func (a *Admin) ProcessCommand(command string) bool {
     var err error
 
     switch command {
-    case "ping":
-      err = a.client.Ping()
-      if err != nil {
-        break
-      }
-
-      fmt.Printf("Pong\n")
     case "reload":
       err = a.client.Reload()
       if err != nil {
