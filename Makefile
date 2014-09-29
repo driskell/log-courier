@@ -34,6 +34,7 @@ gem:
 	gem build log-courier.gemspec
 
 test: all vendor/bundle/.GemfileModT
+	go test -tags "$(TAGS)" lc-admin lc-curvekey lc-lib/... lc-tlscert log-courier
 	bundle exec rspec $(TESTS)
 
 doc:
