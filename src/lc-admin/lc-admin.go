@@ -107,10 +107,7 @@ func (a *Admin) ProcessCommand(command string) bool {
         a.renderSnap("  ", snap)
       }
     case "help":
-      fmt.Printf("Available commands:\n")
-      fmt.Printf("  reload    Reload configuration\n")
-      fmt.Printf("  status    Display the current shipping status\n")
-      fmt.Printf("  exit      Exit\n")
+      PrintHelp()
     default:
       fmt.Printf("Unknown command: %s\n", command)
     }
@@ -231,6 +228,13 @@ WatchLoop:
   return true
 }
 
+func PrintHelp() {
+  fmt.Printf("Available commands:\n")
+  fmt.Printf("  reload    Reload configuration\n")
+  fmt.Printf("  status    Display the current shipping status\n")
+  fmt.Printf("  exit      Exit\n")
+}
+
 func main() {
   var version bool
   var quiet bool
@@ -253,10 +257,16 @@ func main() {
     fmt.Printf("Log Courier version %s client\n\n", core.Log_Courier_Version)
   }
 
-  admin := NewAdmin(quiet, admin_connect)
-
   args := flag.Args()
+
   if len(args) != 0 {
+    // Don't require a connection to display the help message
+    if args[0] == "help" {
+      PrintHelp()
+      os.Exit(0)
+    }
+
+    admin := NewAdmin(quiet, admin_connect)
     if admin.argsCommand(args, watch) {
       os.Exit(0)
     }
@@ -273,6 +283,7 @@ func main() {
     os.Exit(1)
   }
 
+  admin := NewAdmin(quiet, admin_connect)
   if err := admin.connect(); err != nil {
     return
   }
