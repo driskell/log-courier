@@ -6,6 +6,7 @@ export GOPATH := $(GOPATH)
 
 TAGS :=
 BINS := bin/log-courier bin/lc-tlscert bin/lc-admin
+GOTESTS := log-courier lc-tlscert lc-admin lc-lib/...
 TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
 
 ifeq ($(with),zmq3)
@@ -15,6 +16,7 @@ endif
 ifeq ($(with),zmq4)
 TAGS := $(TAGS) zmq zmq_4_x
 BINS := $(BINS) bin/lc-curvekey
+GOTESTS := $(GOTESTS) lc-curvekey
 TESTS := $(TESTS) spec/plainzmq_spec.rb spec/zmq_spec.rb
 endif
 
@@ -34,7 +36,8 @@ gem:
 	gem build log-courier.gemspec
 
 test: all vendor/bundle/.GemfileModT
-	go test -tags "$(TAGS)" lc-admin lc-curvekey lc-lib/... lc-tlscert log-courier
+	go get -d -tags "$(TAGS)" $(GOTESTS)
+	go test -tags "$(TAGS)" $(GOTESTS)
 	bundle exec rspec $(TESTS)
 
 doc:
