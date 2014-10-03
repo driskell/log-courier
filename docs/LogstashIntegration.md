@@ -40,7 +40,7 @@ the installation, which will require an internet connection.
 Now install the Logstash plugins.
 
 		cd <log-courier-source>
-		cp -rvf lib/logstash /opt/logstash/lib
+		cp -rvf lib /opt/logstash
 
 ## Remote Installation
 
