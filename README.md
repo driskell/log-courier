@@ -24,19 +24,19 @@ with many fixes and behavioural improvements.
 
 Log Courier implements the following features:
 
-* Tail active log files
+* Follow active log files
 * Follow rotations
-* Suspend tailing on no more updates
-* Tail STDIN stream
-* Set extra fields to values (host=name), arrays (tags=[one,two]) or hashes
-(origin={host=name,IP=address})
+* Follow standard input stream
+* Suspend tailing after periods of inactivity
+* Set [extra fields](docs/Configuration.md#fields), supporting hashes and arrays
+(`tags: ['one','two']`)
+* [Reload configuration](docs/Configuration.md#reloading) without restarting
 * Secure TLS shipping transport with server certificate verification
 * TLS client certificate verification
 * Secure CurveZMQ shipping transport to load balance across multiple Logstash
 instances (optional, requires ZeroMQ 4+)
 * Plaintext TCP shipping transport for configuration simplicity in local networks
 * Plaintext ZMQ shipping transport
-* Reload configuration without restarting
 * [Administration utility](docs/AdministrationUtility.md) to monitor the
 shipping speed and status
 * [Multiline](docs/codecs/Multiline.md) codec
@@ -50,10 +50,22 @@ two Logstash instances.
 
 ### Build Requirements
 
+1. \*nix, OS X or Windows
 1. The [golang](http://golang.org/doc/install) compiler tools (1.2 or 1.3)
-1. [Logstash](http://logstash.net) 1.4.x
+1. [git](http://git-scm.com)
+1. GNU make
 1. (Optional) [ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for
 plaintext ZMQ, >=4.0 for secure CurveZMQ)
+
+*\*nix: Most requirements can usually be installed by your favourite package
+manager.*
+
+*OS X: Git and GNU make are provided automatically by XCode. ZeroMQ can be
+installed via [Homebrew](http://brew.sh).*
+
+*Windows: GNU make for Windows can be found
+[here](http://gnuwin32.sourceforge.net/packages/make.htm). ZeroMQ may need to be
+built and installed manually.*
 
 ### Building
 
