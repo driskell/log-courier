@@ -4,7 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
-- [Latest Development](#latest-development)
+- [0.15](#015)
 - [0.14](#014)
 - [0.13](#013)
 - [0.12](#012)
@@ -14,6 +14,17 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Latest Development
+
+*TBC*
+
+* Remove `ping` command from `lc-admin` (#49)
+* Empty lines in a log file are incorrectly merged with the following line (#51)
+* Don't require a connection to Log Courier when running `lc-admin help` (#50)
+* Bring back `make selfsigned` to quickly generate self-signed TLS certificates
+(#25)
+* Implement `make curvekey` to quickly generate curve key pairs (#25)
 
 ## 0.15
 
