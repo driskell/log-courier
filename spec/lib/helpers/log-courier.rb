@@ -114,6 +114,7 @@ shared_context 'Helpers_Log_Courier' do
   end
 
   def shutdown
+    puts 'Shutting down Log Courier'
     return if @log_courier.nil?
     terminated = false
     # Send SIGTERM
