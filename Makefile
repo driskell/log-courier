@@ -85,8 +85,8 @@ ifneq ($(implyclean),yes)
 endif
 
 go-check:
-	@go version >/dev/null || (echo "Go not found. You need to install Go: http://golang.org/doc/install"; false)
-	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.2 or 1.3 required, you have a version of Go that is not supported."; false)
+	@go version >/dev/null || (echo "Go not found. You need to install Go version 1.2 or 1.3: http://golang.org/doc/install"; false)
+	@go version | grep -q 'go version go1.[23]' || (echo "Go version 1.2 or 1.3 required, you have a version of Go that is not supported."; false)
 	@echo "GOPATH: $${GOPATH}"
 
 bin/%: FORCE | go-check
