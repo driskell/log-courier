@@ -9,6 +9,10 @@ BINS := bin/log-courier bin/lc-tlscert bin/lc-admin
 GOTESTS := log-courier lc-tlscert lc-admin lc-lib/...
 TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
 
+ifneq (,$(findstring curvekey,$(MAKECMDGOALS)))
+with := zmq4
+endif
+
 ifeq ($(with),zmq3)
 TAGS := $(TAGS) zmq zmq_3_x
 TESTS := $(TESTS) spec/plainzmq_spec.rb
@@ -39,6 +43,12 @@ test: all vendor/bundle/.GemfileModT
 	go get -d -tags "$(TAGS)" $(GOTESTS)
 	go test -tags "$(TAGS)" $(GOTESTS)
 	bundle exec rspec $(TESTS)
+
+selfsigned: | bin/lc-tlscert
+	bin/lc-tlscert
+
+curvekey: | bin/lc-curvekey
+	bin/lc-curvekey
 
 doc:
 	@npm --version >/dev/null || (echo "'npm' not found. You need to install node.js.")
