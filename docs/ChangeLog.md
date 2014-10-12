@@ -26,6 +26,7 @@
 * Bring back `make selfsigned` to quickly generate self-signed TLS certificates
 (#25)
 * Implement `make curvekey` to quickly generate curve key pairs (#25)
+* Fix hanging ZMQ transport on transport error
 
 ## 0.15
 
