@@ -27,6 +27,8 @@
 (#25)
 * Implement `make curvekey` to quickly generate curve key pairs (#25)
 * Fix hanging ZMQ transport on transport error
+* Fix timeout on log-courier side when Logstash busy due to non-thread safe
+timeout timer in the log-courier gem
 
 ## 0.15
 
