@@ -288,7 +288,6 @@ func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text str
   desc := &core.EventDescriptor{
     Stream: h.stream,
     Offset: end_offset,
-    // NOTE: Make this include the fileconfig fields?
     Event:  encoded,
   }
 
