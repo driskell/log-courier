@@ -237,6 +237,8 @@ ReadLoop:
       log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
       h.file.Seek(0, os.SEEK_SET)
       h.offset = 0
+      // TODO: How does this impact a partial line reader buffer?
+      // TODO: How does this imapct multiline?
       continue
     }
 
