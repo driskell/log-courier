@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# If this is not a git repository, use the existing version
+if [ ! -d '.git' ]; then
+	exit
+fi
+
+if [ "$1" == 'current' ]; then
+	VERSION=$(git describe --abbrev=0)
+else
+	VERSION="$(git describe)"
+	if [ $(git status -s 2>/dev/null | wc -l) -ne 0 ]; then
+		VERSION="${VERSION}-dirty"
+	fi
+fi
+
+sed "s/<VERSION>/${VERSION}/g" src/lc-lib/core/version.go.template > src/lc-lib/core/version.go
+sed "s/<VERSION>/${VERSION}/g" log-courier.gemspec.template > log-courier.gemspec
+
+echo "Setting Log Courier Version ${VERSION}"
