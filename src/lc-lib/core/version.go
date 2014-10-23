@@ -16,4 +16,4 @@
 
 package core
 
-const Log_Courier_Version string = "v0.13"
+const Log_Courier_Version string = "1.0"
