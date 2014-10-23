@@ -272,18 +272,26 @@ func (c *Config) Load(path string) (err error) {
     c.General.SpoolSize = default_GeneralConfig_SpoolSize
   }
 
-  // TODO: If max line bytes plus fields size is too big, this could be exceeded
+  // Enforce maximum of 2 GB since event transmit length is uint32
   if c.General.SpoolMaxBytes == 0 {
     c.General.SpoolMaxBytes = default_GeneralConfig_SpoolMaxBytes
+  }
+  if c.General.SpoolMaxBytes >= 2*1024*1024*1024 {
+    err = fmt.Errorf("/general/spool max bytes can not be greater than 2 GiB")
+    return
   }
 
   if c.General.SpoolTimeout == time.Duration(0) {
     c.General.SpoolTimeout = default_GeneralConfig_SpoolTimeout
   }
 
-  // TODO: Event transmit length is uint32 - if this is bigger a rediculously large line will fail
+  // Max line bytes can not be larger than spool max bytes
   if c.General.MaxLineBytes == 0 {
     c.General.MaxLineBytes = default_GeneralConfig_MaxLineBytes
+  }
+  if c.General.MaxLineBytes > c.General.SpoolMaxBytes {
+    err = fmt.Errorf("/general/max line bytes can not be greater than /general/spool max bytes")
+    return
   }
 
   if c.Network.Transport == "" {
