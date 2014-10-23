@@ -85,7 +85,7 @@ func NewMultilineCodecFactory(config *core.Config, config_path string, unused ma
   }
 
   if result.MaxMultilineBytes == 0 {
-    result.MaxMultilineBytes = config.General.MaxLineBytes
+    result.MaxMultilineBytes = config.General.SpoolMaxBytes
   }
 
   // We conciously allow a line 4 bytes longer what we would normally have as the limit

@@ -276,7 +276,7 @@ func (c *Config) Load(path string) (err error) {
   if c.General.SpoolMaxBytes == 0 {
     c.General.SpoolMaxBytes = default_GeneralConfig_SpoolMaxBytes
   }
-  if c.General.SpoolMaxBytes >= 2*1024*1024*1024 {
+  if c.General.SpoolMaxBytes > 2*1024*1024*1024 {
     err = fmt.Errorf("/general/spool max bytes can not be greater than 2 GiB")
     return
   }
