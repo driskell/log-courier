@@ -165,6 +165,8 @@ func (t *TransportZmq) ReloadConfig(new_net_config *core.NetworkConfig) int {
 func (t *TransportZmq) Init() (err error) {
   // Initialise once for ZMQ
   if t.ready {
+    // If already initialised, ask if we can send again
+    t.bridge_chan <- []byte(zmq_signal_output)
     return nil
   }
 
@@ -360,10 +362,16 @@ func (t *TransportZmq) poller(bridge_out *zmq.Socket) {
   runtime.LockOSThread()
 
   t.poll_items = make([]zmq.PollItem, 3)
+
+  // Listen always on bridge
   t.poll_items[0].Socket = bridge_out
   t.poll_items[0].Events = zmq.POLLIN | zmq.POLLOUT
+
+  // Always check for input on dealer - but also initially check for OUT so we can flag send is ready
   t.poll_items[1].Socket = t.dealer
   t.poll_items[1].Events = zmq.POLLIN | zmq.POLLOUT
+
+  // Always listen for input on monitor
   t.poll_items[2].Socket = t.monitor
   t.poll_items[2].Events = zmq.POLLIN
 

@@ -32,10 +32,11 @@ const (
 )
 
 type CodecMultilineFactory struct {
-  Pattern         string        `config:"pattern"`
-  What            string        `config:"what"`
-  Negate          bool          `config:"negate"`
-  PreviousTimeout time.Duration `config:"previous timeout"`
+  Pattern           string        `config:"pattern"`
+  What              string        `config:"what"`
+  Negate            bool          `config:"negate"`
+  PreviousTimeout   time.Duration `config:"previous timeout"`
+  MaxMultilineBytes int64         `config:"max multiline bytes"`
 
   matcher *regexp.Regexp
   what    int
@@ -49,13 +50,14 @@ type CodecMultiline struct {
   end_offset     int64
   start_offset   int64
   buffer         []string
-  buffer_lines   uint64
+  buffer_lines   int64
+  buffer_len     int64
   timer_lock     sync.Mutex
   timer_stop     chan interface{}
   timer_wait     sync.WaitGroup
   timer_deadline time.Time
 
-  meter_lines uint64
+  meter_lines int64
   meter_bytes int64
 }
 
@@ -80,6 +82,16 @@ func NewMultilineCodecFactory(config *core.Config, config_path string, unused ma
     result.what = codecMultiline_What_Previous
   } else if result.What == "next" {
     result.what = codecMultiline_What_Next
+  }
+
+  if result.MaxMultilineBytes == 0 {
+    result.MaxMultilineBytes = config.General.SpoolMaxBytes
+  }
+
+  // We conciously allow a line 4 bytes longer what we would normally have as the limit
+  // This 4 bytes is the event header size. It's not worth considering though
+  if result.MaxMultilineBytes > config.General.SpoolMaxBytes {
+    return nil, fmt.Errorf("max multiline bytes cannot be greater than /general/spool max bytes")
   }
 
   return result, nil
@@ -133,12 +145,36 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
       c.flush()
     }
   }
+
+  var text_len int64 = int64(len(text))
+
+  // Check we don't exceed the max multiline bytes
+  if check_len := c.buffer_len + text_len + c.buffer_lines; check_len > c.config.MaxMultilineBytes {
+    // Store partial and flush
+    overflow := check_len - c.config.MaxMultilineBytes
+    cut := text_len - overflow
+    c.end_offset = end_offset - overflow
+
+    c.buffer = append(c.buffer, text[:cut])
+    c.buffer_lines++
+    c.buffer_len += cut
+
+    c.flush()
+
+    // Append the remaining data to the buffer
+    start_offset += cut
+    text = text[cut:]
+  }
+
   if len(c.buffer) == 0 {
     c.start_offset = start_offset
   }
   c.end_offset = end_offset
+
   c.buffer = append(c.buffer, text)
   c.buffer_lines++
+  c.buffer_len += text_len
+
   if c.config.what == codecMultiline_What_Previous {
     if c.config.PreviousTimeout != 0 {
       // Reset the timer and unlock
@@ -148,6 +184,7 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
   } else if c.config.what == codecMultiline_What_Next && match_failed {
     c.flush()
   }
+  // TODO: Split the line if its too big
 }
 
 func (c *CodecMultiline) flush() {
@@ -160,6 +197,7 @@ func (c *CodecMultiline) flush() {
   // Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
   c.last_offset = c.end_offset
   c.buffer = nil
+  c.buffer_len = 0
   c.buffer_lines = 0
 
   c.callback_func(c.start_offset, c.end_offset, text)

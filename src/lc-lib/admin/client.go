@@ -36,6 +36,9 @@ func NewClient(admin_connect string) (*Client, error) {
 
   ret := &Client{}
 
+  // TODO: handle the connection in a goroutine that can PING
+  //       on idle, and implement a close member to shut it
+  //       it down. For now we'll rely on the auto-reconnect
   if ret.conn, err = ret.connect(admin_connect); err != nil {
     return nil, err
   }

@@ -237,6 +237,8 @@ ReadLoop:
       log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
       h.file.Seek(0, os.SEEK_SET)
       h.offset = 0
+      // TODO: How does this impact a partial line reader buffer?
+      // TODO: How does this imapct multiline?
       continue
     }
 
@@ -288,7 +290,6 @@ func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text str
   desc := &core.EventDescriptor{
     Stream: h.stream,
     Offset: end_offset,
-    // NOTE: Make this include the fileconfig fields?
     Event:  encoded,
   }
 

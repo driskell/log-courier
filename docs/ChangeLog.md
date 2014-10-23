@@ -4,7 +4,8 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
-- [Latest Development](#latest-development)
+- [1.0](#10)
+- [0.15](#015)
 - [0.14](#014)
 - [0.13](#013)
 - [0.12](#012)
@@ -14,6 +15,22 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## 1.0
+
+*23rd October 2014*
+
+* Remove `ping` command from `lc-admin` (#49)
+* Empty lines in a log file are incorrectly merged with the following line (#51)
+* Don't require a connection to Log Courier when running `lc-admin help` (#50)
+* Bring back `make selfsigned` to quickly generate self-signed TLS certificates
+(#25)
+* Implement `make curvekey` to quickly generate curve key pairs (#25)
+* Fix hanging ZMQ transport on transport error
+* Fix timeout on log-courier side when Logstash busy due to non-thread safe
+timeout timer in the log-courier gem
+* Gracefully handle multiline events greater than 10 MiB in size by splitting
+events
 
 ## 0.15
 

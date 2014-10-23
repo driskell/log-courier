@@ -1,4 +1,4 @@
-.PHONY: go-check all log-courier gem test doc clean
+.PHONY: prepare all log-courier gem test doc profile benchmark jrprofile jrbenchmark clean
 
 MAKEFILE := $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
 GOPATH := $(patsubst %/,%,$(dir $(abspath $(MAKEFILE))))
@@ -6,7 +6,12 @@ export GOPATH := $(GOPATH)
 
 TAGS :=
 BINS := bin/log-courier bin/lc-tlscert bin/lc-admin
+GOTESTS := log-courier lc-tlscert lc-admin lc-lib/...
 TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
+
+ifneq (,$(findstring curvekey,$(MAKECMDGOALS)))
+with := zmq4
+endif
 
 ifeq ($(with),zmq3)
 TAGS := $(TAGS) zmq zmq_3_x
@@ -15,6 +20,7 @@ endif
 ifeq ($(with),zmq4)
 TAGS := $(TAGS) zmq zmq_4_x
 BINS := $(BINS) bin/lc-curvekey
+GOTESTS := $(GOTESTS) lc-curvekey
 TESTS := $(TESTS) spec/plainzmq_spec.rb spec/zmq_spec.rb
 endif
 
@@ -34,7 +40,15 @@ gem:
 	gem build log-courier.gemspec
 
 test: all vendor/bundle/.GemfileModT
+	go get -d -tags "$(TAGS)" $(GOTESTS)
+	go test -tags "$(TAGS)" $(GOTESTS)
 	bundle exec rspec $(TESTS)
+
+selfsigned: | bin/lc-tlscert
+	bin/lc-tlscert
+
+curvekey: | bin/lc-curvekey
+	bin/lc-curvekey
 
 doc:
 	@npm --version >/dev/null || (echo "'npm' not found. You need to install node.js.")
@@ -70,12 +84,13 @@ ifneq ($(implyclean),yes)
 	rm -f log-courier-*.gem
 endif
 
-go-check:
-	@go version >/dev/null || (echo "Go not found. You need to install Go: http://golang.org/doc/install"; false)
-	@go version | grep -q 'go version go1.[123]' || (echo "Go version 1.2 or 1.3 required, you have a version of Go that is not supported."; false)
+prepare:
+	@go version >/dev/null || (echo "Go not found. You need to install Go version 1.2 or 1.3: http://golang.org/doc/install"; false)
+	@go version | grep -q 'go version go1.[23]' || (echo "Go version 1.2 or 1.3 required, you have a version of Go that is not supported."; false)
 	@echo "GOPATH: $${GOPATH}"
+	build/fix_version
 
-bin/%: FORCE | go-check
+bin/%: FORCE | prepare
 	go get -d -tags "$(TAGS)" $*
 	go install -tags "$(TAGS)" $*
 
