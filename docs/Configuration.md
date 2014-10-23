@@ -211,8 +211,8 @@ give around a 25% boost of events per second, at the expense of more memory
 usage.
 
 *For most installations you should leave this at the default as it can
-easily cope with over 10,000 events a second on most machines and uses little
-memory. It is useful only in very specific circumstances.*
+easily cope with over 10,000 events a second and uses little memory. It is
+useful only in very specific circumstances.*
 
 ### `"spool max bytes"`
 
@@ -223,6 +223,8 @@ does not have enough room for the next event, it will be flushed immediately.
 
 If this value is modified, the receiving end should also be configured with the
 new limit. For the Logstash plugin, this is the `max_packet_size` setting.
+
+The maximum value for this setting is 2147483648 (2 GiB).
 
 ### `"spool timeout"`
 
@@ -242,6 +244,8 @@ field added.
 
 If the `fields` configuration already contained a "tags" entry, and it is an
 array, it will be appended to. Otherwise, the "tag" field will be left as is.
+
+This setting can not be greater than the `spool max bytes` setting.
 
 ### `"log level"`
 

@@ -16,6 +16,7 @@ option.
   - [`"negate"`](#negate)
   - [`"what"`](#what)
   - [`"previous timeout"`](#previous-timeout)
+  - [`"max multiline bytes"`](#max-multiline-bytes)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -72,3 +73,12 @@ offers a solution to this.
 When using `"previous"`, if `"previous timeout"` is not 0 any buffered lines
 will be flushed as a single event if no more lines are received within the
 specified time period.
+
+### `"max multiline bytes"`
+
+*Number. Optional. Default: `spool max bytes`*
+
+The maximum multiline length to process. If a multiline block exeeds this
+length, it will be split across multiple events.
+
+This setting can not be greater than the `spool max bytes` setting.
