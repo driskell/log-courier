@@ -5,8 +5,8 @@ if [ ! -d '.git' ]; then
 	exit
 fi
 
-if [ "$1" == 'current' ]; then
-	VERSION=$(git describe --abbrev=0)
+if [ -n "$1" ]; then
+	VERSION="$1"
 else
 	VERSION="$(git describe)"
 	if [ $(git status -s 2>/dev/null | wc -l) -ne 0 ]; then
