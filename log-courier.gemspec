@@ -1,6 +1,6 @@
 Gem::Specification.new do |gem|
   gem.name              = 'log-courier'
-  gem.version           = '0.15'
+  gem.version           = '1.0'
   gem.description       = 'Log Courier library'
   gem.summary           = 'Receive events from Log Courier and transmit between LogStash instances'
   gem.homepage          = 'https://github.com/driskell/log-courier'

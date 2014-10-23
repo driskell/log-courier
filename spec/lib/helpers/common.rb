@@ -173,7 +173,7 @@ shared_context 'Helpers' do
     check = args[:check]
 
     waited = 0
-    while total > 0 && waited < EVENT_WAIT_COUNT
+    while total > 0 && waited <= EVENT_WAIT_COUNT
       if @event_queue.length == 0
         sleep(EVENT_WAIT_TIME)
         waited += 1

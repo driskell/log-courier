@@ -106,7 +106,7 @@ module LogCourier
 
     def process_jdat(message, comm, event_queue)
       # Now we have the data, aim to respond within 5 seconds
-      reset_ack_timeout
+      ack_timeout = Time.now.to_i + 5
 
       # OK - first is a nonce - we send this back with sequence acks
       # This allows the client to know what is being acknowledged
@@ -165,12 +165,12 @@ module LogCourier
 
         # Queue the event
         begin
-          event_queue.push event, @ack_timeout - Time.now.to_i
+          event_queue.push event, [0, ack_timeout - Time.now.to_i].max
         rescue TimeoutError
           # Full pipeline, partial ack
           # NOTE: comm.send can raise a Timeout::Error of its own
           comm.send 'ACKN', [nonce, sequence].pack('A*N')
-          reset_ack_timeout
+          ack_timeout = Time.now.to_i + 5
           retry
         end
 
@@ -180,11 +180,6 @@ module LogCourier
       # Acknowledge the full message
       # NOTE: comm.send can raise a Timeout::Error
       comm.send 'ACKN', [nonce, sequence].pack('A*N')
-    end
-
-    def reset_ack_timeout
-      # TODO: Make a constant or configurable
-      @ack_timeout = Time.now.to_i + 5
     end
   end
 end

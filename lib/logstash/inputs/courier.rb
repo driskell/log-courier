@@ -17,10 +17,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: Were these needed? Output doesn't seem to need them
-#require "logstash/inputs/base"
-#require "logstash/namespace"
-
 module LogStash
   module Inputs
     # Receive events over the Log Courier protocol
