@@ -50,14 +50,14 @@ type CodecMultiline struct {
   end_offset     int64
   start_offset   int64
   buffer         []string
-  buffer_lines   uint64
-  buffer_len     int
+  buffer_lines   int64
+  buffer_len     int64
   timer_lock     sync.Mutex
   timer_stop     chan interface{}
   timer_wait     sync.WaitGroup
   timer_deadline time.Time
 
-  meter_lines uint64
+  meter_lines int64
   meter_bytes int64
 }
 
@@ -88,6 +88,8 @@ func NewMultilineCodecFactory(config *core.Config, config_path string, unused ma
     result.MaxMultilineBytes = config.General.MaxLineBytes
   }
 
+  // We conciously allow a line 4 bytes longer what we would normally have as the limit
+  // This 4 bytes is the event header size. It's not worth considering though
   if result.MaxMultilineBytes > config.General.SpoolMaxBytes {
     return nil, fmt.Errorf("max multiline bytes cannot be greater than /general/spool max bytes")
   }
@@ -144,7 +146,7 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
     }
   }
 
-  text_len := len(text)
+  var text_len int64 = int64(len(text))
 
   // Check we don't exceed the max multiline bytes
   if check_len := c.buffer_len + text_len + c.buffer_lines; check_len > c.config.MaxMultilineBytes {
@@ -195,6 +197,7 @@ func (c *CodecMultiline) flush() {
   // Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
   c.last_offset = c.end_offset
   c.buffer = nil
+  c.buffer_len = 0
   c.buffer_lines = 0
 
   c.callback_func(c.start_offset, c.end_offset, text)
