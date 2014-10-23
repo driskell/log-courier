@@ -1,4 +1,4 @@
-.PHONY: go-check all log-courier gem test doc clean
+.PHONY: go-check all log-courier gem test doc profile benchmark jrprofile jrbenchmark clean
 
 MAKEFILE := $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
 GOPATH := $(patsubst %/,%,$(dir $(abspath $(MAKEFILE))))
