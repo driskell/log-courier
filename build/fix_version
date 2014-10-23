@@ -14,7 +14,7 @@ else
 	fi
 fi
 
-sed "s/<VERSION>/${VERSION#v}/g" src/lc-lib/core/version.go.template > src/lc-lib/core/version.go
+sed "s/<VERSION>/${VERSION}/g" src/lc-lib/core/version.go.template > src/lc-lib/core/version.go
 sed "s/<VERSION>/${VERSION#v}/g" log-courier.gemspec.template > log-courier.gemspec
 
 echo "Setting Log Courier Version ${VERSION}"
