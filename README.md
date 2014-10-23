@@ -58,14 +58,15 @@ two Logstash instances.
 plaintext ZMQ, >=4.0 for secure CurveZMQ)
 
 *\*nix: Most requirements can usually be installed by your favourite package
-manager.*
+manager. The optional ZeroMQ >=3.2 is usually also available via the package
+manager. ZeroMQ >=4.0 may need to be build and installed manually.*
 
-*OS X: Git and GNU make are provided automatically by XCode. ZeroMQ can be
-installed via [Homebrew](http://brew.sh).*
+*OS X: Git and GNU make are provided automatically by XCode. The optional ZeroMQ
+can be installed via [Homebrew](http://brew.sh).*
 
 *Windows: GNU make for Windows can be found
-[here](http://gnuwin32.sourceforge.net/packages/make.htm). ZeroMQ may need to be
-built and installed manually.*
+[here](http://gnuwin32.sourceforge.net/packages/make.htm). The optional ZeroMQ
+may need to be built and installed manually.*
 
 ### Building
 
