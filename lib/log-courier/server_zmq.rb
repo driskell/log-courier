@@ -14,7 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'ffi-rzmq-core'
+require 'ffi-rzmq-core/version'
 require 'ffi-rzmq'
+require 'ffi-rzmq/version'
 
 module LogCourier
   # ZMQ transport implementation for the server
@@ -72,6 +75,11 @@ module LogCourier
       rescue => e
         raise "[LogCourierServer] Failed to initialise: #{e}"
       end
+
+      libversion = LibZMQ.version
+      @logger.info "[LogCourierServer] libzmq version #{libversion[:major]}.#{libversion[:minor]}.#{libversion[:patch]}"
+      @logger.info "[LogCourierServer] ffi-rzmq-core version #{LibZMQ::VERSION}"
+      @logger.info "[LogCourierServer] ffi-rzmq version #{ZMQ.version}"
 
       # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
 

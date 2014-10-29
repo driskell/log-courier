@@ -289,6 +289,9 @@ func (t *TransportZmq) Init() (err error) {
     return errors.New("Failed to register any of the specified endpoints.")
   }
 
+  major, minor, patch := zmq.Version()
+  log.Info("libzmq version %d.%d.%d", major, minor, patch)
+
   // Signal channels
   t.bridge_chan = make(chan []byte, 1)
   t.send_chan = make(chan *ZMQMessage, 2)
