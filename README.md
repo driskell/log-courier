@@ -57,15 +57,12 @@ two Logstash instances.
 1. GNU make
 
 *\*nix: Most requirements can usually be installed by your favourite package
-manager. The optional ZeroMQ >=3.2 is usually also available via the package
-manager. ZeroMQ >=4.0 may need to be build and installed manually.*
+manager.*
 
-*OS X: Git and GNU make are provided automatically by XCode. The optional ZeroMQ
-can be installed via [Homebrew](http://brew.sh).*
+*OS X: Git and GNU make are provided automatically by XCode.*
 
 *Windows: GNU make for Windows can be found
-[here](http://gnuwin32.sourceforge.net/packages/make.htm). The optional ZeroMQ
-may need to be built and installed manually.*
+[here](http://gnuwin32.sourceforge.net/packages/make.htm).*
 
 ### Building
 

@@ -84,6 +84,7 @@ vendor/bundle/.GemfileJRubyModT: Gemfile
 clean:
 	go clean -i ./...
 ifneq ($(implyclean),yes)
+	rm -rf src/github.com
 	rm -rf vendor/bundle
 	rm -f Gemfile.lock
 	rm -f log-courier-*.gem
