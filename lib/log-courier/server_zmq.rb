@@ -91,6 +91,8 @@ module LogCourier
 
       # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
 
+      @return_route = []
+
       reset_timeout
     end
 
@@ -126,21 +128,18 @@ module LogCourier
             next
           end
 
-          # Pre-send the routing information and remove it from data
+          # Save the routing information and remove it from data
+          @return_route = []
           data.delete_if do |msg|
             reset_timeout
-            send_with_poll msg, true
-            if ZMQ::Util.errno != ZMQ::EAGAIN
-              @logger.warn "[LogCourierServer] Message send failed: #{ZMQ::Util.error_string}" unless @logger.nil?
-              raise TimeoutError
-            end
             break if msg == ""
+            @return_route.push msg
             true
           end
           data.shift
 
           if data.length != 1
-            @logger.warn '[LogCourierServer] Invalid message: multipart unexpected' unless @logger.nil?
+            @logger.warn "[LogCourierServer] Invalid message: multipart unexpected (#{data.length})" unless @logger.nil?
           else
             recv(data.first, &block)
           end
@@ -189,6 +188,12 @@ module LogCourier
     def send(signature, message)
       reset_timeout
       data = signature + [message.length].pack('N') + message
+
+      # Send the return route and then the message
+      @return_route.each do |msg|
+        send_with_poll msg, true
+      end
+      send_with_poll "", true
       send_with_poll data
     end
 
