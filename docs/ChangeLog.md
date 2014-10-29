@@ -26,6 +26,8 @@
 malformed version string (#62)
 * Print informational messages containing ZMQ library version information during
 gem and log-courier startup to aid in diagnostics
+* Raise a friendly error when trying to use the zmq transport in the Log Courier
+gem with incompatible versions of libzmq
 
 ## 1.0
 

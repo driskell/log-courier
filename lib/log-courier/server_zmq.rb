@@ -38,7 +38,12 @@ module LogCourier
 
       @logger = @options[:logger]
 
+      libversion = LibZMQ.version
+      libversion = "#{libversion[:major]}.#{libversion[:minor]}.#{libversion[:patch]}"
+
       if @options[:transport] == 'zmq'
+        raise "[LogCourierServer] Transport 'zmq' requires libzmq version >= 4 (the current version is #{libversion})" unless LibZMQ.version4?
+
         raise '[LogCourierServer] \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
 
         raise '[LogCourierServer] \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
@@ -76,8 +81,7 @@ module LogCourier
         raise "[LogCourierServer] Failed to initialise: #{e}"
       end
 
-      libversion = LibZMQ.version
-      @logger.info "[LogCourierServer] libzmq version #{libversion[:major]}.#{libversion[:minor]}.#{libversion[:patch]}"
+      @logger.info "[LogCourierServer] libzmq version #{libversion}"
       @logger.info "[LogCourierServer] ffi-rzmq-core version #{LibZMQ::VERSION}"
       @logger.info "[LogCourierServer] ffi-rzmq version #{ZMQ.version}"
 
