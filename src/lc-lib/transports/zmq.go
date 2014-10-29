@@ -117,20 +117,8 @@ func NewZmqTransportFactory(config *core.Config, config_path string, unused map[
       return nil, err
     }
 
-    if len(ret.CurveServerkey) == 0 {
-      return nil, fmt.Errorf("Option %scurve server key is required", config_path)
-    } else if len(ret.CurveServerkey) != 40 || !z85Validate(ret.CurveServerkey) {
-      return nil, fmt.Errorf("Option %scurve server key must be a valid 40 character Z85 encoded string", config_path)
-    }
-    if len(ret.CurvePublickey) == 0 {
-      return nil, fmt.Errorf("Option %scurve public key is required", config_path)
-    } else if len(ret.CurvePublickey) != 40 || !z85Validate(ret.CurvePublickey) {
-      return nil, fmt.Errorf("Option %scurve public key must be a valid 40 character Z85 encoded string", config_path)
-    }
-    if len(ret.CurveSecretkey) == 0 {
-      return nil, fmt.Errorf("Option %scurve secret key is required", config_path)
-    } else if len(ret.CurveSecretkey) != 40 || !z85Validate(ret.CurveSecretkey) {
-      return nil, fmt.Errorf("Option %scurve secret key must be a valid 40 character Z85 encoded string", config_path)
+    if err := ret.processConfig(config_path); err != nil {
+      return nil, err
     }
   } else {
     if err := config.ReportUnusedConfig(config_path, unused); err != nil {

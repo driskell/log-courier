@@ -18,6 +18,10 @@
 
 package transports
 
+func (f *TransportZmqFactory) processConfig(config_path string) (err error) {
+  return nil
+}
+
 func (t *TransportZmq) configureSocket() error {
   return nil
 }

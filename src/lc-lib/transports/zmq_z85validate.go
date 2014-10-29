@@ -1,4 +1,4 @@
-// +build zmq
+// +build zmq_4_x
 
 /*
  * Copyright 2014 Jason Woods.

@@ -23,6 +23,26 @@ import (
   "lc-lib/core"
 )
 
+func (f *TransportZmqFactory) processConfig(config_path string) (err error) {
+  if len(f.CurveServerkey) == 0 {
+    return fmt.Errorf("Option %scurve server key is required", config_path)
+  } else if len(f.CurveServerkey) != 40 || !z85Validate(f.CurveServerkey) {
+    return fmt.Errorf("Option %scurve server key must be a valid 40 character Z85 encoded string", config_path)
+  }
+  if len(f.CurvePublickey) == 0 {
+    return fmt.Errorf("Option %scurve public key is required", config_path)
+  } else if len(f.CurvePublickey) != 40 || !z85Validate(f.CurvePublickey) {
+    return fmt.Errorf("Option %scurve public key must be a valid 40 character Z85 encoded string", config_path)
+  }
+  if len(f.CurveSecretkey) == 0 {
+    return fmt.Errorf("Option %scurve secret key is required", config_path)
+  } else if len(f.CurveSecretkey) != 40 || !z85Validate(f.CurveSecretkey) {
+    return fmt.Errorf("Option %scurve secret key must be a valid 40 character Z85 encoded string", config_path)
+  }
+
+  return nil
+}
+
 func (t *TransportZmq) configureSocket() (err error) {
   if t.config.transport == "zmq" {
     // Configure CurveMQ security
