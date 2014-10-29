@@ -20,6 +20,7 @@ package transports
 
 import (
   "fmt"
+  zmq "github.com/alecthomas/gozmq"
   "lc-lib/core"
 )
 
@@ -57,6 +58,65 @@ func (t *TransportZmq) configureSocket() (err error) {
     }
   }
   return
+}
+
+// Process ZMQ 4.0.x monitor messages
+// http://api.zeromq.org/4-0:zmq-socket-monitor
+func (t *TransportZmq) processMonitorIn() (ok bool) {
+  for {
+    // Bring in the messages
+  RetryRecv:
+    data, err := t.monitor.Recv(zmq.DONTWAIT)
+    if err != nil {
+      switch err {
+      case syscall.EINTR:
+        // Try again
+        goto RetryRecv
+      case syscall.EAGAIN:
+        // No more messages
+        ok = true
+        return
+      }
+
+      // Failure
+      t.recv_chan <- fmt.Errorf("Monitor zmq.Socket.Recv failure %s", err)
+      return
+    }
+
+    switch t.event.part {
+    case Monitor_Part_Header:
+      t.event.event = zmq.Event(binary.LittleEndian.Uint16(data[0:2]))
+      t.event.val = int32(binary.LittleEndian.Uint32(data[2:6]))
+      t.event.data = ""
+    case Monitor_Part_Data:
+      t.event.data = string(data)
+      t.event.Log()
+    default:
+      log.Debug("Extraneous data in monitor message. Silently discarding.")
+      continue
+    }
+
+    more, err := t.monitor.RcvMore()
+    if err != nil {
+      // Failure
+      t.recv_chan <- fmt.Errorf("Monitor zmq.Socket.RcvMore failure %s", err)
+      return
+    }
+
+    if !more {
+      if t.event.part < Monitor_Part_Data {
+        t.event.Log()
+        log.Debug("Unexpected end of monitor message. Skipping.")
+      }
+
+      t.event.part = Monitor_Part_Header
+      continue
+    }
+
+    if t.event.part <= Monitor_Part_Data {
+      t.event.part++
+    }
+  }
 }
 
 // Register the transport
