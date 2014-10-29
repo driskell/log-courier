@@ -14,10 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'ffi-rzmq-core'
-require 'ffi-rzmq-core/version'
-require 'ffi-rzmq'
-require 'ffi-rzmq/version'
+begin
+  require 'ffi-rzmq-core'
+  require 'ffi-rzmq-core/version'
+  require 'ffi-rzmq'
+  require 'ffi-rzmq/version'
+rescue LoadError => e
+  raise "[LogCourierServer] Could not initialise: #{e}"
+end
 
 module LogCourier
   # ZMQ transport implementation for the server
