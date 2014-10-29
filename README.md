@@ -55,18 +55,15 @@ plugin
 1. [git](http://git-scm.com)
 1. GNU make
 
-*\*nix: Most requirements can usually be installed by your favourite package
+* ***\*nix:*** *Most requirements can usually be installed by your favourite package
 manager.*
-
-*OS X: Git and GNU make are provided automatically by XCode.*
-
-*Windows: GNU make for Windows can be found
+* ***OS X:*** *Git and GNU make are provided automatically by XCode.*
+* ***Windows:*** *GNU make for Windows can be found
 [here](http://gnuwin32.sourceforge.net/packages/make.htm).*
 
 ### Building
 
-To build without the optional ZMQ support, simply run `make` as
-follows.
+To build, simply run `make` as follows.
 
 	git clone https://github.com/driskell/log-courier
 	cd log-courier
@@ -74,7 +71,7 @@ follows.
 
 The log-courier program can then be found in the 'bin' folder.
 
-*If you receive errors whilst running `make` try `gmake` instead.*
+*Note: If you receive errors whilst running `make`, try `gmake` instead.*
 
 ### Logstash Integration
 
@@ -92,16 +89,14 @@ on the [Logstash Integration](docs/LogstashIntegration.md) page.
 
 ### Building with ZMQ support
 
-To use the 'zmq' and 'plainzmq' transports, you will need to install
+To use the 'plainzmq' and 'zmq' transports, you will need to install
 [ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for cleartext
-plainzmq, >=4.0 for encrypted zmq).
+'plainzmq', >=4.0 for encrypted 'zmq').
 
-*\*nix: ZeroMQ >=3.2 is usually available via the package manager. ZeroMQ >=4.0
+* ***\*nix:*** *ZeroMQ >=3.2 is usually available via the package manager. ZeroMQ >=4.0
 may need to be built and installed manually.*
-
-*OS X: ZeroMQ can be installed via [Homebrew](http://brew.sh).*
-
-*Windows: ZeroMQ will need to be built and installed manually.*
+* ***OS X:*** *ZeroMQ can be installed via [Homebrew](http://brew.sh).*
+* ***Windows:*** *ZeroMQ will need to be built and installed manually.*
 
 Once the required version of ZeroMQ is installed, run the corresponding `make`
 command to build Log Courier with the ZMQ transports.
@@ -111,12 +106,12 @@ command to build Log Courier with the ZMQ transports.
 	# ZeroMQ >=4.0 - both cleartext 'plainzmq' and encrypted 'zmq' transport
 	make with=zmq4
 
+*Note: If you receive errors whilst running `make`, try `gmake` instead.*
+
 **Please ensure that the versions of ZeroMQ installed on the Logstash hosts and
 the Log Courier hosts are of the same major version. A Log Courier host that has
 ZeroMQ 4.0.5 will not work with a Logstash host using ZeroMQ 3.2.4 (but will
 work with a Logstash host using ZeroMQ 4.0.4.)**
-
-*If you receive errors whilst running `make` try `gmake` instead.*
 
 ### Generating Certificates and Keys
 
