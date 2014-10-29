@@ -38,8 +38,6 @@ log-courier: | $(BINS)
 
 gem: | fix_version
 	gem build log-courier.gemspec
-	gem build logstash-input-log-courier.gemspec
-	gem build logstash-output-log-courier.gemspec
 
 publish_gem: | fix_version vendor/bundle/.GemfileModT
 	bundle exec rake publish_gem
