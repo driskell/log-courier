@@ -79,15 +79,15 @@ module LogCourier
         @poller = ZMQ::Poller.new
 
         if @options[:port] == 0
-          @logger.warn '[LogCourierServer] Transport ' + @options[:transport] + ' is listening on ephemeral port ' + @port.to_s
+          @logger.warn '[LogCourierServer] Transport ' + @options[:transport] + ' is listening on ephemeral port ' + @port.to_s unless @logger.nil?
         end
       rescue => e
         raise "[LogCourierServer] Failed to initialise: #{e}"
       end
 
-      @logger.info "[LogCourierServer] libzmq version #{libversion}"
-      @logger.info "[LogCourierServer] ffi-rzmq-core version #{LibZMQ::VERSION}"
-      @logger.info "[LogCourierServer] ffi-rzmq version #{ZMQ.version}"
+      @logger.info "[LogCourierServer] libzmq version #{libversion}" unless @logger.nil?
+      @logger.info "[LogCourierServer] ffi-rzmq-core version #{LibZMQ::VERSION}" unless @logger.nil?
+      @logger.info "[LogCourierServer] ffi-rzmq version #{ZMQ.version}" unless @logger.nil?
 
       # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
 
