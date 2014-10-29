@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
+- [Latest Development](#latest-development)
 - [1.0](#10)
 - [0.15](#015)
 - [0.14](#014)
@@ -15,6 +16,16 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Latest Development
+
+*TBC*
+
+* Implement gems for the new Logstash plugin system (#60)
+* Fix gem build failing on develop branch with old rubygems versions due to a
+malformed version string (#62)
+* Print informational messages containing ZMQ library version information during
+gem and log-courier startup to aid in diagnostics
 
 ## 1.0
 
