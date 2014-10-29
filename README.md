@@ -12,9 +12,10 @@ with many fixes and behavioural improvements.
 
 - [Features](#features)
 - [Installation](#installation)
-  - [Build Requirements](#build-requirements)
+  - [Requirements](#requirements)
   - [Building](#building)
   - [Logstash Integration](#logstash-integration)
+  - [Building with ZMQ support](#building-with-zmq-support)
   - [Generating Certificates and Keys](#generating-certificates-and-keys)
 - [Documentation](#documentation)
 
@@ -48,14 +49,12 @@ two Logstash instances.
 
 ## Installation
 
-### Build Requirements
+### Requirements
 
 1. \*nix, OS X or Windows
 1. The [golang](http://golang.org/doc/install) compiler tools (1.2 or 1.3)
 1. [git](http://git-scm.com)
 1. GNU make
-1. (Optional) [ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for
-plaintext ZMQ, >=4.0 for secure CurveZMQ)
 
 *\*nix: Most requirements can usually be installed by your favourite package
 manager. The optional ZeroMQ >=3.2 is usually also available via the package
@@ -79,15 +78,6 @@ follows.
 
 The log-courier program can then be found in the 'bin' folder.
 
-To build with the optional ZMQ support use the following.
-
-	git clone https://github.com/driskell/log-courier
-	cd log-courier
-	make with=zmq3
-
-For CurveZMQ support (ZMQ with public key encryption) replace `zmq3` with
-`zmq4`.
-
 *If you receive errors whilst running `make` try `gmake` instead.*
 
 ### Logstash Integration
@@ -96,8 +86,36 @@ Log Courier does not utilise the lumberjack Logstash plugin and instead uses its
 own custom plugin. This allows significant enhancements to the integration far
 beyond the lumberjack protocol allows.
 
-Details instructions on the plugin and how to install it into Logstash can be
-found on the [Logstash Integration](docs/LogstashIntegration.md) page.
+Install using the Logstash 1.5+ Plugin manager.
+
+	cd /path/to/logstash
+	bin/logstash plugin install logstash-input-log-courier
+
+Detailed instructions, including integration with Logstash 1.4.x, can be found
+on the [Logstash Integration](docs/LogstashIntegration.md) page.
+
+### Building with ZMQ support
+
+To use the 'zmq' and 'plainzmq' transports, you will need to install
+[ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for cleartext
+plainzmq, >=4.0 for encrypted zmq).
+
+*\*nix: ZeroMQ >=3.2 is usually available via the package manager. ZeroMQ >=4.0
+may need to be built and installed manually.*
+
+*OS X: ZeroMQ can be installed via [Homebrew](http://brew.sh).*
+
+*Windows: ZeroMQ will need to be built and installed manually.*
+
+Once the required version of ZeroMQ is installed, run the corresponding `make`
+command to build Log Courier with the ZMQ transports.
+
+	# ZeroMQ >=3.2 - cleartext 'plainzmq' transport
+	make with=zmq3
+	# ZeroMQ >=4.0 - both cleartext 'plainzmq' and encrypted 'zmq' transport
+	make with=zmq4
+
+*If you receive errors whilst running `make` try `gmake` instead.*
 
 ### Generating Certificates and Keys
 
@@ -107,7 +125,8 @@ TLS shipping transport.
 
 Likewise, running `make curvekey` will automatically build and run the
 `lc-curvekey` utility that can quickly and easily generate CurveZMQ key pairs
-for the CurveZMQ shipping transport.
+for the CurveZMQ shipping transport. This tool is only available when Log
+Courier is built with ZeroMQ >=4.0.
 
 Both tools also generate the required configuration file snippets.
 
