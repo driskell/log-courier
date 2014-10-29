@@ -424,7 +424,7 @@ RetryControl:
       // Try again
       goto RetryControl
     case syscall.EAGAIN:
-      // Poll lied, poll again
+      // No more messages
       return true
     }
 
@@ -532,7 +532,7 @@ RetrySend:
       // Try again
       goto RetrySend
     case syscall.EAGAIN:
-      // Poll lied, poll again
+      // No more messages
       ok = true
       return
     }
@@ -558,7 +558,7 @@ func (t *TransportZmq) processDealerIn() (ok bool) {
         // Try again
         goto RetryRecv
       case syscall.EAGAIN:
-        // Poll lied, poll again
+        // No more messages
         ok = true
         return
       }
@@ -628,7 +628,7 @@ func (t *TransportZmq) processMonitorIn() (ok bool) {
         // Try again
         goto RetryRecv
       case syscall.EAGAIN:
-        // Poll lied, poll again
+        // No more messages
         ok = true
         return
       }
