@@ -1,4 +1,4 @@
-.PHONY: prepare fix_version all log-courier gem test doc profile benchmark jrprofile jrbenchmark clean
+.PHONY: prepare fix_version all log-courier gem gem_plugins push_gems test doc profile benchmark jrprofile jrbenchmark clean
 
 MAKEFILE := $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
 GOPATH := $(patsubst %/,%,$(dir $(abspath $(MAKEFILE))))
@@ -39,8 +39,12 @@ log-courier: | $(BINS)
 gem: | fix_version
 	gem build log-courier.gemspec
 
-publish_gem: | fix_version vendor/bundle/.GemfileModT
-	bundle exec rake publish_gem
+gem_plugins: | fix_version
+	gem build logstash-input-log-courier.gemspec
+	gem build logstash-output-log-courier.gemspec
+
+push_gems: | gem gem_plugins fix_version vendor/bundle/.GemfileModT
+	build/push_gems
 
 test: | all vendor/bundle/.GemfileModT
 	go get -d -tags "$(TAGS)" $(GOTESTS)
@@ -85,7 +89,7 @@ ifneq ($(implyclean),yes)
 	rm -rf src/github.com
 	rm -rf vendor/bundle
 	rm -f Gemfile.lock
-	rm -f log-courier-*.gem
+	rm -f *.gem
 endif
 
 fix_version:

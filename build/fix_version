@@ -27,4 +27,5 @@ for GEM in log-courier logstash-input-log-courier logstash-output-log-courier; d
 	}
 done
 
-echo "Setting Log Courier Version ${VERSION}"
+echo "${VERSION#v}" > version.txt
+echo "Set Log Courier Version ${VERSION}"
