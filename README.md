@@ -36,16 +36,15 @@ Log Courier implements the following features:
 * TLS client certificate verification
 * Secure CurveZMQ shipping transport to load balance across multiple Logstash
 instances (optional, requires ZeroMQ 4+)
-* Plaintext TCP shipping transport for configuration simplicity in local networks
+* Plaintext TCP shipping transport for configuration simplicity in local
+networks
 * Plaintext ZMQ shipping transport
 * [Administration utility](docs/AdministrationUtility.md) to monitor the
 shipping speed and status
 * [Multiline](docs/codecs/Multiline.md) codec
 * [Filter](docs/codecs/Filter.md) codec
-
-Log Courier integrates with Logstash using an event receiver ruby gem. An event
-sender ruby gem is also available to allow fast and secure transmission between
-two Logstash instances.
+* [Logstash Integration](docs/LogstashIntegration.md) with an input and output
+plugin
 
 ## Installation
 
