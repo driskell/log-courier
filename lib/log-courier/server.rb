@@ -169,6 +169,7 @@ module LogCourier
         rescue TimeoutError
           # Full pipeline, partial ack
           # NOTE: comm.send can raise a Timeout::Error of its own
+          @logger.debug "[LogCourierServer] Partially acknowledging message #{nonce.hash} sequence #{sequence}" unless @logger.nil?
           comm.send 'ACKN', [nonce, sequence].pack('A*N')
           ack_timeout = Time.now.to_i + 5
           retry
@@ -179,6 +180,7 @@ module LogCourier
 
       # Acknowledge the full message
       # NOTE: comm.send can raise a Timeout::Error
+      @logger.debug "[LogCourierServer] Acknowledging message #{nonce.hash} sequence #{sequence}" unless @logger.nil?
       comm.send 'ACKN', [nonce, sequence].pack('A*N')
     end
   end
