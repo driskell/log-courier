@@ -55,10 +55,10 @@ plugin
 1. [git](http://git-scm.com)
 1. GNU make
 
-* ***\*nix:*** *Most requirements can usually be installed by your favourite package
-manager.*
-* ***OS X:*** *Git and GNU make are provided automatically by XCode.*
-* ***Windows:*** *GNU make for Windows can be found
+***\*nix:*** *Most requirements can usually be installed by your favourite package
+manager.*  
+***OS X:*** *Git and GNU make are provided automatically by XCode.*  
+***Windows:*** *GNU make for Windows can be found
 [here](http://gnuwin32.sourceforge.net/packages/make.htm).*
 
 ### Building
@@ -93,10 +93,10 @@ To use the 'plainzmq' and 'zmq' transports, you will need to install
 [ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for cleartext
 'plainzmq', >=4.0 for encrypted 'zmq').
 
-* ***\*nix:*** *ZeroMQ >=3.2 is usually available via the package manager. ZeroMQ >=4.0
-may need to be built and installed manually.*
-* ***OS X:*** *ZeroMQ can be installed via [Homebrew](http://brew.sh).*
-* ***Windows:*** *ZeroMQ will need to be built and installed manually.*
+***\*nix:*** *ZeroMQ >=3.2 is usually available via the package manager. ZeroMQ >=4.0
+may need to be built and installed manually.*  
+***OS X:*** *ZeroMQ can be installed via [Homebrew](http://brew.sh).*  
+***Windows:*** *ZeroMQ will need to be built and installed manually.*
 
 Once the required version of ZeroMQ is installed, run the corresponding `make`
 command to build Log Courier with the ZMQ transports.
