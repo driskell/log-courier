@@ -13,7 +13,3 @@ gem 'ruby-prof', :platforms => :mri
 
 # Tests
 gem 'rspec'
-
-# Publishing to ruby gems
-gem 'rake'
-gem 'gem_publisher'
