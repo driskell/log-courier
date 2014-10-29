@@ -5,9 +5,15 @@ go:
   - 1.2
   - 1.3
 
+# Until below issue is fixed, we need to install keys for rvm get stable
+# https://github.com/travis-ci/travis-ci/issues/2919
+before_install:
+  - gpg --keyserver hkp://keys.gnupg.net --recv-keys D39DC0E3 BF04FF17
+
+# Tests require ruby - ensure latest rvm list available and then switch to 2.0
 # https://github.com/travis-ci/travis-ci/issues/2220
-# Tests require ruby
 install:
+  - rvm get stable
   - rvm use 2.0 --install --binary --fuzzy
 
 # Make will compile, download bundles and run tests
