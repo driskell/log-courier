@@ -115,6 +115,11 @@ command to build Log Courier with the ZMQ transports.
 	# ZeroMQ >=4.0 - both cleartext 'plainzmq' and encrypted 'zmq' transport
 	make with=zmq4
 
+**Please ensure that the versions of ZeroMQ installed on the Logstash hosts and
+the Log Courier hosts are of the same major version. A Log Courier host that has
+ZeroMQ 4.0.5 will not work with a Logstash host using ZeroMQ 3.2.4 (but will
+work with a Logstash host using ZeroMQ 4.0.4.)**
+
 *If you receive errors whilst running `make` try `gmake` instead.*
 
 ### Generating Certificates and Keys
