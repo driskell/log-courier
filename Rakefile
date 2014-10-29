@@ -7,7 +7,8 @@ end
 desc 'Publish gem to RubyGems.org'
 task :publish_gem do
   require 'gem_publisher'
-  gem_file = Dir.glob(File.expand_path('*.gemspec', File.dirname(__FILE__))).first
-  gem = GemPublisher.publish_if_updated(gem_file, :rubygems)
-  puts "Published #{gem}" if gem
+  Dir.glob(File.expand_path('*.gemspec', File.dirname(__FILE__))).each do |gem_file|
+    gem = GemPublisher.publish_if_updated(gem_file, :rubygems)
+    puts "Published #{gem}" if gem
+  end
 end
