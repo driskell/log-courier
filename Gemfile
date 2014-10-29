@@ -1,9 +1,19 @@
 source 'https://rubygems.org'
+
+# Log Courier gem dependencies
 gem 'ffi-rzmq'
 gem 'multi_json'
-gem 'rspec'
 
+# Log Courier gem JSON parsers
 gem 'oj',        :platforms => :mri
+gem 'jrjackson', :platforms => :jruby
+
+# Profiler for MRI
 gem 'ruby-prof', :platforms => :mri
 
-gem 'jrjackson', :platforms => :jruby
+# Tests
+gem 'rspec'
+
+# Publishing to ruby gems
+gem 'rake'
+gem 'gem_publisher'
