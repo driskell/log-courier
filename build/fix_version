@@ -11,10 +11,6 @@ else
 	# Describe version from Git, and ensure the only "-xxx" is the git revision
 	# This ensures that gem builds only add one ".pre" tag automatically
 	VERSION="$(git describe | sed 's/-\([0-9][0-9]*\)-\([0-9a-z][0-9a-z]*\)$/.\1.\2/g')"
-	# Append "D" to show a dirty build, but ignore changes to versions in gemspecs etc.
-	if [ $(git status -s 2>/dev/null | grep -vE '\s(log-courier.gemspec|src/lc-lib/core/version.go)$' | wc -l) -ne 0 ]; then
-		VERSION="${VERSION}D"
-	fi
 fi
 
 # Patch version.go
