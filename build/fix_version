@@ -17,7 +17,18 @@ else
 	fi
 fi
 
-sed "s/<VERSION>/${VERSION}/g" src/lc-lib/core/version.go.template > src/lc-lib/core/version.go
-sed "s/<VERSION>/${VERSION#v}/g" log-courier.gemspec.template > log-courier.gemspec
+# Patch version.go
+sed "s/\\(const  *Log_Courier_Version  *string  *=  *\"\\)[^\"]*\\(\"\\)/\\1${VERSION}\\2/g" src/lc-lib/core/version.go > src/lc-lib/core/version.go.tmp
+\mv -f src/lc-lib/core/version.go.tmp src/lc-lib/core/version.go
+
+# Patch the gemspecs
+for GEM in log-courier logstash-input-log-courier logstash-output-log-courier; do
+	sed "s/\\(gem.version *= *'\\)[^']*\\('\\)/\\1${VERSION#v}\\2/g" ${GEM}.gemspec > ${GEM}.gemspec.tmp
+	\mv -f ${GEM}.gemspec.tmp ${GEM}.gemspec
+	[ ${GEM#logstash-} != $GEM ] && {
+		sed "s/\\(gem.add_runtime_dependency  *'log-courier' *,  *'= *\\)[^']*\\('\\)/\\1${VERSION#v}\\2/g" ${GEM}.gemspec > ${GEM}.gemspec.tmp
+		\mv -f ${GEM}.gemspec.tmp ${GEM}.gemspec
+	}
+done
 
 echo "Setting Log Courier Version ${VERSION}"

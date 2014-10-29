@@ -1,6 +1,5 @@
 Gemfile.lock
 bin
-log-courier-*.gem
 node_modules
 pkg
 spec/tmp
@@ -10,3 +9,4 @@ vendor
 .bundle
 .log-courier
 .vagrant
+*.gem

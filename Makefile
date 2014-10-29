@@ -1,4 +1,4 @@
-.PHONY: prepare all log-courier gem test doc profile benchmark jrprofile jrbenchmark clean
+.PHONY: prepare fix_version all log-courier gem test doc profile benchmark jrprofile jrbenchmark clean
 
 MAKEFILE := $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
 GOPATH := $(patsubst %/,%,$(dir $(abspath $(MAKEFILE))))
@@ -36,8 +36,10 @@ all: log-courier
 
 log-courier: $(BINS)
 
-gem:
+gem: | fix_version
 	gem build log-courier.gemspec
+	gem build logstash-input-log-courier.gemspec
+	gem build logstash-output-log-courier.gemspec
 
 test: all vendor/bundle/.GemfileModT
 	go get -d -tags "$(TAGS)" $(GOTESTS)
@@ -84,11 +86,13 @@ ifneq ($(implyclean),yes)
 	rm -f log-courier-*.gem
 endif
 
-prepare:
+fix_version:
+	build/fix_version
+
+prepare: | fix_version
 	@go version >/dev/null || (echo "Go not found. You need to install Go version 1.2 or 1.3: http://golang.org/doc/install"; false)
 	@go version | grep -q 'go version go1.[23]' || (echo "Go version 1.2 or 1.3 required, you have a version of Go that is not supported."; false)
 	@echo "GOPATH: $${GOPATH}"
-	build/fix_version
 
 bin/%: FORCE | prepare
 	go get -d -tags "$(TAGS)" $*
