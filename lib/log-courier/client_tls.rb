@@ -209,9 +209,10 @@ module LogCourier
     rescue ClientShutdownSignal
       # Just shutdown
       0
-    rescue => e
+    rescue StandardError, NativeException => e
       @logger.warn("[LogCourierClient] Unknown connection failure to #{@options[:addresses][0]}:#{@options[:port]}: #{e}") unless @logger.nil?
       @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      raise e
     end
   end
 end

@@ -22,6 +22,8 @@ require 'multi_json'
 require 'thread'
 require 'zlib'
 
+class NativeException; end
+
 module LogCourier
   class TimeoutError < StandardError; end
   class ShutdownSignal < StandardError; end

@@ -22,6 +22,8 @@ require 'multi_json'
 require 'thread'
 require 'zlib'
 
+class NativeException; end
+
 module LogCourier
   # TODO: Make these shared
   class ClientShutdownSignal < StandardError; end
