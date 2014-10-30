@@ -37,6 +37,7 @@ describe 'log-courier' do
     }
     config
 
+    # Remember the sized queue we use for test buffering is only 10_000 lines
     5_000.times do |i|
       @log_courier.puts "stdin line test #{i}"
     end
