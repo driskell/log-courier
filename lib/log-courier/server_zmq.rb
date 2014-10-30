@@ -110,6 +110,7 @@ module LogCourier
         begin
           begin
             # Try to receive a message
+            reset_timeout
             data = []
             rc = @socket.recv_strings(data, ZMQ::DONTWAIT)
             unless ZMQ::Util.resultcode_ok?(rc)
@@ -131,12 +132,7 @@ module LogCourier
 
           # Save the routing information that appears before the null messages
           @return_route = []
-          data.delete_if do |msg|
-            reset_timeout
-            break if msg == ''
-            @return_route.push msg
-            true
-          end
+          @return_route.push data.shift until data.length == 0 || data[0] == ''
 
           if data.length == 0
             @logger.warn '[LogCourierServer] Invalid message: no data' unless @logger.nil?
@@ -206,14 +202,14 @@ module LogCourier
     end
 
     def send(signature, message)
-      reset_timeout
       data = signature + [message.length].pack('N') + message
 
       # Send the return route and then the message
+      reset_timeout
       @return_route.each do |msg|
         send_with_poll msg, true
       end
-      send_with_poll "", true
+      send_with_poll '', true
       send_with_poll data
     end
 
@@ -237,7 +233,7 @@ module LogCourier
       end
     end
 
-    def reset_timeout()
+    def reset_timeout
       # TODO: Make configurable?
       @timeout = Time.now.to_i + 1_800
     end
