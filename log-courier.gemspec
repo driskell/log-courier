@@ -1,6 +1,6 @@
 Gem::Specification.new do |gem|
   gem.name              = 'log-courier'
-  gem.version           = '1.0'
+  gem.version           = '1.1'
   gem.description       = 'Log Courier library'
   gem.summary           = 'Receive events from Log Courier and transmit between LogStash instances'
   gem.homepage          = 'https://github.com/driskell/log-courier'
@@ -18,6 +18,6 @@ Gem::Specification.new do |gem|
     lib/log-courier/server_zmq.rb
   )
 
-  gem.add_runtime_dependency 'ffi-rzmq', '>= 2.0'
-  gem.add_runtime_dependency 'multi_json'
+  gem.add_runtime_dependency 'ffi-rzmq', '~> 2.0'
+  gem.add_runtime_dependency 'multi_json', '~> 1.0'
 end
