@@ -2,12 +2,14 @@ package codecs
 
 import (
   "lc-lib/core"
+  "sync"
   "testing"
   "time"
 )
 
 var multiline_t *testing.T
 var multiline_lines int
+var multiline_lock sync.Mutex
 
 func createMultilineCodec(unused map[string]interface{}, callback core.CodecCallbackFunc, t *testing.T) core.Codec {
   config := core.NewConfig()
@@ -24,6 +26,8 @@ func createMultilineCodec(unused map[string]interface{}, callback core.CodecCall
 }
 
 func checkMultiline(start_offset int64, end_offset int64, text string) {
+  multiline_lock.Lock()
+  defer multiline_lock.Unlock()
   multiline_lines++
 
   if multiline_lines == 1 {
@@ -122,13 +126,27 @@ func TestMultilinePreviousTimeout(t *testing.T) {
   codec.Event(4, 5, "ANOTHER line")
   codec.Event(6, 7, "DEBUG Next line")
 
+  // Allow 3 seconds
+  time.Sleep(3 * time.Second)
+
+  multiline_lock.Lock()
+  if multiline_lines != 1 {
+    t.Logf("Timeout triggered too early")
+    t.FailNow()
+  }
+  multiline_lock.Unlock()
+
   // Allow 7 seconds
   time.Sleep(7 * time.Second)
 
+  multiline_lock.Lock()
   if multiline_lines != 2 {
     t.Logf("Wrong line count received")
     t.FailNow()
   }
+  multiline_lock.Unlock()
+
+  codec.Teardown()
 }
 
 func TestMultilineNext(t *testing.T) {

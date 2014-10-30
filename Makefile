@@ -7,7 +7,7 @@ export GOPATH := $(GOPATH)
 TAGS :=
 BINS := bin/log-courier bin/lc-tlscert bin/lc-admin
 GOTESTS := log-courier lc-tlscert lc-admin lc-lib/...
-TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
+TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb
 
 ifneq (,$(findstring curvekey,$(MAKECMDGOALS)))
 with := zmq4
