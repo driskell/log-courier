@@ -119,7 +119,8 @@ module LogCourier
               @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
               @poller.register @socket, ZMQ::POLLIN
               while @poller.poll(1_000) == 0
-                raise TimeoutError if Time.now.to_i >= @timeout
+                # Using this inner while triggers pollThreadEvents in JRuby which checks for Thread.raise immediately
+                raise TimeoutError while Time.now.to_i >= @timeout
               end
               next
             end
@@ -229,7 +230,8 @@ module LogCourier
         @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
         @poller.register @socket, ZMQ::POLLOUT
         while @poller.poll(1_000) == 0
-          raise TimeoutError if Time.now.to_i >= @timeout
+          # Using this inner while triggers pollThreadEvents in JRuby which checks for Thread.raise immediately
+          raise TimeoutError while Time.now.to_i >= @timeout
         end
       end
     end
