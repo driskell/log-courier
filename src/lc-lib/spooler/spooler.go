@@ -142,6 +142,13 @@ func (s *Spooler) sendSpool() bool {
 
 func (s *Spooler) resetTimer() {
   s.timer_start = time.Now()
+
+  // Stop the timer, and ensure the channel is empty before restarting it
+  s.timer.Stop()
+  select {
+  case <-s.timer.C:
+  default:
+  }
   s.timer.Reset(s.config.SpoolTimeout)
 }
 
