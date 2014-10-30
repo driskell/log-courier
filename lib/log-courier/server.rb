@@ -158,7 +158,7 @@ module LogCourier
         # Decode the JSON
         begin
           event = @json_adapter.load(data_buf, @json_options)
-        rescue MultiJson::ParserError => e
+        rescue MultiJson::ParseError => e
           @logger.warn("[LogCourierServer] JSON parse failure, falling back to plain-text: #{e}") unless @logger.nil?
           event = { 'message' => data_buf }
         end
