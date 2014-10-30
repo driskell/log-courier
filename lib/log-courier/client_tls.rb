@@ -54,7 +54,7 @@ module LogCourier
     def connect(io_control)
       begin
         tls_connect
-      rescue ClientShutdownSignal
+      rescue ShutdownSignal
         raise
       rescue
         # TODO: Make this configurable
@@ -74,9 +74,9 @@ module LogCourier
     end
 
     def disconnect
-      @send_thread.raise ClientShutdownSignal
+      @send_thread.raise ShutdownSignal
       @send_thread.join
-      @recv_thread.raise ClientShutdownSignal
+      @recv_thread.raise ShutdownSignal
       @recv_thread.join
     end
 
@@ -111,7 +111,7 @@ module LogCourier
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       @logger.warn("[LogCourierClient] SSL write error: #{e}") unless @logger.nil?
       io_control << ['F']
-    rescue ClientShutdownSignal
+    rescue ShutdownSignal
       # Just shutdown
     rescue => e
       @logger.warn("[LogCourierClient] Unknown SSL write error: #{e}") unless @logger.nil?
@@ -147,7 +147,7 @@ module LogCourier
     rescue EOFError
       @logger.warn("[LogCourierClient] Connection closed by server") unless @logger.nil?
       io_control << ['F']
-    rescue ClientShutdownSignal
+    rescue ShutdownSignal
       # Just shutdown
     rescue => e
       @logger.warn("[LogCourierClient] Unknown SSL read error: #{e}") unless @logger.nil?
@@ -206,7 +206,7 @@ module LogCourier
       socket
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       @logger.warn("[LogCourierClient] Connection to #{@options[:addresses][0]}:#{@options[:port]} failed: #{e}") unless @logger.nil?
-    rescue ClientShutdownSignal
+    rescue ShutdownSignal
       # Just shutdown
       0
     rescue StandardError, NativeException => e
