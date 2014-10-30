@@ -139,6 +139,11 @@ module LogCourier
     rescue ShutdownSignal
       # Capture shutting down signal
       0
+    rescue StandardError, NativeException => e
+      # Some other unknown problem
+      @logger.warn("[LogCourierServer] Unknown error: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      raise e
     ensure
       # Raise shutdown in all client threads and join then
       client_threads.each do |_, thr|

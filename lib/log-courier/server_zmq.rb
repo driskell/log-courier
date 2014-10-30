@@ -173,10 +173,11 @@ module LogCourier
     rescue ShutdownSignal
       # Shutting down
       @logger.warn('[LogCourierServer] Server shutting down') unless @logger.nil?
-    rescue => e
+    rescue StandardError, NativeException => e
       # Some other unknown problem
       @logger.warn("[LogCourierServer] Unknown error: #{e}") unless @logger.nil?
       @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      raise e
     ensure
       @socket.close
       @context.terminate
