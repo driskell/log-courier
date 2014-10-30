@@ -132,7 +132,7 @@ module LogCourier
           @return_route = []
           data.delete_if do |msg|
             reset_timeout
-            break if msg == ""
+            break if msg == ''
             @return_route.push msg
             true
           end
@@ -154,7 +154,8 @@ module LogCourier
               i = 0
               data.each do |msg|
                 i += 1
-                @logger.debug "[LogCourierServer] Part #{i}: #{msg[0..31].gsub(/[^[:print:]]/,'.')}"
+                part = msg[0..31].gsub(/[^[:print:]]/, '.')
+                @logger.debug "[LogCourierServer] Part #{i}: #{part.length}:[#{part}]"
               end
             end
           else
