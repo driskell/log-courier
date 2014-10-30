@@ -128,7 +128,7 @@ module LogCourier
             next
           end
 
-          # Save the routing information and remove it from data
+          # Save the routing information that appears before the null messages
           @return_route = []
           data.delete_if do |msg|
             reset_timeout
@@ -136,10 +136,27 @@ module LogCourier
             @return_route.push msg
             true
           end
+
+          if data.length == 0
+            @logger.warn '[LogCourierServer] Invalid message: no data' unless @logger.nil?
+            next
+          elsif data.length == 1
+            @logger.warn '[LogCourierServer] Invalid message: empty data' unless @logger.nil?
+            next
+          end
+
+          # Drop the null message separator
           data.shift
 
           if data.length != 1
             @logger.warn "[LogCourierServer] Invalid message: multipart unexpected (#{data.length})" unless @logger.nil?
+            if !@logger.nil? && @logger.debug?
+              i = 0
+              data.each do |msg|
+                i += 1
+                @logger.debug "[LogCourierServer] Part #{i}: #{msg[0..31].gsub(/[^[:print:]]/,'.')}"
+              end
+            end
           else
             recv(data.first, &block)
           end
