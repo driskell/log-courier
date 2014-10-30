@@ -106,6 +106,12 @@ func (e *ZMQEvent) Log() {
     } else {
       log.Info("Attempting to connect to %s", e.data)
     }
+  case zmq.EVENT_CLOSED:
+    if e.data == "" {
+      log.Error("Connection closed")
+    } else {
+      log.Error("Connection to %s closed", e.data)
+    }
   case zmq.EVENT_DISCONNECTED:
     if e.data == "" {
       log.Error("Lost connection")
