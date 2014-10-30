@@ -1,12 +1,13 @@
 Gemfile.lock
 bin
-log-courier-*.gem
 node_modules
 pkg
 spec/tmp
 src/github.com
 vendor
+version.txt
 .Makefile.tags
 .bundle
 .log-courier
 .vagrant
+*.gem

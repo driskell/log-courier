@@ -123,7 +123,7 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) 
   h.output = output
 
   if h.path == "-" {
-    log.Info("Started stdin harvester at position 0")
+    log.Info("Started stdin harvester")
     h.offset = 0
   } else {
     // Get current offset in file
@@ -200,8 +200,19 @@ ReadLoop:
     }
 
     if err != io.EOF {
-      log.Error("Unexpected error reading from %s: %s", h.path, err)
+      if h.path == "-" {
+        log.Error("Unexpected error reading from stdin: %s", err)
+      } else {
+        log.Error("Unexpected error reading from %s: %s", h.path, err)
+      }
       return h.codec.Teardown(), err
+    }
+
+    if h.path == "-" {
+      // Stdin has finished - stdin blocks permanently until the stream ends
+      // Once the stream ends, finish the harvester
+      log.Info("Stopping harvest of stdin; EOF reached")
+      return h.codec.Teardown(), nil
     }
 
     // Check shutdown
@@ -215,12 +226,6 @@ ReadLoop:
     last_eof := h.offset
     h.last_eof = &last_eof
     h.Unlock()
-
-    // Timed out waiting for data, got EOF
-    if h.path == "-" {
-      // This wouldn't make sense on stdin so lets not risk anything strange happening
-      continue
-    }
 
     // Don't check for truncation until we hit the full read_timeout
     if time.Since(last_read_time) < read_timeout {

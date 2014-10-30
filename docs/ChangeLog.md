@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
+- [1.1](#11)
 - [1.0](#10)
 - [0.15](#015)
 - [0.14](#014)
@@ -15,6 +16,25 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## 1.1
+
+*30th October 2014*
+
+* Implement gems for the new Logstash plugin system (#60)
+* Fix gem build failing on develop branch with old rubygems versions due to a
+malformed version string (#62)
+* Fix ZeroMQ transports in the ruby gem with Logstash 1.4.x (#63)
+* Fix build issue with ZeroMQ 3.2 and `make with=zmq3`
+* Fix partial acknowledgements not being passed to registrar and persisted to
+disk
+* Fix a race condition when the spooler flushes to prevent a timeout occurring
+one or more times after a flush due to size
+* Print informational messages containing ZMQ library version information during
+gem and log-courier startup to aid in diagnostics
+* Raise a friendly error when trying to use the zmq transport in the Log Courier
+gem with incompatible versions of libzmq
+* Various fixes and improvements to log-courier, gem, build and tests
 
 ## 1.0
 

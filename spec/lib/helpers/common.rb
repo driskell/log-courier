@@ -44,7 +44,7 @@ shared_context 'Helpers' do
     # When we add a file we log it here, so after we can remove them
     @files = []
 
-    @event_queue = Queue.new
+    @event_queue = SizedQueue.new 10_000
 
     @servers = {}
     @server_counts = {}

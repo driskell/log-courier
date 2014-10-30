@@ -100,7 +100,7 @@ module LogCourier
         end
 
         if @options[:port] == 0
-          @logger.warn '[LogCourierServer] Transport ' + @options[:transport] + ' is listening on ephemeral port ' + @port.to_s
+          @logger.warn '[LogCourierServer] Transport ' + @options[:transport] + ' is listening on ephemeral port ' + @port.to_s unless @logger.nil?
         end
       rescue => e
         raise "[LogCourierServer] Failed to initialise: #{e}"
@@ -139,6 +139,11 @@ module LogCourier
     rescue ShutdownSignal
       # Capture shutting down signal
       0
+    rescue StandardError, NativeException => e
+      # Some other unknown problem
+      @logger.warn("[LogCourierServer] Unknown error: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      raise e
     ensure
       # Raise shutdown in all client threads and join then
       client_threads.each do |_, thr|

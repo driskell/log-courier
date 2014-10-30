@@ -22,10 +22,11 @@ require 'multi_json'
 require 'thread'
 require 'zlib'
 
+class NativeException; end
+
 module LogCourier
-  # TODO: Make these shared
-  class ClientShutdownSignal < StandardError; end
-  class ClientProtocolError < StandardError; end
+  class ShutdownSignal < StandardError; end
+  class ProtocolError < StandardError; end
 
   # Describes a pending payload
   class PendingPayload
@@ -93,8 +94,8 @@ module LogCourier
 
     def shutdown
       # Raise a shutdown signal in the spooler and wait for it
-      @spooler_thread.raise ClientShutdownSignal
-      @io_thread.raise ClientShutdownSignal
+      @spooler_thread.raise ShutdownSignal
+      @io_thread.raise ShutdownSignal
       @spooler_thread.join
       @io_thread.join
     end
@@ -123,7 +124,7 @@ module LogCourier
           @io_control << ['E', spooled]
         end
       end
-    rescue ClientShutdownSignal
+    rescue ShutdownSignal
       # Just shutdown
       0
     end
@@ -224,13 +225,13 @@ module LogCourier
             # Reset keepalive timeout
             reset_keepalive
           end
-        rescue ClientProtocolError => e
+        rescue ProtocolError => e
           # Reconnect required due to a protocol error
           @logger.warn("[LogCourierClient] Protocol error: #{e}") unless @logger.nil?
         rescue TimeoutError
           # Reconnect due to timeout
           @logger.warn('[LogCourierClient] Timeout occurred') unless @logger.nil?
-        rescue ClientShutdownSignal
+        rescue ShutdownSignal
           # Shutdown, break out
           break
         rescue => e
@@ -311,7 +312,7 @@ module LogCourier
     def process_pong(message)
       # Sanity
       if message.length != 0
-        raise ClientProtocolError, "Unexpected data attached to pong message (#{message.length})"
+        raise ProtocolError, "Unexpected data attached to pong message (#{message.length})"
       end
 
       # No longer pending a PONG
@@ -321,7 +322,7 @@ module LogCourier
     def process_ackn(message)
       # Sanity
       if message.length != 20
-        raise ClientProtocolError, "ACKN message size invalid (#{message.length})"
+        raise ProtocolError, "ACKN message size invalid (#{message.length})"
       end
 
       # Grab nonce

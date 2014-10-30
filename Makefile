@@ -1,4 +1,4 @@
-.PHONY: prepare all log-courier gem test doc profile benchmark jrprofile jrbenchmark clean
+.PHONY: prepare fix_version all log-courier gem gem_plugins push_gems test doc profile benchmark jrprofile jrbenchmark clean
 
 MAKEFILE := $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
 GOPATH := $(patsubst %/,%,$(dir $(abspath $(MAKEFILE))))
@@ -7,7 +7,7 @@ export GOPATH := $(GOPATH)
 TAGS :=
 BINS := bin/log-courier bin/lc-tlscert bin/lc-admin
 GOTESTS := log-courier lc-tlscert lc-admin lc-lib/...
-TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb spec/multiline_spec.rb
+TESTS := spec/courier_spec.rb spec/tcp_spec.rb spec/gem_spec.rb
 
 ifneq (,$(findstring curvekey,$(MAKECMDGOALS)))
 with := zmq4
@@ -32,14 +32,21 @@ SAVETAGS := $(shell echo "$(TAGS)" >.Makefile.tags)
 endif
 endif
 
-all: log-courier
+all: | log-courier
 
-log-courier: $(BINS)
+log-courier: | $(BINS)
 
-gem:
+gem: | fix_version
 	gem build log-courier.gemspec
 
-test: all vendor/bundle/.GemfileModT
+gem_plugins: | fix_version
+	gem build logstash-input-log-courier.gemspec
+	gem build logstash-output-log-courier.gemspec
+
+push_gems: | gem gem_plugins fix_version vendor/bundle/.GemfileModT
+	build/push_gems
+
+test: | all vendor/bundle/.GemfileModT
 	go get -d -tags "$(TAGS)" $(GOTESTS)
 	go test -tags "$(TAGS)" $(GOTESTS)
 	bundle exec rspec $(TESTS)
@@ -56,20 +63,20 @@ doc:
 	@node_modules/.bin/doctoc README.md
 	@for F in docs/*.md docs/codecs/*.md; do node_modules/.bin/doctoc $$F; done
 
-profile: all vendor/bundle/.GemfileModT
+profile: | all vendor/bundle/.GemfileModT
 	bundle exec rspec spec/profile_spec.rb
 
-benchmark: all vendor/bundle/.GemfileModT
+benchmark: | all vendor/bundle/.GemfileModT
 	bundle exec rspec spec/benchmark_spec.rb
 
 vendor/bundle/.GemfileModT: Gemfile
 	bundle install --path vendor/bundle
 	@touch $@
 
-jrprofile: all vendor/bundle/.GemfileModT
+jrprofile: | all vendor/bundle/.GemfileJRubyModT
 	jruby --profile -G vendor/bundle/jruby/1.9/bin/rspec spec/benchmark_spec.rb
 
-jrbenchmark: all vendor/bundle/.GemfileJRubyModT
+jrbenchmark: | all vendor/bundle/.GemfileJRubyModT
 	jruby -G vendor/bundle/jruby/1.9/bin/rspec spec/benchmark_spec.rb
 
 vendor/bundle/.GemfileJRubyModT: Gemfile
@@ -79,19 +86,20 @@ vendor/bundle/.GemfileJRubyModT: Gemfile
 clean:
 	go clean -i ./...
 ifneq ($(implyclean),yes)
+	rm -rf src/github.com
 	rm -rf vendor/bundle
 	rm -f Gemfile.lock
-	rm -f log-courier-*.gem
+	rm -f *.gem
 endif
 
-prepare:
+fix_version:
+	build/fix_version
+
+prepare: | fix_version
 	@go version >/dev/null || (echo "Go not found. You need to install Go version 1.2 or 1.3: http://golang.org/doc/install"; false)
 	@go version | grep -q 'go version go1.[23]' || (echo "Go version 1.2 or 1.3 required, you have a version of Go that is not supported."; false)
 	@echo "GOPATH: $${GOPATH}"
-	build/fix_version
 
-bin/%: FORCE | prepare
+bin/%: prepare
 	go get -d -tags "$(TAGS)" $*
 	go install -tags "$(TAGS)" $*
-
-FORCE:

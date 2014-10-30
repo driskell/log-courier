@@ -87,17 +87,39 @@ type ZMQEvent struct {
   part  int
   event zmq.Event
   val   int32
-  data  []byte
+  data  string
 }
 
 func (e *ZMQEvent) Log() {
   switch e.event {
   case zmq.EVENT_CONNECTED:
-    log.Info("Connected to %s", e.data)
+    if e.data == "" {
+      log.Info("Connected")
+    } else {
+      log.Info("Connected to %s", e.data)
+    }
+  case zmq.EVENT_CONNECT_DELAYED:
+    // Don't log anything for this
   case zmq.EVENT_CONNECT_RETRIED:
-    log.Info("Attempting to connect to %s", e.data)
+    if e.data == "" {
+      log.Info("Attempting to connect")
+    } else {
+      log.Info("Attempting to connect to %s", e.data)
+    }
+  case zmq.EVENT_CLOSED:
+    if e.data == "" {
+      log.Error("Connection closed")
+    } else {
+      log.Error("Connection to %s closed", e.data)
+    }
   case zmq.EVENT_DISCONNECTED:
-    log.Error("Lost connection to %s", e.data)
+    if e.data == "" {
+      log.Error("Lost connection")
+    } else {
+      log.Error("Lost connection to %s", e.data)
+    }
+  default:
+    log.Debug("Unknown monitor message (event:%d, val:%d, data:[% X])", e.event, e.val, e.data)
   }
 }
 
@@ -117,20 +139,8 @@ func NewZmqTransportFactory(config *core.Config, config_path string, unused map[
       return nil, err
     }
 
-    if len(ret.CurveServerkey) == 0 {
-      return nil, fmt.Errorf("Option %scurve server key is required", config_path)
-    } else if len(ret.CurveServerkey) != 40 || !z85Validate(ret.CurveServerkey) {
-      return nil, fmt.Errorf("Option %scurve server key must be a valid 40 character Z85 encoded string", config_path)
-    }
-    if len(ret.CurvePublickey) == 0 {
-      return nil, fmt.Errorf("Option %scurve public key is required", config_path)
-    } else if len(ret.CurvePublickey) != 40 || !z85Validate(ret.CurvePublickey) {
-      return nil, fmt.Errorf("Option %scurve public key must be a valid 40 character Z85 encoded string", config_path)
-    }
-    if len(ret.CurveSecretkey) == 0 {
-      return nil, fmt.Errorf("Option %scurve secret key is required", config_path)
-    } else if len(ret.CurveSecretkey) != 40 || !z85Validate(ret.CurveSecretkey) {
-      return nil, fmt.Errorf("Option %scurve secret key must be a valid 40 character Z85 encoded string", config_path)
+    if err := ret.processConfig(config_path); err != nil {
+      return nil, err
     }
   } else {
     if err := config.ReportUnusedConfig(config_path, unused); err != nil {
@@ -289,6 +299,9 @@ func (t *TransportZmq) Init() (err error) {
     return errors.New("Failed to register any of the specified endpoints.")
   }
 
+  major, minor, patch := zmq.Version()
+  log.Info("libzmq version %d.%d.%d", major, minor, patch)
+
   // Signal channels
   t.bridge_chan = make(chan []byte, 1)
   t.send_chan = make(chan *ZMQMessage, 2)
@@ -433,7 +446,7 @@ RetryControl:
       // Try again
       goto RetryControl
     case syscall.EAGAIN:
-      // Poll lied, poll again
+      // No more messages
       return true
     }
 
@@ -541,7 +554,7 @@ RetrySend:
       // Try again
       goto RetrySend
     case syscall.EAGAIN:
-      // Poll lied, poll again
+      // No more messages
       ok = true
       return
     }
@@ -567,7 +580,7 @@ func (t *TransportZmq) processDealerIn() (ok bool) {
         // Try again
         goto RetryRecv
       case syscall.EAGAIN:
-        // Poll lied, poll again
+        // No more messages
         ok = true
         return
       }
@@ -622,61 +635,6 @@ func (t *TransportZmq) processDealerIn() (ok bool) {
       t.poll_items[1].Events = t.poll_items[1].Events ^ zmq.POLLIN
       ok = true
       return
-    }
-  }
-}
-
-func (t *TransportZmq) processMonitorIn() (ok bool) {
-  for {
-    // Bring in the messages
-  RetryRecv:
-    data, err := t.monitor.Recv(zmq.DONTWAIT)
-    if err != nil {
-      switch err {
-      case syscall.EINTR:
-        // Try again
-        goto RetryRecv
-      case syscall.EAGAIN:
-        // Poll lied, poll again
-        ok = true
-        return
-      }
-
-      // Failure
-      t.recv_chan <- fmt.Errorf("Monitor zmq.Socket.Recv failure %s", err)
-      return
-    }
-
-    more, err := t.monitor.RcvMore()
-    if err != nil {
-      // Failure
-      t.recv_chan <- fmt.Errorf("Monitor zmq.Socket.RcvMore failure %s", err)
-      return
-    }
-
-    switch t.event.part {
-    case Monitor_Part_Header:
-      t.event.event = zmq.Event(binary.LittleEndian.Uint16(data[0:2]))
-      t.event.val = int32(binary.LittleEndian.Uint32(data[2:6]))
-    case Monitor_Part_Data:
-      t.event.data = data
-      t.event.Log()
-    default:
-      log.Debug("Extraneous data in monitor message. Silently discarding.")
-      continue
-    }
-
-    if !more {
-      if t.event.part < Monitor_Part_Data {
-        log.Debug("Unexpected end of monitor message. Skipping.")
-      }
-
-      t.event.part = Monitor_Part_Header
-      continue
-    }
-
-    if t.event.part <= Monitor_Part_Data {
-      t.event.part++
     }
   }
 }

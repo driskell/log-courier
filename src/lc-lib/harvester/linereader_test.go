@@ -87,6 +87,17 @@ func TestLineReadEmpty(t *testing.T) {
   checkEnd(t, reader)
 }
 
+func TestLineReadIncomplete(t *testing.T) {
+  data := bytes.NewBufferString("\n12345678901234567890\n123456")
+
+  // New line read with 100 bytes, enough for the above
+  reader := NewLineReader(data, 100)
+
+  checkLine(t, reader, []byte("\n"))
+  checkLine(t, reader, []byte("12345678901234567890\n"))
+  checkEnd(t, reader)
+}
+
 func TestLineReadFull(t *testing.T) {
   data := bytes.NewBufferString("12345678901234567890\n123456789012345678901234567890\n12345678901234567890\n")
 

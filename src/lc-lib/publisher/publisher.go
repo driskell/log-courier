@@ -547,7 +547,7 @@ func (p *Publisher) processAck(message []byte) (err error) {
     p.line_count += int64(sequence)-int64(payload.ack_events-payload.payload_start)
 
     // Only process the ACK if something was actually processed
-    if int(sequence) > payload.num_events-payload.ack_events {
+    if int(sequence) > payload.ack_events-payload.payload_start {
       payload.ack_events = int(sequence) + payload.payload_start
       // If we need to resend, we'll need to regenerate payload, so free that memory early
       payload.payload = nil
