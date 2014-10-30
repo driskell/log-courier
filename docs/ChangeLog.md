@@ -4,7 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
-- [Latest Development](#latest-development)
+- [1.1](#11)
 - [1.0](#10)
 - [0.15](#015)
 - [0.14](#014)
@@ -17,9 +17,9 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## Latest Development
+## 1.1
 
-*TBC*
+*30th October 2014*
 
 * Implement gems for the new Logstash plugin system (#60)
 * Fix gem build failing on develop branch with old rubygems versions due to a
