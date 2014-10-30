@@ -43,7 +43,7 @@ gem_plugins: | fix_version
 	gem build logstash-input-log-courier.gemspec
 	gem build logstash-output-log-courier.gemspec
 
-push_gems: | gem gem_plugins fix_version vendor/bundle/.GemfileModT
+push_gems: | gem gem_plugins
 	build/push_gems
 
 test: | all vendor/bundle/.GemfileModT
