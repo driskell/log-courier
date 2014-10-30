@@ -183,26 +183,6 @@ describe 'log-courier' do
     receive_and_check
   end
 
-  it 'should handle incomplete lines in buffered logs by waiting for a line end' do
-    f = create_log
-
-    startup
-
-    1_000.times do |i|
-      if (i + 100) % 500 == 0
-        # Make 2 events where we pause for >10s before adding new line, this takes us past eof_timeout
-        f.log_partial_start
-        sleep 15
-        f.log_partial_end
-      else
-        f.log
-      end
-    end
-
-    # Receive and check
-    receive_and_check
-  end
-
   it 'should handle log rotation and resume correctly' do
     f1 = create_log
 
