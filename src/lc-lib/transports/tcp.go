@@ -72,6 +72,8 @@ type TransportTcp struct {
   recv_chan chan interface{}
 
   can_send chan int
+
+  roundrobin int
 }
 
 func NewTcpTransportFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.TransportFactory, error) {
@@ -164,17 +166,27 @@ func (t *TransportTcp) Init() error {
     return fmt.Errorf("Invalid host:port given: %s", hostport)
   }
 
-  // Lookup the server in DNS (if this is IP it will implicitly return)
   host := string(submatch[1])
   port := string(submatch[2])
-  addresses, err := net.LookupHost(host)
-  if err != nil {
-    return fmt.Errorf("DNS lookup failure \"%s\": %s", host, err)
+
+  // Are we an IP?
+  var addresses []net.IP
+  if ip := net.ParseIP(host); ip != nil {
+    addresses = []net.IP{ip}
+  } else {
+    // Lookup the server in DNS
+    var err error
+    addresses, err = net.LookupIP(host)
+    if err != nil {
+      return fmt.Errorf("DNS lookup failure \"%s\": %s", host, err)
+    }
   }
 
-  // Select a random address from the pool of addresses provided by DNS
-  address := addresses[rand.Int()%len(addresses)]
-  addressport := net.JoinHostPort(address, port)
+  // Round robin the available addresses
+  address := addresses[t.roundrobin%len(addresses)]
+  t.roundrobin++
+
+  addressport := net.JoinHostPort(address.String(), port)
 
   log.Info("Attempting to connect to %s (%s)", addressport, host)
 
