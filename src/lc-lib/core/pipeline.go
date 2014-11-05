@@ -80,14 +80,16 @@ func (p *Pipeline) SendConfig(config *Config) {
   }
 }
 
-func (p *Pipeline) Snapshot() []*Snapshot {
-  snapshots := make([]*Snapshot, 0)
+func (p *Pipeline) Snapshot() *Snapshot {
+  snap := NewSnapshot("Log Courier")
 
   for _, sink := range p.snapshot_pipes {
-    snapshots = append(snapshots, sink.Snapshot()...)
+    for _, sub := range sink.Snapshot() {
+      snap.AddSub(sub)
+    }
   }
 
-  return snapshots
+  return snap
 }
 
 type IPipelineSegment interface {

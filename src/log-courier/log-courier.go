@@ -266,6 +266,7 @@ func (lc *LogCourier) processCommand(command string) *admin.Response {
     return &admin.Response{&admin.ReloadResponse{}}
   case "SNAP":
     snaps := lc.pipeline.Snapshot()
+    snaps.Sort()
     return &admin.Response{snaps}
   }
 

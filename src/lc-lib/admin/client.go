@@ -129,14 +129,24 @@ func (c *Client) Reload() error {
   return c.resolveError(response)
 }
 
-func (c *Client) FetchSnapshot() ([]*core.Snapshot, error) {
+func (c *Client) FetchSnapshot() (*core.Snapshot, error) {
   response, err := c.request("SNAP")
   if err != nil {
     return nil, err
   }
 
-  if ret, ok := response.Response.([]*core.Snapshot); ok {
+  if ret, ok := response.Response.(*core.Snapshot); ok {
     return ret, nil
+  }
+
+  // Backwards compatibility
+  if ret, ok := response.Response.([]*core.Snapshot); ok {
+    snap := core.NewSnapshot("Log Courier")
+    for _, sub := range ret {
+      snap.AddSub(sub)
+    }
+    snap.Sort()
+    return snap, nil
   }
 
   return nil, c.resolveError(response)
