@@ -44,12 +44,18 @@ const (
   Monitor_Part_Extraneous
 )
 
+const (
+  default_NetworkConfig_PeerSendQueue int64         = 2
+)
+
 type TransportZmqFactory struct {
   transport string
 
   CurveServerkey string `config:"curve server key"`
   CurvePublickey string `config:"curve public key"`
   CurveSecretkey string `config:"curve secret key"`
+
+  PeerSendQueue int64 `config:"peer send queue"`
 
   hostport_re *regexp.Regexp
 }
@@ -142,10 +148,32 @@ func NewZmqTransportFactory(config *core.Config, config_path string, unused map[
     if err := ret.processConfig(config_path); err != nil {
       return nil, err
     }
-  } else {
-    if err := config.ReportUnusedConfig(config_path, unused); err != nil {
-      return nil, err
-    }
+
+    return ret, nil
+  }
+
+  // Don't allow curve settings
+  if _, ok := unused["CurveServerkey"]; ok {
+    goto CheckUnused
+  }
+  if _, ok := unused["CurvePublickey"]; ok {
+    goto CheckUnused
+  }
+  if _, ok := unused["CurveSecretkey"]; ok {
+    goto CheckUnused
+  }
+
+  if err = config.PopulateConfig(ret, config_path, unused); err != nil {
+    return nil, err
+  }
+
+  if ret.PeerSendQueue == 0 {
+    ret.PeerSendQueue = default_NetworkConfig_PeerSendQueue
+  }
+
+CheckUnused:
+  if err := config.ReportUnusedConfig(config_path, unused); err != nil {
+    return nil, err
   }
 
   return ret, nil
@@ -247,6 +275,11 @@ func (t *TransportZmq) Init() (err error) {
   // all messages immediately when we call Close
   if err = t.dealer.SetLinger(0); err != nil {
     return fmt.Errorf("Failed to set ZMQ linger period: %s", err)
+  }
+
+  // Set the outbound queue
+  if err = t.dealer.SetSndHWM(int(t.config.PeerSendQueue)); err != nil {
+    return fmt.Errorf("Failed to set ZMQ send highwater: %s", err)
   }
 
   // Monitor socket
