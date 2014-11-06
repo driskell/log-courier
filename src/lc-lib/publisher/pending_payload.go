@@ -28,9 +28,10 @@ type pendingPayload struct {
   next          *pendingPayload
   nonce         string
   events        []*core.EventDescriptor
-  num_events    int
+  sequence_from int
+  sequence_len  int
   ack_events    int
-  payload_start int
+  processed     int
   payload       []byte
   timeout       time.Time
 }
@@ -39,7 +40,6 @@ func newPendingPayload(events []*core.EventDescriptor, nonce string, timeout tim
   payload := &pendingPayload{
     events:     events,
     nonce:      nonce,
-    num_events: len(events),
     timeout:    time.Now().Add(timeout),
   }
 
@@ -76,7 +76,8 @@ func (pp *pendingPayload) Generate() (err error) {
   compressor.Close()
 
   pp.payload = buffer.Bytes()
-  pp.payload_start = pp.ack_events
+  pp.sequence_from = pp.processed + pp.ack_events
+  pp.sequence_len = len(pp.events) - pp.ack_events
 
   return
 }

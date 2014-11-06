@@ -534,22 +534,24 @@ func (p *Publisher) processAck(message []byte) (err error) {
 
   ack_events := payload.ack_events
 
-  // Full ACK?
-  // TODO: Protocol error if sequence is too large?
-  if int(sequence) >= payload.num_events-payload.payload_start {
-    p.line_count += int64(payload.num_events-payload.ack_events)
+  // TODO: This is due a rewrite to reduce the math
+
+  // Full ACK? If sequence too large - just assume it meant the sequence end
+  if int(sequence) >= payload.sequence_len {
+    p.line_count += int64((payload.sequence_len+payload.sequence_from)-(payload.processed+payload.ack_events))
 
     // No more events left for this payload, free the payload memory
-    payload.ack_events = len(payload.events)
+    payload.ack_events = (int(sequence)+payload.sequence_from)-payload.processed
     payload.payload = nil
+
     delete(p.pending_payloads, nonce)
   } else {
-    p.line_count += int64(sequence)-int64(payload.ack_events-payload.payload_start)
+    p.line_count += int64((int(sequence)+payload.sequence_from)-(payload.processed-payload.ack_events))
 
     // Only process the ACK if something was actually processed
-    if int(sequence) > payload.ack_events-payload.payload_start {
-      payload.ack_events = int(sequence) + payload.payload_start
+    if int(sequence)+payload.sequence_from > payload.processed+payload.ack_events {
       // If we need to resend, we'll need to regenerate payload, so free that memory early
+      payload.ack_events = (int(sequence)+payload.sequence_from)-payload.processed
       payload.payload = nil
     }
   }
@@ -564,9 +566,8 @@ func (p *Publisher) processAck(message []byte) (err error) {
         p.registrar_spool.Add(registrar.NewAckEvent(payload.events[:payload.ack_events]))
         p.registrar_spool.Send()
         payload.events = payload.events[payload.ack_events:]
-        payload.num_events = len(payload.events)
+        payload.processed += payload.ack_events
         payload.ack_events = 0
-        payload.payload_start = 0
         break
       }
 
