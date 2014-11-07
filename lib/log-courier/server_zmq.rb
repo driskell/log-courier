@@ -94,6 +94,17 @@ module LogCourier
       @return_route = []
 
       reset_timeout
+
+      # Register a finaliser that sets @context to nil
+      # This allows us to detect the JRuby bug where during "exit!" finalisers
+      # are run but threads are not killed - which leaves us in a situation of
+      # a terminated @context (it has a terminate finalizer) and an IO thread
+      # looping retries
+      # JRuby will still crash and burn, but at least we don't spam STDOUT with
+      # errors
+      ObjectSpace.define_finalizer(self, Proc.new do
+        @context = nil
+      end)
     end
 
     def z85validate(z85)
@@ -126,6 +137,8 @@ module LogCourier
               next
             end
           rescue ZMQError => e
+            # Detect JRuby bug
+            fail e if @context.nil?
             @logger.warn "[LogCourierServer] ZMQ recv_string failed: #{e}" unless @logger.nil?
             next
           end
