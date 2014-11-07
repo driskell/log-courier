@@ -20,15 +20,20 @@ import (
   "bytes"
   "compress/zlib"
   "encoding/binary"
+  "errors"
   "lc-lib/core"
   "time"
+)
+
+var (
+  ErrPayloadCorrupt = errors.New("Payload is corrupt")
 )
 
 type pendingPayload struct {
   next          *pendingPayload
   nonce         string
   events        []*core.EventDescriptor
-  sequence_from int
+  last_sequence int
   sequence_len  int
   ack_events    int
   processed     int
@@ -53,6 +58,11 @@ func newPendingPayload(events []*core.EventDescriptor, nonce string, timeout tim
 func (pp *pendingPayload) Generate() (err error) {
   var buffer bytes.Buffer
 
+  // Assertion
+  if len(pp.events) == 0 {
+    return ErrPayloadCorrupt
+  }
+
   // Begin with the nonce
   if _, err = buffer.Write([]byte(pp.nonce)[0:16]); err != nil {
     return
@@ -76,8 +86,44 @@ func (pp *pendingPayload) Generate() (err error) {
   compressor.Close()
 
   pp.payload = buffer.Bytes()
-  pp.sequence_from = pp.processed + pp.ack_events
+  pp.last_sequence = 0
   pp.sequence_len = len(pp.events) - pp.ack_events
 
   return
+}
+
+func (pp *pendingPayload) Ack(sequence int) (int, bool) {
+  if sequence == pp.last_sequence {
+    // No change
+    return 0, false
+  } else if sequence >= pp.sequence_len {
+    // Full ACK
+    lines := pp.sequence_len - pp.last_sequence
+    pp.ack_events = len(pp.events)
+    pp.last_sequence = sequence
+    pp.payload = nil
+    return lines, true
+  }
+
+  lines := sequence - pp.last_sequence
+  pp.ack_events += lines
+  pp.last_sequence = sequence
+  pp.payload = nil
+  return lines, false
+}
+
+func (pp *pendingPayload) HasAck() bool {
+  return pp.ack_events != 0
+}
+
+func (pp *pendingPayload) Complete() bool {
+  return len(pp.events) == 0
+}
+
+func (pp *pendingPayload) Rollup() []*core.EventDescriptor {
+  pp.processed += pp.ack_events
+  rollup := pp.events[:pp.ack_events]
+  pp.events = pp.events[pp.ack_events:]
+  pp.ack_events = 0
+  return rollup
 }

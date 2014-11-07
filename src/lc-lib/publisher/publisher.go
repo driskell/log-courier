@@ -535,45 +535,33 @@ func (p *Publisher) processAck(message []byte) (err error) {
 
   ack_events := payload.ack_events
 
-  // TODO: This is due a rewrite to reduce the math
+  // Process ACK
+  lines, complete := payload.Ack(int(sequence))
+  p.line_count += int64(lines)
 
-  // Full ACK? If sequence too large - just assume it meant the sequence end
-  if int(sequence) >= payload.sequence_len {
-    p.line_count += int64((payload.sequence_len+payload.sequence_from)-(payload.processed+payload.ack_events))
-
-    // No more events left for this payload, free the payload memory
-    payload.ack_events = (int(sequence)+payload.sequence_from)-payload.processed
-    payload.payload = nil
-
+  if complete {
+    // No more events left for this payload, remove from pending list
     delete(p.pending_payloads, nonce)
-  } else {
-    p.line_count += int64((int(sequence)+payload.sequence_from)-(payload.processed-payload.ack_events))
-
-    // Only process the ACK if something was actually processed
-    if int(sequence)+payload.sequence_from > payload.processed+payload.ack_events {
-      // If we need to resend, we'll need to regenerate payload, so free that memory early
-      payload.ack_events = (int(sequence)+payload.sequence_from)-payload.processed
-      payload.payload = nil
-    }
   }
 
   // We potentially receive out-of-order ACKs due to payloads distributed across servers
   // This is where we enforce ordering again to ensure registrar receives ACK in order
   if payload == p.first_payload {
+    // The out of sync count we have will never include the first payload, so
+    // take the value +1
     out_of_sync := p.out_of_sync + 1
 
-    for payload.ack_events != 0 {
-      if payload.ack_events != len(payload.events) {
-        p.registrar_spool.Add(registrar.NewAckEvent(payload.events[:payload.ack_events]))
-        p.registrar_spool.Send()
-        payload.events = payload.events[payload.ack_events:]
-        payload.processed += payload.ack_events
-        payload.ack_events = 0
+    // For each full payload we mark off, we decrease this count, the first we
+    // mark off will always be the first payload - thus the +1. Subsequent
+    // payloads are the out of sync ones - so if we mark them off we decrease
+    // the out of sync count
+    for payload.HasAck() {
+      p.registrar_spool.Add(registrar.NewAckEvent(payload.Rollup()))
+
+      if !payload.Complete() {
         break
       }
 
-      p.registrar_spool.Add(registrar.NewAckEvent(payload.events))
-      p.registrar_spool.Send()
       payload = payload.next
       p.first_payload = payload
       out_of_sync--
@@ -592,8 +580,11 @@ func (p *Publisher) processAck(message []byte) (err error) {
         break
       }
     }
+
+    p.registrar_spool.Send()
   } else if ack_events == 0 {
-    // Mark out of sync so we resend earlier packets in case they were lost
+    // If this is NOT the first payload, and this is the first acknowledgement
+    // for this payload, then increase out of sync payload count
     p.out_of_sync++
   }
 
