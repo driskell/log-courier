@@ -447,6 +447,7 @@ func (p *Publisher) checkResend() (bool, error) {
 
     // Requeue the payload
     p.first_payload = payload.next
+    payload.next = nil
     p.last_payload.next = payload
     p.last_payload = payload
 
