@@ -29,6 +29,7 @@ module LogCourier
     class ZMQError < StandardError; end
 
     attr_reader :port
+    attr_reader :peer
 
     def initialize(options = {})
       @options = {
@@ -91,7 +92,8 @@ module LogCourier
 
       # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
 
-      @return_route = []
+      # TODO: Is there a way to work out the peer? Maybe we send it with payload
+      @peer = nil
 
       reset_timeout
 
@@ -148,10 +150,10 @@ module LogCourier
           @return_route.push data.shift until data.length == 0 || data[0] == ''
 
           if data.length == 0
-            @logger.warn '[LogCourierServer] Invalid message: no data' unless @logger.nil?
+            @logger.warn "[LogCourierServer] Invalid message: no data (route length: #{@return_route.length})" unless @logger.nil?
             next
           elsif data.length == 1
-            @logger.warn '[LogCourierServer] Invalid message: empty data' unless @logger.nil?
+            @logger.warn "[LogCourierServer] Invalid message: empty data (route length: #{@return_route.length})" unless @logger.nil?
             next
           end
 

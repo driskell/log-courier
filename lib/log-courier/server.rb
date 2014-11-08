@@ -75,7 +75,11 @@ module LogCourier
             when 'JDAT'
               process_jdat message, comm, event_queue
             else
-              @logger.warn("[LogCourierServer] Unknown message received from #{comm.peer}") unless @logger.nil?
+              if comm.peer.nil?
+                @logger.warn("[LogCourierServer] Unknown message received") unless @logger.nil?
+              else
+                @logger.warn("[LogCourierServer] Unknown message received from #{comm.peer}") unless @logger.nil?
+              end
               # Don't kill a client that sends a bad message
               # Just reject it and let it send it again, potentially to another server
               comm.send '????', ''
@@ -118,6 +122,12 @@ module LogCourier
       end
 
       nonce = message[0...16]
+
+      if !@logger.nil? && @logger.debug?
+        nonce_str = nonce.each_byte.map do |b|
+          b.to_s(16).rjust(2, '0')
+        end
+      end
 
       # The remainder of the message is the compressed data block
       message = StringIO.new Zlib::Inflate.inflate(message[16...message.length])
@@ -171,7 +181,7 @@ module LogCourier
         rescue TimeoutError
           # Full pipeline, partial ack
           # NOTE: comm.send can raise a Timeout::Error of its own
-          @logger.debug "[LogCourierServer] Partially acknowledging message #{nonce.hash} sequence #{sequence}" unless @logger.nil?
+          @logger.debug "[LogCourierServer] #{@port} Partially acknowledging message #{nonce_str.join} sequence #{sequence}" if !@logger.nil? && @logger.debug?
           comm.send 'ACKN', [nonce, sequence].pack('A*N')
           ack_timeout = Time.now.to_i + 5
           retry
@@ -182,7 +192,7 @@ module LogCourier
 
       # Acknowledge the full message
       # NOTE: comm.send can raise a Timeout::Error
-      @logger.debug "[LogCourierServer] Acknowledging message #{nonce.hash} sequence #{sequence}" unless @logger.nil?
+      @logger.debug "[LogCourierServer] #{@port} Acknowledging message #{nonce_str.join} sequence #{sequence}" if !@logger.nil? && @logger.debug?
       comm.send 'ACKN', [nonce, sequence].pack('A*N')
     end
   end
