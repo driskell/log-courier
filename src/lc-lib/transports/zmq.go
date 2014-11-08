@@ -450,16 +450,16 @@ func (t *TransportZmq) poller(bridge_out *zmq.Socket) {
       }
     }
 
-    // Process dealer send
-    if t.poll_items[1].REvents&zmq.POLLOUT != 0 {
-      if !t.processDealerOut() {
+    // Process dealer receive
+    if t.poll_items[1].REvents&zmq.POLLIN != 0 {
+      if !t.processDealerIn() {
         break
       }
     }
 
-    // Process dealer receive
-    if t.poll_items[1].REvents&zmq.POLLIN != 0 {
-      if !t.processDealerIn() {
+    // Process dealer send
+    if t.poll_items[1].REvents&zmq.POLLOUT != 0 {
+      if !t.processDealerOut() {
         break
       }
     }
@@ -480,50 +480,49 @@ func (t *TransportZmq) poller(bridge_out *zmq.Socket) {
 func (t *TransportZmq) processControlIn(bridge_out *zmq.Socket) (ok bool) {
   var err error
 
-RetryControl:
-  msg, err := bridge_out.Recv(zmq.DONTWAIT)
-  if err != nil {
-    switch err {
-    case syscall.EINTR:
-      // Try again
-      goto RetryControl
-    case syscall.EAGAIN:
-      // No more messages
-      return true
+  for {
+  RetryControl:
+    msg, err := bridge_out.Recv(zmq.DONTWAIT)
+    if err != nil {
+      switch err {
+      case syscall.EINTR:
+        // Try again
+        goto RetryControl
+      case syscall.EAGAIN:
+        // No more messages
+        return true
+      }
+
+      // Failure
+      t.recv_chan <- fmt.Errorf("Pull zmq.Socket.Recv failure %s", err)
+      return
     }
 
-    // Failure
-    t.recv_chan <- fmt.Errorf("Pull zmq.Socket.Recv failure %s", err)
-    return
-  }
+    switch string(msg) {
+    case zmq_signal_output:
+      // Start polling for send
+      t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLOUT
+    case zmq_signal_input:
+      // If we staged a receive, process that
+      if t.recv_buff != nil {
+        select {
+        case t.recv_bridge_chan <- t.recv_buff:
+          t.recv_buff = nil
 
-  switch string(msg) {
-  case zmq_signal_output:
-    // Start polling for send
-    t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLOUT
-  case zmq_signal_input:
-    // If we staged a receive, process that
-    if t.recv_buff != nil {
-      select {
-      case t.recv_bridge_chan <- t.recv_buff:
-        t.recv_buff = nil
-
+          // Start polling for receive
+          t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLIN
+        default:
+          // Do nothing, we were asked for receive but channel is already full
+        }
+      } else {
         // Start polling for receive
         t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLIN
-      default:
-        // Do nothing, we were asked for receive but channel is already full
       }
-    } else {
-      // Start polling for receive
-      t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLIN
+    case zmq_signal_shutdown:
+      // Shutdown
+      return
     }
-  case zmq_signal_shutdown:
-    // Shutdown
-    return
   }
-
-  ok = true
-  return
 }
 
 func (t *TransportZmq) processDealerOut() (ok bool) {
