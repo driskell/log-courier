@@ -377,18 +377,27 @@ BridgeLoop:
         break BridgeLoop
       }
     case message = <-t.recv_bridge_chan:
-    case func() chan<- interface{} {
-      if message != nil {
-        return t.recv_chan
-      }
-      return nil
-    }() <- message:
       // The reason we flush recv through the bridge and not directly to recv_chan is so that if
       // the poller was quick and had to cache a receive as the channel was full, it will stop
       // polling - flushing through bridge allows us to signal poller to start polling again
       // It is not the publisher's responsibility to do this, and TLS wouldn't need it
       bridge_in.Send([]byte(zmq_signal_input), 0)
-      message = nil
+
+      // Keep trying to forward on the message
+    ForwardLoop:
+      for {
+        select {
+        case notify := <-t.bridge_chan:
+          bridge_in.Send(notify, 0)
+
+          // Shutdown?
+          if string(notify) == zmq_signal_shutdown {
+            break BridgeLoop
+          }
+        case t.recv_chan <- message:
+          break ForwardLoop
+        }
+      }
     }
   }
 
