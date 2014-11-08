@@ -93,7 +93,7 @@ func (pp *pendingPayload) Generate() (err error) {
 }
 
 func (pp *pendingPayload) Ack(sequence int) (int, bool) {
-  if sequence == pp.last_sequence {
+  if sequence <= pp.last_sequence {
     // No change
     return 0, false
   } else if sequence >= pp.sequence_len {
