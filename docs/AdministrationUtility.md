@@ -24,6 +24,11 @@ listen address, set the `admin listen address` entry. See
 [Configuration](Configuration.md) for more information on these options and the
 default listen address.
 
+The `lc-admin` utility aims to be always backwards compatible whenever possible.
+This means a newer version of `lc-admin` should be able to connect to any older
+version of `log-courier`. The same is not true in reverse, and an older
+`lc-admin` may be unable to connect or communicate with a newer `log-courier`.
+
 ## Available Commands
 
 ### `help`
