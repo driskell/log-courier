@@ -219,6 +219,8 @@ PublishLoop:
           // Reset timeout
           retry_payload.timeout = time.Now().Add(p.config.Timeout)
 
+          log.Debug("Send now open: Retrying next payload")
+
           // Send the payload again
           if err = p.transport.Write("JDAT", retry_payload.payload); err != nil {
             break SelectLoop
@@ -243,6 +245,7 @@ PublishLoop:
           if resent, err = p.checkResend(); err != nil {
             break SelectLoop
           } else if resent {
+            log.Debug("Send now open: Resent a timed out payload")
             // Expect an ACK within network timeout
             timer.Reset(p.config.Timeout)
             break
@@ -254,9 +257,13 @@ PublishLoop:
           break
         }
 
+        log.Debug("Send now open: Awaiting events for new payload")
+
         // Enable event wait
         input_toggle = p.input
       case events := <-input_toggle:
+        log.Debug("Sending new payload of %d events", len(events))
+
         // Send
         if err = p.sendNewPayload(events); err != nil {
           break SelectLoop
@@ -268,6 +275,7 @@ PublishLoop:
         if p.num_payloads >= p.config.MaxPendingPayloads {
           // Too many pending payloads, disable send temporarily
           p.can_send = nil
+          log.Debug("Pending payload limit reached")
         }
 
         // Expect an ACK within network timeout if this is first payload after idle
@@ -310,8 +318,10 @@ PublishLoop:
           } else if reload != core.Reload_None {
             break SelectLoop
           }
+          log.Debug("No more pending payloads, entering idle")
           timer.Reset(keepalive_timeout)
         } else {
+          log.Debug("%d payloads still pending, resetting timeout", p.num_payloads)
           timer.Reset(p.config.Timeout)
         }
       case <-timer.C:
@@ -326,6 +336,8 @@ PublishLoop:
           err = errors.New("Server did not respond to PING")
           break SelectLoop
         }
+
+        log.Debug("Idle timeout: sending PING")
 
         // Send a ping and expect a pong back (eventually)
         // If we receive an ACK first, that's fine we'll reset timer
@@ -513,6 +525,8 @@ func (p *Publisher) processPong(message []byte) error {
     return errors.New("Unexpected PONG received")
   }
 
+  log.Debug("PONG message received")
+
   p.pending_ping = false
   return nil
 }
@@ -525,6 +539,8 @@ func (p *Publisher) processAck(message []byte) (err error) {
 
   // Read the nonce and sequence number acked
   nonce, sequence := string(message[:16]), binary.BigEndian.Uint32(message[16:20])
+
+  log.Debug("ACKN message received for payload %s sequence %d", nonce, sequence)
 
   // Grab the payload the ACK corresponds to by using nonce
   payload, found := p.pending_payloads[nonce]
