@@ -31,6 +31,11 @@ import (
   "time"
 )
 
+var (
+  ErrNetworkTimeout = errors.New("Server did not respond within network timeout")
+  ErrNetworkPing    = errors.New("Server did not respond to PING")
+)
+
 const (
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   keepalive_timeout          time.Duration = 900 * time.Second
@@ -63,10 +68,13 @@ type Publisher struct {
   registrar_spool  *registrar.RegistrarEventSpool
   shutdown         bool
   line_count       int64
+  retry_count      int64
   seconds_no_ack   int
 
+  timeout_count    int64
   line_speed       float64
   last_line_count  int64
+  last_retry_count int64
   last_measurement time.Time
 }
 
@@ -327,13 +335,13 @@ PublishLoop:
       case <-timer.C:
         // If we have pending payloads, we should've received something by now
         if p.num_payloads != 0 {
-          err = errors.New("Server did not respond within network timeout")
+          err = ErrNetworkTimeout
           break SelectLoop
         }
 
         // If we haven't received a PONG yet this is a timeout
         if p.pending_ping {
-          err = errors.New("Server did not respond to PING")
+          err = ErrNetworkPing
           break SelectLoop
         }
 
@@ -371,7 +379,7 @@ PublishLoop:
 
         p.can_send = nil
       case <-stats_timer.C:
-        p.updateStatistics(Status_Connected)
+        p.updateStatistics(Status_Connected, nil)
         stats_timer.Reset(time.Second)
       }
     }
@@ -384,7 +392,7 @@ PublishLoop:
         break PublishLoop
       }
 
-      p.updateStatistics(Status_Reconnecting)
+      p.updateStatistics(Status_Reconnecting, err)
 
       // An error occurred, reconnect after timeout
       log.Error("Transport error, will try again: %s", err)
@@ -392,7 +400,7 @@ PublishLoop:
     } else {
       log.Info("Reconnecting transport")
 
-      p.updateStatistics(Status_Reconnecting)
+      p.updateStatistics(Status_Reconnecting, nil)
     }
 
     retry_payload = p.first_payload
@@ -430,7 +438,7 @@ func (p *Publisher) reloadConfig(new_config *core.NetworkConfig) int {
   return reload
 }
 
-func (p *Publisher) updateStatistics(status int) {
+func (p *Publisher) updateStatistics(status int, err error) {
   p.Lock()
 
   p.status = status
@@ -438,7 +446,12 @@ func (p *Publisher) updateStatistics(status int) {
   p.line_speed = core.CalculateSpeed(time.Since(p.last_measurement), p.line_speed, float64(p.line_count - p.last_line_count), &p.seconds_no_ack)
 
   p.last_line_count = p.line_count
+  p.last_retry_count = p.retry_count
   p.last_measurement = time.Now()
+
+  if err == ErrNetworkTimeout || err == ErrNetworkPing {
+    p.timeout_count++
+  }
 
   p.Unlock()
 }
@@ -447,6 +460,8 @@ func (p *Publisher) checkResend() (bool, error) {
   // We're out of sync (received ACKs for later payloads but not earlier ones)
   // Check timeouts of earlier payloads and resend if necessary
   if payload := p.first_payload; payload.timeout.Before(time.Now()) {
+    p.retry_count++
+
     // Do we need to regenerate the payload?
     if payload.payload == nil {
       if err := payload.Generate(); err != nil {
@@ -624,6 +639,8 @@ func (p *Publisher) Snapshot() []*core.Snapshot {
   snapshot.AddEntry("Speed (Lps)", p.line_speed)
   snapshot.AddEntry("Published lines", p.last_line_count)
   snapshot.AddEntry("Pending Payloads", p.num_payloads)
+  snapshot.AddEntry("Timeouts", p.timeout_count)
+  snapshot.AddEntry("Retransmissions", p.last_retry_count)
 
   p.RUnlock()
 

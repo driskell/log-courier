@@ -57,6 +57,11 @@ describe 'benchmark' do
 
     startup verbose: false, args: '-from-beginning=true', config: <<-config
     {
+      "general": {
+        "admin enabled": true,
+        "admin listen address": "tcp:127.0.0.1:12350",
+        "log level": "debug"
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
