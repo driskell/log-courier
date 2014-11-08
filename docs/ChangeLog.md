@@ -31,6 +31,7 @@ instead of randomising
 * Updated the RedHat/CentOS 5/6 SysV init script in contrib to follow Fedora
 packaging guidelines
 * Provided a RedHat/CentOS 7 systemd service configuration in contrib
+* Implemented "Dead time in" on `lc-admin` harvester statuses
 
 ## 1.1
 

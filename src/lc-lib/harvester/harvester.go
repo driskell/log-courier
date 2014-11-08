@@ -67,6 +67,7 @@ type Harvester struct {
   line_count uint64
   byte_count uint64
   last_eof   *int64
+  last_read  time.Time
 }
 
 func NewHarvester(stream core.Stream, config *core.Config, fileconfig *core.FileConfig, offset int64) *Harvester {
@@ -90,6 +91,7 @@ func NewHarvester(stream core.Stream, config *core.Config, fileconfig *core.File
     config:      config,
     fileconfig:  fileconfig,
     offset:      offset,
+    last_read:   time.Now(),
   }
 
   ret.codec = fileconfig.CodecFactory.NewCodec(ret.eventCallback, ret.offset)
@@ -225,6 +227,7 @@ ReadLoop:
     h.Lock()
     last_eof := h.offset
     h.last_eof = &last_eof
+    h.last_read = last_read_time
     h.Unlock()
 
     // Don't check for truncation until we hit the full read_timeout
@@ -389,6 +392,11 @@ func (h *Harvester) Snapshot() *core.Snapshot {
     ret.AddEntry("Last EOF", "Never")
   } else {
     ret.AddEntry("Last EOF", h.last_eof)
+  }
+  if age := time.Since(h.last_read); age < h.fileconfig.DeadTime {
+    ret.AddEntry("Dead time in", h.fileconfig.DeadTime-age)
+  } else {
+    ret.AddEntry("Dead time in", "Momentarily")
   }
 
   if sub_snap := h.codec.Snapshot(); sub_snap != nil {
