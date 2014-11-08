@@ -478,8 +478,6 @@ func (t *TransportZmq) poller(bridge_out *zmq.Socket) {
 }
 
 func (t *TransportZmq) processControlIn(bridge_out *zmq.Socket) (ok bool) {
-  var err error
-
   for {
   RetryControl:
     msg, err := bridge_out.Recv(zmq.DONTWAIT)
