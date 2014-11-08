@@ -540,7 +540,7 @@ func (p *Publisher) processAck(message []byte) (err error) {
   // Read the nonce and sequence number acked
   nonce, sequence := string(message[:16]), binary.BigEndian.Uint32(message[16:20])
 
-  log.Debug("ACKN message received for payload %s sequence %d", nonce, sequence)
+  log.Debug("ACKN message received for payload %x sequence %d", nonce, sequence)
 
   // Grab the payload the ACK corresponds to by using nonce
   payload, found := p.pending_payloads[nonce]
