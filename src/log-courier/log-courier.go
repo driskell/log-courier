@@ -51,6 +51,8 @@ type LogCourier struct {
   config_file    string
   from_beginning bool
   log_file       *os.File
+  last_snapshot  time.Time
+  snapshot       *core.Snapshot
 }
 
 func NewLogCourier() *LogCourier {
@@ -265,9 +267,12 @@ func (lc *LogCourier) processCommand(command string) *admin.Response {
     }
     return &admin.Response{&admin.ReloadResponse{}}
   case "SNAP":
-    snaps := lc.pipeline.Snapshot()
-    snaps.Sort()
-    return &admin.Response{snaps}
+    if lc.snapshot == nil || time.Since(lc.last_snapshot) >= time.Second {
+      lc.snapshot = lc.pipeline.Snapshot()
+      lc.snapshot.Sort()
+      lc.last_snapshot = time.Now()
+    }
+    return &admin.Response{lc.snapshot}
   }
 
 

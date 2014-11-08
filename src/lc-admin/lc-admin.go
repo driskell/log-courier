@@ -133,7 +133,7 @@ func (a *Admin) renderSnap(indent string, snap *core.Snapshot) {
       } else if t, ok := v.(time.Time); ok {
         fmt.Printf(indent + "%s: %s\n", k, t.Format("_2 Jan 2006 15.04.05"))
       } else if t, ok := v.(time.Duration); ok {
-        fmr.Printf(indent + "%s: %v\n", k, t-(t%time.Second))
+        fmt.Printf(indent + "%s: %v\n", k, t-(t%time.Second))
       } else {
         fmt.Printf(indent + "%s: %v\n", k, v)
       }
