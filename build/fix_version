@@ -11,6 +11,7 @@ else
 	# Describe version from Git, and ensure the only "-xxx" is the git revision
 	# This ensures that gem builds only add one ".pre" tag automatically
 	VERSION="$(git describe | sed 's/-\([0-9][0-9]*\)-\([0-9a-z][0-9a-z]*\)$/.\1.\2/g')"
+	VERSION="${VERSION#v}"
 fi
 
 # Patch version.go
@@ -19,13 +20,13 @@ sed "s/\\(const  *Log_Courier_Version  *string  *=  *\"\\)[^\"]*\\(\"\\)/\\1${VE
 
 # Patch the gemspecs
 for GEM in log-courier logstash-input-log-courier logstash-output-log-courier; do
-	sed "s/\\(gem.version *= *'\\)[^']*\\('\\)/\\1${VERSION#v}\\2/g" ${GEM}.gemspec > ${GEM}.gemspec.tmp
+	sed "s/\\(gem.version *= *'\\)[^']*\\('\\)/\\1${VERSION}\\2/g" ${GEM}.gemspec > ${GEM}.gemspec.tmp
 	\mv -f ${GEM}.gemspec.tmp ${GEM}.gemspec
 	[ ${GEM#logstash-} != $GEM ] && {
-		sed "s/\\(gem.add_runtime_dependency  *'log-courier' *,  *'= *\\)[^']*\\('\\)/\\1${VERSION#v}\\2/g" ${GEM}.gemspec > ${GEM}.gemspec.tmp
+		sed "s/\\(gem.add_runtime_dependency  *'log-courier' *,  *'= *\\)[^']*\\('\\)/\\1${VERSION}\\2/g" ${GEM}.gemspec > ${GEM}.gemspec.tmp
 		\mv -f ${GEM}.gemspec.tmp ${GEM}.gemspec
 	}
 done
 
-echo "${VERSION#v}" > version.txt
+echo "${VERSION}" > version.txt
 echo "Set Log Courier Version ${VERSION}"
