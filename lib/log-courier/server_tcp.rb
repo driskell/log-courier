@@ -224,6 +224,28 @@ module LogCourier
       @fd.close rescue nil
     end
 
+    def send(signature, message)
+      reset_timeout
+      data = signature + [message.length].pack('N') + message
+      done = 0
+      loop do
+        begin
+          written = @fd.write_nonblock(data[done...data.length])
+        rescue IO::WaitReadable
+          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        rescue IO::WaitWritable
+          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+          retry
+        end
+        raise ProtocolError, "write failure (#{done}/#{data.length})" if written == 0
+        done += written
+        break if done >= data.length
+      end
+    end
+
+    private
+
     def recv(need)
       reset_timeout
       have = ''
@@ -250,26 +272,6 @@ module LogCourier
         break if have.length >= need
       end
       have
-    end
-
-    def send(signature, message)
-      reset_timeout
-      data = signature + [message.length].pack('N') + message
-      done = 0
-      loop do
-        begin
-          written = @fd.write_nonblock(data[done...data.length])
-        rescue IO::WaitReadable
-          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
-          retry
-        rescue IO::WaitWritable
-          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
-          retry
-        end
-        raise ProtocolError, "write failure (#{done}/#{data.length})" if written == 0
-        done += written
-        break if done >= data.length
-      end
     end
 
     def reset_timeout

@@ -99,6 +99,8 @@ module LogCourier
       end
     end
 
+    private
+
     def process_ping(message, comm)
       # Size of message should be 0
       if message.length != 0
