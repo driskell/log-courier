@@ -14,14 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-begin
-  require 'ffi-rzmq-core'
-  require 'ffi-rzmq-core/version'
-  require 'ffi-rzmq'
-  require 'ffi-rzmq/version'
-rescue LoadError => e
-  raise "[LogCourierServer] Could not initialise: #{e}"
-end
+require 'thread'
+require 'log-courier/zmq_qpoll'
 
 module LogCourier
   # ZMQ transport implementation for the server
@@ -29,7 +23,6 @@ module LogCourier
     class ZMQError < StandardError; end
 
     attr_reader :port
-    attr_reader :peer
 
     def initialize(options = {})
       @options = {
@@ -39,6 +32,7 @@ module LogCourier
         address:          '0.0.0.0',
         curve_secret_key: nil,
         max_packet_size:  10_485_760,
+        peer_recv_queue:  10,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -61,23 +55,21 @@ module LogCourier
 
         if @options[:transport] == 'zmq'
           rc = @socket.setsockopt(ZMQ::CURVE_SERVER, 1)
-          raise ZMQError, 'setsockopt CURVE_SERVER failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
+          raise 'setsockopt CURVE_SERVER failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
           rc = @socket.setsockopt(ZMQ::CURVE_SECRETKEY, @options[:curve_secret_key])
-          raise ZMQError, 'setsockopt CURVE_SECRETKEY failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
+          raise 'setsockopt CURVE_SECRETKEY failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
         end
 
         bind = 'tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s)
         rc = @socket.bind(bind)
-        raise ZMQError, 'failed to bind at ' + bind + ': ' + rZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
+        raise 'failed to bind at ' + bind + ': ' + rZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
         # Lookup port number that was allocated in case it was set to 0
         endpoint = ''
         rc = @socket.getsockopt(ZMQ::LAST_ENDPOINT, endpoint)
-        raise ZMQError, 'getsockopt LAST_ENDPOINT failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
+        raise 'getsockopt LAST_ENDPOINT failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
         @port = endpoint_port.to_i
-
-        @poller = ZMQ::Poller.new
 
         if @options[:port] == 0
           @logger.warn '[LogCourierServer] Transport ' + @options[:transport] + ' is listening on ephemeral port ' + @port.to_s unless @logger.nil?
@@ -92,10 +84,14 @@ module LogCourier
 
       # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
 
-      # TODO: Is there a way to work out the peer? Maybe we send it with payload
-      @peer = nil
+      # TODO: Make this send queue configurable?
+      @send_queue = EventQueue.new 2
+      @factory = ClientFactoryZmq.new(@options, @send_queue)
 
-      reset_timeout
+      # Setup poller
+      @poller = ZMQPoll::ZMQPoll.new(@context)
+      @poller.register_socket @socket, ZMQ::POLLIN
+      @poller.register_queue_to_socket @send_queue, @socket
 
       # Register a finaliser that sets @context to nil
       # This allows us to detect the JRuby bug where during "exit!" finalisers
@@ -109,75 +105,23 @@ module LogCourier
       end)
     end
 
-    def z85validate(z85)
-      # ffi-rzmq does not implement decode - but we want to validate during startup
-      decoded = FFI::MemoryPointer.from_string(' ' * (8 * z85.length / 10))
-      ret = LibZMQ.zmq_z85_decode decoded, z85
-      return false if ret.nil?
-
-      true
-    end
-
     def run(&block)
       loop do
         begin
-          begin
-            # Try to receive a message
-            reset_timeout
-            data = []
-            rc = @socket.recv_strings(data, ZMQ::DONTWAIT)
-            unless ZMQ::Util.resultcode_ok?(rc)
-              raise ZMQError, 'recv_string error: ' + ZMQ::Util.error_string if ZMQ::Util.errno != ZMQ::EAGAIN
+          @poller.poll(5_000) do |socket, r, w|
+            next if socket != @socket
+            next if !r
 
-              # Wait for a message to arrive, handling timeouts
-              @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
-              @poller.register @socket, ZMQ::POLLIN
-              while @poller.poll(1_000) == 0
-                # Using this inner while triggers pollThreadEvents in JRuby which checks for Thread.raise immediately
-                raise TimeoutError while Time.now.to_i >= @timeout
-              end
-              next
-            end
-          rescue ZMQError => e
-            # Detect JRuby bug
-            fail e if @context.nil?
-            @logger.warn "[LogCourierServer] ZMQ recv_string failed: #{e}" unless @logger.nil?
-            next
+            receive &block
           end
-
-          # Save the routing information that appears before the null messages
-          @return_route = []
-          @return_route.push data.shift until data.length == 0 || data[0] == ''
-
-          if data.length == 0
-            @logger.warn "[LogCourierServer] Invalid message: no data (route length: #{@return_route.length})" unless @logger.nil?
-            next
-          elsif data.length == 1
-            @logger.warn "[LogCourierServer] Invalid message: empty data (route length: #{@return_route.length})" unless @logger.nil?
-            next
-          end
-
-          # Drop the null message separator
-          data.shift
-
-          if data.length != 1
-            @logger.warn "[LogCourierServer] Invalid message: multipart unexpected (#{data.length})" unless @logger.nil?
-            if !@logger.nil? && @logger.debug?
-              i = 0
-              data.each do |msg|
-                i += 1
-                part = msg[0..31].gsub(/[^[:print:]]/, '.')
-                @logger.debug "[LogCourierServer] Part #{i}: #{part.length}:[#{part}]"
-              end
-            end
-          else
-            recv(data.first, &block)
-          end
-        rescue TimeoutError
+        rescue ZMQPoll::ZMQError => e
+          # Detect JRuby bug
+          fail e if @context.nil?
+          @logger.warn "[LogCourierServer] ZMQ recv_string failed: #{e}" unless @logger.nil?
+          next
+        rescue ZMQPoll::TimeoutError
           # We'll let ZeroMQ manage reconnections and new connections
           # There is no point in us doing any form of reconnect ourselves
-          # We will keep this timeout in however, for shutdown checks
-          reset_timeout
           next
         end
       end
@@ -190,13 +134,228 @@ module LogCourier
       @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
       raise e
     ensure
+      @poller.shutdown
+      @factory.shutdown
       @socket.close
       @context.terminate
     end
 
+    private
+
+    def z85validate(z85)
+      # ffi-rzmq does not implement decode - but we want to validate during startup
+      decoded = FFI::MemoryPointer.from_string(' ' * (8 * z85.length / 10))
+      ret = LibZMQ.zmq_z85_decode decoded, z85
+      return false if ret.nil?
+
+      true
+    end
+
+    def receive(&block)
+      # Try to receive a message
+      data = []
+      rc = @socket.recv_strings(data, ZMQ::DONTWAIT)
+      unless ZMQ::Util.resultcode_ok?(rc)
+        fail ZMQError, 'recv_string error: ' + ZMQ::Util.error_string if ZMQ::Util.errno != ZMQ::EAGAIN
+      end
+
+      # Save the source information that appears before the null messages
+      source = []
+      source.push data.shift until data.length == 0 || data[0] == ''
+
+      if data.length == 0
+        @logger.warn "[LogCourierServer] Invalid message: no data (route length: #{source.length})" unless @logger.nil?
+        return
+      elsif data.length == 1
+        @logger.warn "[LogCourierServer] Invalid message: empty data (route length: #{source.length})" unless @logger.nil?
+        return
+      end
+
+      # Drop the null message separator
+      data.shift
+
+      if data.length != 1
+        @logger.warn "[LogCourierServer] Invalid message: multipart unexpected (#{data.length})" unless @logger.nil?
+        if !@logger.nil? && @logger.debug?
+          i = 0
+          data.each do |msg|
+            i += 1
+            part = msg[0..31].gsub(/[^[:print:]]/, '.')
+            @logger.debug "[LogCourierServer] Part #{i}: #{part.length}:[#{part}]"
+          end
+        end
+        return
+      end
+
+      @factory.deliver source, data.first, &block
+    end
+  end
+
+  class ClientFactoryZmq
+    attr_reader :options
+    attr_reader :send_queue
+
+    def initialize(options, send_queue)
+      @options = options
+      @logger = @options[:logger]
+
+      @send_queue = send_queue
+      @index = {}
+      @client_threads = {}
+      @mutex = Mutex.new
+    end
+
+    def shutdown
+      # Stop other threads from try_drop collisions
+      client_threads = @mutex.synchronize do
+        client_threads = @client_threads
+        @client_threads = {}
+        client_threads
+      end
+
+      client_threads.each_value do |thr|
+        thr.raise ShutdownSignal
+      end
+
+      client_threads.each_value(&:join)
+    end
+
+    def deliver(source, data, &block)
+      # Find the handling thread
+      # We separate each source into threads so that each thread can respond
+      # with partial ACKs if we hit a slow down
+      # If we processed in a single thread, we'd only be able to respond to
+      # a single client with partial ACKs
+      @mutex.synchronize do
+        index = @index
+        source.each do |identity|
+          index[identity] = {} if !index.key?(identity)
+          index = index[identity]
+        end
+
+        if !index.key?('')
+          if !@logger.nil? && @logger.debug?
+            source_str = source.first.each_byte.map do |b|
+              b.to_s(16).rjust(2, '0')
+            end
+          end
+
+          @logger.debug "[LogCourierServer] Starting new thread for unknown source #{source_str.join}" unless @logger.nil? || !@logger.debug?
+
+          # Create the client and associated thread
+          client = ClientZmq.new(self, source) do
+            try_drop(source)
+          end
+
+          thread = Thread.new do
+            client.run &block
+          end
+
+          @client_threads[thread] = thread
+
+          index[''] = {
+            'client' => client,
+            'thread' => thread,
+          }
+        end
+
+        # Existing thread, throw on the queue, if not enough room drop the message
+        index['']['client'].push data, 0
+      end
+    end
+
+    private
+
+    def try_drop(source)
+      if !@logger.nil? && @logger.debug?
+        source_str = source.first.each_byte.map do |b|
+          b.to_s(16).rjust(2, '0')
+        end
+      end
+
+      # This is called when a client goes idle, to cleanup resources
+      # We may tie this into zmq monitor
+      @mutex.synchronize do
+        index = @index
+        parents = []
+        source.each do |identity|
+          if !index.key?(identity)
+            @logger.debug "[LogCourierServer] Failed idle shutdown of thread for unknown source #{source_str.join}" unless @logger.nil? || !@logger.debug?
+            break
+          end
+          parents.push [index, identity]
+          index = index[identity]
+        end
+
+        if !index.key?('')
+          @logger.debug "[LogCourierServer] Failed idle shutdown of thread for unknown source #{source_str.join}" unless @logger.nil? || !@logger.debug?
+          break
+        end
+
+        # Don't allow drop if we have messages in the queue
+        if index['']['client'].length != 0
+          @logger.debug "[LogCourierServer] Failed idle shutdown of thread for source #{source_str.join} as message queue is not empty" unless @logger.nil? || !@logger.debug?
+          return false
+        end
+
+        @logger.debug "[LogCourierServer] Successful idle shutdown of thread for source #{source_str.join}" unless @logger.nil? || !@logger.debug?
+
+        # Delete the entry
+        @client_threads.delete(index['']['thread'])
+        index.delete('')
+
+        # Cleanup orphaned leafs
+        parents.reverse_each do |path|
+          path[0].delete(path[1]) if path[0][path[1]].length == 0
+        end
+      end
+
+      return true
+    end
+  end
+
+  class ClientZmq < EventQueue
+    attr_reader :peer
+
+    def initialize(factory, source, &try_drop)
+      # Setup the queue for receiving events to process
+      super(@factory.options[:peer_recv_queue])
+
+      @factory = factory
+      @logger = @factory.options[:logger]
+      @send_queue = @factory.send_queue
+      @source = source
+      @try_drop = try_drop
+    end
+
+    def run(&block)
+      loop do
+        begin
+          # TODO: Make timeout configurable?
+          data = self.pop(30)
+          recv(data, &block)
+        rescue TimeoutError
+          # Try to clean up resources - if we fail, new messages have arrived
+          retry if !@try_drop.call(@source)
+          break
+        end
+      end
+    rescue ShutdownSignal
+      # Shutting down
+      @logger.warn('[LogCourierServer] Client thread shutting down') unless @logger.nil?
+      0
+    rescue StandardError, NativeException => e
+      # Some other unknown problem
+      @logger.warn("[LogCourierServer] Unknown client error: #{e}") unless @logger.nil?
+      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      raise e
+    end
+
+    private
+
     def recv(data)
       if data.length < 8
-        @logger.warn '[LogCourierServer] Invalid message: not enough data' unless @logger.nil?
+        @logger.warn "[LogCourierServer] Invalid message: not enough data (#{data.length} < 8)" unless @logger.nil?
         return
       end
 
@@ -207,50 +366,19 @@ module LogCourier
       if data.length - 8 != length
         @logger.warn "[LogCourierServer] Invalid message: data has invalid length (#{data.length - 8} != #{length})" unless @logger.nil?
         return
-      elsif length > @options[:max_packet_size]
+      elsif length > @factory.options[:max_packet_size]
         @logger.warn "[LogCourierServer] Invalid message: packet too large (#{length} > #{@options[:max_packet_size]})" unless @logger.nil?
         return
       end
 
       # Yield the parts
       yield signature, data[8, length], self
+      return
     end
 
     def send(signature, message)
       data = signature + [message.length].pack('N') + message
-
-      # Send the return route and then the message
-      reset_timeout
-      @return_route.each do |msg|
-        send_with_poll msg, true
-      end
-      send_with_poll '', true
-      send_with_poll data
-    end
-
-    def send_with_poll(data, more = false)
-      loop do
-        # Try to send a message but never block
-        rc = @socket.send_string(data, (more ? ZMQ::SNDMORE : 0) | ZMQ::DONTWAIT)
-        break if ZMQ::Util.resultcode_ok?(rc)
-        if ZMQ::Util.errno != ZMQ::EAGAIN
-          @logger.warn "[LogCourierServer] Message send failed: #{ZMQ::Util.error_string}" unless @logger.nil?
-          raise TimeoutError
-        end
-
-        # Wait for send to become available, handling timeouts
-        @poller.deregister @socket, ZMQ::POLLIN | ZMQ::POLLOUT
-        @poller.register @socket, ZMQ::POLLOUT
-        while @poller.poll(1_000) == 0
-          # Using this inner while triggers pollThreadEvents in JRuby which checks for Thread.raise immediately
-          raise TimeoutError while Time.now.to_i >= @timeout
-        end
-      end
-    end
-
-    def reset_timeout
-      # TODO: Make configurable?
-      @timeout = Time.now.to_i + 1_800
+      @send_queue.push @source + ['', data]
     end
   end
 end
