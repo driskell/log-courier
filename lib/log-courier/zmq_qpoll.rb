@@ -57,6 +57,7 @@ module ZMQPoll
 			@sockets.each do |socket|
 				socket.close
 			end
+			return
 		end
 
 		def register_socket(socket, flags)
@@ -131,12 +132,12 @@ module ZMQPoll
 
 		def poll(timeout)
 			if @poller.size == 0
-				raise ZMQError, 'poll run called with zero socket/queues'
+				fail ZMQError, 'poll run called with zero socket/queues'
 			end
 
 			rc = @poller.poll(timeout)
 			if rc == -1
-				raise ZMQError, 'poll error: ' + ZMQ::Util.error_string
+				fail ZMQError, 'poll error: ' + ZMQ::Util.error_string
 			end
 
 			return if rc == 0
@@ -158,16 +159,16 @@ module ZMQPoll
 
 		def create_socket_to_socket(socket)
 			receiver = @context.socket(ZMQ::PULL)
-			raise ZMQError, 'socket creation error: ' + ZMQ::Util.error_string if receiver.nil?
+			fail ZMQError, 'socket creation error: ' + ZMQ::Util.error_string if receiver.nil?
 
 			rc = receiver.bind("inproc://zmqpollreceiver-#{receiver.hash}")
-			raise ZMQError, 'bind error: ' + ZMQ::Util.error_string if !ZMQ::Util.resultcode_ok?(rc)
+			fail ZMQError, 'bind error: ' + ZMQ::Util.error_string if !ZMQ::Util.resultcode_ok?(rc)
 
 			sender = @context.socket(ZMQ::PUSH)
-			raise ZMQError, 'socket creation error: ' + ZMQ::Util.error_string if sender.nil?
+			fail ZMQError, 'socket creation error: ' + ZMQ::Util.error_string if sender.nil?
 
 			rc = sender.connect("inproc://zmqpollreceiver-#{receiver.hash}")
-			raise ZMQError, 'bind error: ' + ZMQ::Util.error_string if !ZMQ::Util.resultcode_ok?(rc)
+			fail ZMQError, 'bind error: ' + ZMQ::Util.error_string if !ZMQ::Util.resultcode_ok?(rc)
 
 			state = {
 				:callback => :_handle_socket_to_socket,
@@ -249,7 +250,7 @@ module ZMQPoll
 		def recv(socket)
 			data = []
 
-			_poll_eagain(socket, ZMQ::POLLIN, 5) do
+			poll_eagain(socket, ZMQ::POLLIN, 5) do
 				# recv_strings appears to be safe, ZMQ documents that a client will either
 				# receive 0 parts or all parts
 				socket.recv_strings(data, ZMQ::DONTWAIT)
@@ -260,14 +261,14 @@ module ZMQPoll
 
 		def send(socket, data)
 			while data.length != 1
-				_send_part socket, data.shift, true
+				send_part socket, data.shift, true
 			end
-			_send_part socket, data.shift
+			send_part socket, data.shift
 			return
 		end
 
 		def send_part(socket, data, more=false)
-			_poll_eagain(socket, ZMQ::POLLOUT, 5) do
+			poll_eagain(socket, ZMQ::POLLOUT, 5) do
 				# Try to send a message but never block
 				# We could use send_strings but it is vague on if ZMQ can return an
 				# error midway through sending parts...
@@ -285,8 +286,8 @@ module ZMQPoll
 				break if ZMQ::Util.resultcode_ok?(rc)
 				if ZMQ::Util.errno != ZMQ::EAGAIN
 					if flag == ZMQ::POLLIN
-						raise ZMQError, 'message receive failed: ' + ZMQ::Util.error_string
-					raise ZMQError, 'message send failed: ' + ZMQ::Util.error_string
+						fail ZMQError, 'message receive failed: ' + ZMQ::Util.error_string
+					fail ZMQError, 'message send failed: ' + ZMQ::Util.error_string
 				end
 
 				# Wait for send to become available, handling timeouts
@@ -297,9 +298,10 @@ module ZMQPoll
 
 				while poller.poll(1_000) == 0
 					# Using this inner while triggers pollThreadEvents in JRuby which checks for Thread.raise immediately
-					raise TimeoutError while Time.now.to_i >= timeout
+					fail TimeoutError while Time.now.to_i >= timeout
 				end
 			end
+			return
 		end
 	end
 end

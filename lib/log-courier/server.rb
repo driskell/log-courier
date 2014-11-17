@@ -49,7 +49,7 @@ module LogCourier
         require 'log-courier/server_zmq'
         @server = ServerZmq.new(@options)
       else
-        raise '[LogCourierServer] \'transport\' must be tcp, tls, plainzmq or zmq'
+        fail '[LogCourierServer] \'transport\' must be tcp, tls, plainzmq or zmq'
       end
 
       # Grab the port back
@@ -97,6 +97,7 @@ module LogCourier
           server_thread.join
         end
       end
+      return
     end
 
     private
@@ -104,12 +105,13 @@ module LogCourier
     def process_ping(message, comm)
       # Size of message should be 0
       if message.length != 0
-        raise ProtocolError, "unexpected data attached to ping message (#{message.length})"
+        fail ProtocolError, "unexpected data attached to ping message (#{message.length})"
       end
 
       # PONG!
       # NOTE: comm.send can raise a Timeout::Error of its own
       comm.send 'PONG', ''
+      return
     end
 
     def process_jdat(message, comm, event_queue)
@@ -120,7 +122,7 @@ module LogCourier
       # This allows the client to know what is being acknowledged
       # Nonce is 16 so check we have enough
       if message.length < 17
-        raise ProtocolError, "JDAT message too small (#{message.length})"
+        fail ProtocolError, "JDAT message too small (#{message.length})"
       end
 
       nonce = message[0...16]
@@ -148,7 +150,7 @@ module LogCourier
           # Finished!
           break
         elsif length_buf.length < 4
-          raise ProtocolError, "JDAT length extraction failed (#{ret} #{length_buf.length})"
+          fail ProtocolError, "JDAT length extraction failed (#{ret} #{length_buf.length})"
         end
 
         length = length_buf.unpack('N').first
@@ -157,7 +159,7 @@ module LogCourier
         ret = message.read length, data_buf
         if ret.nil? or data_buf.length < length
           @logger.warn()
-          raise ProtocolError, "JDAT message extraction failed #{ret} #{data_buf.length}"
+          fail ProtocolError, "JDAT message extraction failed #{ret} #{data_buf.length}"
         end
 
         data_buf.force_encoding('utf-8')
@@ -196,6 +198,7 @@ module LogCourier
       # NOTE: comm.send can raise a Timeout::Error
       @logger.debug "[LogCourierServer] #{@port} Acknowledging message #{nonce_str.join} sequence #{sequence}" if !@logger.nil? && @logger.debug?
       comm.send 'ACKN', [nonce, sequence].pack('A*N')
+      return
     end
   end
 end

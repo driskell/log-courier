@@ -33,7 +33,7 @@ module LogCourier
     # Creates a fixed-length queue with a maximum size of +max+.
     #
     def initialize(max)
-      raise ArgumentError, "queue size must be positive" unless max > 0
+      fail ArgumentError, "queue size must be positive" unless max > 0
       @max = max
       @enque_cond = ConditionVariable.new
       @num_enqueue_waiting = 0
@@ -44,18 +44,19 @@ module LogCourier
       self.taint
       @mutex = Mutex.new
       @cond = ConditionVariable.new
+      return
     end
 
     #
     # Returns the maximum size of the queue.
     #
-    attr_reader @max
+    attr_reader :max
 
     #
     # Sets the maximum size of the queue.
     #
     def max=(max)
-      raise ArgumentError, "queue size must be positive" unless max > 0
+      fail ArgumentError, "queue size must be positive" unless max > 0
 
       @mutex.synchronize do
         if max <= @max
@@ -88,7 +89,7 @@ module LogCourier
           ensure
             @num_enqueue_waiting -= 1
           end
-          raise TimeoutError if !timeout.nil? and Time.now - start >= timeout
+          fail TimeoutError if !timeout.nil? and Time.now - start >= timeout
         end
 
         @que.push obj
@@ -179,16 +180,17 @@ module LogCourier
       @mutex.synchronize do
         loop do
           return @que.shift unless @que.empty?
-          raise TimeoutError if timeout == 0
+          fail TimeoutError if timeout == 0
           begin
             @num_waiting += 1
             @cond.wait @mutex, timeout
           ensure
             @num_waiting -= 1
           end
-          raise TimeoutError if !timeout.nil? and Time.now - start >= timeout
+          fail TimeoutError if !timeout.nil? and Time.now - start >= timeout
         end
       end
+      return
     end
   end
 end
