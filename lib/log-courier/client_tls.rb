@@ -80,6 +80,13 @@ module LogCourier
       @recv_thread.join
     end
 
+    def send(signature, message)
+      # Add to send queue
+      @send_q << [signature, message.length].pack('A4N') + message
+    end
+
+    private
+
     def run_send(io_control)
       # Ask for something to send
       io_control << ['S']
@@ -153,11 +160,6 @@ module LogCourier
       @logger.warn("[LogCourierClient] Unknown SSL read error: #{e}") unless @logger.nil?
       @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
       io_control << ['F']
-    end
-
-    def send(signature, message)
-      # Add to send queue
-      @send_q << [signature, message.length].pack('A4N') + message
     end
 
     def pause_send

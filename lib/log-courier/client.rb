@@ -100,6 +100,8 @@ module LogCourier
       @io_thread.join
     end
 
+    private
+
     def run_spooler
       loop do
         spooled = []
