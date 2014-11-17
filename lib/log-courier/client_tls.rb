@@ -38,17 +38,17 @@ module LogCourier
       @logger = @options[:logger]
 
       [:port, :ssl_ca].each do |k|
-        raise "[LogCourierClient] '#{k}' is required" if @options[k].nil?
+        fail "[LogCourierClient] '#{k}' is required" if @options[k].nil?
       end
 
-      raise '[LogCourierClient] \'addresses\' must contain at least one address' if @options[:addresses].empty?
+      fail '[LogCourierClient] \'addresses\' must contain at least one address' if @options[:addresses].empty?
 
       c = 0
       [:ssl_certificate, :ssl_key].each do
         c += 1
       end
 
-      raise '[LogCourierClient] \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
+      fail '[LogCourierClient] \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
     end
 
     def connect(io_control)
@@ -71,6 +71,7 @@ module LogCourier
       @recv_thread = Thread.new do
         run_recv io_control
       end
+      return
     end
 
     def disconnect
@@ -78,11 +79,13 @@ module LogCourier
       @send_thread.join
       @recv_thread.raise ShutdownSignal
       @recv_thread.join
+      return
     end
 
     def send(signature, message)
       # Add to send queue
       @send_q << [signature, message.length].pack('A4N') + message
+      return
     end
 
     private
@@ -115,22 +118,25 @@ module LogCourier
           @ssl_client.write message
         end
       end
+      return
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       @logger.warn("[LogCourierClient] SSL write error: #{e}") unless @logger.nil?
       io_control << ['F']
+      return
     rescue ShutdownSignal
-      # Just shutdown
+      return
     rescue => e
       @logger.warn("[LogCourierClient] Unknown SSL write error: #{e}") unless @logger.nil?
       @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
       io_control << ['F']
+      return
     end
 
     def run_recv(io_control)
       loop do
         # Grab a header
         header = @ssl_client.read(8)
-        raise EOFError if header.nil?
+        fail EOFError if header.nil?
 
         # Decode signature and length
         signature, length = header.unpack('A4N')
@@ -148,24 +154,29 @@ module LogCourier
         # Pass through to receive
         io_control << ['R', signature, message]
       end
+      return
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       @logger.warn("[LogCourierClient] SSL read error: #{e}") unless @logger.nil?
       io_control << ['F']
+      return
     rescue EOFError
       @logger.warn("[LogCourierClient] Connection closed by server") unless @logger.nil?
       io_control << ['F']
+      return
     rescue ShutdownSignal
-      # Just shutdown
+      return
     rescue => e
       @logger.warn("[LogCourierClient] Unknown SSL read error: #{e}") unless @logger.nil?
       @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
       io_control << ['F']
+      return
     end
 
     def pause_send
       return if @send_paused
       @send_paused = true
       @send_q << nil
+      return
     end
 
     def send_paused
@@ -177,6 +188,7 @@ module LogCourier
         @send_paused = false
         @send_q << nil
       end
+      return
     end
 
     def tls_connect
@@ -204,13 +216,12 @@ module LogCourier
       socket.post_connection_check(@options[:addresses][0])
 
       @logger.info("[LogCourierClient] Connected successfully") unless @logger.nil?
-
-      socket
+      return
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       @logger.warn("[LogCourierClient] Connection to #{@options[:addresses][0]}:#{@options[:port]} failed: #{e}") unless @logger.nil?
+      return
     rescue ShutdownSignal
-      # Just shutdown
-      0
+      return
     rescue StandardError, NativeException => e
       @logger.warn("[LogCourierClient] Unknown connection failure to #{@options[:addresses][0]}:#{@options[:port]}: #{e}") unless @logger.nil?
       @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?

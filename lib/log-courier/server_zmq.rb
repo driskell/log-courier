@@ -41,11 +41,11 @@ module LogCourier
       libversion = "#{libversion[:major]}.#{libversion[:minor]}.#{libversion[:patch]}"
 
       if @options[:transport] == 'zmq'
-        raise "[LogCourierServer] Transport 'zmq' requires libzmq version >= 4 (the current version is #{libversion})" unless LibZMQ.version4?
+        fail "[LogCourierServer] Transport 'zmq' requires libzmq version >= 4 (the current version is #{libversion})" unless LibZMQ.version4?
 
-        raise '[LogCourierServer] \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
+        fail '[LogCourierServer] \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
 
-        raise '[LogCourierServer] \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
+        fail '[LogCourierServer] \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
       end
 
       begin
@@ -55,20 +55,20 @@ module LogCourier
 
         if @options[:transport] == 'zmq'
           rc = @socket.setsockopt(ZMQ::CURVE_SERVER, 1)
-          raise 'setsockopt CURVE_SERVER failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
+          fail 'setsockopt CURVE_SERVER failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
           rc = @socket.setsockopt(ZMQ::CURVE_SECRETKEY, @options[:curve_secret_key])
-          raise 'setsockopt CURVE_SECRETKEY failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
+          fail 'setsockopt CURVE_SECRETKEY failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
         end
 
         bind = 'tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s)
         rc = @socket.bind(bind)
-        raise 'failed to bind at ' + bind + ': ' + rZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
+        fail 'failed to bind at ' + bind + ': ' + rZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
         # Lookup port number that was allocated in case it was set to 0
         endpoint = ''
         rc = @socket.getsockopt(ZMQ::LAST_ENDPOINT, endpoint)
-        raise 'getsockopt LAST_ENDPOINT failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
+        fail 'getsockopt LAST_ENDPOINT failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc) && %r{\Atcp://(?:.*):(?<endpoint_port>\d+)\0\z} =~ endpoint
         @port = endpoint_port.to_i
 
         if @options[:port] == 0
@@ -125,9 +125,11 @@ module LogCourier
           next
         end
       end
+      return
     rescue ShutdownSignal
       # Shutting down
       @logger.warn('[LogCourierServer] Server shutting down') unless @logger.nil?
+      return
     rescue StandardError, NativeException => e
       # Some other unknown problem
       @logger.warn("[LogCourierServer] Unknown error: #{e}") unless @logger.nil?
@@ -147,7 +149,6 @@ module LogCourier
       decoded = FFI::MemoryPointer.from_string(' ' * (8 * z85.length / 10))
       ret = LibZMQ.zmq_z85_decode decoded, z85
       return false if ret.nil?
-
       true
     end
 
@@ -188,6 +189,7 @@ module LogCourier
       end
 
       @factory.deliver source, data.first, &block
+      return
     end
   end
 
@@ -218,6 +220,7 @@ module LogCourier
       end
 
       client_threads.each_value(&:join)
+      return
     end
 
     def deliver(source, data, &block)
@@ -240,7 +243,7 @@ module LogCourier
             end
           end
 
-          @logger.debug "[LogCourierServer] Starting new thread for unknown source #{source_str.join}" unless @logger.nil? || !@logger.debug?
+          @logger.info "[LogCourierServer] New source: #{source_str.join}" unless @logger.nil?
 
           # Create the client and associated thread
           client = ClientZmq.new(self, source) do
@@ -262,6 +265,7 @@ module LogCourier
         # Existing thread, throw on the queue, if not enough room drop the message
         index['']['client'].push data, 0
       end
+      return
     end
 
     private
@@ -280,7 +284,7 @@ module LogCourier
         parents = []
         source.each do |identity|
           if !index.key?(identity)
-            @logger.debug "[LogCourierServer] Failed idle shutdown of thread for unknown source #{source_str.join}" unless @logger.nil? || !@logger.debug?
+            @logger.warn "[LogCourierServer] Failed idle shutdown of thread for unknown source #{source_str.join}" unless @logger.nil?
             break
           end
           parents.push [index, identity]
@@ -288,17 +292,17 @@ module LogCourier
         end
 
         if !index.key?('')
-          @logger.debug "[LogCourierServer] Failed idle shutdown of thread for unknown source #{source_str.join}" unless @logger.nil? || !@logger.debug?
+          @logger.warn "[LogCourierServer] Failed idle shutdown of thread for unknown source #{source_str.join}" unless @logger.nil?
           break
         end
 
         # Don't allow drop if we have messages in the queue
         if index['']['client'].length != 0
-          @logger.debug "[LogCourierServer] Failed idle shutdown of thread for source #{source_str.join} as message queue is not empty" unless @logger.nil? || !@logger.debug?
+          @logger.warn "[LogCourierServer] Failed idle shutdown of thread for source #{source_str.join} as message queue is not empty" unless @logger.nil?
           return false
         end
 
-        @logger.debug "[LogCourierServer] Successful idle shutdown of thread for source #{source_str.join}" unless @logger.nil? || !@logger.debug?
+        @logger.info "[LogCourierServer] Source idle: #{source_str.join}" unless @logger.nil?
 
         # Delete the entry
         @client_threads.delete(index['']['thread'])
@@ -340,14 +344,15 @@ module LogCourier
           break
         end
       end
+      return
     rescue ShutdownSignal
       # Shutting down
-      @logger.warn('[LogCourierServer] Client thread shutting down') unless @logger.nil?
-      0
+      @logger.warn '[LogCourierServer] Client thread shutting down' unless @logger.nil?
+      return
     rescue StandardError, NativeException => e
       # Some other unknown problem
-      @logger.warn("[LogCourierServer] Unknown client error: #{e}") unless @logger.nil?
-      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      @logger.warn "[LogCourierServer] Unknown client error: #{e}" unless @logger.nil?
+      @logger.warn "[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})" unless @logger.nil?
       raise e
     end
 
@@ -379,6 +384,7 @@ module LogCourier
     def send(signature, message)
       data = signature + [message.length].pack('N') + message
       @send_queue.push @source + ['', data]
+      return
     end
   end
 end

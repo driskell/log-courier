@@ -57,11 +57,11 @@ module LogCourier
 
       if @options[:transport] == 'tls'
         [:ssl_certificate, :ssl_key].each do |k|
-          raise "[LogCourierServer] '#{k}' is required" if @options[k].nil?
+          fail "[LogCourierServer] '#{k}' is required" if @options[k].nil?
         end
 
         if @options[:ssl_verify] and (!@options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
-          raise '[LogCourierServer] Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
+          fail '[LogCourierServer] Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
         end
       end
 
@@ -136,9 +136,9 @@ module LogCourier
           ConnectionTcp.new(@logger, client_copy, peer_copy, @options).run(&block)
         end
       end
+      return
     rescue ShutdownSignal
-      # Capture shutting down signal
-      0
+      return
     rescue StandardError, NativeException => e
       # Some other unknown problem
       @logger.warn("[LogCourierServer] Unknown error: #{e}") unless @logger.nil?
@@ -179,7 +179,7 @@ module LogCourier
 
         # Sanity
         if length > @options[:max_packet_size]
-          raise ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
+          fail ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
         end
 
         # While we're processing, EOF is bad as it may occur during send
@@ -198,28 +198,35 @@ module LogCourier
         # If we EOF next it's a graceful close
         @in_progress = false
       end
+      return
     rescue TimeoutError
       # Timeout of the connection, we were idle too long without a ping/pong
       @logger.warn("[LogCourierServer] Connection from #{@peer} timed out") unless @logger.nil?
+      return
     rescue EOFError
       if @in_progress
         @logger.warn("[LogCourierServer] Premature connection close on connection from #{@peer}") unless @logger.nil?
       else
         @logger.info("[LogCourierServer] Connection from #{@peer} closed") unless @logger.nil?
       end
+      return
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       # Read errors, only action is to shutdown which we'll do in ensure
       @logger.warn("[LogCourierServer] SSL error on connection from #{@peer}: #{e}") unless @logger.nil?
+      return
     rescue ProtocolError => e
       # Connection abort request due to a protocol error
       @logger.warn("[LogCourierServer] Protocol error on connection from #{@peer}: #{e}") unless @logger.nil?
+      return
     rescue ShutdownSignal
       # Shutting down
       @logger.warn("[LogCourierServer] Closing connecting from #{@peer}: server shutting down") unless @logger.nil?
+      return
     rescue => e
       # Some other unknown problem
       @logger.warn("[LogCourierServer] Unknown error on connection from #{@peer}: #{e}") unless @logger.nil?
       @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      return
     ensure
       @fd.close rescue nil
     end
@@ -232,16 +239,17 @@ module LogCourier
         begin
           written = @fd.write_nonblock(data[done...data.length])
         rescue IO::WaitReadable
-          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+          fail TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
           retry
         rescue IO::WaitWritable
-          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+          fail TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
           retry
         end
-        raise ProtocolError, "write failure (#{done}/#{data.length})" if written == 0
+        fail ProtocolError, "write failure (#{done}/#{data.length})" if written == 0
         done += written
         break if done >= data.length
       end
+      return
     end
 
     private
@@ -253,16 +261,16 @@ module LogCourier
         begin
        	  buffer = @fd.read_nonblock need - have.length
         rescue IO::WaitReadable
-          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+          fail TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
           retry
         rescue IO::WaitWritable
-          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+          fail TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
           retry
         end
         if buffer.nil?
-          raise EOFError
+          fail EOFError
         elsif buffer.length == 0
-          raise ProtocolError, "read failure (#{have.length}/#{need})"
+          fail ProtocolError, "read failure (#{have.length}/#{need})"
         end
         if have.length == 0
           have = buffer
@@ -277,6 +285,7 @@ module LogCourier
     def reset_timeout
       # TODO: Make configurable
       @timeout = Time.now.to_i + 1_800
+      return
     end
   end
 end
