@@ -203,6 +203,12 @@ func (c *Config) loadFile(path string) (stripped *bytes.Buffer, err error) {
   return
 }
 
+func ExpandEnv(config_in []byte) (config_out []byte) {	
+	config_str := string(config_in)	
+	config_out = []byte(os.ExpandEnv(config_str))
+	return
+}
+
 // TODO: Config from a TOML? Maybe a custom one
 func (c *Config) Load(path string) (err error) {
   var data *bytes.Buffer
@@ -214,7 +220,7 @@ func (c *Config) Load(path string) (err error) {
 
   // Pull the entire structure into raw_config
   raw_config := make(map[string]interface{})
-  if err = json.Unmarshal(data.Bytes(), &raw_config); err != nil {
+  if err = json.Unmarshal(ExpandEnv(data.Bytes()), &raw_config); err != nil {
     return
   }
 
@@ -245,7 +251,7 @@ func (c *Config) Load(path string) (err error) {
 
       // Pull the structure into raw_include
       raw_include := make([]interface{}, 0)
-      if err = json.Unmarshal(data.Bytes(), &raw_include); err != nil {
+      if err = json.Unmarshal(ExpandEnv(data.Bytes()), &raw_include); err != nil {
         return
       }
 
