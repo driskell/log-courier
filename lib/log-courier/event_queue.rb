@@ -49,9 +49,7 @@ module LogCourier
     #
     # Returns the maximum size of the queue.
     #
-    def max
-      @max
-    end
+    attr_reader @max
 
     #
     # Sets the maximum size of the queue.
@@ -113,38 +111,13 @@ module LogCourier
     # Retrieves data from the queue and runs a waiting thread, if any.
     #
     def pop(*args)
-      retval = _pop_timeout *args
+      retval = pop_timeout *args
       @mutex.synchronize do
         if @que.length < @max
           @enque_cond.signal
         end
       end
       retval
-    end
-
-    #
-    # Retrieves data from the queue.  If the queue is empty, the calling thread is
-    # suspended until data is pushed onto the queue or, if set, +timeout+ seconds
-    # passes.  If +timeout+ is 0, the thread isn't suspended, and an exception is
-    # raised.
-    #
-    def _pop_timeout(timeout = nil)
-      unless timeout.nil?
-        start = Time.now
-      end
-      @mutex.synchronize do
-        loop do
-          return @que.shift unless @que.empty?
-          raise TimeoutError if timeout == 0
-          begin
-            @num_waiting += 1
-            @cond.wait @mutex, timeout
-          ensure
-            @num_waiting -= 1
-          end
-          raise TimeoutError if !timeout.nil? and Time.now - start >= timeout
-        end
-      end
     end
 
     #
@@ -189,6 +162,33 @@ module LogCourier
     #
     def num_waiting
       @num_waiting + @num_enqueue_waiting
+    end
+
+    private
+
+    #
+    # Retrieves data from the queue.  If the queue is empty, the calling thread is
+    # suspended until data is pushed onto the queue or, if set, +timeout+ seconds
+    # passes.  If +timeout+ is 0, the thread isn't suspended, and an exception is
+    # raised.
+    #
+    def pop_timeout(timeout = nil)
+      unless timeout.nil?
+        start = Time.now
+      end
+      @mutex.synchronize do
+        loop do
+          return @que.shift unless @que.empty?
+          raise TimeoutError if timeout == 0
+          begin
+            @num_waiting += 1
+            @cond.wait @mutex, timeout
+          ensure
+            @num_waiting -= 1
+          end
+          raise TimeoutError if !timeout.nil? and Time.now - start >= timeout
+        end
+      end
     end
   end
 end
