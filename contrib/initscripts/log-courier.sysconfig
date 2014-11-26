@@ -1,0 +1,3 @@
+# log-courier config file location
+CONFIG_FILE="/etc/log-courier/log-courier.conf"
+
