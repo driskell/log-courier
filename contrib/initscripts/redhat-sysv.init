@@ -19,8 +19,17 @@
 
 DAEMON='/usr/sbin/log-courier'
 DATA_DIR='/var/lib/log-courier'
-CONFIG_FILE='/etc/log-courier/log-courier.conf'
 PID_FILE='/var/run/log-courier.pid'
+
+# check if file exists
+if [ -f /etc/sysconfig/log-courier ]; then
+	. /etc/sysconfig/log-courier
+fi
+
+# set default config file, if $CONFIG_FILE is not set
+if [ -z ${CONFIG_FILE} ]; then
+	CONFIG_FILE='/etc/log-courier/log-courier.conf'
+fi
 
 do_start() {
 	echo -n "Starting Log Courier: "
