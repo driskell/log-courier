@@ -61,9 +61,13 @@ install -p -m 644 README.md							%{buildroot}%{_docdir}/log-courier
 install -p -m 644 log-courier.conf  				%{buildroot}%{_sysconfdir}/log-courier
 install -p -m 644 log-courier.httpd.conf.example 	%{buildroot}%{_sysconfdir}/log-courier/conf.d
 
-install -p -m 755 log-courier.systemd	%{buildroot}/usr/lib/systemd/system/log-courier.service
 install -p -m 644 log-courier.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/log-courier
+%if %{use_systemd}
+install -p -m 755 log-courier.systemd	%{buildroot}/usr/lib/systemd/system/log-courier.service
+%else
 install -p -m 755 log-courier.sysv-init	%{buildroot}%{_initrddir}/log-courier
+%endif
+
 
 %clean
 rm -rf %{buildroot}
