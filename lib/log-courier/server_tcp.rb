@@ -94,7 +94,9 @@ module LogCourier
             ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
           end
 
+          # Create the OpenSSL server - set start_immediately to false so we can multithread handshake
           @server = OpenSSL::SSL::SSLServer.new(@tcp_server, ssl)
+          @server.start_immediately = false
         else
           @server = @tcp_server
         end
@@ -111,15 +113,15 @@ module LogCourier
       client_threads = {}
 
       loop do
-        # This means ssl accepting is single-threaded.
+        # Because start_immediately is false, TCP accept is single thread but
+        # handshake is essentiall multithreaded as we defer it to the thread
         begin
           client = @server.accept
         rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
-          # Handshake failure or other issue
+          # Accept failure or other issue
           peer = Thread.current['LogCourierPeer'] || 'unknown'
-          @logger.warn "[LogCourierServer] Connection from #{peer} failed to initialise: #{e}" unless @logger.nil?
+          @logger.warn "[LogCourierServer] Connection from #{peer} failed to accept: #{e}" unless @logger.nil?
           client.close rescue nil
-          next
         end
 
         peer = Thread.current['LogCourierPeer'] || 'unknown'
@@ -133,7 +135,7 @@ module LogCourier
 
         # Start a new connection thread
         client_threads[client] = Thread.new(client, peer) do |client_copy, peer_copy|
-          ConnectionTcp.new(@logger, client_copy, peer_copy, @options).run(&block)
+          run_thread client_copy, peer_copy, &block
         end
       end
       return
@@ -153,6 +155,25 @@ module LogCourier
       client_threads.each(&:join)
 
       @tcp_server.close
+    end
+
+    private
+
+    def run_thread(client, peer, &block)
+      # Perform the handshake inside the new thread so we don't block TCP accept
+      if @options[:transport] == 'tls'
+        begin
+          client.accept
+        rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
+          # Handshake failure or other issue
+          peer = Thread.current['LogCourierPeer'] || 'unknown'
+          @logger.warn "[LogCourierServer] Connection from #{peer} failed to initialise: #{e}" unless @logger.nil?
+          client.close rescue nil
+          next
+        end
+      end
+
+      ConnectionTcp.new(@logger, client, peer, @options).run(&block)
     end
   end
 
