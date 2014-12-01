@@ -55,7 +55,7 @@ type TransportZmqFactory struct {
   CurvePublickey string `config:"curve public key"`
   CurveSecretkey string `config:"curve secret key"`
 
-  PeerSendQueue int64 `config:"peer send queue"`
+  PeerSendQueue int64
 
   hostport_re *regexp.Regexp
 }

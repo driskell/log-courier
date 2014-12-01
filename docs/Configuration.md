@@ -321,20 +321,6 @@ sending anymore data.
 enough to maintain throughput even on high latency links and low enough not to
 cause excessive memory usage.*
 
-### `"peer send queue"`
-
-*Number. Optional with "transport" = "zmq". Not allowed otherwise. Default: 2*
-
-The maximum number of payloads to queue against a specific peer when using ZMQ.
-If all peer queues are full, the transport pauses until a slot frees. This
-setting should be configured to be a fraction of `"max pending payloads"`, and
-never higher.
-
-The right combination of `"max pending payloads"` and `"peer send queue"` can
-ensure that when a peer stops responding, but has not yet disconnected, the
-queue to that peer never contains all pending payloads - if it did, transmission
-would stall until the `"timeout"`` occurred.
-
 ### `"reconnect"`
 
 *Duration. Optional. Default: 1*

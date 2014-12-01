@@ -25,8 +25,6 @@
 * Fix repeated partial Acks triggering an incorrect flush of events to registrar
 * Fix a loop that could occur when using ZMQ transport (#68)
 * `lc-admin` status output is now sorted and no longer in random order
-* Implement "peer send queue" configuration setting for ZMQ transport to help
-ensure that pending payloads are never all queued against a single peer (#66)
 * TLS and TCP transport will now round robin the available server addresses
 instead of randomising
 * Updated the RedHat/CentOS 5/6 SysV init script in contrib to follow Fedora
