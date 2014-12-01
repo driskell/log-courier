@@ -20,11 +20,17 @@
 
 ## 1.2
 
-*8th November 2014*
+*1st December 2014*
 
 * Fix repeated partial Acks triggering an incorrect flush of events to registrar
 * Fix a loop that could occur when using ZMQ transport (#68)
 * `lc-admin` status output is now sorted and no longer in random order
+* Add a workaround for logstash shutdown looping with "Context is terminated"
+messages (#73)
+* Implement asynchronous ZMQ receive pipeline in the Logstash gem to resolve
+timeout issues with multiple clients and a busy pipeline
+* Implement multithreaded SSL accept in the Logstash gem to prevent a single
+hung handshake attempt from blocking new connections
 * TLS and TCP transport will now round robin the available server addresses
 instead of randomising
 * Updated the RedHat/CentOS 5/6 SysV init script in contrib to follow Fedora
