@@ -22,6 +22,23 @@ module LogCourier
   class ServerZmq
     class ZMQError < StandardError; end
 
+    class << self
+      @print_zmq_versions = false
+
+      def print_zmq_versions(logger)
+        return if @print_zmq_versions || logger.nil?
+
+        libversion = LibZMQ.version
+        libversion = "#{libversion[:major]}.#{libversion[:minor]}.#{libversion[:patch]}"
+
+        logger.info 'libzmq', :version => libversion
+        logger.info 'ffi-rzmq-core', :version => LibZMQ::VERSION
+        logger.info 'ffi-rzmq', :version => ZMQ.version
+
+        @print_zmq_versions = true
+      end
+    end
+
     attr_reader :port
 
     def initialize(options = {})
@@ -37,15 +54,14 @@ module LogCourier
 
       @logger = @options[:logger]
 
-      libversion = LibZMQ.version
-      libversion = "#{libversion[:major]}.#{libversion[:minor]}.#{libversion[:patch]}"
+      self.class.print_zmq_versions @logger
 
       if @options[:transport] == 'zmq'
-        fail "[LogCourierServer] Transport 'zmq' requires libzmq version >= 4 (the current version is #{libversion})" unless LibZMQ.version4?
+        fail "input/courier: Transport 'zmq' requires libzmq version >= 4" unless LibZMQ.version4?
 
-        fail '[LogCourierServer] \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
+        fail 'input/courier: \'curve_secret_key\' is required' if @options[:curve_secret_key].nil?
 
-        fail '[LogCourierServer] \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
+        fail 'input/courier: \'curve_secret_key\' must be a valid 40 character Z85 encoded string' if @options[:curve_secret_key].length != 40 || !z85validate(@options[:curve_secret_key])
       end
 
       begin
@@ -72,15 +88,11 @@ module LogCourier
         @port = endpoint_port.to_i
 
         if @options[:port] == 0
-          @logger.warn '[LogCourierServer] Transport ' + @options[:transport] + ' is listening on ephemeral port ' + @port.to_s unless @logger.nil?
+          @logger.warn 'Ephemeral port allocated', :transport => @options[:transport], :port => @port unless @logger.nil?
         end
       rescue => e
-        raise "[LogCourierServer] Failed to initialise: #{e}"
+        raise "input/courier: Failed to initialise: #{e}"
       end
-
-      @logger.info "[LogCourierServer] libzmq version #{libversion}" unless @logger.nil?
-      @logger.info "[LogCourierServer] ffi-rzmq-core version #{LibZMQ::VERSION}" unless @logger.nil?
-      @logger.info "[LogCourierServer] ffi-rzmq version #{ZMQ.version}" unless @logger.nil?
 
       # TODO: Implement workers option by receiving on a ROUTER and proxying to a DEALER, with workers connecting to the DEALER
 
@@ -117,7 +129,7 @@ module LogCourier
         rescue ZMQPoll::ZMQError => e
           # Detect JRuby bug
           fail e if @context.nil?
-          @logger.warn "[LogCourierServer] ZMQ recv_string failed: #{e}" unless @logger.nil?
+          @logger.warn e, :hint => 'ZMQ recv_string failure' unless @logger.nil?
           next
         rescue ZMQPoll::TimeoutError
           # We'll let ZeroMQ manage reconnections and new connections
@@ -128,12 +140,11 @@ module LogCourier
       return
     rescue ShutdownSignal
       # Shutting down
-      @logger.warn('[LogCourierServer] Server shutting down') unless @logger.nil?
+      @logger.warn 'Server shutting down' unless @logger.nil?
       return
     rescue StandardError, NativeException => e
       # Some other unknown problem
-      @logger.warn("[LogCourierServer] Unknown error: #{e}") unless @logger.nil?
-      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      @logger.warn e, :hint => 'Unknown error, shutting down' unless @logger.nil?
       raise e
     ensure
       @poller.shutdown
@@ -165,10 +176,10 @@ module LogCourier
       source.push data.shift until data.length == 0 || data[0] == ''
 
       if data.length == 0
-        @logger.warn "[LogCourierServer] Invalid message: no data (route length: #{source.length})" unless @logger.nil?
+        @logger.warn 'Invalid message: no data', :source_length => source.length unless @logger.nil?
         return
       elsif data.length == 1
-        @logger.warn "[LogCourierServer] Invalid message: empty data (route length: #{source.length})" unless @logger.nil?
+        @logger.warn 'Invalid message: empty data', :source_length => source.length unless @logger.nil?
         return
       end
 
@@ -176,14 +187,15 @@ module LogCourier
       data.shift
 
       if data.length != 1
-        @logger.warn "[LogCourierServer] Invalid message: multipart unexpected (#{data.length})" unless @logger.nil?
+        @logger.warn 'Invalid message: multipart unexpected', :source_length => source.length, :data_length => data.length unless @logger.nil?
         if !@logger.nil? && @logger.debug?
           i = 0
+          parts = {}
           data.each do |msg|
             i += 1
-            part = msg[0..31].gsub(/[^[:print:]]/, '.')
-            @logger.debug "[LogCourierServer] Part #{i}: #{part.length}:[#{part}]"
+            parts[i] = "#{part.length}:[#{msg[0..31].gsub(/[^[:print:]]/, '.')}]"
           end
+          @logger.debug 'Data', parts
         end
         return
       end
@@ -237,16 +249,16 @@ module LogCourier
         end
 
         if !index.key?('')
-          if !@logger.nil? && @logger.debug?
-            source_str = source.first.each_byte.map do |b|
+          source_str = source.map do |s|
+            s.each_byte.map do |b|
               b.to_s(16).rjust(2, '0')
             end
-          end
+          end.join
 
-          @logger.info "[LogCourierServer] New source: #{source_str.join}" unless @logger.nil?
+          @logger.info 'New source', :source => source_str unless @logger.nil?
 
           # Create the client and associated thread
-          client = ClientZmq.new(self, source) do
+          client = ClientZmq.new(self, source, source_str) do
             try_drop(source)
           end
 
@@ -270,13 +282,7 @@ module LogCourier
 
     private
 
-    def try_drop(source)
-      if !@logger.nil? && @logger.debug?
-        source_str = source.first.each_byte.map do |b|
-          b.to_s(16).rjust(2, '0')
-        end
-      end
-
+    def try_drop(source, source_str)
       # This is called when a client goes idle, to cleanup resources
       # We may tie this into zmq monitor
       @mutex.synchronize do
@@ -284,7 +290,7 @@ module LogCourier
         parents = []
         source.each do |identity|
           if !index.key?(identity)
-            @logger.warn "[LogCourierServer] Failed idle shutdown of thread for unknown source #{source_str.join}" unless @logger.nil?
+            @logger.warn 'Unknown idle source failed to shutdown', :source => source_str unless @logger.nil?
             break
           end
           parents.push [index, identity]
@@ -292,17 +298,17 @@ module LogCourier
         end
 
         if !index.key?('')
-          @logger.warn "[LogCourierServer] Failed idle shutdown of thread for unknown source #{source_str.join}" unless @logger.nil?
+          @logger.warn 'Unknown idle source failed to shutdown', :source => source_str unless @logger.nil?
           break
         end
 
         # Don't allow drop if we have messages in the queue
         if index['']['client'].length != 0
-          @logger.warn "[LogCourierServer] Failed idle shutdown of thread for source #{source_str.join} as message queue is not empty" unless @logger.nil?
+          @logger.warn 'Failed idle source shutdown as message queue is not empty', :source => source_str unless @logger.nil?
           return false
         end
 
-        @logger.info "[LogCourierServer] Source idle: #{source_str.join}" unless @logger.nil?
+        @logger.info 'Idle source shutting down', :source => source_str unless @logger.nil?
 
         # Delete the entry
         @client_threads.delete(index['']['thread'])
@@ -319,17 +325,16 @@ module LogCourier
   end
 
   class ClientZmq < EventQueue
-    attr_reader :peer
-
-    def initialize(factory, source, &try_drop)
-      # Setup the queue for receiving events to process
-      super(@factory.options[:peer_recv_queue])
-
+    def initialize(factory, source, source_str, &try_drop)
       @factory = factory
       @logger = @factory.options[:logger]
       @send_queue = @factory.send_queue
       @source = source
+      @source_str = source_str
       @try_drop = try_drop
+
+      # Setup the queue for receiving events to process
+      super @factory.options[:peer_recv_queue]
     end
 
     def run(&block)
@@ -347,20 +352,25 @@ module LogCourier
       return
     rescue ShutdownSignal
       # Shutting down
-      @logger.warn '[LogCourierServer] Client thread shutting down' unless @logger.nil?
+      @logger.info 'Source shutting down', :source => @source_str unless @logger.nil?
       return
     rescue StandardError, NativeException => e
       # Some other unknown problem
-      @logger.warn "[LogCourierServer] Unknown client error: #{e}" unless @logger.nil?
-      @logger.warn "[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})" unless @logger.nil?
+      @logger.warn e, :hint => 'Unknown error, connection aborted', :source => @source_str unless @logger.nil?
       raise e
+    end
+
+    def send(signature, message)
+      data = signature + [message.length].pack('N') + message
+      @send_queue.push @source + ['', data]
+      return
     end
 
     private
 
     def recv(data)
       if data.length < 8
-        @logger.warn "[LogCourierServer] Invalid message: not enough data (#{data.length} < 8)" unless @logger.nil?
+        @logger.warn 'Invalid message: not enough data', :data_length => data.length, :source => @source_str unless @logger.nil?
         return
       end
 
@@ -369,21 +379,15 @@ module LogCourier
 
       # Verify length
       if data.length - 8 != length
-        @logger.warn "[LogCourierServer] Invalid message: data has invalid length (#{data.length - 8} != #{length})" unless @logger.nil?
+        @logger.warn 'Invalid message: data has invalid length', :data_length => data.length - 8, :encoded_length => length, :source => @source_str unless @logger.nil?
         return
       elsif length > @factory.options[:max_packet_size]
-        @logger.warn "[LogCourierServer] Invalid message: packet too large (#{length} > #{@options[:max_packet_size]})" unless @logger.nil?
+        @logger.warn 'Invalid message: packet too large', :size => length, :max_packet_size => @options[:max_packet_size], :source => @source_str unless @logger.nil?
         return
       end
 
       # Yield the parts
       yield signature, data[8, length], self
-      return
-    end
-
-    def send(signature, message)
-      data = signature + [message.length].pack('N') + message
-      @send_queue.push @source + ['', data]
       return
     end
   end
