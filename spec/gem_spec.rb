@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'logger'
+require 'cabin'
 require 'timeout'
 require 'lib/common'
 
@@ -28,8 +28,9 @@ describe 'log-courier gem' do
   end
 
   def startup
-    logger = Logger.new(STDOUT)
-    logger.level = Logger::DEBUG
+    logger = Cabin::Channel.new
+    logger.subscribe STDOUT
+    logger.level = :debug
 
     # Reset server for each test
     @client = LogCourier::Client.new(

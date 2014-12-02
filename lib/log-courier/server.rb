@@ -40,6 +40,7 @@ module LogCourier
       }.merge!(options)
 
       @logger = @options[:logger]
+      @logger['plugin'] = 'input/courier'
 
       case @options[:transport]
       when 'tcp', 'tls'
@@ -49,11 +50,12 @@ module LogCourier
         require 'log-courier/server_zmq'
         @server = ServerZmq.new(@options)
       else
-        raise '[LogCourierServer] \'transport\' must be tcp, tls, plainzmq or zmq'
+        fail 'input/courier: \'transport\' must be tcp, tls, plainzmq or zmq'
       end
 
-      # Grab the port back
+      # Grab the port back and update the logger context
       @port = @server.port
+      @logger['port'] = @port unless @logger.nil?
 
       # Load the json adapter
       @json_adapter = MultiJson.adapter.instance
@@ -75,7 +77,11 @@ module LogCourier
             when 'JDAT'
               process_jdat message, comm, event_queue
             else
-              @logger.warn("[LogCourierServer] Unknown message received from #{comm.peer}") unless @logger.nil?
+              if comm.peer.nil?
+                @logger.warn 'Unknown message received', :from => 'unknown' unless @logger.nil?
+              else
+                @logger.warn 'Unknown message received', :from => comm.peer unless @logger.nil?
+              end
               # Don't kill a client that sends a bad message
               # Just reject it and let it send it again, potentially to another server
               comm.send '????', ''
@@ -93,17 +99,21 @@ module LogCourier
           server_thread.join
         end
       end
+      return
     end
+
+    private
 
     def process_ping(message, comm)
       # Size of message should be 0
       if message.length != 0
-        raise ProtocolError, "unexpected data attached to ping message (#{message.length})"
+        fail ProtocolError, "unexpected data attached to ping message (#{message.length})"
       end
 
       # PONG!
       # NOTE: comm.send can raise a Timeout::Error of its own
       comm.send 'PONG', ''
+      return
     end
 
     def process_jdat(message, comm, event_queue)
@@ -114,10 +124,16 @@ module LogCourier
       # This allows the client to know what is being acknowledged
       # Nonce is 16 so check we have enough
       if message.length < 17
-        raise ProtocolError, "JDAT message too small (#{message.length})"
+        fail ProtocolError, "JDAT message too small (#{message.length})"
       end
 
       nonce = message[0...16]
+
+      if !@logger.nil? && @logger.debug?
+        nonce_str = nonce.each_byte.map do |b|
+          b.to_s(16).rjust(2, '0')
+        end
+      end
 
       # The remainder of the message is the compressed data block
       message = StringIO.new Zlib::Inflate.inflate(message[16...message.length])
@@ -136,7 +152,7 @@ module LogCourier
           # Finished!
           break
         elsif length_buf.length < 4
-          raise ProtocolError, "JDAT length extraction failed (#{ret} #{length_buf.length})"
+          fail ProtocolError, "JDAT length extraction failed (#{ret} #{length_buf.length})"
         end
 
         length = length_buf.unpack('N').first
@@ -145,7 +161,7 @@ module LogCourier
         ret = message.read length, data_buf
         if ret.nil? or data_buf.length < length
           @logger.warn()
-          raise ProtocolError, "JDAT message extraction failed #{ret} #{data_buf.length}"
+          fail ProtocolError, "JDAT message extraction failed #{ret} #{data_buf.length}"
         end
 
         data_buf.force_encoding('utf-8')
@@ -161,7 +177,7 @@ module LogCourier
         begin
           event = @json_adapter.load(data_buf, @json_options)
         rescue MultiJson::ParseError => e
-          @logger.warn("[LogCourierServer] JSON parse failure, falling back to plain-text: #{e}") unless @logger.nil?
+          @logger.warn e, :hint => 'JSON parse failure, falling back to plain-text' unless @logger.nil?
           event = { 'message' => data_buf }
         end
 
@@ -171,7 +187,7 @@ module LogCourier
         rescue TimeoutError
           # Full pipeline, partial ack
           # NOTE: comm.send can raise a Timeout::Error of its own
-          @logger.debug "[LogCourierServer] Partially acknowledging message #{nonce.hash} sequence #{sequence}" unless @logger.nil?
+          @logger.debug 'Partially acknowledging message', :nonce => nonce_str.join, :sequence => sequence if !@logger.nil? && @logger.debug?
           comm.send 'ACKN', [nonce, sequence].pack('A*N')
           ack_timeout = Time.now.to_i + 5
           retry
@@ -182,8 +198,9 @@ module LogCourier
 
       # Acknowledge the full message
       # NOTE: comm.send can raise a Timeout::Error
-      @logger.debug "[LogCourierServer] Acknowledging message #{nonce.hash} sequence #{sequence}" unless @logger.nil?
+      @logger.debug 'Acknowledging message', :nonce => nonce_str.join, :sequence => sequence if !@logger.nil? && @logger.debug?
       comm.send 'ACKN', [nonce, sequence].pack('A*N')
+      return
     end
   end
 end

@@ -27,7 +27,7 @@ describe 'log-courier' do
     {
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
-        "servers": [ "127.0.0.1:#{server_port}" ]
+        "servers": [ "localhost:#{server_port}" ]
       },
       "files": [
         {
