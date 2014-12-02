@@ -18,6 +18,7 @@ Gem::Specification.new do |gem|
     lib/log-courier/server_zmq.rb
   )
 
-  gem.add_runtime_dependency 'ffi-rzmq', '~> 2.0'
-  gem.add_runtime_dependency 'multi_json', '~> 1.0'
+  gem.add_runtime_dependency 'cabin',      '~> 0.6'
+  gem.add_runtime_dependency 'ffi-rzmq',   '~> 2.0'
+  gem.add_runtime_dependency 'multi_json', '~> 1.10'
 end
