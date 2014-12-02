@@ -73,7 +73,7 @@ module ZMQPoll
 		end
 
 		def register_queue_to_socket(queue, socket)
-			s2s_state = create_socket_to_socket(socket)
+			s2s_state = _create_socket_to_socket(socket)
 
 			state = {
 				state:    s2s_state,
@@ -86,7 +86,7 @@ module ZMQPoll
 					data = queue.pop
 					break if data.nil?
 					begin
-						_send s2s_state[:sender], data
+						send s2s_state[:sender], data
 					rescue TimeoutError
 						state[:mutex].synchronize do
 							break if state[:shutdown]
@@ -117,7 +117,7 @@ module ZMQPoll
 		end
 
 		def create_socket_to_socket(socket)
-			state = create_socket_to_socket(socket)
+			state = _create_socket_to_socket(socket)
 			@socket_to_socket[state[:sender]] = state
 			state[:sender]
 		end
@@ -146,7 +146,7 @@ module ZMQPoll
 
 			ready.each do |socket|
 				if @handlers.key?(socket)
-					self.send @handlers[socket][:callback], @handlers[socket]
+					__send__ @handlers[socket][:callback], @handlers[socket]
 				end
 
 				yield socket, @poller.readables.include?(socket), @poller.writables.include?(socket)
@@ -157,7 +157,7 @@ module ZMQPoll
 
 		private
 
-		def create_socket_to_socket(socket)
+		def _create_socket_to_socket(socket)
 			receiver = @context.socket(ZMQ::PULL)
 			fail ZMQError, 'socket creation error: ' + ZMQ::Util.error_string if receiver.nil?
 
@@ -171,7 +171,7 @@ module ZMQPoll
 			fail ZMQError, 'bind error: ' + ZMQ::Util.error_string if !ZMQ::Util.resultcode_ok?(rc)
 
 			state = {
-				:callback => :_handle_socket_to_socket,
+				:callback => :handle_socket_to_socket,
 				:sender   => sender,
 				:receiver => receiver,
 				:socket   => socket,
@@ -190,7 +190,7 @@ module ZMQPoll
 			state
 		end
 
-		def close_socket_to_socket(state)
+		def _close_socket_to_socket(state)
 			@sockets.delete state[:sender]
 
 			@poller.delete state[:receiver]
@@ -212,7 +212,7 @@ module ZMQPoll
 			loop do
 				if state[:send_ok] && !state[:buffer].nil?
 					begin
-						_send state[:socket], state[:buffer]
+						send state[:socket], state[:buffer]
 					rescue TimeoutError
 					end
 					state[:buffer] = nil if state[:buffer].length == 0
@@ -278,15 +278,14 @@ module ZMQPoll
 			return
 		end
 
-		def poll_egain(socket, flag, timeout, &block)
+		def poll_eagain(socket, flag, timeout, &block)
 			poller = nil
 			timeout = Time.now.to_i + timeout
 			loop do
 				rc = block.call()
 				break if ZMQ::Util.resultcode_ok?(rc)
 				if ZMQ::Util.errno != ZMQ::EAGAIN
-					if flag == ZMQ::POLLIN
-						fail ZMQError, 'message receive failed: ' + ZMQ::Util.error_string
+					fail ZMQError, 'message receive failed: ' + ZMQ::Util.error_string if flag == ZMQ::POLLIN
 					fail ZMQError, 'message send failed: ' + ZMQ::Util.error_string
 				end
 

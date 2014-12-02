@@ -40,6 +40,7 @@ module LogCourier
       }.merge!(options)
 
       @logger = @options[:logger]
+      @logger['plugin'] = 'input/courier'
 
       case @options[:transport]
       when 'tcp', 'tls'
@@ -49,11 +50,12 @@ module LogCourier
         require 'log-courier/server_zmq'
         @server = ServerZmq.new(@options)
       else
-        fail '[LogCourierServer] \'transport\' must be tcp, tls, plainzmq or zmq'
+        fail 'input/courier: \'transport\' must be tcp, tls, plainzmq or zmq'
       end
 
-      # Grab the port back
+      # Grab the port back and update the logger context
       @port = @server.port
+      @logger['port'] = @port unless @logger.nil?
 
       # Load the json adapter
       @json_adapter = MultiJson.adapter.instance
@@ -76,9 +78,9 @@ module LogCourier
               process_jdat message, comm, event_queue
             else
               if comm.peer.nil?
-                @logger.warn("[LogCourierServer] Unknown message received") unless @logger.nil?
+                @logger.warn 'Unknown message received', :from => 'unknown' unless @logger.nil?
               else
-                @logger.warn("[LogCourierServer] Unknown message received from #{comm.peer}") unless @logger.nil?
+                @logger.warn 'Unknown message received', :from => comm.peer unless @logger.nil?
               end
               # Don't kill a client that sends a bad message
               # Just reject it and let it send it again, potentially to another server
@@ -175,7 +177,7 @@ module LogCourier
         begin
           event = @json_adapter.load(data_buf, @json_options)
         rescue MultiJson::ParseError => e
-          @logger.warn("[LogCourierServer] JSON parse failure, falling back to plain-text: #{e}") unless @logger.nil?
+          @logger.warn e, :hint => 'JSON parse failure, falling back to plain-text' unless @logger.nil?
           event = { 'message' => data_buf }
         end
 
@@ -185,7 +187,7 @@ module LogCourier
         rescue TimeoutError
           # Full pipeline, partial ack
           # NOTE: comm.send can raise a Timeout::Error of its own
-          @logger.debug "[LogCourierServer] #{@port} Partially acknowledging message #{nonce_str.join} sequence #{sequence}" if !@logger.nil? && @logger.debug?
+          @logger.debug 'Partially acknowledging message', :nonce => nonce_str.join, :sequence => sequence if !@logger.nil? && @logger.debug?
           comm.send 'ACKN', [nonce, sequence].pack('A*N')
           ack_timeout = Time.now.to_i + 5
           retry
@@ -196,7 +198,7 @@ module LogCourier
 
       # Acknowledge the full message
       # NOTE: comm.send can raise a Timeout::Error
-      @logger.debug "[LogCourierServer] #{@port} Acknowledging message #{nonce_str.join} sequence #{sequence}" if !@logger.nil? && @logger.debug?
+      @logger.debug 'Acknowledging message', :nonce => nonce_str.join, :sequence => sequence if !@logger.nil? && @logger.debug?
       comm.send 'ACKN', [nonce, sequence].pack('A*N')
       return
     end

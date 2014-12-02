@@ -15,7 +15,7 @@
 # limitations under the License.
 
 require 'thread'
-require 'logger'
+require 'cabin'
 require 'log-courier/server'
 
 # Common helpers for testing both ruby client and the courier
@@ -73,9 +73,10 @@ shared_context 'Helpers' do
 
     id = args[:id]
 
-    logger = Logger.new(STDOUT)
-    logger.progname = "Server #{id}"
-    logger.level = Logger::DEBUG
+    logger = Cabin::Channel.new
+    logger.subscribe STDOUT
+    logger['instance'] = id
+    logger.level = :debug
 
     raise 'Server already initialised' if @servers.key?(id)
 

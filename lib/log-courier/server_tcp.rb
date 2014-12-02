@@ -24,12 +24,24 @@ require 'thread'
 module LogCourier
   # Wrap around TCPServer to grab last error for use in reporting which peer had an error
   class ExtendedTCPServer < TCPServer
-    # Yield the peer
+    attr_reader :peer
+
+    def initialise
+      reset_peer
+      super
+    end
+
+    # Save the peer
     def accept
       sock = super
       peer = sock.peeraddr(:numeric)
-      Thread.current['LogCourierPeer'] = "#{peer[2]}:#{peer[1]}"
+      @peer = "#{peer[2]}:#{peer[1]}"
       return sock
+    end
+
+    def reset_peer
+      @peer = 'unknown'
+      return
     end
   end
 
@@ -57,11 +69,11 @@ module LogCourier
 
       if @options[:transport] == 'tls'
         [:ssl_certificate, :ssl_key].each do |k|
-          fail "[LogCourierServer] '#{k}' is required" if @options[k].nil?
+          fail "input/courier: '#{k}' is required" if @options[k].nil?
         end
 
         if @options[:ssl_verify] and (!@options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
-          fail '[LogCourierServer] Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
+          fail 'input/courier: Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
         end
       end
 
@@ -102,10 +114,10 @@ module LogCourier
         end
 
         if @options[:port] == 0
-          @logger.warn '[LogCourierServer] Transport ' + @options[:transport] + ' is listening on ephemeral port ' + @port.to_s unless @logger.nil?
+          @logger.warn 'Ephemeral port allocated', :transport => @options[:transport], :port => @port unless @logger.nil?
         end
       rescue => e
-        raise "[LogCourierServer] Failed to initialise: #{e}"
+        raise "input/courier: Failed to initialise: #{e}"
       end
     end # def initialize
 
@@ -115,19 +127,18 @@ module LogCourier
       loop do
         # Because start_immediately is false, TCP accept is single thread but
         # handshake is essentiall multithreaded as we defer it to the thread
+        @tcp_server.reset_peer
+        client = nil
         begin
           client = @server.accept
         rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
           # Accept failure or other issue
-          peer = Thread.current['LogCourierPeer'] || 'unknown'
-          @logger.warn "[LogCourierServer] Connection from #{peer} failed to accept: #{e}" unless @logger.nil?
-          client.close rescue nil
+          @logger.warn 'Connection failed to accept', :error => e.message, :peer => @tcp_server.peer unless @logger.nil
+          client.close rescue nil unless client.nil?
           next
         end
 
-        peer = Thread.current['LogCourierPeer'] || 'unknown'
-
-    	  @logger.info "[LogCourierServer] New connection from #{peer}" unless @logger.nil?
+    	  @logger.info 'New connection', :peer => @tcp_server.peer unless @logger.nil?
 
         # Clear up finished threads
         client_threads.delete_if do |_, thr|
@@ -135,7 +146,7 @@ module LogCourier
         end
 
         # Start a new connection thread
-        client_threads[client] = Thread.new(client, peer) do |client_copy, peer_copy|
+        client_threads[client] = Thread.new(client, @tcp_server.peer) do |client_copy, peer_copy|
           run_thread client_copy, peer_copy, &block
         end
       end
@@ -144,8 +155,7 @@ module LogCourier
       return
     rescue StandardError, NativeException => e
       # Some other unknown problem
-      @logger.warn("[LogCourierServer] Unknown error: #{e}") unless @logger.nil?
-      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      @logger.warn e, :hint => 'Unknown error, shutting down' unless @logger.nil?
       raise e
     ensure
       # Raise shutdown in all client threads and join then
@@ -167,9 +177,8 @@ module LogCourier
           client.accept
         rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
           # Handshake failure or other issue
-          peer = Thread.current['LogCourierPeer'] || 'unknown'
-          @logger.warn "[LogCourierServer] Connection from #{peer} failed to initialise: #{e}" unless @logger.nil?
-          client.close rescue nil
+          @logger.warn 'Connection failed to initialise', :error => e.message, :peer => peer unless @logger.nil?
+          client.close
           return
         end
       end
@@ -223,31 +232,30 @@ module LogCourier
       return
     rescue TimeoutError
       # Timeout of the connection, we were idle too long without a ping/pong
-      @logger.warn("[LogCourierServer] Connection from #{@peer} timed out") unless @logger.nil?
+      @logger.warn 'Connection timed out', :peer => @peer unless @logger.nil?
       return
     rescue EOFError
       if @in_progress
-        @logger.warn("[LogCourierServer] Premature connection close on connection from #{@peer}") unless @logger.nil?
+        @logger.warn 'Unexpected EOF', :peer => @peer unless @logger.nil?
       else
-        @logger.info("[LogCourierServer] Connection from #{@peer} closed") unless @logger.nil?
+        @logger.info 'Connection closed', :peer => @peer unless @logger.nil?
       end
       return
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
       # Read errors, only action is to shutdown which we'll do in ensure
-      @logger.warn("[LogCourierServer] SSL error on connection from #{@peer}: #{e}") unless @logger.nil?
+      @logger.warn 'SSL error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
       return
     rescue ProtocolError => e
       # Connection abort request due to a protocol error
-      @logger.warn("[LogCourierServer] Protocol error on connection from #{@peer}: #{e}") unless @logger.nil?
+      @logger.warn 'Protocol error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
       return
     rescue ShutdownSignal
       # Shutting down
-      @logger.warn("[LogCourierServer] Closing connecting from #{@peer}: server shutting down") unless @logger.nil?
+      @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
       return
-    rescue => e
+    rescue StandardError, NativeException => e
       # Some other unknown problem
-      @logger.warn("[LogCourierServer] Unknown error on connection from #{@peer}: #{e}") unless @logger.nil?
-      @logger.warn("[LogCourierServer] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      @logger.warn e, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
       return
     ensure
       @fd.close rescue nil
