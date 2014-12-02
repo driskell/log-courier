@@ -58,6 +58,7 @@ module LogCourier
       }.merge!(options)
 
       @logger = @options[:logger]
+      @logger['plugin'] = 'output/courier'
 
       require 'log-courier/client_tls'
       @client = ClientTls.new(@options)
@@ -231,17 +232,16 @@ module LogCourier
           end
         rescue ProtocolError => e
           # Reconnect required due to a protocol error
-          @logger.warn("[LogCourierClient] Protocol error: #{e}") unless @logger.nil?
+          @logger.warn 'Protocol error', :error => e.message unless @logger.nil?
         rescue TimeoutError
           # Reconnect due to timeout
-          @logger.warn('[LogCourierClient] Timeout occurred') unless @logger.nil?
+          @logger.warn 'Timeout occurred' unless @logger.nil?
         rescue ShutdownSignal
           # Shutdown, break out
           break
-        rescue => e
+        rescue StandardError, NativeException => e
           # Unknown error occurred
-          @logger.warn("[LogCourierClient] Unknown error: #{e}") unless @logger.nil?
-          @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+          @logger.warn e, :hint => 'Unknown error' unless @logger.nil?
         end
 
         # Disconnect and retry payloads

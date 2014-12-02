@@ -38,17 +38,17 @@ module LogCourier
       @logger = @options[:logger]
 
       [:port, :ssl_ca].each do |k|
-        fail "[LogCourierClient] '#{k}' is required" if @options[k].nil?
+        fail "output/courier: '#{k}' is required" if @options[k].nil?
       end
 
-      fail '[LogCourierClient] \'addresses\' must contain at least one address' if @options[:addresses].empty?
+      fail 'output/courier: \'addresses\' must contain at least one address' if @options[:addresses].empty?
 
       c = 0
       [:ssl_certificate, :ssl_key].each do
         c += 1
       end
 
-      fail '[LogCourierClient] \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
+      fail 'output/courier: \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
     end
 
     def connect(io_control)
@@ -120,14 +120,13 @@ module LogCourier
       end
       return
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-      @logger.warn("[LogCourierClient] SSL write error: #{e}") unless @logger.nil?
+      @logger.warn 'SSL write error', :error => e.message unless @logger.nil?
       io_control << ['F']
       return
     rescue ShutdownSignal
       return
-    rescue => e
-      @logger.warn("[LogCourierClient] Unknown SSL write error: #{e}") unless @logger.nil?
-      @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+    rescue StandardError, NativeException => e
+      @logger.warn e, :hint => 'Unknown SSL write error' unless @logger.nil?
       io_control << ['F']
       return
     end
@@ -143,7 +142,7 @@ module LogCourier
 
         if length > 1048576
           # Too big raise error
-          @logger.warn("[LogCourierClient] Invalid message: data too big (#{length})") unless @logger.nil?
+          @logger.warn 'Invalid message: data too big', :data_length => length unless @logger.nil?
           io_control << ['F']
           break
         end
@@ -156,18 +155,17 @@ module LogCourier
       end
       return
     rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-      @logger.warn("[LogCourierClient] SSL read error: #{e}") unless @logger.nil?
+      @logger.warn 'SSL read error', :error => e.message unless @logger.nil?
       io_control << ['F']
       return
     rescue EOFError
-      @logger.warn("[LogCourierClient] Connection closed by server") unless @logger.nil?
+      @logger.warn 'Connection closed by server' unless @logger.nil?
       io_control << ['F']
       return
     rescue ShutdownSignal
       return
     rescue => e
-      @logger.warn("[LogCourierClient] Unknown SSL read error: #{e}") unless @logger.nil?
-      @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
+      @logger.warn e, :hint => 'Unknown SSL read error' unless @logger.nil?
       io_control << ['F']
       return
     end
@@ -193,39 +191,48 @@ module LogCourier
 
     def tls_connect
       # TODO: Implement random selection - and don't use separate :port - remember to update post_connection_check too
-      @logger.info("[LogCourierClient] Connecting to #{@options[:addresses][0]}:#{@options[:port]}") unless @logger.nil?
-      tcp_socket = TCPSocket.new(@options[:addresses][0], @options[:port])
+      address = @options[:addresses][0]
+      port = @options[:port]
 
-      ssl = OpenSSL::SSL::SSLContext.new
+      @logger.info 'Connecting', :address => address, :port => port unless @logger.nil?
 
-      unless @options[:ssl_certificate].nil?
-        ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
-        ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
+      begin
+        tcp_socket = TCPSocket.new(address, port)
+
+        ssl = OpenSSL::SSL::SSLContext.new
+
+        unless @options[:ssl_certificate].nil?
+          ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
+          ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
+        end
+
+        cert_store = OpenSSL::X509::Store.new
+        cert_store.add_file(@options[:ssl_ca])
+        #ssl.cert_store = cert_store
+        ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+
+        @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
+
+        socket = @ssl_client.connect
+
+        # Verify certificate
+        socket.post_connection_check(address)
+
+        # Add extra logging data now we're connected
+        @logger['address'] = address
+        @logger['port'] = port
+
+        @logger.info 'Connected successfully' unless @logger.nil?
+        return
+      rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
+        @logger.warn 'Connection failed', :error => e.message, :address => address, :port => port unless @logger.nil?
+        return
+      rescue ShutdownSignal
+        return
+      rescue StandardError, NativeException => e
+        @logger.warn e, :hint => 'Unknown connection failure', :address => address, :port => port unless @logger.nil?
+        raise e
       end
-
-      cert_store = OpenSSL::X509::Store.new
-      cert_store.add_file(@options[:ssl_ca])
-      #ssl.cert_store = cert_store
-      ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
-
-      @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
-
-      socket = @ssl_client.connect
-
-      # Verify certificate
-      socket.post_connection_check(@options[:addresses][0])
-
-      @logger.info("[LogCourierClient] Connected successfully") unless @logger.nil?
-      return
-    rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-      @logger.warn("[LogCourierClient] Connection to #{@options[:addresses][0]}:#{@options[:port]} failed: #{e}") unless @logger.nil?
-      return
-    rescue ShutdownSignal
-      return
-    rescue StandardError, NativeException => e
-      @logger.warn("[LogCourierClient] Unknown connection failure to #{@options[:addresses][0]}:#{@options[:port]}: #{e}") unless @logger.nil?
-      @logger.warn("[LogCourierClient] #{e.backtrace}: #{e.message} (#{e.class})") unless @logger.nil?
-      raise e
     end
   end
 end
