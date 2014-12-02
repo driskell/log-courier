@@ -37,7 +37,8 @@ hung handshake attempt from blocking new connections
 * Switch to ruby-cabin logging in the gems to match Logstash logging
 * Updated the RedHat/CentOS 5/6 SysV init script in contrib to follow Fedora
 packaging guidelines
-* Provided a RedHat/CentOS 7 systemd service configuration in contrib
+* Provided a RedHat/CentOS 7 systemd service configuration in contrib (with
+fixes from @matejzero)
 
 ## 1.1
 
