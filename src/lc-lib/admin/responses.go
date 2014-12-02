@@ -54,6 +54,9 @@ func init() {
   gob.Register(&ReloadResponse{})
 
   // SNAP
-  gob.Register([]*core.Snapshot{&core.Snapshot{}})
+  gob.Register(&core.Snapshot{})
+  // SNAP - time.Time
   gob.Register(time.Now())
+  // SNAP - time.Duration
+  gob.Register(time.Since(time.Now()))
 }

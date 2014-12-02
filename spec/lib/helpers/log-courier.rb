@@ -88,9 +88,9 @@ shared_context 'Helpers_Log_Courier' do
       loop do
         line = log_courier.gets
         break if line.nil?
-        puts 'SO: ' + line
+        puts ':' + line
       end
-      puts 'SO- END'
+      puts ':END'
     end
 
     # Needs some time to startup - to ensure when we create new files AFTER this, they are not detected during startup

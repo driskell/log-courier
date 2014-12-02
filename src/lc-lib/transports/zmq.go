@@ -44,12 +44,18 @@ const (
   Monitor_Part_Extraneous
 )
 
+const (
+  default_NetworkConfig_PeerSendQueue int64         = 2
+)
+
 type TransportZmqFactory struct {
   transport string
 
   CurveServerkey string `config:"curve server key"`
   CurvePublickey string `config:"curve public key"`
   CurveSecretkey string `config:"curve secret key"`
+
+  PeerSendQueue int64
 
   hostport_re *regexp.Regexp
 }
@@ -142,10 +148,32 @@ func NewZmqTransportFactory(config *core.Config, config_path string, unused map[
     if err := ret.processConfig(config_path); err != nil {
       return nil, err
     }
-  } else {
-    if err := config.ReportUnusedConfig(config_path, unused); err != nil {
-      return nil, err
-    }
+
+    return ret, nil
+  }
+
+  // Don't allow curve settings
+  if _, ok := unused["CurveServerkey"]; ok {
+    goto CheckUnused
+  }
+  if _, ok := unused["CurvePublickey"]; ok {
+    goto CheckUnused
+  }
+  if _, ok := unused["CurveSecretkey"]; ok {
+    goto CheckUnused
+  }
+
+  if err = config.PopulateConfig(ret, config_path, unused); err != nil {
+    return nil, err
+  }
+
+  if ret.PeerSendQueue == 0 {
+    ret.PeerSendQueue = default_NetworkConfig_PeerSendQueue
+  }
+
+CheckUnused:
+  if err := config.ReportUnusedConfig(config_path, unused); err != nil {
+    return nil, err
   }
 
   return ret, nil
@@ -249,6 +277,11 @@ func (t *TransportZmq) Init() (err error) {
     return fmt.Errorf("Failed to set ZMQ linger period: %s", err)
   }
 
+  // Set the outbound queue
+  if err = t.dealer.SetSndHWM(int(t.config.PeerSendQueue)); err != nil {
+    return fmt.Errorf("Failed to set ZMQ send highwater: %s", err)
+  }
+
   // Monitor socket
   if t.monitor, err = t.context.NewSocket(zmq.PULL); err != nil {
     return fmt.Errorf("Failed to create monitor ZMQ PULL socket: %s", err)
@@ -344,18 +377,27 @@ BridgeLoop:
         break BridgeLoop
       }
     case message = <-t.recv_bridge_chan:
-    case func() chan<- interface{} {
-      if message != nil {
-        return t.recv_chan
-      }
-      return nil
-    }() <- message:
       // The reason we flush recv through the bridge and not directly to recv_chan is so that if
       // the poller was quick and had to cache a receive as the channel was full, it will stop
       // polling - flushing through bridge allows us to signal poller to start polling again
       // It is not the publisher's responsibility to do this, and TLS wouldn't need it
       bridge_in.Send([]byte(zmq_signal_input), 0)
-      message = nil
+
+      // Keep trying to forward on the message
+    ForwardLoop:
+      for {
+        select {
+        case notify := <-t.bridge_chan:
+          bridge_in.Send(notify, 0)
+
+          // Shutdown?
+          if string(notify) == zmq_signal_shutdown {
+            break BridgeLoop
+          }
+        case t.recv_chan <- message:
+          break ForwardLoop
+        }
+      }
     }
   }
 
@@ -408,16 +450,16 @@ func (t *TransportZmq) poller(bridge_out *zmq.Socket) {
       }
     }
 
-    // Process dealer send
-    if t.poll_items[1].REvents&zmq.POLLOUT != 0 {
-      if !t.processDealerOut() {
+    // Process dealer receive
+    if t.poll_items[1].REvents&zmq.POLLIN != 0 {
+      if !t.processDealerIn() {
         break
       }
     }
 
-    // Process dealer receive
-    if t.poll_items[1].REvents&zmq.POLLIN != 0 {
-      if !t.processDealerIn() {
+    // Process dealer send
+    if t.poll_items[1].REvents&zmq.POLLOUT != 0 {
+      if !t.processDealerOut() {
         break
       }
     }
@@ -436,52 +478,49 @@ func (t *TransportZmq) poller(bridge_out *zmq.Socket) {
 }
 
 func (t *TransportZmq) processControlIn(bridge_out *zmq.Socket) (ok bool) {
-  var err error
+  for {
+  RetryControl:
+    msg, err := bridge_out.Recv(zmq.DONTWAIT)
+    if err != nil {
+      switch err {
+      case syscall.EINTR:
+        // Try again
+        goto RetryControl
+      case syscall.EAGAIN:
+        // No more messages
+        return true
+      }
 
-RetryControl:
-  msg, err := bridge_out.Recv(zmq.DONTWAIT)
-  if err != nil {
-    switch err {
-    case syscall.EINTR:
-      // Try again
-      goto RetryControl
-    case syscall.EAGAIN:
-      // No more messages
-      return true
+      // Failure
+      t.recv_chan <- fmt.Errorf("Pull zmq.Socket.Recv failure %s", err)
+      return
     }
 
-    // Failure
-    t.recv_chan <- fmt.Errorf("Pull zmq.Socket.Recv failure %s", err)
-    return
-  }
+    switch string(msg) {
+    case zmq_signal_output:
+      // Start polling for send
+      t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLOUT
+    case zmq_signal_input:
+      // If we staged a receive, process that
+      if t.recv_buff != nil {
+        select {
+        case t.recv_bridge_chan <- t.recv_buff:
+          t.recv_buff = nil
 
-  switch string(msg) {
-  case zmq_signal_output:
-    // Start polling for send
-    t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLOUT
-  case zmq_signal_input:
-    // If we staged a receive, process that
-    if t.recv_buff != nil {
-      select {
-      case t.recv_bridge_chan <- t.recv_buff:
-        t.recv_buff = nil
-
+          // Start polling for receive
+          t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLIN
+        default:
+          // Do nothing, we were asked for receive but channel is already full
+        }
+      } else {
         // Start polling for receive
         t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLIN
-      default:
-        // Do nothing, we were asked for receive but channel is already full
       }
-    } else {
-      // Start polling for receive
-      t.poll_items[1].Events = t.poll_items[1].Events | zmq.POLLIN
+    case zmq_signal_shutdown:
+      // Shutdown
+      return
     }
-  case zmq_signal_shutdown:
-    // Shutdown
-    return
   }
-
-  ok = true
-  return
 }
 
 func (t *TransportZmq) processDealerOut() (ok bool) {

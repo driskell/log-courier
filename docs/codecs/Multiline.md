@@ -12,11 +12,11 @@ option.
 
 - [Example](#example)
 - [Options](#options)
-  - [`"pattern"`](#pattern)
-  - [`"negate"`](#negate)
-  - [`"what"`](#what)
-  - [`"previous timeout"`](#previous-timeout)
   - [`"max multiline bytes"`](#max-multiline-bytes)
+  - [`"negate"`](#negate)
+  - [`"pattern"`](#pattern)
+  - [`"previous timeout"`](#previous-timeout)
+  - [`"what"`](#what)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -32,6 +32,22 @@ option.
 
 ## Options
 
+### `"max multiline bytes"`
+
+*Number. Optional. Default: `spool max bytes`*
+
+The maximum multiline length to process. If a multiline block exeeds this
+length, it will be split across multiple events.
+
+This setting can not be greater than the `spool max bytes` setting.
+
+### `"negate"`
+
+*Boolean. Optional. Default: false*
+
+Negates `pattern` so that a match becomes a non-match and a non-match becomes a
+match.
+
 ### `"pattern"`
 
 *String. Required*
@@ -40,12 +56,13 @@ A regular expression to match against each line.
 
 The syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
 
-### `"negate"`
+### `"previous timeout"`
 
-*Boolean. Optional. Default: false*
+*Duration. Optional. Default: 0. Ignored when "what" != "previous"*
 
-Negates `pattern` so that a match becomes a non-match and a non-match becomes a
-match.
+When using `"previous"`, if `"previous timeout"` is not 0 any buffered lines
+will be flushed as a single event if no more lines are received within the
+specified time period.
 
 ### `"what"`
 
@@ -65,20 +82,3 @@ single event and start a new buffer.
 A side effect of using `"previous"` is that an event will not be flushed until
 the first line of the next event is encountered. The `"previous timeout"` option
 offers a solution to this.
-
-### `"previous timeout"`
-
-*Duration. Optional. Default: 0. Ignored when "what" != "previous"*
-
-When using `"previous"`, if `"previous timeout"` is not 0 any buffered lines
-will be flushed as a single event if no more lines are received within the
-specified time period.
-
-### `"max multiline bytes"`
-
-*Number. Optional. Default: `spool max bytes`*
-
-The maximum multiline length to process. If a multiline block exeeds this
-length, it will be split across multiple events.
-
-This setting can not be greater than the `spool max bytes` setting.

@@ -72,6 +72,12 @@ type TransportTcp struct {
   recv_chan chan interface{}
 
   can_send chan int
+
+  roundrobin int
+  host_is_ip bool
+  host       string
+  port       string
+  addresses  []net.IP
 }
 
 func NewTcpTransportFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.TransportFactory, error) {
@@ -156,37 +162,59 @@ func (t *TransportTcp) Init() error {
     t.disconnect()
   }
 
-  // Pick a random server from the list.
-  hostport := t.net_config.Servers[rand.Int()%len(t.net_config.Servers)]
-  // TODO: Parse and lookup using net.ResolveTCPAddr
-  submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
-  if submatch == nil {
-    return fmt.Errorf("Invalid host:port given: %s", hostport)
+  // Have we exhausted the address list we had?
+  if t.addresses == nil {
+    var err error
+
+    // Round robin to the next server
+    selected := t.net_config.Servers[t.roundrobin%len(t.net_config.Servers)]
+    t.roundrobin++
+
+    t.host, t.port, err = net.SplitHostPort(selected)
+    if err != nil {
+      return fmt.Errorf("Invalid hostport given: %s", selected)
+    }
+
+    // Are we an IP?
+    if ip := net.ParseIP(t.host); ip != nil {
+      t.host_is_ip = true
+      t.addresses = []net.IP{ip}
+    } else {
+      // Lookup the server in DNS
+      t.host_is_ip = false
+      t.addresses, err = net.LookupIP(t.host)
+      if err != nil {
+        return fmt.Errorf("DNS lookup failure \"%s\": %s", t.host, err)
+      }
+    }
   }
 
-  // Lookup the server in DNS (if this is IP it will implicitly return)
-  host := string(submatch[1])
-  port := string(submatch[2])
-  addresses, err := net.LookupHost(host)
-  if err != nil {
-    return fmt.Errorf("DNS lookup failure \"%s\": %s", host, err)
+  // Try next address and drop it from our list
+  addressport := net.JoinHostPort(t.addresses[0].String(), t.port)
+  if len(t.addresses) > 1 {
+    t.addresses = t.addresses[1:]
+  } else {
+    t.addresses = nil
   }
 
-  // Select a random address from the pool of addresses provided by DNS
-  address := addresses[rand.Int()%len(addresses)]
-  addressport := net.JoinHostPort(address, port)
+  var desc string
+  if t.host_is_ip {
+    desc = fmt.Sprintf("%s", addressport)
+  } else {
+    desc = fmt.Sprintf("%s (%s)", addressport, t.host)
+  }
 
-  log.Info("Attempting to connect to %s (%s)", addressport, host)
+  log.Info("Attempting to connect to %s", desc)
 
   tcpsocket, err := net.DialTimeout("tcp", addressport, t.net_config.Timeout)
   if err != nil {
-    return fmt.Errorf("Failed to connect to %s: %s", address, err)
+    return fmt.Errorf("Failed to connect to %s: %s", desc, err)
   }
 
   // Now wrap in TLS if this is the "tls" transport
   if t.config.transport == "tls" {
-    // Set the tlsconfig server name for server validation (since Go 1.3)
-    t.config.tls_config.ServerName = host
+    // Set the tlsconfig server name for server validation (required since Go 1.3)
+    t.config.tls_config.ServerName = t.host
 
     t.tlssocket = tls.Client(&transportTcpWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
     t.tlssocket.SetDeadline(time.Now().Add(t.net_config.Timeout))
@@ -194,7 +222,7 @@ func (t *TransportTcp) Init() error {
     if err != nil {
       t.tlssocket.Close()
       tcpsocket.Close()
-      return fmt.Errorf("TLS Handshake failure with %s: %s", address, err)
+      return fmt.Errorf("TLS Handshake failure with %s: %s", desc, err)
     }
 
     t.socket = t.tlssocket
@@ -202,7 +230,7 @@ func (t *TransportTcp) Init() error {
     t.socket = tcpsocket
   }
 
-  log.Info("Connected to %s", address)
+  log.Info("Connected to %s", desc)
 
   // Signal channels
   t.shutdown = make(chan interface{}, 1)

@@ -66,7 +66,8 @@ type Harvester struct {
   byte_speed float64
   line_count uint64
   byte_count uint64
-  last_eof   *int64
+  last_eof_off *int64
+  last_eof   *time.Time
 }
 
 func NewHarvester(stream core.Stream, config *core.Config, fileconfig *core.FileConfig, offset int64) *Harvester {
@@ -90,6 +91,7 @@ func NewHarvester(stream core.Stream, config *core.Config, fileconfig *core.File
     config:      config,
     fileconfig:  fileconfig,
     offset:      offset,
+    last_eof:    nil,
   }
 
   ret.codec = fileconfig.CodecFactory.NewCodec(ret.eventCallback, ret.offset)
@@ -170,6 +172,8 @@ ReadLoop:
 
       h.codec.Meter()
 
+      h.last_eof = nil
+
       h.Unlock()
 
       // Check shutdown
@@ -223,8 +227,15 @@ ReadLoop:
     }
 
     h.Lock()
-    last_eof := h.offset
-    h.last_eof = &last_eof
+    if h.last_eof_off == nil {
+      h.last_eof_off = new(int64)
+    }
+    *h.last_eof_off = h.offset
+
+    if h.last_eof == nil {
+      h.last_eof = new(time.Time)
+    }
+    *h.last_eof = last_read_time
     h.Unlock()
 
     // Don't check for truncation until we hit the full read_timeout
@@ -385,10 +396,20 @@ func (h *Harvester) Snapshot() *core.Snapshot {
   ret.AddEntry("Speed (Bps)", h.byte_speed)
   ret.AddEntry("Processed lines", h.line_count)
   ret.AddEntry("Current offset", h.offset)
-  if h.last_eof == nil {
-    ret.AddEntry("Last EOF", "Never")
+  if h.last_eof_off == nil {
+    ret.AddEntry("Last EOF Offset", "Never")
   } else {
-    ret.AddEntry("Last EOF", h.last_eof)
+    ret.AddEntry("Last EOF Offset", h.last_eof_off)
+  }
+  if h.last_eof == nil {
+    ret.AddEntry("Status", "Alive")
+  } else {
+    ret.AddEntry("Status", "Idle")
+    if age := time.Since(*h.last_eof); age < h.fileconfig.DeadTime {
+      ret.AddEntry("Dead timer", h.fileconfig.DeadTime-age)
+    } else {
+      ret.AddEntry("Dead timer", "0s")
+    }
   }
 
   if sub_snap := h.codec.Snapshot(); sub_snap != nil {

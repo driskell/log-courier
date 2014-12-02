@@ -8,8 +8,8 @@ The filter codec strips out unwanted events, shipping only those desired.
 
 - [Example](#example)
 - [Options](#options)
-  - [`"patterns"`](#patterns)
   - [`"negate"`](#negate)
+  - [`"patterns"`](#patterns)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -21,6 +21,13 @@ The filter codec strips out unwanted events, shipping only those desired.
 	}
 
 ## Options
+
+### `"negate"`
+
+*Boolean. Optional. Default: false*
+
+Negates `patterns` so that an event is only shipped if none of the patterns
+matched.
 
 ### `"patterns"`
 
@@ -34,10 +41,3 @@ until the next event. As such, patterns with higher hit rates should be
 specified first.
 
 The pattern syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
-
-### `"negate"`
-
-*Boolean. Optional. Default: false*
-
-Negates `patterns` so that an event is only shipped if none of the patterns
-matched.

@@ -31,6 +31,11 @@ import (
   "time"
 )
 
+var (
+  ErrNetworkTimeout = errors.New("Server did not respond within network timeout")
+  ErrNetworkPing    = errors.New("Server did not respond to PING")
+)
+
 const (
   // TODO(driskell): Make the idle timeout configurable like the network timeout is?
   keepalive_timeout          time.Duration = 900 * time.Second
@@ -63,10 +68,13 @@ type Publisher struct {
   registrar_spool  *registrar.RegistrarEventSpool
   shutdown         bool
   line_count       int64
+  retry_count      int64
   seconds_no_ack   int
 
+  timeout_count    int64
   line_speed       float64
   last_line_count  int64
+  last_retry_count int64
   last_measurement time.Time
 }
 
@@ -219,6 +227,8 @@ PublishLoop:
           // Reset timeout
           retry_payload.timeout = time.Now().Add(p.config.Timeout)
 
+          log.Debug("Send now open: Retrying next payload")
+
           // Send the payload again
           if err = p.transport.Write("JDAT", retry_payload.payload); err != nil {
             break SelectLoop
@@ -243,6 +253,7 @@ PublishLoop:
           if resent, err = p.checkResend(); err != nil {
             break SelectLoop
           } else if resent {
+            log.Debug("Send now open: Resent a timed out payload")
             // Expect an ACK within network timeout
             timer.Reset(p.config.Timeout)
             break
@@ -254,9 +265,13 @@ PublishLoop:
           break
         }
 
+        log.Debug("Send now open: Awaiting events for new payload")
+
         // Enable event wait
         input_toggle = p.input
       case events := <-input_toggle:
+        log.Debug("Sending new payload of %d events", len(events))
+
         // Send
         if err = p.sendNewPayload(events); err != nil {
           break SelectLoop
@@ -268,6 +283,7 @@ PublishLoop:
         if p.num_payloads >= p.config.MaxPendingPayloads {
           // Too many pending payloads, disable send temporarily
           p.can_send = nil
+          log.Debug("Pending payload limit reached")
         }
 
         // Expect an ACK within network timeout if this is first payload after idle
@@ -310,22 +326,26 @@ PublishLoop:
           } else if reload != core.Reload_None {
             break SelectLoop
           }
+          log.Debug("No more pending payloads, entering idle")
           timer.Reset(keepalive_timeout)
         } else {
+          log.Debug("%d payloads still pending, resetting timeout", p.num_payloads)
           timer.Reset(p.config.Timeout)
         }
       case <-timer.C:
         // If we have pending payloads, we should've received something by now
         if p.num_payloads != 0 {
-          err = errors.New("Server did not respond within network timeout")
+          err = ErrNetworkTimeout
           break SelectLoop
         }
 
         // If we haven't received a PONG yet this is a timeout
         if p.pending_ping {
-          err = errors.New("Server did not respond to PING")
+          err = ErrNetworkPing
           break SelectLoop
         }
+
+        log.Debug("Idle timeout: sending PING")
 
         // Send a ping and expect a pong back (eventually)
         // If we receive an ACK first, that's fine we'll reset timer
@@ -359,7 +379,7 @@ PublishLoop:
 
         p.can_send = nil
       case <-stats_timer.C:
-        p.updateStatistics(Status_Connected)
+        p.updateStatistics(Status_Connected, nil)
         stats_timer.Reset(time.Second)
       }
     }
@@ -372,7 +392,7 @@ PublishLoop:
         break PublishLoop
       }
 
-      p.updateStatistics(Status_Reconnecting)
+      p.updateStatistics(Status_Reconnecting, err)
 
       // An error occurred, reconnect after timeout
       log.Error("Transport error, will try again: %s", err)
@@ -380,7 +400,7 @@ PublishLoop:
     } else {
       log.Info("Reconnecting transport")
 
-      p.updateStatistics(Status_Reconnecting)
+      p.updateStatistics(Status_Reconnecting, nil)
     }
 
     retry_payload = p.first_payload
@@ -418,7 +438,7 @@ func (p *Publisher) reloadConfig(new_config *core.NetworkConfig) int {
   return reload
 }
 
-func (p *Publisher) updateStatistics(status int) {
+func (p *Publisher) updateStatistics(status int, err error) {
   p.Lock()
 
   p.status = status
@@ -426,7 +446,12 @@ func (p *Publisher) updateStatistics(status int) {
   p.line_speed = core.CalculateSpeed(time.Since(p.last_measurement), p.line_speed, float64(p.line_count - p.last_line_count), &p.seconds_no_ack)
 
   p.last_line_count = p.line_count
+  p.last_retry_count = p.retry_count
   p.last_measurement = time.Now()
+
+  if err == ErrNetworkTimeout || err == ErrNetworkPing {
+    p.timeout_count++
+  }
 
   p.Unlock()
 }
@@ -435,6 +460,8 @@ func (p *Publisher) checkResend() (bool, error) {
   // We're out of sync (received ACKs for later payloads but not earlier ones)
   // Check timeouts of earlier payloads and resend if necessary
   if payload := p.first_payload; payload.timeout.Before(time.Now()) {
+    p.retry_count++
+
     // Do we need to regenerate the payload?
     if payload.payload == nil {
       if err := payload.Generate(); err != nil {
@@ -447,6 +474,7 @@ func (p *Publisher) checkResend() (bool, error) {
 
     // Requeue the payload
     p.first_payload = payload.next
+    payload.next = nil
     p.last_payload.next = payload
     p.last_payload = payload
 
@@ -512,6 +540,8 @@ func (p *Publisher) processPong(message []byte) error {
     return errors.New("Unexpected PONG received")
   }
 
+  log.Debug("PONG message received")
+
   p.pending_ping = false
   return nil
 }
@@ -525,6 +555,8 @@ func (p *Publisher) processAck(message []byte) (err error) {
   // Read the nonce and sequence number acked
   nonce, sequence := string(message[:16]), binary.BigEndian.Uint32(message[16:20])
 
+  log.Debug("ACKN message received for payload %x sequence %d", nonce, sequence)
+
   // Grab the payload the ACK corresponds to by using nonce
   payload, found := p.pending_payloads[nonce]
   if !found {
@@ -534,44 +566,33 @@ func (p *Publisher) processAck(message []byte) (err error) {
 
   ack_events := payload.ack_events
 
-  // Full ACK?
-  // TODO: Protocol error if sequence is too large?
-  if int(sequence) >= payload.num_events-payload.payload_start {
-    p.line_count += int64(payload.num_events-payload.ack_events)
+  // Process ACK
+  lines, complete := payload.Ack(int(sequence))
+  p.line_count += int64(lines)
 
-    // No more events left for this payload, free the payload memory
-    payload.ack_events = len(payload.events)
-    payload.payload = nil
+  if complete {
+    // No more events left for this payload, remove from pending list
     delete(p.pending_payloads, nonce)
-  } else {
-    p.line_count += int64(sequence)-int64(payload.ack_events-payload.payload_start)
-
-    // Only process the ACK if something was actually processed
-    if int(sequence) > payload.ack_events-payload.payload_start {
-      payload.ack_events = int(sequence) + payload.payload_start
-      // If we need to resend, we'll need to regenerate payload, so free that memory early
-      payload.payload = nil
-    }
   }
 
   // We potentially receive out-of-order ACKs due to payloads distributed across servers
   // This is where we enforce ordering again to ensure registrar receives ACK in order
   if payload == p.first_payload {
+    // The out of sync count we have will never include the first payload, so
+    // take the value +1
     out_of_sync := p.out_of_sync + 1
 
-    for payload.ack_events != 0 {
-      if payload.ack_events != len(payload.events) {
-        p.registrar_spool.Add(registrar.NewAckEvent(payload.events[:payload.ack_events]))
-        p.registrar_spool.Send()
-        payload.events = payload.events[payload.ack_events:]
-        payload.num_events = len(payload.events)
-        payload.ack_events = 0
-        payload.payload_start = 0
+    // For each full payload we mark off, we decrease this count, the first we
+    // mark off will always be the first payload - thus the +1. Subsequent
+    // payloads are the out of sync ones - so if we mark them off we decrease
+    // the out of sync count
+    for payload.HasAck() {
+      p.registrar_spool.Add(registrar.NewAckEvent(payload.Rollup()))
+
+      if !payload.Complete() {
         break
       }
 
-      p.registrar_spool.Add(registrar.NewAckEvent(payload.events))
-      p.registrar_spool.Send()
       payload = payload.next
       p.first_payload = payload
       out_of_sync--
@@ -590,8 +611,11 @@ func (p *Publisher) processAck(message []byte) (err error) {
         break
       }
     }
+
+    p.registrar_spool.Send()
   } else if ack_events == 0 {
-    // Mark out of sync so we resend earlier packets in case they were lost
+    // If this is NOT the first payload, and this is the first acknowledgement
+    // for this payload, then increase out of sync payload count
     p.out_of_sync++
   }
 
@@ -615,6 +639,8 @@ func (p *Publisher) Snapshot() []*core.Snapshot {
   snapshot.AddEntry("Speed (Lps)", p.line_speed)
   snapshot.AddEntry("Published lines", p.last_line_count)
   snapshot.AddEntry("Pending Payloads", p.num_payloads)
+  snapshot.AddEntry("Timeouts", p.timeout_count)
+  snapshot.AddEntry("Retransmissions", p.last_retry_count)
 
   p.RUnlock()
 

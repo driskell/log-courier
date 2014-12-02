@@ -88,17 +88,14 @@ func (a *Admin) ProcessCommand(command string) bool {
 
       fmt.Printf("Configuration reload successful\n")
     case "status":
-      var snapshots []*core.Snapshot
+      var snaps *core.Snapshot
 
-      snapshots, err = a.client.FetchSnapshot()
+      snaps, err = a.client.FetchSnapshot()
       if err != nil {
         break
       }
 
-      for _, snap := range snapshots {
-        fmt.Printf("%s:\n", snap.Description())
-        a.renderSnap("  ", snap)
-      }
+      a.renderSnap("", snaps)
     case "help":
       PrintHelp()
     default:
@@ -135,6 +132,8 @@ func (a *Admin) renderSnap(indent string, snap *core.Snapshot) {
         fmt.Printf(indent + "%s: %.2f\n", k, t)
       } else if t, ok := v.(time.Time); ok {
         fmt.Printf(indent + "%s: %s\n", k, t.Format("_2 Jan 2006 15.04.05"))
+      } else if t, ok := v.(time.Duration); ok {
+        fmt.Printf(indent + "%s: %v\n", k, t-(t%time.Second))
       } else {
         fmt.Printf(indent + "%s: %v\n", k, v)
       }

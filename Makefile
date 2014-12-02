@@ -1,4 +1,4 @@
-.PHONY: prepare fix_version all log-courier gem gem_plugins push_gems test doc profile benchmark jrprofile jrbenchmark clean
+.PHONY: prepare fix_version all log-courier gem gem_plugins push_gems test test_go test_rspec doc profile benchmark jrprofile jrbenchmark clean
 
 MAKEFILE := $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
 GOPATH := $(patsubst %/,%,$(dir $(abspath $(MAKEFILE))))
@@ -43,13 +43,17 @@ gem_plugins: | fix_version
 	gem build logstash-input-log-courier.gemspec
 	gem build logstash-output-log-courier.gemspec
 
-push_gems: | gem gem_plugins fix_version vendor/bundle/.GemfileModT
+push_gems: | gem gem_plugins
 	build/push_gems
 
-test: | all vendor/bundle/.GemfileModT
+test_go: | all
 	go get -d -tags "$(TAGS)" $(GOTESTS)
 	go test -tags "$(TAGS)" $(GOTESTS)
+
+test_rspec: | all vendor/bundle/.GemfileModT
 	bundle exec rspec $(TESTS)
+
+test: | test_go test_rspec
 
 selfsigned: | bin/lc-tlscert
 	bin/lc-tlscert

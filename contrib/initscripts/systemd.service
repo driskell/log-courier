@@ -1,0 +1,15 @@
+[Unit]
+Description=Log Courier, a lightweight log shipper with Logstash integration.
+After=syslog.target network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/sysconfig/log-courier
+ExecStartPre=/usr/sbin/log-courier -config-test=true -config=${CONFIG_FILE}
+ExecStart=/usr/sbin/log-courier -config=${CONFIG_FILE}
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s TERM $MAINPID
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

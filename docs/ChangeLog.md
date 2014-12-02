@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
+- [1.2](#12)
 - [1.1](#11)
 - [1.0](#10)
 - [0.15](#015)
@@ -16,6 +17,27 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## 1.2
+
+*1st December 2014*
+
+* Fix repeated partial Acks triggering an incorrect flush of events to registrar
+* Fix a loop that could occur when using ZMQ transport (#68)
+* TLS and TCP transport will now round robin the available server addresses
+instead of randomising
+* Implemented "Dead time in" on `lc-admin` harvester statuses
+* `lc-admin` status output is now sorted and no longer in random order
+* Add a workaround for logstash shutdown looping with "Context is terminated"
+messages (#73)
+* Implement asynchronous ZMQ receive pipeline in the Logstash gem to resolve
+timeout issues with multiple clients and a busy pipeline
+* Implement multithreaded SSL accept in the Logstash gem to prevent a single
+hung handshake attempt from blocking new connections
+* Switch to ruby-cabin logging in the gems to match Logstash logging
+* Updated the RedHat/CentOS 5/6 SysV init script in contrib to follow Fedora
+packaging guidelines
+* Provided a RedHat/CentOS 7 systemd service configuration in contrib
 
 ## 1.1
 

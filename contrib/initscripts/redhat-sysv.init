@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# log-courier Log Courier
+# log-courier Log Courier, a lightweight log shipper with Logstash integration.
 #
 # chkconfig: 2345 90 10
 # description: Controls the Log Courier daemon
@@ -11,7 +11,7 @@
 # Required-Stop:     $local_fs $remote_fs $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Log Courier
+# Short-Description: Log Courier, a lightweight log shipper with Logstash integration.
 ### END INIT INFO
 
 # source function library
@@ -19,8 +19,17 @@
 
 DAEMON='/usr/sbin/log-courier'
 DATA_DIR='/var/lib/log-courier'
-CONFIG_FILE='/etc/log-courier/log-courier.conf'
 PID_FILE='/var/run/log-courier.pid'
+
+# check if file exists
+if [ -f /etc/sysconfig/log-courier ]; then
+	. /etc/sysconfig/log-courier
+fi
+
+# set default config file, if $CONFIG_FILE is not set
+if [ -z ${CONFIG_FILE} ]; then
+	CONFIG_FILE='/etc/log-courier/log-courier.conf'
+fi
 
 do_start() {
 	echo -n "Starting Log Courier: "
@@ -74,6 +83,14 @@ case "$1" in
 			RC=$?
 		fi
 	;;
+	condrestart|try-restart)
+		status -p $PID_FILE $DAEMON
+		RC=$?
+		if [ $RC -eq 0 ]; then
+			$0 restart
+			RC=$?
+		fi
+	;;
 	configtest)
 		echo -n "Configuration test: "
 		TESTRESULT=$( ${DAEMON} -config="${CONFIG_FILE}" -config-test )
@@ -88,7 +105,7 @@ case "$1" in
 		fi
 	;;
 	*)
-		echo "Usage: $0 start|stop|status|reload|restart|configtest"
+		echo "Usage: $0 start|stop|status|reload|restart|condrestart|try-restart|configtest"
 		exit 1
 	;;
 esac
