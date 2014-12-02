@@ -122,6 +122,7 @@ module LogCourier
           peer = Thread.current['LogCourierPeer'] || 'unknown'
           @logger.warn "[LogCourierServer] Connection from #{peer} failed to accept: #{e}" unless @logger.nil?
           client.close rescue nil
+          next
         end
 
         peer = Thread.current['LogCourierPeer'] || 'unknown'
@@ -169,7 +170,7 @@ module LogCourier
           peer = Thread.current['LogCourierPeer'] || 'unknown'
           @logger.warn "[LogCourierServer] Connection from #{peer} failed to initialise: #{e}" unless @logger.nil?
           client.close rescue nil
-          next
+          return
         end
       end
 
