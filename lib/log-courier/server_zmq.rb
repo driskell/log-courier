@@ -258,7 +258,7 @@ module LogCourier
 
           # Create the client and associated thread
           client = ClientZmq.new(self, source, source_str) do
-            try_drop(source)
+            try_drop source, source_str
           end
 
           thread = Thread.new do
