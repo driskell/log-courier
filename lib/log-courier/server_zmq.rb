@@ -66,8 +66,14 @@ module LogCourier
 
       begin
         @context = ZMQ::Context.new
+        fail ZMQError, 'context creation error: ' + ZMQ::Util.error_string if @context.nil?
+
         # Router so we can send multiple responses
         @socket = @context.socket(ZMQ::ROUTER)
+        fail ZMQError, 'socket creation error: ' + ZMQ::Util.error_string if @socket.nil?
+
+        rc = @socket.setsockopt(ZMQ::LINGER, 0)
+        fail ZMQError, 'setsockopt LINGER failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
         if @options[:transport] == 'zmq'
           rc = @socket.setsockopt(ZMQ::CURVE_SERVER, 1)
@@ -104,20 +110,10 @@ module LogCourier
       @poller = ZMQPoll::ZMQPoll.new(@context)
       @poller.register_socket @socket, ZMQ::POLLIN
       @poller.register_queue_to_socket @send_queue, @socket
-
-      # Register a finaliser that sets @context to nil
-      # This allows us to detect the JRuby bug where during "exit!" finalisers
-      # are run but threads are not killed - which leaves us in a situation of
-      # a terminated @context (it has a terminate finalizer) and an IO thread
-      # looping retries
-      # JRuby will still crash and burn, but at least we don't spam STDOUT with
-      # errors
-      ObjectSpace.define_finalizer(self, Proc.new do
-        @context = nil
-      end)
     end
 
     def run(&block)
+      errors = 0
       loop do
         begin
           @poller.poll(5_000) do |socket, r, w|
@@ -126,11 +122,14 @@ module LogCourier
 
             receive &block
           end
+          errors = 0
         rescue ZMQPoll::ZMQError => e
-          # Detect JRuby bug
-          fail e if @context.nil?
-          @logger.warn e, :hint => 'ZMQ recv_string failure' unless @logger.nil?
+          @logger.warn e, :hint => 'ZMQ poll failure' unless @logger.nil?
           next
+        rescue ZMQPoll::ZMQTerm
+          # Fall into shutdown signal, context was terminated
+          # This can happen in JRuby - it seems to run finalisers too early
+          fail ShutdownSignal
         rescue ZMQPoll::TimeoutError
           # We'll let ZeroMQ manage reconnections and new connections
           # There is no point in us doing any form of reconnect ourselves
@@ -145,7 +144,7 @@ module LogCourier
     rescue StandardError, NativeException => e
       # Some other unknown problem
       @logger.warn e, :hint => 'Unknown error, shutting down' unless @logger.nil?
-      raise e
+      return
     ensure
       @poller.shutdown
       @factory.shutdown

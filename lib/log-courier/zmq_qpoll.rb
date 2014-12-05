@@ -24,6 +24,7 @@ end
 
 module ZMQPoll
 	class ZMQError < StandardError; end
+	class ZMQTerm < StandardError; end
 	class TimeoutError < StandardError; end
 
 	class ZMQPoll
@@ -136,7 +137,18 @@ module ZMQPoll
 			end
 
 			rc = @poller.poll(timeout)
-			if rc == -1
+			unless ZMQ::Util.resultcode_ok?(rc)
+				# If we get ETERM or ENOTSOCK - we may have hit JRuby bug where finalisers are called too early
+				# We throw it so the caller knows NOT to retry and hit a bad loop
+				# The downside is - this Jruby bug will cause an inevitable deadlock
+				# The finaliser for the context will have run before finalisers for sockets (random order?)
+				# The resulting ZMQ context termination will block, waiting for sockets to be closed
+				# However, when closing a socket, ffi-rzmq will attempt to remove it's finaliser
+				# This removal will deadlock as it attempts to lock the finaliser list, which is locked by the
+				# thread that is running the ZMQ context termination, which is blocked...
+				# TODO: Raise issue in JRuby github and try to track down why finalisers run while code is running
+				# if the exit! call is made
+				fail ZMQTerm, 'poll error: ' + ZMQ::Util.error_string if ZMQ::Util.errno == ZMQ::ETERM || ZMQ::Util.errno == ZMQ::ENOTSOCK
 				fail ZMQError, 'poll error: ' + ZMQ::Util.error_string
 			end
 
@@ -161,14 +173,20 @@ module ZMQPoll
 			receiver = @context.socket(ZMQ::PULL)
 			fail ZMQError, 'socket creation error: ' + ZMQ::Util.error_string if receiver.nil?
 
+			rc = receiver.setsockopt(ZMQ::LINGER, 0)
+			fail ZMQError, 'setsockopt LINGER failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
+
 			rc = receiver.bind("inproc://zmqpollreceiver-#{receiver.hash}")
-			fail ZMQError, 'bind error: ' + ZMQ::Util.error_string if !ZMQ::Util.resultcode_ok?(rc)
+			fail ZMQError, 'bind error: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
 			sender = @context.socket(ZMQ::PUSH)
 			fail ZMQError, 'socket creation error: ' + ZMQ::Util.error_string if sender.nil?
 
+			rc = sender.setsockopt(ZMQ::LINGER, 0)
+			fail ZMQError, 'setsockopt LINGER failure: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
+
 			rc = sender.connect("inproc://zmqpollreceiver-#{receiver.hash}")
-			fail ZMQError, 'bind error: ' + ZMQ::Util.error_string if !ZMQ::Util.resultcode_ok?(rc)
+			fail ZMQError, 'bind error: ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
 			state = {
 				:callback => :handle_socket_to_socket,

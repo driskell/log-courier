@@ -156,7 +156,7 @@ module LogCourier
     rescue StandardError, NativeException => e
       # Some other unknown problem
       @logger.warn e, :hint => 'Unknown error, shutting down' unless @logger.nil?
-      raise e
+      return
     ensure
       # Raise shutdown in all client threads and join then
       client_threads.each do |_, thr|
