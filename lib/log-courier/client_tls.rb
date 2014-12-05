@@ -52,14 +52,15 @@ module LogCourier
     end
 
     def connect(io_control)
-      begin
-        tls_connect
-      rescue ShutdownSignal
-        raise
-      rescue
+      loop do
+        begin
+          break if tls_connect
+        rescue ShutdownSignal
+          raise
+        end
+
         # TODO: Make this configurable
         sleep 5
-        retry
       end
 
       @send_q = SizedQueue.new 1
@@ -223,16 +224,14 @@ module LogCourier
         @logger['port'] = port
 
         @logger.info 'Connected successfully' unless @logger.nil?
-        return
+        return true
       rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
         @logger.warn 'Connection failed', :error => e.message, :address => address, :port => port unless @logger.nil?
-        return
-      rescue ShutdownSignal
-        return
       rescue StandardError, NativeException => e
         @logger.warn e, :hint => 'Unknown connection failure', :address => address, :port => port unless @logger.nil?
-        raise e
       end
+
+      false
     end
   end
 end
