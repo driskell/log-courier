@@ -16,6 +16,7 @@ Gem::Specification.new do |gem|
     lib/log-courier/server.rb
     lib/log-courier/server_tcp.rb
     lib/log-courier/server_zmq.rb
+    lib/log-courier/zmq_qpoll.rb
   )
 
   gem.add_runtime_dependency 'cabin',      '~> 0.6'
