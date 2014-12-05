@@ -53,6 +53,9 @@ test_go: | all
 test_rspec: | all vendor/bundle/.GemfileModT
 	bundle exec rspec $(TESTS)
 
+jrtest_rspec: | all vendor/bundle/.GemfileJRubyModT
+	jruby -G vendor/bundle/jruby/1.9/bin/rspec $(TESTS)
+
 test: | test_go test_rspec
 
 selfsigned: | bin/lc-tlscert
