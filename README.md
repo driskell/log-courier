@@ -131,4 +131,5 @@ Both tools also generate the required configuration file snippets.
 * [Administration Utility](docs/AdministrationUtility.md)
 * [Command Line Arguments](docs/CommandLineArguments.md)
 * [Configuration](docs/Configuration.md)
+* [Logstash Integration](docs/LogstashIntegration.md)
 * [Change Log](docs/ChangeLog.md)
