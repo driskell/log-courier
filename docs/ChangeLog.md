@@ -23,6 +23,7 @@
 
 *???*
 
+* Added support for Go 1.4
 * Fix missing file in Logstash gem that prevents ZMQ transports from working
 (#75)
 * Fix Logstash gem crash with ZMQ if a client enters idle state (#73)
