@@ -18,6 +18,17 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## ?.?
+
+*???*
+
+* Fix missing file in Logstash gem that prevents ZMQ transports from working
+(#75)
+* Fix Logstash gem crash with ZMQ if a client enters idle state (#73)
+* During shutdown, Logstash gem with ZMQ will now never loop with context
+terminated errors (#73)
+* Significantly improve memory usage when monitoring many files (#78)
+
 ## 1.2
 
 *1st December 2014*
