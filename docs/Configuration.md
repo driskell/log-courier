@@ -209,6 +209,16 @@ Enables sending of Log Courier's internal log to syslog. May be used in conjunct
 
 *This option is ignored by Windows builds.*
 
+### `"line buffer bytes"`
+
+*Number. Optional. Default: 16384*
+
+The size of the line buffer used when reading files.
+
+If `max line bytes` is greater than this value, any lines that exceed this size
+will trigger additional memory allocations. This value should be set to a value
+just above the 90th percentile (or average) line length.
+
 ### `"max line bytes"`
 
 *Number. Optional. Default: 1048576*
