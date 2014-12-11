@@ -37,6 +37,8 @@ events and add regression test
 
 *1st December 2014*
 
+*** Changes ***
+
 * Fix repeated partial Acks triggering an incorrect flush of events to registrar
 * Fix a loop that could occur when using ZMQ transport (#68)
 * TLS and TCP transport will now round robin the available server addresses
@@ -54,6 +56,11 @@ hung handshake attempt from blocking new connections
 packaging guidelines
 * Provided a RedHat/CentOS 7 systemd service configuration in contrib (with
 fixes from @matejzero)
+
+*** Known Issues ***
+
+* The Logstash courier output plugin hangs whilst continuously resending events.
+This issue is fixed in the following version. No workaround is available.
 
 ## 1.1
 
