@@ -29,6 +29,8 @@
 * During shutdown, Logstash gem with ZMQ will now never loop with context
 terminated errors (#73)
 * Significantly improve memory usage when monitoring many files (#78)
+* Fix Logstash courier output plugin hanging whilst continuously resending
+events and add regression test
 
 ## 1.2
 
