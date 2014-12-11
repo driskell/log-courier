@@ -89,6 +89,25 @@ module LogCourier
       return
     end
 
+    def pause_send
+      return if @send_paused
+      @send_paused = true
+      @send_q << nil
+      return
+    end
+
+    def send_paused?
+      @send_paused
+    end
+
+    def resume_send
+      if @send_paused
+        @send_paused = false
+        @send_q << nil
+      end
+      return
+    end
+
     private
 
     def run_send(io_control)
@@ -168,25 +187,6 @@ module LogCourier
     rescue => e
       @logger.warn e, :hint => 'Unknown SSL read error' unless @logger.nil?
       io_control << ['F']
-      return
-    end
-
-    def pause_send
-      return if @send_paused
-      @send_paused = true
-      @send_q << nil
-      return
-    end
-
-    def send_paused
-      @send_paused
-    end
-
-    def resume_send
-      if @send_paused
-        @send_paused = false
-        @send_q << nil
-      end
       return
     end
 

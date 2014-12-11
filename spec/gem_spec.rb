@@ -64,6 +64,6 @@ describe 'log-courier gem' do
       i += 1
     end
 
-    shutdown
+    expect(shutdown).to eq true
   end
 end
