@@ -365,6 +365,9 @@ module LogCourier
       return
     end
 
+    def add_fields(event)
+    end
+
     private
 
     def recv(data)

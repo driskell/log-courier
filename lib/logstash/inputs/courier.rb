@@ -59,8 +59,22 @@ module LogStash
       # Max packet size
       config :max_packet_size, :validate => :number
 
-      # Peer recv queue
+      # The size of the internal queue for each peer
+      #
+      # Sent payloads will be dropped when the queue is full
+      #
+      # This setting should max the max_pending_payloads Log Courier
+      # configuration
       config :peer_recv_queue, :validate => :number
+
+      # Add additional fields to events that identity the peer
+      #
+      # This setting is only effective with the tcp and tls transports
+      #
+      # "peer" identifies the source host and port
+      # "peer_ssl_cn" contains the client certificate hostname for TLS peers
+      # using client certificates
+      config :add_peer_fields, :validate => :boolean
 
       public
 
@@ -81,8 +95,10 @@ module LogStash
           curve_secret_key:      @curve_secret_key,
         }
 
+        # Honour the defaults in the LogCourier gem
         options[:max_packet_size] = @max_packet_size unless @max_packet_size.nil?
         options[:peer_recv_queue] = @peer_recv_queue unless @peer_recv_queue.nil?
+        options[:add_peer_fields] = @add_peer_fields unless @add_peer_fields.nil?
 
         require 'log-courier/server'
         @log_courier = LogCourier::Server.new options

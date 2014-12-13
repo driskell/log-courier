@@ -26,6 +26,11 @@
 * Added support for Go 1.4
 * Added new "host" option to override the "host" field in generated events
 (elasticsearch/logstash-forwarder#260)
+* The Logstash input gem can now be requested to add extra fields to events for
+peer identification. The tls and tcp transports can now add a "peer" field
+containing the host and port, and the tls transport a "peer_ssl_cn" field that
+will be set to the client certificates common name. The "add_peer_fields" plugin
+option will enable these fields (#77)
 * Fix missing file in Logstash gem that prevents ZMQ transports from working
 (#75)
 * Fix Logstash gem crash with ZMQ if a client enters idle state (#73)
