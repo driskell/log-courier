@@ -28,19 +28,6 @@ import (
   "time"
 )
 
-var (
-  event_host string = "localhost.localdomain"
-)
-
-func init() {
-  ret, err := os.Hostname()
-  if err == nil {
-    event_host = ret
-  } else {
-    log.Warning("Failed to determine the FQDN; using '%s'.", event_host)
-  }
-}
-
 type HarvesterFinish struct {
   Last_Offset int64
   Error       error
@@ -270,7 +257,7 @@ ReadLoop:
 
 func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text string) {
   event := core.Event{
-    "host":    event_host,
+    "host":    h.config.General.Host,
     "path":    h.path,
     "offset":  start_offset,
     "message": text,

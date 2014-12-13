@@ -15,6 +15,7 @@
   - [`"admin enabled"`](#admin-enabled)
   - [`"admin listen address"`](#admin-listen-address)
   - [`"log file"`](#log-file)
+  - [`"host"`](#host)
   - [`"log level"`](#log-level)
   - [`"log stdout"`](#log-stdout)
   - [`"log syslog"`](#log-syslog)
@@ -184,6 +185,15 @@ Examples:
 *Requires restart*
 
 A log file to save Log Courier's internal log into. May be used in conjunction with `"log stdout"` and `"log syslog"`.
+
+### `"host"`
+
+*String. Optional. Default: System FQDN.*
+*Configuration reload will only affect new or resumed files*
+
+Every event has an automatic field, "host", that contains the current system
+FQDN. Using this option allows a custom value to be given to the "host" field
+instead of the system FQDN.
 
 ### `"log level"`
 

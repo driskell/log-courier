@@ -24,6 +24,8 @@
 *???*
 
 * Added support for Go 1.4
+* Added new "host" option to override the "host" field in generated events
+(elasticsearch/logstash-forwarder#260)
 * Fix missing file in Logstash gem that prevents ZMQ transports from working
 (#75)
 * Fix Logstash gem crash with ZMQ if a client enters idle state (#73)

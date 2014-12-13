@@ -52,6 +52,10 @@ const (
   default_FileConfig_DeadTime              int64         = 86400
 )
 
+var (
+  default_GeneralConfig_Host string = "localhost.localdomain"
+)
+
 type Config struct {
   General  GeneralConfig `config:"general"`
   Network  NetworkConfig `config:"network"`
@@ -73,6 +77,7 @@ type GeneralConfig struct {
   LogStdout        bool          `config:"log stdout"`
   LogSyslog        bool          `config:"log syslog"`
   LogFile          string        `config:"log file"`
+  Host             string        `config:"host"`
 }
 
 type NetworkConfig struct {
@@ -302,6 +307,16 @@ func (c *Config) Load(path string) (err error) {
   if c.General.MaxLineBytes > c.General.SpoolMaxBytes {
     err = fmt.Errorf("/general/max line bytes can not be greater than /general/spool max bytes")
     return
+  }
+
+  if c.General.Host == "" {
+    ret, err := os.Hostname()
+    if err == nil {
+      c.General.Host = ret
+    } else {
+      c.General.Host = default_GeneralConfig_Host
+      log.Warning("Failed to determine the FQDN; using '%s'.", c.General.Host)
+    }
   }
 
   if c.Network.Transport == "" {
