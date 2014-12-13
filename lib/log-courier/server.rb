@@ -181,6 +181,9 @@ module LogCourier
           event = { 'message' => data_buf }
         end
 
+        # Add peer fields?
+        comm.add_fields event
+
         # Queue the event
         begin
           event_queue.push event, [0, ack_timeout - Time.now.to_i].max
