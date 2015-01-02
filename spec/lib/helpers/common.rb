@@ -158,7 +158,8 @@ shared_context 'Helpers' do
       total:       nil,
       check:       true,
       check_file:  true,
-      check_order: true
+      check_order: true,
+      host:        nil
     }.merge!(args)
 
     # Quick check of the total events we are expecting - but allow time to receive them
@@ -168,6 +169,10 @@ shared_context 'Helpers' do
       end
     else
       total = args[:total]
+    end
+
+    args.delete_if do |k,v|
+      v.nil?
     end
 
     orig_total = total
@@ -189,7 +194,7 @@ shared_context 'Helpers' do
         if block.nil?
           found = @files.find do |f|
             next unless f.pending?
-            f.logged?(check_file: args[:check_file], check_order: args[:check_order], event: e)
+            f.logged?(event: e, **args)
           end
           expect(found).to_not be_nil, "Event received not recognised: #{e}"
         else

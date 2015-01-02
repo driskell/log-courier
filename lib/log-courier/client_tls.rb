@@ -52,14 +52,15 @@ module LogCourier
     end
 
     def connect(io_control)
-      begin
-        tls_connect
-      rescue ShutdownSignal
-        raise
-      rescue
+      loop do
+        begin
+          break if tls_connect
+        rescue ShutdownSignal
+          raise
+        end
+
         # TODO: Make this configurable
         sleep 5
-        retry
       end
 
       @send_q = SizedQueue.new 1
@@ -85,6 +86,25 @@ module LogCourier
     def send(signature, message)
       # Add to send queue
       @send_q << [signature, message.length].pack('A4N') + message
+      return
+    end
+
+    def pause_send
+      return if @send_paused
+      @send_paused = true
+      @send_q << nil
+      return
+    end
+
+    def send_paused?
+      @send_paused
+    end
+
+    def resume_send
+      if @send_paused
+        @send_paused = false
+        @send_q << nil
+      end
       return
     end
 
@@ -170,25 +190,6 @@ module LogCourier
       return
     end
 
-    def pause_send
-      return if @send_paused
-      @send_paused = true
-      @send_q << nil
-      return
-    end
-
-    def send_paused
-      @send_paused
-    end
-
-    def resume_send
-      if @send_paused
-        @send_paused = false
-        @send_q << nil
-      end
-      return
-    end
-
     def tls_connect
       # TODO: Implement random selection - and don't use separate :port - remember to update post_connection_check too
       address = @options[:addresses][0]
@@ -208,7 +209,7 @@ module LogCourier
 
         cert_store = OpenSSL::X509::Store.new
         cert_store.add_file(@options[:ssl_ca])
-        #ssl.cert_store = cert_store
+        ssl.cert_store = cert_store
         ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
 
         @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
@@ -223,16 +224,14 @@ module LogCourier
         @logger['port'] = port
 
         @logger.info 'Connected successfully' unless @logger.nil?
-        return
+        return true
       rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
         @logger.warn 'Connection failed', :error => e.message, :address => address, :port => port unless @logger.nil?
-        return
-      rescue ShutdownSignal
-        return
       rescue StandardError, NativeException => e
         @logger.warn e, :hint => 'Unknown connection failure', :address => address, :port => port unless @logger.nil?
-        raise e
       end
+
+      false
     end
   end
 end

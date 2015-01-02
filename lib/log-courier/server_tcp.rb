@@ -63,6 +63,7 @@ module LogCourier
         ssl_verify_default_ca: false,
         ssl_verify_ca:         nil,
         max_packet_size:       10_485_760,
+        add_peer_fields:       false,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -156,7 +157,7 @@ module LogCourier
     rescue StandardError, NativeException => e
       # Some other unknown problem
       @logger.warn e, :hint => 'Unknown error, shutting down' unless @logger.nil?
-      raise e
+      return
     ensure
       # Raise shutdown in all client threads and join then
       client_threads.each do |_, thr|
@@ -195,8 +196,20 @@ module LogCourier
       @logger = logger
       @fd = fd
       @peer = peer
+      @peer_fields = {}
       @in_progress = false
       @options = options
+
+      if @options[:add_peer_fields]
+        @peer_fields['peer'] = peer
+        if @options[:transport] == 'tls' && !@fd.peer_cert.nil?
+          @peer_fields['peer_ssl_cn'] = get_cn(@fd.peer_cert)
+        end
+      end
+    end
+
+    def add_fields(event)
+      event.merge! @peer_fields if @peer_fields.length != 0
     end
 
     def run
@@ -283,6 +296,13 @@ module LogCourier
     end
 
     private
+
+    def get_cn(cert)
+      cert.subject.to_a.find do |oid, value|
+        return value if oid == "CN"
+      end
+      nil
+    end
 
     def recv(need)
       reset_timeout

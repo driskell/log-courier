@@ -1,6 +1,6 @@
 Gem::Specification.new do |gem|
   gem.name              = 'log-courier'
-  gem.version           = '1.2'
+  gem.version           = '1.3'
   gem.description       = 'Log Courier library'
   gem.summary           = 'Receive events from Log Courier and transmit between LogStash instances'
   gem.homepage          = 'https://github.com/driskell/log-courier'
@@ -16,6 +16,7 @@ Gem::Specification.new do |gem|
     lib/log-courier/server.rb
     lib/log-courier/server_tcp.rb
     lib/log-courier/server_zmq.rb
+    lib/log-courier/zmq_qpoll.rb
   )
 
   gem.add_runtime_dependency 'cabin',      '~> 0.6'
