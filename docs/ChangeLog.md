@@ -39,6 +39,8 @@ terminated errors (#73)
 * Significantly improve memory usage when monitoring many files (#78)
 * Fix Logstash courier output plugin hanging whilst continuously resending
 events and add regression test
+* Fix Logstash courier output plugin not verifying the remote certificate
+correctly
 * Various other minor tweaks and fixes
 
 ## 1.2
