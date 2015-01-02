@@ -19,9 +19,9 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## ?.?
+## 1.3
 
-*???*
+*2nd January 2014*
 
 * Added support for Go 1.4
 * Added new "host" option to override the "host" field in generated events
@@ -39,12 +39,13 @@ terminated errors (#73)
 * Significantly improve memory usage when monitoring many files (#78)
 * Fix Logstash courier output plugin hanging whilst continuously resending
 events and add regression test
+* Various other minor tweaks and fixes
 
 ## 1.2
 
 *1st December 2014*
 
-*** Changes ***
+***Changes***
 
 * Fix repeated partial Acks triggering an incorrect flush of events to registrar
 * Fix a loop that could occur when using ZMQ transport (#68)
@@ -64,7 +65,7 @@ packaging guidelines
 * Provided a RedHat/CentOS 7 systemd service configuration in contrib (with
 fixes from @matejzero)
 
-*** Known Issues ***
+***Known Issues***
 
 * The Logstash courier output plugin hangs whilst continuously resending events.
 This issue is fixed in the following version. No workaround is available.
@@ -128,9 +129,10 @@ that freezes log shipping
 * Provide more information when the gem encounters ProtocolError failures
 * Fix ssl_verify usage triggering error, "Either 'ssl_verify_default_ca' or
 'ssl_verify_ca' must be specified when ssl_verify is true" (#41)
-* Fix  (#45)
-* Restore message reliability and correctly perform partial ack. Since 0.9 a
-full event spool from log-courier could be lost (default 1024) instead of just
+* Fix previous_timeout multiline codec setting (#45)
+* Restore message reliability and correctly perform partial ack. Since 0.9
+events from log-courier could be lost after a broken connection and not
+retransmitted
 * Significantly improve Log Courier gem performance within JRuby by switching
 JrJackson parse mode from string to raw+bigdecimal
 * Add unix domain socket support to the administration connection
@@ -149,13 +151,13 @@ them, and make the size configurable (#40)
 
 * Added new administration utility that can connect to a running Log Courier
 instance and report on the current shipping status
-* Added new filter codec to allow selective shipping and reduce LogStash loads
-* Fixed LogStash plugin entering infinite loop during LogStash shutdown sequence
-when using ZMQ. The plugin now shuts down gracefully along with LogStash (#30)
+* Added new filter codec to allow selective shipping and reduce Logstash loads
+* Fixed Logstash plugin entering infinite loop during Logstash shutdown sequence
+when using ZMQ. The plugin now shuts down gracefully along with Logstash (#30)
 * Fixed unexpected registrar conflict messages appearing for a short time after
 a log rotation occurred (#34)
-* Fixed LogStash crashing with "Operation cannot be accomplished in current
-state" when using ZMQ and LogStash hits a bottleneck requiring partial ACKs to
+* Fixed Logstash crashing with "Operation cannot be accomplished in current
+state" when using ZMQ and Logstash hits a bottleneck requiring partial ACKs to
 be sent to Log Courier
 * Improved performance of the Log Courier Logstash plugins
 * Various other minor rework and improvements
@@ -207,7 +209,7 @@ self-signed certificates and the necessary log snippets like genkey did for ZMQ
 
 * Support for Go 1.3 (#3)
 * Configuration can be reloaded while log courier is running by sending the
-SIGHUP signal (*nix only)
+SIGHUP signal (\*nix only)
 * Additional configuration files can be imported by the main configuration file
 using the new `"includes"` section which is an array of Fileglobs. (#5)
 * Added `make selfsigned` to allow quick generation of SSL certificates for
@@ -227,7 +229,7 @@ all fields having the same value as the first field. (#4)
 
 * Restructure and tidy the project and implement new build tools
 * Rename to **Log Courier**
-* Implement an completely new test framework with even more tests
+* Implement a completely new test framework with even more tests
 * Introduce a new protocol and TLS transport layer that is faster on high
 latency links such as the internet
 * Implement support for a CurveZMQ transport to allow transmission of logs to
