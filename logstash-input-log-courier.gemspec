@@ -1,6 +1,6 @@
 Gem::Specification.new do |gem|
   gem.name              = 'logstash-input-log-courier'
-  gem.version           = '1.2'
+  gem.version           = '1.3'
   gem.description       = 'Log Courier Input Logstash Plugin'
   gem.summary           = 'Receive events from Log Courier and Logstash using the Log Courier protocol'
   gem.homepage          = 'https://github.com/driskell/log-courier'
@@ -16,5 +16,5 @@ Gem::Specification.new do |gem|
   gem.metadata = { 'logstash_plugin' => 'true', 'group' => 'input' }
 
   gem.add_runtime_dependency 'logstash', '~> 1.4'
-  gem.add_runtime_dependency 'log-courier', '= 1.2'
+  gem.add_runtime_dependency 'log-courier', '= 1.3'
 end
