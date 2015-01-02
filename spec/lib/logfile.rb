@@ -79,14 +79,15 @@ class LogFile
 
   def logged?(args = {})
     args = {
-      event: { 'host' => nil },
-      check_file: true,
-      check_order: true
+      event:       { 'host' => nil },
+      check_file:  true,
+      check_order: true,
+      host:        @host
     }.merge!(args)
 
     event = args[:event]
 
-    return false if event['host'] != @host
+    return false if event['host'] != args[:host]
     return false if args[:check_file] && event['path'] != @orig_path
 
     if args[:check_order]

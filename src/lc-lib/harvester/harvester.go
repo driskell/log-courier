@@ -28,19 +28,6 @@ import (
   "time"
 )
 
-var (
-  event_host string = "localhost.localdomain"
-)
-
-func init() {
-  ret, err := os.Hostname()
-  if err == nil {
-    event_host = ret
-  } else {
-    log.Warning("Failed to determine the FQDN; using '%s'.", event_host)
-  }
-}
-
 type HarvesterFinish struct {
   Last_Offset int64
   Error       error
@@ -145,7 +132,7 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) 
   }
 
   // The buffer size limits the maximum line length we can read, including terminator
-  reader := NewLineReader(h.file, h.config.General.MaxLineBytes)
+  reader := NewLineReader(h.file, int(h.config.General.LineBufferBytes), int(h.config.General.MaxLineBytes))
 
   // TODO: Make configurable?
   read_timeout := 10 * time.Second
@@ -182,11 +169,6 @@ ReadLoop:
         break ReadLoop
       default:
       }
-    }
-
-    if err == ErrBufferFull {
-      err = nil
-      h.split = true
     }
 
     if err == nil {
@@ -275,7 +257,7 @@ ReadLoop:
 
 func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text string) {
   event := core.Event{
-    "host":    event_host,
+    "host":    h.config.General.Host,
     "path":    h.path,
     "offset":  start_offset,
     "message": text,
@@ -365,10 +347,14 @@ func (h *Harvester) readline(reader *LineReader) (string, int, error) {
       } else {
         newline = 1
       }
+    } else if err == ErrLineTooLong {
+      h.split = true
+      err = nil
     }
 
     // Return the line along with the length including line ending
     length := len(line)
+    // We use string() to copy the memory, which is a slice of the line buffer we need to re-use
     return string(line[:length-newline]), length, err
   }
 

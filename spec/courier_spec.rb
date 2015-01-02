@@ -622,7 +622,8 @@ describe 'log-courier' do
         "log level": "debug",
         "log syslog": false,
         "log stdout": false,
-        "log file": "#{TEMP_PATH}/logs/log.log"
+        "log file": "#{TEMP_PATH}/logs/log.log",
+        "host": "custom.hostname.local"
       },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
@@ -641,7 +642,7 @@ describe 'log-courier' do
     f.log 5000
 
     # Receive and check
-    receive_and_check
+    receive_and_check host: 'custom.hostname.local'
 
     shutdown
     expect(File.file?("#{TEMP_PATH}/logs/log.log")).to be true

@@ -39,6 +39,7 @@ const (
   default_GeneralConfig_SpoolSize          int64         = 1024
   default_GeneralConfig_SpoolMaxBytes      int64         = 10485760
   default_GeneralConfig_SpoolTimeout       time.Duration = 5 * time.Second
+  default_GeneralConfig_LineBufferBytes    int64         = 16384
   default_GeneralConfig_MaxLineBytes       int64         = 1048576
   default_GeneralConfig_LogLevel           logging.Level = logging.INFO
   default_GeneralConfig_LogStdout          bool          = true
@@ -49,6 +50,10 @@ const (
   default_NetworkConfig_MaxPendingPayloads int64         = 10
   default_FileConfig_Codec                 string        = "plain"
   default_FileConfig_DeadTime              int64         = 86400
+)
+
+var (
+  default_GeneralConfig_Host string = "localhost.localdomain"
 )
 
 type Config struct {
@@ -66,11 +71,13 @@ type GeneralConfig struct {
   SpoolSize        int64         `config:"spool size"`
   SpoolMaxBytes    int64         `config:"spool max bytes"`
   SpoolTimeout     time.Duration `config:"spool timeout"`
+  LineBufferBytes  int64         `config:"line buffer bytes"`
   MaxLineBytes     int64         `config:"max line bytes"`
   LogLevel         logging.Level `config:"log level"`
   LogStdout        bool          `config:"log stdout"`
   LogSyslog        bool          `config:"log syslog"`
   LogFile          string        `config:"log file"`
+  Host             string        `config:"host"`
 }
 
 type NetworkConfig struct {
@@ -285,6 +292,14 @@ func (c *Config) Load(path string) (err error) {
     c.General.SpoolTimeout = default_GeneralConfig_SpoolTimeout
   }
 
+  if c.General.LineBufferBytes == 0 {
+    c.General.LineBufferBytes = default_GeneralConfig_LineBufferBytes
+  }
+  if c.General.LineBufferBytes < 1 {
+    err = fmt.Errorf("/general/line buffer bytes must be greater than 1")
+    return
+  }
+
   // Max line bytes can not be larger than spool max bytes
   if c.General.MaxLineBytes == 0 {
     c.General.MaxLineBytes = default_GeneralConfig_MaxLineBytes
@@ -292,6 +307,16 @@ func (c *Config) Load(path string) (err error) {
   if c.General.MaxLineBytes > c.General.SpoolMaxBytes {
     err = fmt.Errorf("/general/max line bytes can not be greater than /general/spool max bytes")
     return
+  }
+
+  if c.General.Host == "" {
+    ret, err := os.Hostname()
+    if err == nil {
+      c.General.Host = ret
+    } else {
+      c.General.Host = default_GeneralConfig_Host
+      log.Warning("Failed to determine the FQDN; using '%s'.", c.General.Host)
+    }
   }
 
   if c.Network.Transport == "" {

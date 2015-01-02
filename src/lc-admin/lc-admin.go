@@ -25,14 +25,28 @@ import (
   "os"
   "os/signal"
   "strings"
+  "text/scanner"
   "time"
 )
+
+type CommandError struct {
+  message string
+}
+
+func (c *CommandError) Error() string {
+  return c.message
+}
+
+var CommandEOF *CommandError = &CommandError{"EOF"}
+var CommandTooManyArgs *CommandError = &CommandError{"Too many arguments"}
 
 type Admin struct {
   client        *admin.Client
   connected     bool
   quiet         bool
   admin_connect string
+  scanner       scanner.Scanner
+  scanner_err   error
 }
 
 func NewAdmin(quiet bool, admin_connect string) *Admin {
@@ -79,8 +93,18 @@ func (a *Admin) ProcessCommand(command string) bool {
 
     var err error
 
+    a.initScanner(command)
+    if command, err = a.scanIdent(); err != nil {
+      goto Error
+    }
+
     switch command {
     case "reload":
+      if !a.scanEOF() {
+        err = CommandTooManyArgs
+        break
+      }
+
       err = a.client.Reload()
       if err != nil {
         break
@@ -88,25 +112,44 @@ func (a *Admin) ProcessCommand(command string) bool {
 
       fmt.Printf("Configuration reload successful\n")
     case "status":
-      var snaps *core.Snapshot
+      var format string
+      format, err = a.scanIdent()
+      if err != nil && err != CommandEOF {
+        break
+      }
 
+      if !a.scanEOF() {
+        err = CommandTooManyArgs
+        break
+      }
+
+      var snaps *core.Snapshot
       snaps, err = a.client.FetchSnapshot()
       if err != nil {
         break
       }
 
-      a.renderSnap("", snaps)
+      a.renderSnap(format, snaps)
     case "help":
+      if !a.scanEOF() {
+        err = CommandTooManyArgs
+        break
+      }
+
       PrintHelp()
     default:
-      fmt.Printf("Unknown command: %s\n", command)
+      err = &CommandError{fmt.Sprintf("Unknown command: %s", command)}
     }
 
     if err == nil {
       return true
     }
 
-    if _, ok := err.(*admin.ErrorResponse); ok {
+  Error:
+    if _, ok := err.(*CommandError); ok {
+      fmt.Printf("Parse error: %s\n", err)
+      return false
+    } else if _, ok := err.(*admin.ErrorResponse); ok {
       fmt.Printf("Log Courier returned an error: %s\n", err)
       return false
     } else {
@@ -122,20 +165,105 @@ func (a *Admin) ProcessCommand(command string) bool {
   return false
 }
 
-func (a *Admin) renderSnap(indent string, snap *core.Snapshot) {
+func (a *Admin) initScanner(command string) {
+  a.scanner.Init(strings.NewReader(command))
+  a.scanner.Mode = scanner.ScanIdents | scanner.ScanInts | scanner.ScanStrings
+  a.scanner.Whitespace = 1<<' '
+
+  a.scanner.Error = func(s *scanner.Scanner, msg string) {
+    a.scanner_err = &CommandError{msg}
+  }
+}
+
+func (a *Admin) scanIdent() (string, error) {
+  r := a.scanner.Scan()
+  if a.scanner_err != nil {
+    return "", a.scanner_err
+  }
+  switch r {
+  case scanner.Ident:
+    return a.scanner.TokenText(), nil
+  case scanner.EOF:
+    return "", CommandEOF
+  }
+  return "", &CommandError{"Invalid token"}
+}
+
+func (a *Admin) scanEOF() bool {
+  r := a.scanner.Scan()
+  if a.scanner_err == nil && r == scanner.EOF {
+    return true
+  }
+  return false
+}
+
+func (a *Admin) renderSnap(format string, snap *core.Snapshot) {
+  switch format {
+  case "json":
+    fmt.Printf("{\n")
+    a.renderSnapJSON("\t", snap)
+    fmt.Printf("}\n")
+  default:
+    a.renderSnapYAML("", snap)
+  }
+}
+
+func (a *Admin) renderSnapJSON(indent string, snap *core.Snapshot) {
   if snap.NumEntries() != 0 {
     for i, j := 0, snap.NumEntries(); i < j; i = i+1 {
       k, v := snap.Entry(i)
-      if t, ok := v.(string); ok {
-        fmt.Printf(indent + "%s: %s\n", k, t)
-      } else if t, ok := v.(float64); ok {
-        fmt.Printf(indent + "%s: %.2f\n", k, t)
-      } else if t, ok := v.(time.Time); ok {
-        fmt.Printf(indent + "%s: %s\n", k, t.Format("_2 Jan 2006 15.04.05"))
-      } else if t, ok := v.(time.Duration); ok {
-        fmt.Printf(indent + "%s: %v\n", k, t-(t%time.Second))
+      switch t := v.(type) {
+      case string:
+        fmt.Printf(indent + "%q: %q", k, t)
+      case int8, int16, int32, int64, uint8, uint16, uint32, uint64:
+        fmt.Printf(indent + "%q: %d", k, t)
+      case float32, float64:
+        fmt.Printf(indent + "%q: %.2f", k, t)
+      case time.Time:
+        fmt.Printf(indent + "%q: %q", k, t.Format("_2 Jan 2006 15.04.05"))
+      case time.Duration:
+        fmt.Printf(indent + "%q: %q", k, (t-(t%time.Second)).String())
+      default:
+        fmt.Printf(indent + "%q: %q", k, fmt.Sprintf("%v", t))
+      }
+      if i + 1 < j || snap.NumSubs() != 0 {
+        fmt.Printf(",\n")
       } else {
-        fmt.Printf(indent + "%s: %v\n", k, v)
+        fmt.Printf("\n")
+      }
+    }
+  }
+  if snap.NumSubs() != 0 {
+    for i, j := 0, snap.NumSubs(); i < j; i = i+1 {
+      sub_snap := snap.Sub(i)
+      fmt.Printf(indent + "%q: {\n", sub_snap.Description())
+      a.renderSnapJSON(indent + "\t", sub_snap)
+      if i + 1 < j {
+        fmt.Printf(indent + "},\n")
+      } else {
+        fmt.Printf(indent + "}\n")
+      }
+    }
+  }
+}
+
+func (a *Admin) renderSnapYAML(indent string, snap *core.Snapshot) {
+  if snap.NumEntries() != 0 {
+    for i, j := 0, snap.NumEntries(); i < j; i = i+1 {
+      k, v := snap.Entry(i)
+      switch t := v.(type) {
+      case string:
+        fmt.Printf(indent + "%s: %s\n", k, t)
+      case int, int8, int16, int32, int64, uint8, uint16, uint32, uint64:
+        fmt.Printf(indent + "%s: %d\n", k, t)
+      case float32, float64:
+        fmt.Printf(indent + "%s: %.2f\n", k, t)
+      case time.Time:
+        fmt.Printf(indent + "%s: %s\n", k, t.Format("_2 Jan 2006 15.04.05"))
+      case time.Duration:
+        fmt.Printf(indent + "%s: %s\n", k, (t-(t%time.Second)).String())
+      default:
+        fmt.Printf(indent + "%s: %v\n", k, t)
       }
     }
   }
@@ -143,7 +271,7 @@ func (a *Admin) renderSnap(indent string, snap *core.Snapshot) {
     for i, j := 0, snap.NumSubs(); i < j; i = i+1 {
       sub_snap := snap.Sub(i)
       fmt.Printf(indent + "%s:\n", sub_snap.Description())
-      a.renderSnap(indent + "  ", sub_snap)
+      a.renderSnapYAML(indent + "  ", sub_snap)
     }
   }
 }

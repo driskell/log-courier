@@ -15,9 +15,11 @@
   - [`"admin enabled"`](#admin-enabled)
   - [`"admin listen address"`](#admin-listen-address)
   - [`"log file"`](#log-file)
+  - [`"host"`](#host)
   - [`"log level"`](#log-level)
   - [`"log stdout"`](#log-stdout)
   - [`"log syslog"`](#log-syslog)
+  - [`"line buffer bytes"`](#line-buffer-bytes)
   - [`"max line bytes"`](#max-line-bytes)
   - [`"persist directory"`](#persist-directory)
   - [`"prospect interval"`](#prospect-interval)
@@ -29,7 +31,6 @@
   - [`"curve public key"`](#curve-public-key)
   - [`"curve secret key"`](#curve-secret-key)
   - [`"max pending payloads"`](#max-pending-payloads)
-  - [`"peer send queue"`](#peer-send-queue)
   - [`"reconnect"`](#reconnect)
   - [`"servers"`](#servers)
   - [`"ssl ca"`](#ssl-ca)
@@ -185,6 +186,15 @@ Examples:
 
 A log file to save Log Courier's internal log into. May be used in conjunction with `"log stdout"` and `"log syslog"`.
 
+### `"host"`
+
+*String. Optional. Default: System FQDN.*
+*Configuration reload will only affect new or resumed files*
+
+Every event has an automatic field, "host", that contains the current system
+FQDN. Using this option allows a custom value to be given to the "host" field
+instead of the system FQDN.
+
 ### `"log level"`
 
 *String. Optional. Default: "info".  
@@ -208,6 +218,16 @@ Enables sending of Log Courier's internal log to the console (stdout). May be us
 Enables sending of Log Courier's internal log to syslog. May be used in conjunction with `"log stdout"` and `"log file"`.
 
 *This option is ignored by Windows builds.*
+
+### `"line buffer bytes"`
+
+*Number. Optional. Default: 16384*
+
+The size of the line buffer used when reading files.
+
+If `max line bytes` is greater than this value, any lines that exceed this size
+will trigger additional memory allocations. This value should be set to a value
+just above the 90th percentile (or average) line length.
 
 ### `"max line bytes"`
 

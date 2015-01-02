@@ -705,6 +705,16 @@ func (t *TransportZmq) Write(signature string, message []byte) (err error) {
     }
   }
 
+  // TODO: Fix regression where we could pend all payloads on a single ZMQ peer
+  // We should switch to full freelance pattern - ROUTER-to-ROUTER
+  // For this to work with ZMQ 3.2 we need to force identities on the server
+  // as the connection IP:Port and use those identities as available send pool
+  // For ZMQ 4+ we can skip using those and enable ZMQ_ROUTER_PROBE which sends
+  // an empty message on connection - server should respond with empty message
+  // which will allow us to populate identity list that way.
+  // ZMQ 4 approach is rigid as it means we don't need to rely on fixed
+  // identities
+
   t.send_chan <- &ZMQMessage{part: []byte(""), final: false}
   t.send_chan <- &ZMQMessage{part: write_buffer.Bytes(), final: true}
 

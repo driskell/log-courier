@@ -97,6 +97,9 @@ verification (tls)
 * curve_secret_key - CurveZMQ secret key for the server (zmq)
 * max_packet_size - The maximum packet size to accept (default 10485760,
 corresponds to Log Courier's `"spool max bytes"`)
+* peer_recv_queue - The size of the internal queue for each peer
+* add_peer_fields - Add "peer" field to events that identifies source host, and
+"peer_ssl_dn" for TLS peers with client certificates
 
 The following options are available for the output plugin:
 

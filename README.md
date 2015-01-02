@@ -51,7 +51,7 @@ plugin
 ### Requirements
 
 1. \*nix, OS X or Windows
-1. The [golang](http://golang.org/doc/install) compiler tools (1.2 or 1.3)
+1. The [golang](http://golang.org/doc/install) compiler tools (1.2-1.4)
 1. [git](http://git-scm.com)
 1. GNU make
 
@@ -131,4 +131,5 @@ Both tools also generate the required configuration file snippets.
 * [Administration Utility](docs/AdministrationUtility.md)
 * [Command Line Arguments](docs/CommandLineArguments.md)
 * [Configuration](docs/Configuration.md)
+* [Logstash Integration](docs/LogstashIntegration.md)
 * [Change Log](docs/ChangeLog.md)

@@ -41,27 +41,33 @@ Requests Log Courier to reload its configuration.
 
 ### `status`
 
-Displays Log Courier's current shipping status in YAML format for ease of
-parsing by external scripts and utilities.
+*Syntax: status [<format>]*
+
+Displays Log Courier's current shipping status in the requested format.
+
+<format> must be yaml or json. If not specified, the default format is yaml.
 
 Following is an example of the output this command provides.
 
-	/var/log/syslog (0xc21004fa20):
+	"State: /var/log/nginx/access.log (0xc2080681e0)":
 	  Status: Running
 	  Harvester:
-	    Speed (Lps): 1914.93
-	    Speed (Bps): 152600.51
-	    Processed lines: 5000
-	    Last offset: 398893
-	    Last EOF: 398893
-	/var/log/maillog (0xc21004fc60):
-	  Status: Running
-	  Harvester:
-	    Speed (Lps): 2742.58
-	    Speed (Bps): 218799.19
-	    Processed lines: 5000
-	    Last offset: 398893
-	    Last EOF: 398893
+	    Speed (Lps): 20205.40
+	    Speed (Bps): 1627565.16
+	    Processed lines: 43024
+	    Current offset: 3473919
+	    Last EOF Offset: Never
+	    Status: Alive
+	Prospector:
+	  Watched files: 1
+	  Active states: 1
+	Publisher:
+	  Status: Connected
+	  Speed (Lps): 8735.15
+	  Published lines: 23552
+	  Pending Payloads: 10
+	  Timeouts: 0
+	  Retransmissions: 0
 
 ## Command Line Options
 

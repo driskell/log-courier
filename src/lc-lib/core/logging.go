@@ -16,4 +16,10 @@
 
 package core
 
-const Log_Courier_Version string = "1.3"
+import "github.com/op/go-logging"
+
+var log *logging.Logger
+
+func init() {
+	log = logging.MustGetLogger("core")
+}

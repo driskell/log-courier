@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
 
+- [?.?](#)
 - [1.2](#12)
 - [1.1](#11)
 - [1.0](#10)
@@ -18,9 +19,35 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## 1.3
+
+*2nd January 2014*
+
+* Added support for Go 1.4
+* Added new "host" option to override the "host" field in generated events
+(elasticsearch/logstash-forwarder#260)
+* The Logstash input gem can now be requested to add extra fields to events for
+peer identification. The tls and tcp transports can now add a "peer" field
+containing the host and port, and the tls transport a "peer_ssl_cn" field that
+will be set to the client certificates common name. The "add_peer_fields" plugin
+option will enable these fields (#77)
+* Fix missing file in Logstash gem that prevents ZMQ transports from working
+(#75)
+* Fix Logstash gem crash with ZMQ if a client enters idle state (#73)
+* During shutdown, Logstash gem with ZMQ will now never loop with context
+terminated errors (#73)
+* Significantly improve memory usage when monitoring many files (#78)
+* Fix Logstash courier output plugin hanging whilst continuously resending
+events and add regression test
+* Fix Logstash courier output plugin not verifying the remote certificate
+correctly
+* Various other minor tweaks and fixes
+
 ## 1.2
 
 *1st December 2014*
+
+***Changes***
 
 * Fix repeated partial Acks triggering an incorrect flush of events to registrar
 * Fix a loop that could occur when using ZMQ transport (#68)
@@ -37,7 +64,13 @@ hung handshake attempt from blocking new connections
 * Switch to ruby-cabin logging in the gems to match Logstash logging
 * Updated the RedHat/CentOS 5/6 SysV init script in contrib to follow Fedora
 packaging guidelines
-* Provided a RedHat/CentOS 7 systemd service configuration in contrib
+* Provided a RedHat/CentOS 7 systemd service configuration in contrib (with
+fixes from @matejzero)
+
+***Known Issues***
+
+* The Logstash courier output plugin hangs whilst continuously resending events.
+This issue is fixed in the following version. No workaround is available.
 
 ## 1.1
 
@@ -98,9 +131,10 @@ that freezes log shipping
 * Provide more information when the gem encounters ProtocolError failures
 * Fix ssl_verify usage triggering error, "Either 'ssl_verify_default_ca' or
 'ssl_verify_ca' must be specified when ssl_verify is true" (#41)
-* Fix  (#45)
-* Restore message reliability and correctly perform partial ack. Since 0.9 a
-full event spool from log-courier could be lost (default 1024) instead of just
+* Fix previous_timeout multiline codec setting (#45)
+* Restore message reliability and correctly perform partial ack. Since 0.9
+events from log-courier could be lost after a broken connection and not
+retransmitted
 * Significantly improve Log Courier gem performance within JRuby by switching
 JrJackson parse mode from string to raw+bigdecimal
 * Add unix domain socket support to the administration connection
@@ -119,13 +153,13 @@ them, and make the size configurable (#40)
 
 * Added new administration utility that can connect to a running Log Courier
 instance and report on the current shipping status
-* Added new filter codec to allow selective shipping and reduce LogStash loads
-* Fixed LogStash plugin entering infinite loop during LogStash shutdown sequence
-when using ZMQ. The plugin now shuts down gracefully along with LogStash (#30)
+* Added new filter codec to allow selective shipping and reduce Logstash loads
+* Fixed Logstash plugin entering infinite loop during Logstash shutdown sequence
+when using ZMQ. The plugin now shuts down gracefully along with Logstash (#30)
 * Fixed unexpected registrar conflict messages appearing for a short time after
 a log rotation occurred (#34)
-* Fixed LogStash crashing with "Operation cannot be accomplished in current
-state" when using ZMQ and LogStash hits a bottleneck requiring partial ACKs to
+* Fixed Logstash crashing with "Operation cannot be accomplished in current
+state" when using ZMQ and Logstash hits a bottleneck requiring partial ACKs to
 be sent to Log Courier
 * Improved performance of the Log Courier Logstash plugins
 * Various other minor rework and improvements
@@ -177,7 +211,7 @@ self-signed certificates and the necessary log snippets like genkey did for ZMQ
 
 * Support for Go 1.3 (#3)
 * Configuration can be reloaded while log courier is running by sending the
-SIGHUP signal (*nix only)
+SIGHUP signal (\*nix only)
 * Additional configuration files can be imported by the main configuration file
 using the new `"includes"` section which is an array of Fileglobs. (#5)
 * Added `make selfsigned` to allow quick generation of SSL certificates for
@@ -197,7 +231,7 @@ all fields having the same value as the first field. (#4)
 
 * Restructure and tidy the project and implement new build tools
 * Rename to **Log Courier**
-* Implement an completely new test framework with even more tests
+* Implement a completely new test framework with even more tests
 * Introduce a new protocol and TLS transport layer that is faster on high
 latency links such as the internet
 * Implement support for a CurveZMQ transport to allow transmission of logs to
