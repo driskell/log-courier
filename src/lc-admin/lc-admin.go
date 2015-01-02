@@ -173,16 +173,6 @@ func (a *Admin) initScanner(command string) {
   a.scanner.Error = func(s *scanner.Scanner, msg string) {
     a.scanner_err = &CommandError{msg}
   }
-
-  a.scanner.IsIdentRune = func(ch rune, i int) bool {
-    if ch >= 'a' && ch <= 'z' {
-      return true
-    }
-    if ch >= 'A' && ch <= 'Z' {
-      return true
-    }
-    return false
-  }
 }
 
 func (a *Admin) scanIdent() (string, error) {
