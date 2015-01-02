@@ -209,7 +209,7 @@ module LogCourier
 
         cert_store = OpenSSL::X509::Store.new
         cert_store.add_file(@options[:ssl_ca])
-        #ssl.cert_store = cert_store
+        ssl.cert_store = cert_store
         ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
 
         @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
