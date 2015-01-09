@@ -36,18 +36,18 @@ type HarvesterFinish struct {
 type Harvester struct {
   sync.RWMutex
 
-  stop_chan   chan interface{}
-  return_chan chan *HarvesterFinish
-  stream      core.Stream
-  fileinfo    os.FileInfo
-  path        string
-  config      *core.Config
-  fileconfig  *core.FileConfig
-  offset      int64
-  output      chan<- *core.EventDescriptor
-  codec       core.Codec
-  file        *os.File
-  split       bool
+  stop_chan     chan interface{}
+  return_chan   chan *HarvesterFinish
+  stream        core.Stream
+  fileinfo      os.FileInfo
+  path          string
+  config        *core.Config
+  stream_config *core.StreamConfig
+  offset        int64
+  output        chan<- *core.EventDescriptor
+  codec         core.Codec
+  file          *os.File
+  split         bool
 
   line_speed float64
   byte_speed float64
@@ -57,7 +57,7 @@ type Harvester struct {
   last_eof   *time.Time
 }
 
-func NewHarvester(stream core.Stream, config *core.Config, fileconfig *core.FileConfig, offset int64) *Harvester {
+func NewHarvester(stream core.Stream, config *core.Config, stream_config *core.StreamConfig, offset int64) *Harvester {
   var fileinfo os.FileInfo
   var path string
 
@@ -70,18 +70,18 @@ func NewHarvester(stream core.Stream, config *core.Config, fileconfig *core.File
   }
 
   ret := &Harvester{
-    stop_chan:   make(chan interface{}),
-    return_chan: make(chan *HarvesterFinish, 1),
-    stream:      stream,
-    fileinfo:    fileinfo,
-    path:        path,
-    config:      config,
-    fileconfig:  fileconfig,
-    offset:      offset,
-    last_eof:    nil,
+    stop_chan:     make(chan interface{}),
+    return_chan:   make(chan *HarvesterFinish, 1),
+    stream:        stream,
+    fileinfo:      fileinfo,
+    path:          path,
+    config:        config,
+    stream_config: stream_config,
+    offset:        offset,
+    last_eof:      nil,
   }
 
-  ret.codec = fileconfig.CodecFactory.NewCodec(ret.eventCallback, ret.offset)
+  ret.codec = stream_config.CodecFactory.NewCodec(ret.eventCallback, ret.offset)
 
   return ret
 }
@@ -240,7 +240,7 @@ ReadLoop:
       continue
     }
 
-    if age := time.Since(last_read_time); age > h.fileconfig.DeadTime {
+    if age := time.Since(last_read_time); age > h.stream_config.DeadTime {
       // if last_read_time was more than dead time, this file is probably dead. Stop watching it.
       log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
       // TODO: We should return a Stat() from before we attempted to read
@@ -262,8 +262,8 @@ func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text str
     "offset":  start_offset,
     "message": text,
   }
-  for k := range h.fileconfig.Fields {
-    event[k] = h.fileconfig.Fields[k]
+  for k := range h.stream_config.Fields {
+    event[k] = h.stream_config.Fields[k]
   }
 
   // If we split any of the line data, tag it
@@ -391,8 +391,8 @@ func (h *Harvester) Snapshot() *core.Snapshot {
     ret.AddEntry("Status", "Alive")
   } else {
     ret.AddEntry("Status", "Idle")
-    if age := time.Since(*h.last_eof); age < h.fileconfig.DeadTime {
-      ret.AddEntry("Dead timer", h.fileconfig.DeadTime-age)
+    if age := time.Since(*h.last_eof); age < h.stream_config.DeadTime {
+      ret.AddEntry("Dead timer", h.stream_config.DeadTime-age)
     } else {
       ret.AddEntry("Dead timer", "0s")
     }

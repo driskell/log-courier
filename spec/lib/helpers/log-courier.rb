@@ -74,6 +74,8 @@ shared_context 'Helpers_Log_Courier' do
     _write_config config
 
     if args[:stdin]
+      args[:args] += ' ' if args[:args]
+      args[:args] += '-stdin=true'
       @log_courier_mode = 'r+'
     else
       @log_courier_mode = 'r'
@@ -111,6 +113,21 @@ shared_context 'Helpers_Log_Courier' do
     end
     @config.puts config
     @config.close
+  end
+
+  def stdin_shutdown
+    return unless @log_courier_mode == 'r+'
+    begin
+      # If this fails, don't bother closing write again
+      @log_courier_mode = 'r'
+      Timeout.timeout(30) do
+        # Close and wait
+        @log_courier.close_write
+        @log_courier_reader.join
+      end
+    rescue Timeout::Error
+      fail "Log-courier did not shutdown on stdin EOF"
+    end
   end
 
   def shutdown

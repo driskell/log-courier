@@ -11,6 +11,10 @@
   - [String, Number, Boolean, Array, Dictionary](#string-number-boolean-array-dictionary)
   - [Duration](#duration)
   - [Fileglob](#fileglob)
+- [Stream Configuration](#stream-configuration)
+  - [`"codec"`](#codec)
+  - [`"dead time"`](#dead-time)
+  - [`"fields"`](#fields)
 - [`"general"`](#general)
   - [`"admin enabled"`](#admin-enabled)
   - [`"admin listen address"`](#admin-listen-address)
@@ -39,11 +43,9 @@
   - [`"timeout"`](#timeout)
   - [`"transport"`](#transport)
 - [`"files"`](#files)
-  - [`"codec"`](#codec)
-  - [`"dead time"`](#dead-time)
-  - [`"fields"`](#fields)
   - [`"paths"`](#paths)
 - [`"includes"`](#includes)
+- [`"stdin"`](#stdin)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -147,6 +149,64 @@ character-range:
 * `"/var/log/program/log_????.log"`
 * `"/var/log/httpd/access.log"`
 * `"/var/log/httpd/access.log.[0-9]"`
+
+## Stream Configuration
+
+Stream Configuration parameters can be specified for file groups within
+[`"files"`](#files) and also for [`"stdin"`](#stdin). They customise the log
+entries produced by passing, for example, by passing them through a codec and
+adding extra fields.
+
+### `"codec"`
+
+*Codec configuration. Optional. Default: `{ "name": "plain" }`*
+*Configuration reload will only affect new or resumed files*
+
+*Depending on how log-courier was built, some codecs may not be available. Run
+`log-courier -list-supported` to see the list of codecs available in a specific
+build of log-courier.*
+
+The specified codec will receive the lines read from the log stream and perform
+any decoding necessary to generate events. The plain codec does nothing and
+simply ships the events unchanged.
+
+All configurations are a dictionary with at least a "name" key. Additional
+options can be provided if the specified codec allows.
+
+{ "name": "codec-name" }
+{ "name": "codec-name", "option1": "value", "option2": "42" }
+
+Aside from "plain", the following codecs are available at this time.
+
+* [Filter](codecs/Filter.md)
+* [Multiline](codecs/Multiline.md)
+
+### `"dead time"`
+
+*Duration. Optional. Default: "24h"*
+*Configuration reload will only affect new or resumed files*
+
+If a log file has not been modified in this time period, it will be closed and
+Log Courier will simply watch it for modifications. If the file is modified it
+will be reopened.
+
+If a log file that is being harvested is deleted, it will remain on disk until
+Log Courier closes it. Therefore it is important to keep this value sensible to
+ensure old log files are not kept open preventing deletion.
+
+### `"fields"`
+
+*Dictionary. Optional*
+*Configuration reload will only affect new or resumed files*
+
+Extra fields to attach the event prior to shipping. These can be simple strings,
+numbers or even arrays and dictionaries.
+
+Examples:
+
+* `{ "type": "syslog" }`
+* `{ "type": "apache", "server_names": [ "example.com", "www.example.com" ] }`
+* `{ "type": "program", "program": { "exec": "program.py", "args": [ "--run", "--daemon" ] } }`
 
 ## `"general"`
 
@@ -418,9 +478,8 @@ option.
 
 ## `"files"`
 
-The file configuration lists the file groups that contain the logs you wish to
-ship. It is an array of file group configurations. A minimum of one file group
-configuration must be specified.
+The files configuration lists the file groups that contain the logs you wish to
+ship. It is an array of file group configurations.
 
 ```
 	[
@@ -433,56 +492,8 @@ configuration must be specified.
 	]
 ```
 
-### `"codec"`
-
-*Codec configuration. Optional. Default: `{ "name": "plain" }`*
-*Configuration reload will only affect new or resumed files*
-
-*Depending on how log-courier was built, some codecs may not be available. Run
-`log-courier -list-supported` to see the list of codecs available in a specific
-build of log-courier.*
-
-The specified codec will receive the lines read from the log stream and perform
-any decoding necessary to generate events. The plain codec does nothing and
-simply ships the events unchanged.
-
-All configurations are a dictionary with at least a "name" key. Additional
-options can be provided if the specified codec allows.
-
-	{ "name": "codec-name" }
-	{ "name": "codec-name", "option1": "value", "option2": "42" }
-
-Aside from "plain", the following codecs are available at this time.
-
-* [Filter](codecs/Filter.md)
-* [Multiline](codecs/Multiline.md)
-
-### `"dead time"`
-
-*Duration. Optional. Default: "24h"*
-*Configuration reload will only affect new or resumed files*
-
-If a log file has not been modified in this time period, it will be closed and
-Log Courier will simply watch it for modifications. If the file is modified it
-will be reopened.
-
-If a log file that is being harvested is deleted, it will remain on disk until
-Log Courier closes it. Therefore it is important to keep this value sensible to
-ensure old log files are not kept open preventing deletion.
-
-### `"fields"`
-
-*Dictionary. Optional*
-*Configuration reload will only affect new or resumed files*
-
-Extra fields to attach the event prior to shipping. These can be simple strings,
-numbers or even arrays and dictionaries.
-
-Examples:
-
-* `{ "type": "syslog" }`
-* `{ "type": "apache", "server_names": [ "example.com", "www.example.com" ] }`
-* `{ "type": "program", "program": { "exec": "program.py", "args": [ "--run", "--daemon" ] } }`
+In addition to the configuration parameters specified below, each file group may
+also have [Stream Configuration](#streamconfiguration) parameters specified.
 
 ### `"paths"`
 
@@ -515,3 +526,10 @@ following.
 		"paths": [ "/var/log/httpd/access.log" ],
 		"fields": [ "type": "access_log" ]
 	} ]
+
+## `"stdin"`
+
+The stdin configuration contains the
+[Stream Configuration](#streamconfiguration) parameters that should be used when
+Log Courier is set to read log data from stdin using the
+[`-stdin`](CommandLineArguments.md#stdin) command line entry.

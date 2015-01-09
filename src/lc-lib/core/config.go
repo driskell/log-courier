@@ -28,6 +28,7 @@ import (
   "os"
   "path/filepath"
   "reflect"
+  "strings"
   "time"
 )
 
@@ -48,8 +49,8 @@ const (
   default_NetworkConfig_Timeout            time.Duration = 15 * time.Second
   default_NetworkConfig_Reconnect          time.Duration = 1 * time.Second
   default_NetworkConfig_MaxPendingPayloads int64         = 10
-  default_FileConfig_Codec                 string        = "plain"
-  default_FileConfig_DeadTime              int64         = 86400
+  default_StreamConfig_Codec               string        = "plain"
+  default_StreamConfig_DeadTime            int64         = 86400
 )
 
 var (
@@ -61,6 +62,7 @@ type Config struct {
   Network  NetworkConfig `config:"network"`
   Files    []FileConfig  `config:"files"`
   Includes []string      `config:"includes"`
+  Stdin    StreamConfig  `config:"stdin"`
 }
 
 type GeneralConfig struct {
@@ -97,13 +99,18 @@ type CodecConfigStub struct {
   Unused map[string]interface{}
 }
 
-type FileConfig struct {
-  Paths    []string               `config:"paths"`
+type StreamConfig struct {
   Fields   map[string]interface{} `config:"fields"`
   Codec    CodecConfigStub        `config:"codec"`
   DeadTime time.Duration          `config:"dead time"`
 
   CodecFactory CodecFactory
+}
+
+type FileConfig struct {
+  Paths []string `config:"paths"`
+
+  StreamConfig `config:",embed"`
 }
 
 func NewConfig() *Config {
@@ -343,27 +350,38 @@ func (c *Config) Load(path string) (err error) {
   }
 
   for k := range c.Files {
-    if c.Files[k].Codec.Name == "" {
-      c.Files[k].Codec.Name = default_FileConfig_Codec
-    }
-
-    if registrar_func, ok := registered_Codecs[c.Files[k].Codec.Name]; ok {
-      if c.Files[k].CodecFactory, err = registrar_func(c, fmt.Sprintf("/files[%d]/codec/", k), c.Files[k].Codec.Unused, c.Files[k].Codec.Name); err != nil {
-        return
-      }
-    } else {
-      err = fmt.Errorf("Unrecognised codec '%s' for 'files' entry %d", c.Files[k].Codec.Name, k)
+    if err = c.initStreamConfig(fmt.Sprintf("/files[%d]/codec/", k), &c.Files[k].StreamConfig); err != nil {
       return
     }
+  }
 
-    if c.Files[k].DeadTime == time.Duration(0) {
-      c.Files[k].DeadTime = time.Duration(default_FileConfig_DeadTime) * time.Second
-    }
-
-    // TODO: Event transmit length is uint32, if fields length is rediculous we will fail
+  if err = c.initStreamConfig("/stdin", &c.Stdin); err != nil {
+    return
   }
 
   return
+}
+
+func (c *Config) initStreamConfig(path string, stream_config *StreamConfig) (err error) {
+  if stream_config.Codec.Name == "" {
+    stream_config.Codec.Name = default_StreamConfig_Codec
+  }
+
+  if registrar_func, ok := registered_Codecs[stream_config.Codec.Name]; ok {
+    if stream_config.CodecFactory, err = registrar_func(c, path, stream_config.Codec.Unused, stream_config.Codec.Name); err != nil {
+      return
+    }
+  } else {
+    return fmt.Errorf("Unrecognised codec '%s' for %s", stream_config.Codec.Name, path)
+  }
+
+  if stream_config.DeadTime == time.Duration(0) {
+    stream_config.DeadTime = time.Duration(default_StreamConfig_DeadTime) * time.Second
+  }
+
+  // TODO: EDGE CASE: Event transmit length is uint32, if fields length is rediculous we will fail
+
+  return nil
 }
 
 // TODO: This should be pushed to a wrapper or module
@@ -373,6 +391,7 @@ func (c *Config) Load(path string) (err error) {
 //       We can then take the unused configuration dynamically at runtime based on another value
 func (c *Config) PopulateConfig(config interface{}, config_path string, raw_config map[string]interface{}) (err error) {
   vconfig := reflect.ValueOf(config).Elem()
+FieldLoop:
   for i := 0; i < vconfig.NumField(); i++ {
     field := vconfig.Field(i)
     if !field.CanSet() {
@@ -380,6 +399,17 @@ func (c *Config) PopulateConfig(config interface{}, config_path string, raw_conf
     }
     fieldtype := vconfig.Type().Field(i)
     tag := fieldtype.Tag.Get("config")
+    mods := strings.Split(tag, ",")
+    tag = mods[0]
+    mods = mods[1:]
+    for _, mod := range mods {
+      if mod == "embed" && field.Kind() == reflect.Struct {
+        if err = c.PopulateConfig(field.Addr().Interface(), config_path, raw_config); err != nil {
+          return
+        }
+        continue FieldLoop
+      }
+    }
     if tag == "" {
       continue
     }

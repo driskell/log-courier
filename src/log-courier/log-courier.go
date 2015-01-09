@@ -25,6 +25,7 @@ import (
   "github.com/op/go-logging"
   "lc-lib/admin"
   "lc-lib/core"
+  "lc-lib/harvester"
   "lc-lib/prospector"
   "lc-lib/spooler"
   "lc-lib/publisher"
@@ -49,7 +50,9 @@ type LogCourier struct {
   shutdown_chan  chan os.Signal
   reload_chan    chan os.Signal
   config_file    string
+  stdin          bool
   from_beginning bool
+  harvester      *harvester.Harvester
   log_file       *os.File
   last_snapshot  time.Time
   snapshot       *core.Snapshot
@@ -65,33 +68,47 @@ func NewLogCourier() *LogCourier {
 func (lc *LogCourier) Run() {
   var admin_listener *admin.Listener
   var on_command <-chan string
+  var harvester_wait <-chan *harvester.HarvesterFinish
+  var registrar_imp *registrar.Registrar
 
   lc.startUp()
 
   log.Info("Log Courier version %s pipeline starting", core.Log_Courier_Version)
 
-  if lc.config.General.AdminEnabled {
-    var err error
+  // If reading from stdin, skip admin, and set up a null registrar
+  if lc.stdin {
+    registrar_imp = nil
+  } else {
+    if lc.config.General.AdminEnabled {
+      var err error
 
-    admin_listener, err = admin.NewListener(lc.pipeline, &lc.config.General)
-    if err != nil {
-      log.Fatalf("Failed to initialise: %s", err)
+      admin_listener, err = admin.NewListener(lc.pipeline, &lc.config.General)
+      if err != nil {
+        log.Fatalf("Failed to initialise: %s", err)
+      }
+
+      on_command = admin_listener.OnCommand()
     }
 
-    on_command = admin_listener.OnCommand()
+    registrar_imp = registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
   }
 
-  registrar := registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
-
-  publisher, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar)
+  publisher, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar_imp)
   if err != nil {
     log.Fatalf("Failed to initialise: %s", err)
   }
 
-  spooler := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher)
+  spooler_imp := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher)
 
-  if _, err := prospector.NewProspector(lc.pipeline, lc.config, lc.from_beginning, registrar, spooler); err != nil {
-    log.Fatalf("Failed to initialise: %s", err)
+  // If reading from stdin, don't start prospector, directly start a harvester
+  if lc.stdin {
+    lc.harvester = harvester.NewHarvester(nil, lc.config, &lc.config.Stdin, 0)
+    lc.harvester.Start(spooler_imp.Connect())
+    harvester_wait = lc.harvester.OnFinish()
+  } else {
+    if _, err := prospector.NewProspector(lc.pipeline, lc.config, lc.from_beginning, registrar_imp, spooler_imp); err != nil {
+      log.Fatalf("Failed to initialise: %s", err)
+    }
   }
 
   // Start the pipeline
@@ -113,6 +130,15 @@ SignalLoop:
       lc.reloadConfig()
     case command := <-on_command:
       admin_listener.Respond(lc.processCommand(command))
+    case finished := <-harvester_wait:
+      if finished.Error != nil {
+        log.Notice("An error occurred reading from stdin at offset %d: %s", finished.Last_Offset, finished.Error)
+      } else {
+        log.Notice("Finished reading from stdin at offset %d", finished.Last_Offset)
+      }
+      lc.harvester = nil
+      lc.cleanShutdown()
+      break SignalLoop
     }
   }
 
@@ -135,6 +161,7 @@ func (lc *LogCourier) startUp() {
   flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
 
   flag.StringVar(&lc.config_file, "config", "", "The config file to load")
+  flag.BoolVar(&lc.stdin, "stdin", false, "Read from stdin instead of files listed in the config file")
   flag.BoolVar(&lc.from_beginning, "from-beginning", false, "On first run, read new files from the beginning instead of the end")
 
   flag.Parse()
@@ -236,8 +263,10 @@ func (lc *LogCourier) loadConfig() error {
     return err
   }
 
-  if len(lc.config.Files) == 0 {
-    return fmt.Errorf("No file groups were found in the configuration.")
+  if lc.stdin {
+    // TODO: Where to find stdin config for codec and fields?
+  } else if len(lc.config.Files) == 0 {
+    log.Warning("No file groups were found in the configuration.")
   }
 
   return nil
@@ -281,6 +310,13 @@ func (lc *LogCourier) processCommand(command string) *admin.Response {
 
 func (lc *LogCourier) cleanShutdown() {
   log.Notice("Initiating shutdown")
+
+  if lc.harvester != nil {
+    lc.harvester.Stop()
+    finished := <-lc.harvester.OnFinish()
+    log.Notice("Aborted reading from stdin at offset %d", finished.Last_Offset)
+  }
+
   lc.pipeline.Shutdown()
   lc.pipeline.Wait()
 }
