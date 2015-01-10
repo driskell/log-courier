@@ -136,7 +136,17 @@ func NewTcpTransportFactory(config *core.Config, config_path string, unused map[
 }
 
 func (f *TransportTcpFactory) NewTransport(config *core.NetworkConfig) (core.Transport, error) {
-  return &TransportTcp{config: f, net_config: config}, nil
+  ret := &TransportTcp{
+    config: f,
+    net_config: config,
+  }
+
+  // Randomise the initial host - after this it will round robin
+  // Round robin after initial attempt ensures we don't retry same host twice,
+  // and also ensures we try all hosts one by one
+  ret.roundrobin = rand.Intn(len(config.Servers))
+
+  return ret, nil
 }
 
 func (t *TransportTcp) ReloadConfig(new_net_config *core.NetworkConfig) int {

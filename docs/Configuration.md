@@ -359,6 +359,11 @@ Sets the list of servers to send logs to. DNS names are resolved into IP
 addresses each time connections are made and all available IP addresses are
 used.
 
+Only the initial server is randomly selected. Subsequent connection attempts are
+made to the next IP address available (if the server had multiple IP addresses)
+or to the next server listed in the configuration file (if all addresses for the
+previous server were exausted.)
+
 ### `"ssl ca"`
 
 *Filepath. Required with "transport" = "tls". Not allowed otherwise*
