@@ -225,6 +225,9 @@ func (t *TransportTcp) Init() error {
 
   // Now wrap in TLS if this is the "tls" transport
   if t.config.transport == "tls" {
+    // Disable SSLv3 (mitigate POODLE vulnerability)
+    t.config.tls_config.MinVersion = tls.VersionTLS10
+
     // Set the tlsconfig server name for server validation (required since Go 1.3)
     t.config.tls_config.ServerName = t.host
 
