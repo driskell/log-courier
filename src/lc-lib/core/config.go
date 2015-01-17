@@ -46,6 +46,8 @@ const (
 	default_GeneralConfig_LogStdout          bool          = true
 	default_GeneralConfig_LogSyslog          bool          = false
 	default_NetworkConfig_Transport          string        = "tls"
+	default_NetworkConfig_Rfc2782Srv         bool          = true
+	default_NetworkConfig_Rfc2782Service     string        = "courier"
 	default_NetworkConfig_Timeout            time.Duration = 15 * time.Second
 	default_NetworkConfig_Reconnect          time.Duration = 1 * time.Second
 	default_NetworkConfig_MaxPendingPayloads int64         = 10
@@ -85,6 +87,8 @@ type GeneralConfig struct {
 type NetworkConfig struct {
 	Transport          string        `config:"transport"`
 	Servers            []string      `config:"servers"`
+	Rfc2782Srv         bool          `config:"rfc 2782 srv"`
+	Rfc2782Service     string        `config:"rfc 2782 service"`
 	Timeout            time.Duration `config:"timeout"`
 	Reconnect          time.Duration `config:"reconnect"`
 	MaxPendingPayloads int64         `config:"max pending payloads"`
@@ -257,6 +261,7 @@ func (c *Config) Load(path string) (err error) {
 	c.General.LogLevel = default_GeneralConfig_LogLevel
 	c.General.LogStdout = default_GeneralConfig_LogStdout
 	c.General.LogSyslog = default_GeneralConfig_LogSyslog
+	c.Network.Rfc2782Srv = default_NetworkConfig_Rfc2782Srv
 
 	// Populate configuration - reporting errors on spelling mistakes etc.
 	if err = c.PopulateConfig(c, "/", raw_config); err != nil {
@@ -359,6 +364,9 @@ func (c *Config) Load(path string) (err error) {
 		return
 	}
 
+	if c.Network.Rfc2782Service == "" {
+		c.Network.Rfc2782Service = default_NetworkConfig_Rfc2782Service
+	}
 	if c.Network.Timeout == time.Duration(0) {
 		c.Network.Timeout = default_NetworkConfig_Timeout
 	}

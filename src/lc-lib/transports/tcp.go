@@ -31,6 +31,7 @@ import (
 	"math/rand"
 	"net"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -75,8 +76,7 @@ type TransportTcp struct {
 	roundrobin int
 	host_is_ip bool
 	host       string
-	port       string
-	addresses  []net.IP
+	addresses  []*net.TCPAddr
 }
 
 func NewTcpTransportFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.TransportFactory, error) {
@@ -176,33 +176,13 @@ func (t *TransportTcp) Init() error {
 
 	// Have we exhausted the address list we had?
 	if t.addresses == nil {
-		var err error
-
-		// Round robin to the next server
-		selected := t.net_config.Servers[t.roundrobin%len(t.net_config.Servers)]
-		t.roundrobin++
-
-		t.host, t.port, err = net.SplitHostPort(selected)
-		if err != nil {
-			return fmt.Errorf("Invalid hostport given: %s", selected)
-		}
-
-		// Are we an IP?
-		if ip := net.ParseIP(t.host); ip != nil {
-			t.host_is_ip = true
-			t.addresses = []net.IP{ip}
-		} else {
-			// Lookup the server in DNS
-			t.host_is_ip = false
-			t.addresses, err = net.LookupIP(t.host)
-			if err != nil {
-				return fmt.Errorf("DNS lookup failure \"%s\": %s", t.host, err)
-			}
+		if err := t.populateAddresses(); err != nil {
+			return err
 		}
 	}
 
 	// Try next address and drop it from our list
-	addressport := net.JoinHostPort(t.addresses[0].String(), t.port)
+	addressport := t.addresses[0].String()
 	if len(t.addresses) > 1 {
 		t.addresses = t.addresses[1:]
 	} else {
@@ -267,6 +247,89 @@ func (t *TransportTcp) Init() error {
 	go t.receiver()
 
 	return nil
+}
+
+func (t *TransportTcp) populateAddresses() (err error) {
+	// Round robin to the next server
+	selected := t.net_config.Servers[t.roundrobin%len(t.net_config.Servers)]
+	t.roundrobin++
+
+	t.addresses = make([]*net.TCPAddr, 0)
+
+	// @hostname means SRV record where the host and port are in the record
+	if len(t.host) > 0 && t.host[0] == '@' {
+		var srvs []*net.SRV
+		var service, protocol string
+
+		t.host_is_ip = false
+
+		if t.net_config.Rfc2782Srv {
+			service, protocol = t.net_config.Rfc2782Service, "tcp"
+		} else {
+			service, protocol = "", ""
+		}
+
+		_, srvs, err = net.LookupSRV(service, protocol, t.host[1:])
+		if err != nil {
+			return fmt.Errorf("DNS SRV lookup failure \"%s\": %s", t.host, err)
+		} else if len(srvs) == 0 {
+			return fmt.Errorf("DNS SRV lookup failure \"%s\": No targets found", t.host)
+		}
+
+		for _, srv := range srvs {
+			if _, err = t.populateLookup(srv.Target, int(srv.Port)); err != nil {
+				return
+			}
+		}
+
+		return
+	}
+
+	// Standard host:port declaration
+	var port_str string
+	var port uint64
+	if t.host, port_str, err = net.SplitHostPort(selected); err != nil {
+		return fmt.Errorf("Invalid hostport given: %s", selected)
+	}
+
+	if port, err = strconv.ParseUint(port_str, 10, 16); err != nil {
+		return fmt.Errorf("Invalid port given: %s", port_str)
+	}
+
+	if t.host_is_ip, err = t.populateLookup(t.host, int(port)); err != nil {
+		return
+	}
+
+	return nil
+}
+
+func (t *TransportTcp) populateLookup(host string, port int) (bool, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		// IP address
+		t.addresses = append(t.addresses, &net.TCPAddr{
+			IP:   ip,
+			Port: port,
+		})
+
+		return true, nil
+	}
+
+	// Lookup the hostname in DNS
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return false, fmt.Errorf("DNS lookup failure \"%s\": %s", host, err)
+	} else if len(ips) == 0 {
+		return false, fmt.Errorf("DNS lookup failure \"%s\": No addresses found", host)
+	}
+
+	for _, ip := range ips {
+		t.addresses = append(t.addresses, &net.TCPAddr{
+			IP:   ip,
+			Port: port,
+		})
+	}
+
+	return false, nil
 }
 
 func (t *TransportTcp) disconnect() {
