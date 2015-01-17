@@ -10,6 +10,7 @@
 - [`-cpuprofile=<path>`](#-cpuprofile=path)
 - [`-from-beginning`](#-from-beginning)
 - [`-list-supported`](#-list-supported)
+- [`-stdin`](#-stdin)
 - [`-version`](#-version)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -59,6 +60,12 @@ discovered log files will start from the begining, regardless of this flag.
 
 Print a list of available transports and codecs provided by this build of Log
 Courier, then exit.
+
+## `-stdin`
+
+Read log data from stdin and ignore files declaractions in the configuration
+file. The fields and codec can be configured in the configuration file under
+the `"stdin"` section.
 
 ## `-version`
 

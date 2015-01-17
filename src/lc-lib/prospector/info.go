@@ -98,12 +98,6 @@ func (pi *prospectorInfo) stop() {
   if !pi.running {
     return
   }
-  if pi.file == "-" {
-    // Just in case someone started us outside a pipeline with stdin
-    // to stop confusion at why we don't exit after Ctrl+C
-    // There's no deadline on Stdin reads :-(
-    log.Notice("Waiting for Stdin to close (EOF or Ctrl+D)")
-  }
   pi.harvester.Stop()
 }
 

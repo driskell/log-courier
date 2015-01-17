@@ -100,38 +100,6 @@ func (p *Prospector) Run() {
     p.Done()
   }()
 
-  // Handle any "-" (stdin) paths - but only once
-  stdin_started := false
-  for config_k, config := range p.config.Files {
-    for i, path := range config.Paths {
-      if path == "-" {
-        if !stdin_started {
-          // We need to check err - we cannot allow a nil stat
-          stat, err := os.Stdin.Stat()
-          if err != nil {
-            log.Error("stat(Stdin) failed: %s", err)
-            continue
-          }
-
-          // Stdin is implicitly an orphaned fileinfo
-          info := newProspectorInfoFromFileInfo("-", stat)
-          info.orphaned = Orphaned_Yes
-
-          // Store the reference so we can shut it down later
-          p.prospectors[info] = info
-
-          // Start the harvester
-          p.startHarvesterWithOffset(info, &p.config.Files[config_k], 0)
-
-          stdin_started = true
-        }
-
-        // Remove it from the file list
-        config.Paths = append(config.Paths[:i], config.Paths[i+1:]...)
-      }
-    }
-  }
-
 ProspectLoop:
   for {
     newlastscan := time.Now()
@@ -406,7 +374,7 @@ func (p *Prospector) startHarvester(info *prospectorInfo, fileconfig *core.FileC
 
 func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileconfig *core.FileConfig, offset int64) {
   // TODO - hook in a shutdown channel
-  info.harvester = harvester.NewHarvester(info, p.config, fileconfig, offset)
+  info.harvester = harvester.NewHarvester(info, p.config, &fileconfig.StreamConfig, offset)
   info.running = true
   info.status = Status_Ok
   info.harvester.Start(p.output)
