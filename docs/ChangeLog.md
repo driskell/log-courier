@@ -2,8 +2,9 @@
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [1.4](#14)
 - [1.3](#13)
 - [1.2](#12)
 - [1.1](#11)
@@ -18,6 +19,35 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## 1.4
+
+*???*
+
+***Breaking Changes***
+
+* The way in which logs are read from stdin has been significantly changed. The
+"-" path in the configuration is no longer special and no longer reads from
+stdin. Instead, you must now start log-courier with the `-stdin` command line
+argument, and configure the codec and additional fields in the new `stdin`
+configuration file section. Log Courier will now also exit cleanly once all data
+from stdin has been read and acknowledged by the server (previously it would
+hang forever.)
+
+***Changes***
+
+* Implement random selection of the initial server connection. This partly
+reverts a change made in version 1.2. Subsequent connections due to connection
+failures will still round robin.
+* Allow use of certificate files containing intermediates within the Log Courier
+configuration. (Thanks @mhughes - #88)
+* A configuration reload will now reopen log files. (#91)
+* Implement support for SRV record server entries (#85)
+
+***Security***
+
+* SSLv2 and SSLv3 are now explicitly disabled in Log Courier and the logstash
+courier plugins to further enhance security when using the TLS transport.
 
 ## 1.3
 
