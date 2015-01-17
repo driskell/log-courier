@@ -25,7 +25,6 @@ import (
   "crypto/x509"
   "encoding/binary"
   "encoding/pem"
-  "errors"
   "fmt"
   "io/ioutil"
   "lc-lib/core"
@@ -105,26 +104,29 @@ func NewTcpTransportFactory(config *core.Config, config_path string, unused map[
 
     if len(ret.SSLCA) > 0 {
       ret.tls_config.RootCAs = x509.NewCertPool()
-
       pemdata, err := ioutil.ReadFile(ret.SSLCA)
       if err != nil {
-        return nil, fmt.Errorf("Failure reading CA certificate: %s", err)
+        return nil, fmt.Errorf("Failure reading CA certificate: %s\n", err)
       }
-
-      block, _ := pem.Decode(pemdata)
-      if block == nil {
-        return nil, errors.New("Failed to decode CA certificate data")
+      rest := pemdata
+      var block *pem.Block
+      var pemBlockNum = 1
+      for {
+        block, rest = pem.Decode(rest)
+        if block != nil {
+          if block.Type != "CERTIFICATE" {
+            return nil, fmt.Errorf("Block %d does not contain a certificate: %s\n", pemBlockNum, ret.SSLCA)
+          }
+          cert, err := x509.ParseCertificate(block.Bytes)
+          if err != nil {
+            return nil, fmt.Errorf("Failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
+          }
+          ret.tls_config.RootCAs.AddCert(cert)
+          pemBlockNum += 1
+        } else {
+          break
+        }
       }
-      if block.Type != "CERTIFICATE" {
-        return nil, fmt.Errorf("Specified CA certificate is not a certificate: %s", ret.SSLCA)
-      }
-
-      cert, err := x509.ParseCertificate(block.Bytes)
-      if err != nil {
-        return nil, fmt.Errorf("Failed to parse CA certificate: %s", err)
-      }
-
-      ret.tls_config.RootCAs.AddCert(cert)
     }
   } else {
     if err := config.ReportUnusedConfig(config_path, unused); err != nil {
