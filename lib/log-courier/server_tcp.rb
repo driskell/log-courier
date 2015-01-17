@@ -87,6 +87,16 @@ module LogCourier
 
         if @options[:transport] == 'tls'
           ssl = OpenSSL::SSL::SSLContext.new
+
+          # Disable SSLv2 and SSLv3
+          # Call set_params first to ensure options attribute is there (hmmmm?)
+          ssl.set_params
+          # Modify the default options to ensure SSLv2 and SSLv3 is disabled
+          # This retains any beneficial options set by default in the current Ruby implementation
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv2 if defined?(OpenSSL::SSL::OP_NO_SSLv2)
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv3 if defined?(OpenSSL::SSL::OP_NO_SSLv3)
+
+          # Set the certificate file
           ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
           ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
 
