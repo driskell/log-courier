@@ -54,6 +54,7 @@ module LogCourier
       @options = {
         logger:                nil,
         transport:             'tls',
+        stream_factory:        StreamFactory.new,
         port:                  0,
         address:               '0.0.0.0',
         ssl_certificate:       nil,
@@ -190,7 +191,8 @@ module LogCourier
 
   # Representation of a single connected client
   class ConnectionTcp
-    attr_accessor :peer
+    attr_reader :peer
+    attr_reader :stream
 
     def initialize(logger, fd, peer, options)
       @logger = logger
@@ -199,6 +201,7 @@ module LogCourier
       @peer_fields = {}
       @in_progress = false
       @options = options
+      @stream = @options[:stream_factory].create_stream
 
       if @options[:add_peer_fields]
         @peer_fields['peer'] = peer
@@ -206,10 +209,6 @@ module LogCourier
           @peer_fields['peer_ssl_cn'] = get_cn(@fd.peer_cert)
         end
       end
-    end
-
-    def add_fields(event)
-      event.merge! @peer_fields if @peer_fields.length != 0
     end
 
     def run
@@ -293,6 +292,10 @@ module LogCourier
         break if done >= data.length
       end
       return
+    end
+
+    def add_fields(event)
+      event.merge! @peer_fields if @peer_fields.length != 0
     end
 
     private

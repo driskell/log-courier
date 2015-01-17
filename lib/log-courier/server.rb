@@ -29,14 +29,27 @@ module LogCourier
   class ShutdownSignal < StandardError; end
   class ProtocolError < StandardError; end
 
+  class StreamFactory
+    def create_stream()
+      Stream.new
+    end
+  end
+
+  class Stream
+    def decode(event)
+      yield event
+    end
+  end
+
   # Implementation of the server
   class Server
     attr_reader :port
 
     def initialize(options = {})
       @options = {
-        logger:    nil,
-        transport: 'tls'
+        logger:         nil,
+        transport:      'tls',
+        stream_factory: StreamFactory.new
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -186,7 +199,9 @@ module LogCourier
 
         # Queue the event
         begin
-          event_queue.push event, [0, ack_timeout - Time.now.to_i].max
+          comm.stream.decode(event) do |event|
+            event_queue.push event, [0, ack_timeout - Time.now.to_i].max
+          end
         rescue TimeoutError
           # Full pipeline, partial ack
           # NOTE: comm.send can raise a Timeout::Error of its own

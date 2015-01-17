@@ -76,8 +76,6 @@ module LogStash
       # using client certificates
       config :add_peer_fields, :validate => :boolean
 
-      public
-
       def register
         @logger.info('Starting courier input listener', :address => "#{@host}:#{@port}")
 
@@ -93,6 +91,7 @@ module LogStash
           ssl_verify_default_ca: @ssl_verify_default_ca,
           ssl_verify_ca:         @ssl_verify_ca,
           curve_secret_key:      @curve_secret_key,
+          stream_factory:        CourierStreamFactory.new(@codec, output_queue)
         }
 
         # Honour the defaults in the LogCourier gem
@@ -104,13 +103,43 @@ module LogStash
         @log_courier = LogCourier::Server.new options
       end
 
-      public
-
       def run(output_queue)
         @log_courier.run do |event|
-          event = LogStash::Event.new(event)
-          decorate event
+          # TODO: Implement codec flush somehow
           output_queue << event
+        end
+      end
+    end
+
+    class CourierStreamFactory < LogCourier::StreamFactory
+      def initialize(codec_obj)
+        super
+        @codec_obj = codec_obj
+      end
+
+      def create_stream()
+        CourierStream.new @codec_obj.clone
+      end
+    end
+
+    class CourierStream < LogCourier::Stream
+      def initialize(codec)
+        super
+        @codec = codec
+      end
+
+      def decode(event)
+        if event.key?('message')
+          message = event['message']
+          event.delete! 'message'
+        else
+          message = ''
+        end
+
+        @codec.decode(message) do |decoded|
+          decoded.append event
+          decorate decoded
+          yield decoded
         end
       end
     end

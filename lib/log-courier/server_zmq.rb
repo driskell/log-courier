@@ -45,6 +45,7 @@ module LogCourier
       @options = {
         logger:           nil,
         transport:        'zmq',
+        stream_factory:   StreamFactory.new,
         port:             0,
         address:          '0.0.0.0',
         curve_secret_key: nil,
@@ -324,6 +325,8 @@ module LogCourier
   end
 
   class ClientZmq < EventQueue
+    attr_reader :stream
+
     def initialize(factory, source, source_str, &try_drop)
       @factory = factory
       @logger = @factory.options[:logger]
@@ -331,6 +334,7 @@ module LogCourier
       @source = source
       @source_str = source_str
       @try_drop = try_drop
+      @stream = @factory.options[:stream_factory].create_stream
 
       # Setup the queue for receiving events to process
       super @factory.options[:peer_recv_queue]
