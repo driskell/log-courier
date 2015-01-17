@@ -53,7 +53,7 @@ type LogCourier struct {
   stdin          bool
   from_beginning bool
   harvester      *harvester.Harvester
-  log_file       *os.File
+  log_file       *DefaultLogBackend
   last_snapshot  time.Time
   snapshot       *core.Snapshot
 }
@@ -236,12 +236,12 @@ func (lc *LogCourier) configureLogging() (err error) {
 
   // Log file?
   if lc.config.General.LogFile != "" {
-    lc.log_file, err = os.OpenFile(lc.config.General.LogFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0640)
+    lc.log_file, err = NewDefaultLogBackend(lc.config.General.LogFile, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
     if err != nil {
       return
     }
 
-    backends = append(backends, logging.NewLogBackend(lc.log_file, "", stdlog.LstdFlags|stdlog.Lmicroseconds))
+    backends = append(backends, lc.log_file)
   }
 
   if err = lc.configureLoggingPlatform(&backends); err != nil {
@@ -281,6 +281,12 @@ func (lc *LogCourier) reloadConfig() error {
 
   // Update the log level
   logging.SetLevel(lc.config.General.LogLevel, "")
+
+  // Reopen the log file if we specified one
+  if lc.log_file != nil {
+    lc.log_file.Reopen()
+    log.Notice("Log file reopened")
+  }
 
   // Pass the new config to the pipeline workers
   lc.pipeline.SendConfig(lc.config)
