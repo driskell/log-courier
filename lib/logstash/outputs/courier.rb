@@ -20,7 +20,7 @@
 module LogStash
   module Outputs
     # Send events using the Log Courier protocol
-    class LogCourier < LogStash::Outputs::Base
+    class Courier < LogStash::Outputs::Base
       config_name 'courier'
       milestone 1
 
