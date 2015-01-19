@@ -17,7 +17,7 @@
 package registrar
 
 import (
-  "lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/core"
   "os"
 )
 

@@ -24,7 +24,7 @@ import (
   "errors"
   "fmt"
   zmq "github.com/alecthomas/gozmq"
-  "lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/core"
   "net"
   "regexp"
   "runtime"

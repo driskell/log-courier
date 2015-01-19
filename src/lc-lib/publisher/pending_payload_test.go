@@ -17,7 +17,7 @@
 package publisher
 
 import (
-	"lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/core"
 	"time"
 	"testing"
 )

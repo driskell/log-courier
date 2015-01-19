@@ -1,4 +1,4 @@
-.PHONY: prepare fix_version all log-courier gem gem_plugins push_gems test test_go test_rspec doc profile benchmark jrprofile jrbenchmark clean
+.PHONY: prepare fix_version setup_root all log-courier gem gem_plugins push_gems test test_go test_rspec doc profile benchmark jrprofile jrbenchmark clean
 
 MAKEFILE := $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
 GOPATH := $(patsubst %/,%,$(dir $(abspath $(MAKEFILE))))
@@ -102,7 +102,10 @@ endif
 fix_version:
 	build/fix_version
 
-prepare: | fix_version
+setup_root:
+	build/setup_root
+
+prepare: | fix_version setup_root
 	@go version >/dev/null || (echo "Go not found. You need to install Go version 1.2-1.4: http://golang.org/doc/install"; false)
 	@go version | grep -q 'go version go1.[234]' || (echo "Go version 1.2-1.4, you have a version of Go that is not supported."; false)
 	@echo "GOPATH: $${GOPATH}"

@@ -29,7 +29,7 @@ import (
   "encoding/binary"
   "fmt"
   zmq "github.com/alecthomas/gozmq"
-  "lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/core"
   "syscall"
   "unsafe"
 )

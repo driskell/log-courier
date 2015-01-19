@@ -20,8 +20,8 @@
 package spooler
 
 import (
-  "lc-lib/core"
-  "lc-lib/publisher"
+  "github.com/driskell/log-courier/src/lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/publisher"
   "time"
 )
 

@@ -22,7 +22,7 @@ package registrar
 import (
   "encoding/json"
   "fmt"
-  "lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/core"
   "os"
   "sync"
 )

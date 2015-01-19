@@ -27,7 +27,7 @@ import (
   "encoding/pem"
   "fmt"
   "io/ioutil"
-  "lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/core"
   "math/rand"
   "net"
   "regexp"

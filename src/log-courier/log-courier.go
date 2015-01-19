@@ -23,21 +23,21 @@ import (
   "flag"
   "fmt"
   "github.com/op/go-logging"
-  "lc-lib/admin"
-  "lc-lib/core"
-  "lc-lib/harvester"
-  "lc-lib/prospector"
-  "lc-lib/spooler"
-  "lc-lib/publisher"
-  "lc-lib/registrar"
+  "github.com/driskell/log-courier/src/lc-lib/admin"
+  "github.com/driskell/log-courier/src/lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/harvester"
+  "github.com/driskell/log-courier/src/lc-lib/prospector"
+  "github.com/driskell/log-courier/src/lc-lib/spooler"
+  "github.com/driskell/log-courier/src/lc-lib/publisher"
+  "github.com/driskell/log-courier/src/lc-lib/registrar"
   stdlog "log"
   "os"
   "runtime/pprof"
   "time"
 )
 
-import _ "lc-lib/codecs"
-import _ "lc-lib/transports"
+import _ "github.com/driskell/log-courier/src/lc-lib/codecs"
+import _ "github.com/driskell/log-courier/src/lc-lib/transports"
 
 func main() {
   logcourier := NewLogCourier()

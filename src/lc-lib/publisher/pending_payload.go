@@ -21,7 +21,7 @@ import (
   "compress/zlib"
   "encoding/binary"
   "errors"
-  "lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/core"
   "time"
 )
 

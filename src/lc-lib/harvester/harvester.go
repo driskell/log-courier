@@ -22,7 +22,7 @@ package harvester
 import (
   "fmt"
   "io"
-  "lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/core"
   "os"
   "sync"
   "time"

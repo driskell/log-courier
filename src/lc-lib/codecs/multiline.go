@@ -19,7 +19,7 @@ package codecs
 import (
   "errors"
   "fmt"
-  "lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/core"
   "regexp"
   "strings"
   "sync"

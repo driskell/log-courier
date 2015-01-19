@@ -21,10 +21,10 @@ package prospector
 
 import (
   "fmt"
-  "lc-lib/core"
-  "lc-lib/harvester"
-  "lc-lib/registrar"
-  "lc-lib/spooler"
+  "github.com/driskell/log-courier/src/lc-lib/core"
+  "github.com/driskell/log-courier/src/lc-lib/harvester"
+  "github.com/driskell/log-courier/src/lc-lib/registrar"
+  "github.com/driskell/log-courier/src/lc-lib/spooler"
   "os"
   "path/filepath"
   "time"
