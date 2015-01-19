@@ -310,7 +310,9 @@ PublishLoop:
 				if p.num_payloads >= p.config.MaxPendingPayloads {
 					// Too many pending payloads, disable send temporarily
 					p.can_send = nil
-					log.Debug("Pending payload limit reached")
+					log.Debug("Pending payload limit of %d reached", p.config.MaxPendingPayloads)
+				} else {
+					log.Debug("%d/%d pending payloads now in transit", p.num_payloads, p.config.MaxPendingPayloads)
 				}
 
 				// Expect an ACK within network timeout if this is first payload after idle
