@@ -40,7 +40,7 @@ module LogCourier
       }.merge!(options)
 
       @logger = @options[:logger]
-      @logger['plugin'] = 'input/courier'
+      @logger['plugin'] = 'input/courier' unless @logger.nil?
 
       case @options[:transport]
       when 'tcp', 'tls'
