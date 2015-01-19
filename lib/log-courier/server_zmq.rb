@@ -273,8 +273,11 @@ module LogCourier
           }
         end
 
-        # Existing thread, throw on the queue, if not enough room drop the message
-        index['']['client'].push data, 0
+        # Existing thread, throw on the queue, if not enough room (timeout) drop the message
+        begin
+          index['']['client'].push data, 0
+        rescue LogCourier::TimeoutError
+        end
       end
       return
     end

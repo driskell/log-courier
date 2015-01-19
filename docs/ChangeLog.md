@@ -44,6 +44,8 @@ configuration. (Thanks @mhughes - #88)
 * A configuration reload will now reopen log files. (#91)
 * Implement support for SRV record server entries (#85)
 * Fix Log Courier output plugin (#96)
+* Fix Logstash input plugin with zmq transport failing when discarding a message
+due to peer_recv_queue being exceeded (#92)
 
 ***Security***
 
