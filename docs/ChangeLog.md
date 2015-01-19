@@ -43,6 +43,7 @@ failures will still round robin.
 configuration. (Thanks @mhughes - #88)
 * A configuration reload will now reopen log files. (#91)
 * Implement support for SRV record server entries (#85)
+* Fix Log Courier output plugin (#96)
 
 ***Security***
 
@@ -52,6 +53,8 @@ courier plugins to further enhance security when using the TLS transport.
 ## 1.3
 
 *2nd January 2014*
+
+***Changes***
 
 * Added support for Go 1.4
 * Added new "host" option to override the "host" field in generated events
@@ -72,6 +75,11 @@ events and add regression test
 * Fix Logstash courier output plugin not verifying the remote certificate
 correctly
 * Various other minor tweaks and fixes
+
+***Known Issues***
+
+* The Logstash courier output plugin triggers a NameError. This issue is fixed
+in the following version. No workaround is available.
 
 ## 1.2
 
