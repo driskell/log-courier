@@ -20,5 +20,5 @@ import "os"
 
 // A stream should be a pointer object that uniquely identified a file stream
 type Stream interface {
-  Info() (string, os.FileInfo)
+	Info() (string, os.FileInfo)
 }

@@ -17,10 +17,10 @@
 package main
 
 import (
-  "flag"
-  "fmt"
-  zmq "github.com/alecthomas/gozmq"
-  "syscall"
+	"flag"
+	"fmt"
+	zmq "github.com/alecthomas/gozmq"
+	"syscall"
 )
 
 /*
@@ -31,70 +31,70 @@ import (
 import "C"
 
 func main() {
-  var single bool
+	var single bool
 
-  flag.BoolVar(&single, "single", false, "generate a single keypair")
-  flag.Parse()
+	flag.BoolVar(&single, "single", false, "generate a single keypair")
+	flag.Parse()
 
-  if single {
-    fmt.Println("Generating single keypair...")
+	if single {
+		fmt.Println("Generating single keypair...")
 
-    pub, priv, err := CurveKeyPair()
-    if err != nil {
-      fmt.Println("An error occurred:", err)
-      if err == syscall.ENOTSUP {
-        fmt.Print("Please ensure that your zeromq installation was built with libsodium support")
-      }
-      return
-    }
+		pub, priv, err := CurveKeyPair()
+		if err != nil {
+			fmt.Println("An error occurred:", err)
+			if err == syscall.ENOTSUP {
+				fmt.Print("Please ensure that your zeromq installation was built with libsodium support")
+			}
+			return
+		}
 
-    fmt.Println("Public key:  ", pub)
-    fmt.Println("Private key: ", priv)
-    return
-  }
+		fmt.Println("Public key:  ", pub)
+		fmt.Println("Private key: ", priv)
+		return
+	}
 
-  fmt.Println("Generating configuration keys...")
-  fmt.Println("(Use 'genkey --single' to generate a single keypair.)")
-  fmt.Println("")
+	fmt.Println("Generating configuration keys...")
+	fmt.Println("(Use 'genkey --single' to generate a single keypair.)")
+	fmt.Println("")
 
-  server_pub, server_priv, err := CurveKeyPair()
-  if err != nil {
-    fmt.Println("An error occurred:", err)
-    if err == syscall.ENOTSUP {
-      fmt.Print("Please ensure that your zeromq installation was built with libsodium support")
-    }
-    return
-  }
+	server_pub, server_priv, err := CurveKeyPair()
+	if err != nil {
+		fmt.Println("An error occurred:", err)
+		if err == syscall.ENOTSUP {
+			fmt.Print("Please ensure that your zeromq installation was built with libsodium support")
+		}
+		return
+	}
 
-  client_pub, client_priv, err := CurveKeyPair()
-  if err != nil {
-    fmt.Println("An error occurred:", err)
-    if err == syscall.ENOTSUP {
-      fmt.Println("Please ensure that your zeromq installation was built with libsodium support")
-    }
-    return
-  }
+	client_pub, client_priv, err := CurveKeyPair()
+	if err != nil {
+		fmt.Println("An error occurred:", err)
+		if err == syscall.ENOTSUP {
+			fmt.Println("Please ensure that your zeromq installation was built with libsodium support")
+		}
+		return
+	}
 
-  fmt.Println("Copy and paste the following into your Log Courier configuration:")
-  fmt.Printf("    \"curve server key\": \"%s\",\n", server_pub)
-  fmt.Printf("    \"curve public key\": \"%s\",\n", client_pub)
-  fmt.Printf("    \"curve secret key\": \"%s\",\n", client_priv)
-  fmt.Println("")
-  fmt.Println("Copy and paste the following into your LogStash configuration:")
-  fmt.Printf("    curve_secret_key => \"%s\",\n", server_priv)
+	fmt.Println("Copy and paste the following into your Log Courier configuration:")
+	fmt.Printf("    \"curve server key\": \"%s\",\n", server_pub)
+	fmt.Printf("    \"curve public key\": \"%s\",\n", client_pub)
+	fmt.Printf("    \"curve secret key\": \"%s\",\n", client_priv)
+	fmt.Println("")
+	fmt.Println("Copy and paste the following into your LogStash configuration:")
+	fmt.Printf("    curve_secret_key => \"%s\",\n", server_priv)
 }
 
 // Because gozmq does not yet expose this for us, we have to expose it ourselves
 func CurveKeyPair() (string, string, error) {
-  var pub [41]C.char
-  var priv [41]C.char
+	var pub [41]C.char
+	var priv [41]C.char
 
-  // Because gozmq does not yet expose this for us, we have to expose it ourselves
-  if rc, err := C.zmq_curve_keypair(&pub[0], &priv[0]); rc != 0 {
-    return "", "", casterr(err)
-  }
+	// Because gozmq does not yet expose this for us, we have to expose it ourselves
+	if rc, err := C.zmq_curve_keypair(&pub[0], &priv[0]); rc != 0 {
+		return "", "", casterr(err)
+	}
 
-  return C.GoString(&pub[0]), C.GoString(&priv[0]), nil
+	return C.GoString(&pub[0]), C.GoString(&priv[0]), nil
 }
 
 // The following is copy-pasted from gozmq's zmq.go
@@ -102,21 +102,21 @@ func CurveKeyPair() (string, string, error) {
 type zmqErrno syscall.Errno
 
 func (e zmqErrno) Error() string {
-  return C.GoString(C.zmq_strerror(C.int(e)))
+	return C.GoString(C.zmq_strerror(C.int(e)))
 }
 
 func casterr(fromcgo error) error {
-  errno, ok := fromcgo.(syscall.Errno)
-  if !ok {
-    return fromcgo
-  }
-  zmqerrno := zmqErrno(errno)
-  switch zmqerrno {
-  case zmq.ENOTSOCK:
-    return zmqerrno
-  }
-  if zmqerrno >= C.ZMQ_HAUSNUMERO {
-    return zmqerrno
-  }
-  return errno
+	errno, ok := fromcgo.(syscall.Errno)
+	if !ok {
+		return fromcgo
+	}
+	zmqerrno := zmqErrno(errno)
+	switch zmqerrno {
+	case zmq.ENOTSOCK:
+		return zmqerrno
+	}
+	if zmqerrno >= C.ZMQ_HAUSNUMERO {
+		return zmqerrno
+	}
+	return errno
 }

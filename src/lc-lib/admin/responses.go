@@ -12,18 +12,18 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
-*/
+ */
 
 package admin
 
 import (
-  "encoding/gob"
-  "github.com/driskell/log-courier/src/lc-lib/core"
-  "time"
+	"encoding/gob"
+	"github.com/driskell/log-courier/src/lc-lib/core"
+	"time"
 )
 
 type Response struct {
-  Response interface{}
+	Response interface{}
 }
 
 type PongResponse struct {
@@ -33,30 +33,30 @@ type ReloadResponse struct {
 }
 
 type ErrorResponse struct {
-  Message string
+	Message string
 }
 
 func (e *ErrorResponse) Error() string {
-  return e.Message
+	return e.Message
 }
 
 func init() {
-  // Response structure
-  gob.Register(&Response{})
+	// Response structure
+	gob.Register(&Response{})
 
-  // General error
-  gob.Register(&ErrorResponse{})
+	// General error
+	gob.Register(&ErrorResponse{})
 
-  // PONG
-  gob.Register(&PongResponse{})
+	// PONG
+	gob.Register(&PongResponse{})
 
-  // RELD
-  gob.Register(&ReloadResponse{})
+	// RELD
+	gob.Register(&ReloadResponse{})
 
-  // SNAP
-  gob.Register(&core.Snapshot{})
-  // SNAP - time.Time
-  gob.Register(time.Now())
-  // SNAP - time.Duration
-  gob.Register(time.Since(time.Now()))
+	// SNAP
+	gob.Register(&core.Snapshot{})
+	// SNAP - time.Time
+	gob.Register(time.Now())
+	// SNAP - time.Duration
+	gob.Register(time.Since(time.Now()))
 }

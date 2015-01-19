@@ -17,17 +17,17 @@
 package core
 
 import (
-  "encoding/json"
+	"encoding/json"
 )
 
 type Event map[string]interface{}
 
 type EventDescriptor struct {
-  Stream Stream
-  Offset int64
-  Event  []byte
+	Stream Stream
+	Offset int64
+	Event  []byte
 }
 
 func (e *Event) Encode() ([]byte, error) {
-  return json.Marshal(e)
+	return json.Marshal(e)
 }

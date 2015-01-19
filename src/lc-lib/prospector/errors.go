@@ -12,18 +12,18 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
-*/
+ */
 
 package prospector
 
 type ProspectorSkipError struct {
-  message string
+	message string
 }
 
 func newProspectorSkipError(message string) *ProspectorSkipError {
-  return &ProspectorSkipError{message: message}
+	return &ProspectorSkipError{message: message}
 }
 
 func (e *ProspectorSkipError) Error() string {
-  return e.message
+	return e.message
 }

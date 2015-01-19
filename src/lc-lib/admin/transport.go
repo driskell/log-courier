@@ -12,7 +12,7 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
-*/
+ */
 
 package admin
 
@@ -33,7 +33,7 @@ type listenerFunc func(string, string) (NetListener, error)
 
 var (
 	registeredConnectors map[string]connectorFunc = make(map[string]connectorFunc)
-	registeredListeners map[string]listenerFunc = make(map[string]listenerFunc)
+	registeredListeners  map[string]listenerFunc  = make(map[string]listenerFunc)
 )
 
 func registerTransport(name string, connector connectorFunc, listener listenerFunc) {

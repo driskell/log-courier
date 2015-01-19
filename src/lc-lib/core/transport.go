@@ -17,22 +17,22 @@
 package core
 
 const (
-  Reload_None = iota
-  Reload_Servers
-  Reload_Transport
+	Reload_None = iota
+	Reload_Servers
+	Reload_Transport
 )
 
 type Transport interface {
-  ReloadConfig(*NetworkConfig) int
-  Init() error
-  CanSend() <-chan int
-  Write(string, []byte) error
-  Read() <-chan interface{}
-  Shutdown()
+	ReloadConfig(*NetworkConfig) int
+	Init() error
+	CanSend() <-chan int
+	Write(string, []byte) error
+	Read() <-chan interface{}
+	Shutdown()
 }
 
 type TransportFactory interface {
-  NewTransport(*NetworkConfig) (Transport, error)
+	NewTransport(*NetworkConfig) (Transport, error)
 }
 
 type TransportRegistrarFunc func(*Config, string, map[string]interface{}, string) (TransportFactory, error)
@@ -40,13 +40,13 @@ type TransportRegistrarFunc func(*Config, string, map[string]interface{}, string
 var registered_Transports map[string]TransportRegistrarFunc = make(map[string]TransportRegistrarFunc)
 
 func RegisterTransport(transport string, registrar_func TransportRegistrarFunc) {
-  registered_Transports[transport] = registrar_func
+	registered_Transports[transport] = registrar_func
 }
 
 func AvailableTransports() (ret []string) {
-  ret = make([]string, 0, len(registered_Transports))
-  for k := range registered_Transports {
-    ret = append(ret, k)
-  }
-  return
+	ret = make([]string, 0, len(registered_Transports))
+	for k := range registered_Transports {
+		ret = append(ret, k)
+	}
+	return
 }

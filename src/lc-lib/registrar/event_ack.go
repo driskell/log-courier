@@ -17,33 +17,33 @@
 package registrar
 
 import (
-  "github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/core"
 )
 
 type AckEvent struct {
-  events []*core.EventDescriptor
+	events []*core.EventDescriptor
 }
 
 func NewAckEvent(events []*core.EventDescriptor) *AckEvent {
-  return &AckEvent{
-    events: events,
-  }
+	return &AckEvent{
+		events: events,
+	}
 }
 
 func (e *AckEvent) Process(state map[core.Stream]*FileState) {
-  if len(e.events) == 1 {
-    log.Debug("Registrar received offsets for %d log entries", len(e.events))
-  } else {
-    log.Debug("Registrar received offsets for %d log entries", len(e.events))
-  }
+	if len(e.events) == 1 {
+		log.Debug("Registrar received offsets for %d log entries", len(e.events))
+	} else {
+		log.Debug("Registrar received offsets for %d log entries", len(e.events))
+	}
 
-  for _, event := range e.events {
-    _, is_found := state[event.Stream]
-    if !is_found {
-      // This is probably stdin then or a deleted file we can't resume
-      continue
-    }
+	for _, event := range e.events {
+		_, is_found := state[event.Stream]
+		if !is_found {
+			// This is probably stdin then or a deleted file we can't resume
+			continue
+		}
 
-    state[event.Stream].Offset = event.Offset
-  }
+		state[event.Stream].Offset = event.Offset
+	}
 }

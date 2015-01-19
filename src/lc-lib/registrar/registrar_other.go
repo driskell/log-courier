@@ -22,22 +22,22 @@
 package registrar
 
 import (
-  "encoding/json"
-  "os"
+	"encoding/json"
+	"os"
 )
 
 func (r *Registrar) writeRegistry() error {
-  // Open tmp file, write, flush, rename
-  fname := r.persistdir + string(os.PathSeparator) + r.statefile
-  tname := fname + ".new"
-  file, err := os.Create(tname)
-  if err != nil {
-    return err
-  }
-  defer file.Close()
+	// Open tmp file, write, flush, rename
+	fname := r.persistdir + string(os.PathSeparator) + r.statefile
+	tname := fname + ".new"
+	file, err := os.Create(tname)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-  encoder := json.NewEncoder(file)
-  encoder.Encode(r.toCanonical())
+	encoder := json.NewEncoder(file)
+	encoder.Encode(r.toCanonical())
 
-  return os.Rename(tname, fname)
+	return os.Rename(tname, fname)
 }

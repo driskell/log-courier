@@ -17,30 +17,30 @@
 package registrar
 
 import (
-  "github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/core"
 )
 
 type RenamedEvent struct {
-  stream core.Stream
-  source string
+	stream core.Stream
+	source string
 }
 
 func NewRenamedEvent(stream core.Stream, source string) *RenamedEvent {
-  return &RenamedEvent{
-    stream: stream,
-    source: source,
-  }
+	return &RenamedEvent{
+		stream: stream,
+		source: source,
+	}
 }
 
 func (e *RenamedEvent) Process(state map[core.Stream]*FileState) {
-  _, is_found := state[e.stream]
-  if !is_found {
-    // This is probably stdin or a deleted file we can't resume
-    return
-  }
+	_, is_found := state[e.stream]
+	if !is_found {
+		// This is probably stdin or a deleted file we can't resume
+		return
+	}
 
-  log.Debug("Registrar received a rename event for %s -> %s", state[e.stream].Source, e.source)
+	log.Debug("Registrar received a rename event for %s -> %s", state[e.stream].Source, e.source)
 
-  // Update the stored file name
-  state[e.stream].Source = &e.source
+	// Update the stored file name
+	state[e.stream].Source = &e.source
 }

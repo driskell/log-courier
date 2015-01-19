@@ -19,18 +19,18 @@
 package main
 
 import (
-  "github.com/op/go-logging"
-  "os"
-  "os/signal"
+	"github.com/op/go-logging"
+	"os"
+	"os/signal"
 )
 
 func (lc *LogCourier) registerSignals() {
-  // Windows onyl supports os.Interrupt
-  signal.Notify(lc.shutdown_chan, os.Interrupt)
+	// Windows onyl supports os.Interrupt
+	signal.Notify(lc.shutdown_chan, os.Interrupt)
 
-  // No reload signal for Windows - implementation will have to wait
+	// No reload signal for Windows - implementation will have to wait
 }
 
 func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
-  return nil
+	return nil
 }

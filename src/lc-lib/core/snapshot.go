@@ -12,80 +12,80 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
-*/
+ */
 
 package core
 
 import (
-  "sort"
+	"sort"
 )
 
 type Snapshot struct {
-  Desc    string
-  Entries map[string]interface{}
-  Keys    []string
-  Subs    map[string]*Snapshot
-  SubKeys []string
+	Desc    string
+	Entries map[string]interface{}
+	Keys    []string
+	Subs    map[string]*Snapshot
+	SubKeys []string
 }
 
 func NewSnapshot(desc string) *Snapshot {
-  return &Snapshot{
-    Desc:    desc,
-    Entries: make(map[string]interface{}),
-    Keys:    make([]string, 0),
-    Subs:    make(map[string]*Snapshot),
-    SubKeys: make([]string, 0),
-  }
+	return &Snapshot{
+		Desc:    desc,
+		Entries: make(map[string]interface{}),
+		Keys:    make([]string, 0),
+		Subs:    make(map[string]*Snapshot),
+		SubKeys: make([]string, 0),
+	}
 }
 
 func (s *Snapshot) Sort() {
-  sort.Strings(s.Keys)
-  sort.Strings(s.SubKeys)
+	sort.Strings(s.Keys)
+	sort.Strings(s.SubKeys)
 }
 
 func (s *Snapshot) Description() string {
-  return s.Desc
+	return s.Desc
 }
 
 func (s *Snapshot) AddEntry(name string, value interface{}) {
-  s.Entries[name] = value
-  s.Keys = append(s.Keys, name)
+	s.Entries[name] = value
+	s.Keys = append(s.Keys, name)
 }
 
 func (s *Snapshot) EntryByName(name string) (interface{}, bool) {
-  if v, ok := s.Entries[name]; ok {
-    return v, true
-  }
+	if v, ok := s.Entries[name]; ok {
+		return v, true
+	}
 
-  return nil, false
+	return nil, false
 }
 
 func (s *Snapshot) Entry(i int) (string, interface{}) {
-  if i < 0 || i >= len(s.Keys) {
-    panic("Out of bounds")
-  }
+	if i < 0 || i >= len(s.Keys) {
+		panic("Out of bounds")
+	}
 
-  return s.Keys[i], s.Entries[s.Keys[i]]
+	return s.Keys[i], s.Entries[s.Keys[i]]
 }
 
 func (s *Snapshot) NumEntries() int {
-  return len(s.Keys)
+	return len(s.Keys)
 }
 
 func (s *Snapshot) AddSub(sub *Snapshot) {
-  desc := sub.Description()
-  s.Subs[desc] = sub
-  s.SubKeys = append(s.SubKeys, desc)
+	desc := sub.Description()
+	s.Subs[desc] = sub
+	s.SubKeys = append(s.SubKeys, desc)
 }
 
 func (s *Snapshot) Sub(i int) *Snapshot {
-  if i < 0 || i >= len(s.SubKeys) {
-    panic("Out of bounds")
-  }
+	if i < 0 || i >= len(s.SubKeys) {
+		panic("Out of bounds")
+	}
 
-  return s.Subs[s.SubKeys[i]]
+	return s.Subs[s.SubKeys[i]]
 }
 
 func (s *Snapshot) NumSubs() int {
-  return len(s.SubKeys)
+	return len(s.SubKeys)
 }

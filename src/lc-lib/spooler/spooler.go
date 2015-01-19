@@ -20,152 +20,152 @@
 package spooler
 
 import (
-  "github.com/driskell/log-courier/src/lc-lib/core"
-  "github.com/driskell/log-courier/src/lc-lib/publisher"
-  "time"
+	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/publisher"
+	"time"
 )
 
 const (
-  // Event header is just uint32 at the moment
-  event_header_size   = 4
+	// Event header is just uint32 at the moment
+	event_header_size = 4
 )
 
 type Spooler struct {
-  core.PipelineSegment
-  core.PipelineConfigReceiver
+	core.PipelineSegment
+	core.PipelineConfigReceiver
 
-  config      *core.GeneralConfig
-  spool       []*core.EventDescriptor
-  spool_size  int
-  input       chan *core.EventDescriptor
-  output      chan<- []*core.EventDescriptor
-  timer_start time.Time
-  timer       *time.Timer
+	config      *core.GeneralConfig
+	spool       []*core.EventDescriptor
+	spool_size  int
+	input       chan *core.EventDescriptor
+	output      chan<- []*core.EventDescriptor
+	timer_start time.Time
+	timer       *time.Timer
 }
 
 func NewSpooler(pipeline *core.Pipeline, config *core.GeneralConfig, publisher_imp *publisher.Publisher) *Spooler {
-  ret := &Spooler{
-    config: config,
-    spool:  make([]*core.EventDescriptor, 0, config.SpoolSize),
-    input:  make(chan *core.EventDescriptor, 16), // TODO: Make configurable?
-    output: publisher_imp.Connect(),
-  }
+	ret := &Spooler{
+		config: config,
+		spool:  make([]*core.EventDescriptor, 0, config.SpoolSize),
+		input:  make(chan *core.EventDescriptor, 16), // TODO: Make configurable?
+		output: publisher_imp.Connect(),
+	}
 
-  pipeline.Register(ret)
+	pipeline.Register(ret)
 
-  return ret
+	return ret
 }
 
 func (s *Spooler) Connect() chan<- *core.EventDescriptor {
-  return s.input
+	return s.input
 }
 
 func (s *Spooler) Run() {
-  defer func() {
-    s.Done()
-  }()
+	defer func() {
+		s.Done()
+	}()
 
-  s.timer_start = time.Now()
-  s.timer = time.NewTimer(s.config.SpoolTimeout)
+	s.timer_start = time.Now()
+	s.timer = time.NewTimer(s.config.SpoolTimeout)
 
 SpoolerLoop:
-  for {
-    select {
-    case event := <-s.input:
-      if len(s.spool) > 0 && int64(s.spool_size) + int64(len(event.Event)) + event_header_size >= s.config.SpoolMaxBytes {
-        log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spool_size, s.config.SpoolMaxBytes, len(event.Event) + 4)
+	for {
+		select {
+		case event := <-s.input:
+			if len(s.spool) > 0 && int64(s.spool_size)+int64(len(event.Event))+event_header_size >= s.config.SpoolMaxBytes {
+				log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spool_size, s.config.SpoolMaxBytes, len(event.Event)+4)
 
-        // Can't fit this event in the spool - flush and then queue
-        if !s.sendSpool() {
-          break SpoolerLoop
-        }
+				// Can't fit this event in the spool - flush and then queue
+				if !s.sendSpool() {
+					break SpoolerLoop
+				}
 
-        s.resetTimer()
-        s.spool_size += len(event.Event) + event_header_size
-        s.spool = append(s.spool, event)
+				s.resetTimer()
+				s.spool_size += len(event.Event) + event_header_size
+				s.spool = append(s.spool, event)
 
-        continue
-      }
+				continue
+			}
 
-      s.spool_size += len(event.Event) + event_header_size
-      s.spool = append(s.spool, event)
+			s.spool_size += len(event.Event) + event_header_size
+			s.spool = append(s.spool, event)
 
-      // Flush if full
-      if len(s.spool) >= cap(s.spool) {
-        log.Debug("Spooler flushing %d events due to spool size reached", len(s.spool))
+			// Flush if full
+			if len(s.spool) >= cap(s.spool) {
+				log.Debug("Spooler flushing %d events due to spool size reached", len(s.spool))
 
-        if !s.sendSpool() {
-          break SpoolerLoop
-        }
+				if !s.sendSpool() {
+					break SpoolerLoop
+				}
 
-        s.resetTimer()
-      }
-    case <-s.timer.C:
-      // Flush what we have, if anything
-      if len(s.spool) > 0 {
-        log.Debug("Spooler flushing %d events due to spool timeout exceeded", len(s.spool))
+				s.resetTimer()
+			}
+		case <-s.timer.C:
+			// Flush what we have, if anything
+			if len(s.spool) > 0 {
+				log.Debug("Spooler flushing %d events due to spool timeout exceeded", len(s.spool))
 
-        if !s.sendSpool() {
-          break SpoolerLoop
-        }
-      }
+				if !s.sendSpool() {
+					break SpoolerLoop
+				}
+			}
 
-      s.resetTimer()
-    case <-s.OnShutdown():
-      break SpoolerLoop
-    case config := <-s.OnConfig():
-      if !s.reloadConfig(config) {
-        break SpoolerLoop
-      }
-    }
-  }
+			s.resetTimer()
+		case <-s.OnShutdown():
+			break SpoolerLoop
+		case config := <-s.OnConfig():
+			if !s.reloadConfig(config) {
+				break SpoolerLoop
+			}
+		}
+	}
 
-  log.Info("Spooler exiting")
+	log.Info("Spooler exiting")
 }
 
 func (s *Spooler) sendSpool() bool {
-  select {
-  case <-s.OnShutdown():
-    return false
-  case config := <-s.OnConfig():
-    if !s.reloadConfig(config) {
-      return false
-    }
-  case s.output <- s.spool:
-  }
+	select {
+	case <-s.OnShutdown():
+		return false
+	case config := <-s.OnConfig():
+		if !s.reloadConfig(config) {
+			return false
+		}
+	case s.output <- s.spool:
+	}
 
-  s.spool = make([]*core.EventDescriptor, 0, s.config.SpoolSize)
-  s.spool_size = 0
+	s.spool = make([]*core.EventDescriptor, 0, s.config.SpoolSize)
+	s.spool_size = 0
 
-  return true
+	return true
 }
 
 func (s *Spooler) resetTimer() {
-  s.timer_start = time.Now()
+	s.timer_start = time.Now()
 
-  // Stop the timer, and ensure the channel is empty before restarting it
-  s.timer.Stop()
-  select {
-  case <-s.timer.C:
-  default:
-  }
-  s.timer.Reset(s.config.SpoolTimeout)
+	// Stop the timer, and ensure the channel is empty before restarting it
+	s.timer.Stop()
+	select {
+	case <-s.timer.C:
+	default:
+	}
+	s.timer.Reset(s.config.SpoolTimeout)
 }
 
 func (s *Spooler) reloadConfig(config *core.Config) bool {
-  s.config = &config.General
+	s.config = &config.General
 
-  // Immediate flush?
-  passed := time.Now().Sub(s.timer_start)
-  if passed >= s.config.SpoolTimeout || len(s.spool) >= int(s.config.SpoolSize) {
-    if !s.sendSpool() {
-      return false
-    }
-    s.timer_start = time.Now()
-    s.timer.Reset(s.config.SpoolTimeout)
-  } else {
-    s.timer.Reset(passed - s.config.SpoolTimeout)
-  }
+	// Immediate flush?
+	passed := time.Now().Sub(s.timer_start)
+	if passed >= s.config.SpoolTimeout || len(s.spool) >= int(s.config.SpoolSize) {
+		if !s.sendSpool() {
+			return false
+		}
+		s.timer_start = time.Now()
+		s.timer.Reset(s.config.SpoolTimeout)
+	} else {
+		s.timer.Reset(passed - s.config.SpoolTimeout)
+	}
 
-  return true
+	return true
 }
