@@ -79,7 +79,7 @@ module LogStash
       public
 
       def register
-        @logger.info('Starting courier input listener', :address => "#{@host}:#{@port}")
+        @logger.info 'Starting courier input listener', :address => "#{@host}:#{@port}"
 
         options = {
           logger:                @logger,
