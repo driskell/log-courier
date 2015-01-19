@@ -97,7 +97,7 @@ module LogCourier
       }.merge!(options)
 
       @logger = @options[:logger]
-      @logger['plugin'] = 'output/courier'
+      @logger['plugin'] = 'output/courier' unless @logger.nil?
 
       require 'log-courier/client_tls'
       @client = ClientTls.new(@options)
