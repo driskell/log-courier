@@ -277,6 +277,7 @@ module LogCourier
         begin
           index['']['client'].push data, 0
         rescue LogCourier::TimeoutError
+          # TODO: Log a warning about this?
         end
       end
       return
