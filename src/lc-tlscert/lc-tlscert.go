@@ -28,6 +28,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"flag"
 	"fmt"
 	"math/big"
 	"net"
@@ -75,6 +76,18 @@ func anyKey() {
 
 func main() {
 	var err error
+	var common_name string
+	var days string
+	var cert_base string
+	var omitConfirm bool
+	flag.StringVar(&common_name, "name", "", "The common name")
+	flag.StringVar(&cert_base, "p", "selfsigned", "The base path of the certs")
+	flag.StringVar(&days, "days", "", "The common name")
+	flag.BoolVar(&omitConfirm, "y", false, "continue to generate certs w/o waiting for confirmation")
+	flag.Parse()
+	dnsIPs := flag.Args()
+	fmt.Println("dnsIPs: ", dnsIPs)
+	fmt.Println("Common Name: ", common_name)
 
 	template := x509.Certificate{
 		Subject: pkix.Name{
@@ -89,46 +102,68 @@ func main() {
 		IsCA: true,
 	}
 
-	fmt.Println("Specify the Common Name for the certificate. The common name")
-	fmt.Println("can be anything, but is usually set to the server's primary")
-	fmt.Println("DNS name. Even if you plan to connect via IP address you")
-	fmt.Println("should specify the DNS name here.")
-	fmt.Println()
+	if common_name == "" {
+		fmt.Println("Specify the Common Name for the certificate. The common name")
+		fmt.Println("can be anything, but is usually set to the server's primary")
+		fmt.Println("DNS name. Even if you plan to connect via IP address you")
+		fmt.Println("should specify the DNS name here.")
+		fmt.Println()
 
-	template.Subject.CommonName = readString("Common name")
-	fmt.Println()
-
-	fmt.Println("The next step is to add any additional DNS names and IP")
-	fmt.Println("addresses that clients may use to connect to the server. If")
-	fmt.Println("you plan to connect to the server via IP address and not DNS")
-	fmt.Println("then you must specify those IP addresses here.")
-	fmt.Println("When you are finished, just press enter.")
-	fmt.Println()
-
-	var cnt = 0
-	var val string
-	for {
-		cnt++
-
-		if val = readString(fmt.Sprintf("DNS or IP address %d", cnt)); val == "" {
-			break
-		}
-
-		if ip := net.ParseIP(val); ip != nil {
-			template.IPAddresses = append(template.IPAddresses, ip)
-		} else {
-			template.DNSNames = append(template.DNSNames, val)
-		}
+		template.Subject.CommonName = readString("Common name")
+		fmt.Println()
+	} else {
+		fmt.Println("Use common name from option '-name': ", common_name)
+		template.Subject.CommonName = common_name
 	}
 
-	fmt.Println()
+	if len(dnsIPs) == 0 {
+		fmt.Println("The next step is to add any additional DNS names and IP")
+		fmt.Println("addresses that clients may use to connect to the server. If")
+		fmt.Println("you plan to connect to the server via IP address and not DNS")
+		fmt.Println("then you must specify those IP addresses here.")
+		fmt.Println("When you are finished, just press enter.")
+		fmt.Println()
 
-	fmt.Println("How long should the certificate be valid for? A year (365")
-	fmt.Println("days) is usual but requires the certificate to be regenerated")
-	fmt.Println("within a year or the certificate will cease working.")
-	fmt.Println()
+		var cnt = 0
+		var val string
+		for {
+			cnt++
 
-	template.NotAfter = template.NotBefore.Add(time.Duration(readNumber("Number of days")) * time.Hour * 24)
+			if val = readString(fmt.Sprintf("DNS or IP address %d", cnt)); val == "" {
+				break
+			}
+
+			if ip := net.ParseIP(val); ip != nil {
+				template.IPAddresses = append(template.IPAddresses, ip)
+			} else {
+				template.DNSNames = append(template.DNSNames, val)
+			}
+		}
+
+		fmt.Println()
+	} else {
+		for _, val := range dnsIPs {
+			if ip := net.ParseIP(val); ip != nil {
+				template.IPAddresses = append(template.IPAddresses, ip)
+			} else {
+				template.DNSNames = append(template.DNSNames, val)
+			}
+		}
+	}
+	if days == "" {
+		fmt.Println("How long should the certificate be valid for? A year (365")
+		fmt.Println("days) is usual but requires the certificate to be regenerated")
+		fmt.Println("within a year or the certificate will cease working.")
+		fmt.Println()
+
+		template.NotAfter = template.NotBefore.Add(time.Duration(readNumber("Number of days")) * time.Hour * 24)
+	} else {
+		var num int64
+		if num, err = strconv.ParseInt(days, 0, 64); err != nil {
+			fmt.Println("Please enter a valid numerical value")
+		}
+		template.NotAfter = template.NotBefore.Add(time.Duration(num) * time.Hour * 24)
+	}
 
 	fmt.Println("Common name:", template.Subject.CommonName)
 	fmt.Println("DNS SANs:")
@@ -150,8 +185,10 @@ func main() {
 	fmt.Println()
 
 	fmt.Println("The certificate can now be generated")
-	fmt.Println("Press any key to begin generating the self-signed certificate.")
-	anyKey()
+	if omitConfirm == false {
+		fmt.Println("Press any key to begin generating the self-signed certificate.")
+		anyKey()
+	}
 
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -172,7 +209,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	certOut, err := os.Create("selfsigned.crt")
+	certOut, err := os.Create(fmt.Sprintf("%s.crt", cert_base))
 	if err != nil {
 		fmt.Println("Failed to open selfsigned.pem for writing:", err)
 		os.Exit(1)
@@ -180,7 +217,7 @@ func main() {
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 	certOut.Close()
 
-	keyOut, err := os.OpenFile("selfsigned.key", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.OpenFile(fmt.Sprintf("%s.key", cert_base), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		fmt.Println("failed to open selfsigned.key for writing:", err)
 		os.Exit(1)
