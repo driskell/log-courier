@@ -165,6 +165,12 @@ module LogCourier
           next if spooled.length == 0
         end
 
+        if spooled.length >= @options[:spool_size]
+          @logger.debug 'Flushing full spool', :events => spooled.length
+        else
+          @logger.debug 'Flushing spool due to timeout', :events => spooled.length
+        end
+
         # Pass through to io_control but only if we're ready to send
         @send_mutex.synchronize do
           @send_cond.wait(@send_mutex) unless @send_ready
