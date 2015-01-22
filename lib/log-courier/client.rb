@@ -93,15 +93,21 @@ module LogCourier
     def initialize(options = {})
       @options = {
         logger:       nil,
+        transport:    'tls',
         spool_size:   1024,
-        idle_timeout: 5
+        idle_timeout: 5,
       }.merge!(options)
 
       @logger = @options[:logger]
       @logger['plugin'] = 'output/courier' unless @logger.nil?
 
-      require 'log-courier/client_tls'
-      @client = ClientTls.new(@options)
+      case @options[:transport]
+      when 'tcp', 'tls'
+        require 'log-courier/client_tcp'
+        @server = ClientTcp.new(@options)
+      else
+        fail 'output/courier: \'transport\' must be tcp or tls'
+      end
 
       @event_queue = EventQueue.new @options[:spool_size]
       @pending_payloads = {}
