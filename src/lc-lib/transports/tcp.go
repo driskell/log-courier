@@ -304,8 +304,9 @@ SendLoop:
 					// Shutdown will have been received by the wrapper
 					break SendLoop
 				} else {
-					// Pass error back
+					// Pass the error back and abort
 					t.recv_chan <- err
+					break SendLoop
 				}
 			}
 		}
