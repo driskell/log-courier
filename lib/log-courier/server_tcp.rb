@@ -264,9 +264,13 @@ module LogCourier
         @logger.info 'Connection closed', :peer => @peer unless @logger.nil?
       end
       return
-    rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
+    rescue OpenSSL::SSL::SSLError => e
       # Read errors, only action is to shutdown which we'll do in ensure
       @logger.warn 'SSL error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
+      return
+    rescue IOError, Errno::ECONNRESET => e
+      # Read errors, only action is to shutdown which we'll do in ensure
+      @logger.warn 'Connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
       return
     rescue ProtocolError => e
       # Connection abort request due to a protocol error
