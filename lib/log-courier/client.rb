@@ -25,6 +25,7 @@ require 'zlib'
 class NativeException; end
 
 module LogCourier
+  class TimeoutError < StandardError; end
   class ShutdownSignal < StandardError; end
   class ProtocolError < StandardError; end
 
