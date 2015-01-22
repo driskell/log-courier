@@ -46,6 +46,10 @@ configuration. (Thanks @mhughes - #88)
 * Fix Log Courier output plugin (#96)
 * Fix Logstash input plugin with zmq transport failing when discarding a message
 due to peer_recv_queue being exceeded (#92)
+* Fix a TCP transport race condition that could deadlock publisher on a send()
+error (#100)
+* Fix "address already in use" startup error when admin is enabled on a unix
+socket and the unix socket file already exists during startup (#101)
 
 ***Security***
 
