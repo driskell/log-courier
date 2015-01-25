@@ -104,7 +104,7 @@ module LogCourier
       case @options[:transport]
       when 'tcp', 'tls'
         require 'log-courier/client_tcp'
-        @server = ClientTcp.new(@options)
+        @client = ClientTcp.new(@options)
       else
         fail 'output/courier: \'transport\' must be tcp or tls'
       end
