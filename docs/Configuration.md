@@ -82,11 +82,18 @@ command replacing 1234 with the Process ID of Log Courier.
 
 	kill -HUP 1234
 
+Log Courier will reopen its own log file if one has been configured, allowing
+native log rotation to take place.
+
 Please note that files Log Courier has already started harvesting will continue
-to harvest after the reload with their previous configuration. The reload
-process will only affect new files and the network configuration. In the case of
-a network configuration change, Log Courier will disconnect and reconnect at the
-earliest opportunity.
+to be harvested after the reload with their original configuration; the reload
+process will only affect new files. Additionally, harvested log files will not
+be reopened. Log rotations are detected automatically. To control when a
+harvested log file is closed you can adjust the [`"dead time"`](#dead-time)
+option.
+
+In the case of a network configuration change, Log Courier will disconnect and
+reconnect at the earliest opportunity.
 
 *Configuration reload is not currently available on Windows builds of Log
 Courier.*
@@ -505,7 +512,13 @@ also have [Stream Configuration](#streamconfiguration) parameters specified.
 *Array of Fileglobs. Required*
 
 At least one Fileglob must be specified and all matching files for all provided
-globs will be tailed.
+globs will be monitored.
+
+If the log file is rotated, Log Courier will detect this and automatically start
+harvesting the new file. It will also keep the old file open to catch any
+delayed writes that a still-reloading application has not yet written. You can
+configure the time period before this old log file is closed using the
+[`"dead time"`](#dead-time) option.
 
 See above for a description of the Fileglob field type.
 
