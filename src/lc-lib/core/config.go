@@ -217,6 +217,26 @@ func (c *Config) loadFile(path string) (stripped *bytes.Buffer, err error) {
 	return
 }
 
+// Parse a *json.SyntaxError into a pretty error message
+func (c *Config) parseSyntaxError(js []byte, err error) error {
+	json_err, ok := err.(*json.SyntaxError)
+	if !ok {
+		return err
+	}
+
+	start := bytes.LastIndex(js[:json_err.Offset], []byte("\n"))+1
+	end := bytes.Index(js[start:], []byte("\n"))
+	if end >= 0 {
+		end += start
+	} else {
+		end = len(js)
+	}
+
+	line, pos := bytes.Count(js[:start], []byte("\n")), int(json_err.Offset) - start - 1
+
+	return fmt.Errorf("%s on line %d\n%s\n%s^", err, line, js[start:end], strings.Repeat(" ", pos))
+}
+
 // TODO: Config from a TOML? Maybe a custom one
 func (c *Config) Load(path string) (err error) {
 	var data *bytes.Buffer
@@ -229,7 +249,7 @@ func (c *Config) Load(path string) (err error) {
 	// Pull the entire structure into raw_config
 	raw_config := make(map[string]interface{})
 	if err = json.Unmarshal(data.Bytes(), &raw_config); err != nil {
-		return
+		return c.parseSyntaxError(data.Bytes(), err)
 	}
 
 	// Fill in defaults where the zero-value is a valid setting
