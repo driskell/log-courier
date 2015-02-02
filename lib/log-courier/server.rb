@@ -59,7 +59,7 @@ module LogCourier
 
       # Load the json adapter
       @json_adapter = MultiJson.adapter.instance
-      @json_options = { raw: true, use_bigdecimal: true }
+      @json_options = { raw: true }
     end
 
     def run(&block)
