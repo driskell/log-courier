@@ -50,6 +50,7 @@ due to peer_recv_queue being exceeded (#92)
 error (#100)
 * Fix "address already in use" startup error when admin is enabled on a unix
 socket and the unix socket file already exists during startup (#101)
+* Report the location in the configuration file of any syntax errors (#102)
 
 ***Security***
 
