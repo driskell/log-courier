@@ -90,10 +90,6 @@ func (pi *prospectorInfo) isRunning() bool {
 	return pi.running
 }
 
-/*func (pi *prospectorInfo) ShutdownSignal() <-chan interface{} {
-	return pi.harvester_stop
-}*/
-
 func (pi *prospectorInfo) stop() {
 	if !pi.running {
 		return
@@ -119,6 +115,10 @@ func (pi *prospectorInfo) setHarvesterStopped(status *harvester.HarvesterFinish)
 	if status.Error != nil {
 		pi.status = Status_Failed
 		pi.err = status.Error
+	}
+	if status.Last_Stat != nil {
+		// Keep the last stat the harvester ran so we compare timestamps for potential resume
+		pi.identity.Update(status.Last_Stat, &pi.identity)
 	}
 	pi.harvester = nil
 }

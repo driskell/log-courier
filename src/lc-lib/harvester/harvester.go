@@ -31,6 +31,7 @@ import (
 type HarvesterFinish struct {
 	Last_Offset int64
 	Error       error
+	Last_Stat   os.FileInfo
 }
 
 type Harvester struct {
@@ -90,6 +91,7 @@ func (h *Harvester) Start(output chan<- *core.EventDescriptor) {
 	go func() {
 		status := &HarvesterFinish{}
 		status.Last_Offset, status.Error = h.harvest(output)
+		status.Last_Stat = h.fileinfo
 		h.return_chan <- status
 	}()
 }
@@ -231,6 +233,9 @@ ReadLoop:
 			return h.codec.Teardown(), err
 		}
 
+		// Store latest stat()
+		h.fileinfo = info
+
 		if info.Size() < h.offset {
 			log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
 			h.file.Seek(0, os.SEEK_SET)
@@ -243,10 +248,6 @@ ReadLoop:
 		if age := time.Since(last_read_time); age > h.stream_config.DeadTime {
 			// if last_read_time was more than dead time, this file is probably dead. Stop watching it.
 			log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
-			// TODO: We should return a Stat() from before we attempted to read
-			// In prospector we use that for comparison to resume
-			// This prevents a potential race condition if we stop just as the
-			// file is modified with extra lines...
 			return h.codec.Teardown(), nil
 		}
 	}
@@ -327,6 +328,9 @@ func (h *Harvester) prepareHarvester() error {
 		h.file.Close()
 		return fmt.Errorf("Not the same file")
 	}
+
+	// Store latest stat()
+	h.fileinfo = info
 
 	// TODO: Check error?
 	h.file.Seek(h.offset, os.SEEK_SET)
