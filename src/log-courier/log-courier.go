@@ -69,7 +69,7 @@ func (lc *LogCourier) Run() {
 	var admin_listener *admin.Listener
 	var on_command <-chan string
 	var harvester_wait <-chan *harvester.HarvesterFinish
-	var registrar_imp *registrar.Registrar
+	var registrar_imp registrar.Registrator
 
 	lc.startUp()
 
@@ -77,7 +77,7 @@ func (lc *LogCourier) Run() {
 
 	// If reading from stdin, skip admin, and set up a null registrar
 	if lc.stdin {
-		registrar_imp = nil
+		registrar_imp = newStdinRegistrar(lc.pipeline)
 	} else {
 		if lc.config.General.AdminEnabled {
 			var err error
@@ -93,12 +93,12 @@ func (lc *LogCourier) Run() {
 		registrar_imp = registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
 	}
 
-	publisher, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar_imp)
+	publisher_imp, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar_imp)
 	if err != nil {
 		log.Fatalf("Failed to initialise: %s", err)
 	}
 
-	spooler_imp := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher)
+	spooler_imp := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher_imp)
 
 	// If reading from stdin, don't start prospector, directly start a harvester
 	if lc.stdin {
@@ -137,6 +137,13 @@ SignalLoop:
 				log.Notice("Finished reading from stdin at offset %d", finished.Last_Offset)
 			}
 			lc.harvester = nil
+
+			// Flush the spooler
+			spooler_imp.Flush()
+
+			// Wait for StdinRegistrar to finish
+			registrar_imp.(*StdinRegistrar).Wait(finished.Last_Offset)
+
 			lc.cleanShutdown()
 			break SignalLoop
 		}
