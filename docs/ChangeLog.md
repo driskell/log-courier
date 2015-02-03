@@ -51,6 +51,11 @@ error (#100)
 * Fix "address already in use" startup error when admin is enabled on a unix
 socket and the unix socket file already exists during startup (#101)
 * Report the location in the configuration file of any syntax errors (#102)
+* Fix an extremely rare race condition where a dead file may not be resumed if
+it is updated at the exact moment it is marked as dead
+* Remove use_bigdecimal JrJackson JSON decode option as Logstash does not
+support it. Also, using this option enables it globally within Logstash due to
+option leakage within the JrJackson gem (#103)
 
 ***Security***
 
