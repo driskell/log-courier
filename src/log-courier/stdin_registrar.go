@@ -72,16 +72,14 @@ RegistrarLoop:
 			wait_offset = new(int64)
 			*wait_offset = signal
 
-			log.Debug("Registrar received stdin EOF offset of %d", *wait_offset)
+			log.Debug("Stdin registrar received stdin EOF offset of %d", *wait_offset)
 		case events := <-r.registrar_chan:
 			for _, event := range events {
 				event.Process(state)
 			}
 
-			log.Debug("-- %v", state)
-
 			if wait_offset != nil && state[nil].Offset >= *wait_offset {
-				log.Debug("Registrar has reached end of stdin", state[nil].Offset)
+				log.Debug("Stdin registrar has reached end of stdin")
 				break RegistrarLoop
 			}
 
@@ -91,7 +89,7 @@ RegistrarLoop:
 		}
 	}
 
-	log.Info("Registrar exiting")
+	log.Info("Stdin registrar exiting")
 }
 
 func (r *StdinRegistrar) Connect() registrar.EventSpooler {
