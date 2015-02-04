@@ -50,7 +50,7 @@ which will require an internet connection.
 
 		cd /path/to/logstash
 		export GEM_HOME=vendor/bundle/jruby/1.9
-		java -jar vendor/jar/jruby-complete-1.7.11.jar -S gem install /path/to/log-courier-X.X.gem
+		java -jar vendor/jar/jruby-complete-1.7.11.jar -S gem install /path/to/the.gem
 
 The remaining step is to manually install the Logstash plugins.
 
@@ -60,13 +60,13 @@ The remaining step is to manually install the Logstash plugins.
 ### Local-only Installation
 
 If you need to install the gem and plugins on a server without an internet
-connection, you can download the latest ffi-rzmq-core and ffi-zmq gems from the
-rubygems site, transfer them across, and install them yourself. Once they are
-installed, follow the instructions for Manual Installation and the process can
-be completed without an internet connection.
+connection, you can download the gem dependencies from the rubygems site,
+transfer them across. Follow the instructions for Manual Installation and
+install the dependency gems before the Log Courier gem.
 
 * https://rubygems.org/gems/ffi-rzmq-core
 * https://rubygems.org/gems/ffi-rzmq
+* https://rubygems.org/gems/multi_json
 
 ## Configuration
 
