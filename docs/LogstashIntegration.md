@@ -60,7 +60,7 @@ The remaining step is to manually install the Logstash plugins.
 ### Local-only Installation
 
 If you need to install the gem and plugins on a server without an internet
-connection, you can download the gem dependencies from the rubygems site,
+connection, you can download the gem dependencies from the rubygems site and
 transfer them across. Follow the instructions for Manual Installation and
 install the dependency gems before the Log Courier gem.
 
