@@ -56,6 +56,8 @@ it is updated at the exact moment it is marked as dead
 * Remove use_bigdecimal JrJackson JSON decode option as Logstash does not
 support it. Also, using this option enables it globally within Logstash due to
 option leakage within the JrJackson gem (#103)
+* Fix filter codec not saving offset correctly when dead time reached or stdin
+EOF reached (reported in #108)
 
 ***Security***
 
