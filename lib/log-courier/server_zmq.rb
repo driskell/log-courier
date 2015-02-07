@@ -85,7 +85,7 @@ module LogCourier
 
         bind = 'tcp://' + @options[:address] + (@options[:port] == 0 ? ':*' : ':' + @options[:port].to_s)
         rc = @socket.bind(bind)
-        fail 'failed to bind at ' + bind + ': ' + rZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
+        fail 'failed to bind at ' + bind + ': ' + ZMQ::Util.error_string unless ZMQ::Util.resultcode_ok?(rc)
 
         # Lookup port number that was allocated in case it was set to 0
         endpoint = ''
