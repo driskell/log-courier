@@ -268,7 +268,7 @@ instead of the system FQDN.
 Available values: "critical", "error", "warning", "notice", "info", "debug"*  
 *Requires restart*
 
-The maximum level of detail to produce in Log Courier's internal log.
+The minimum level of detail to produce in Log Courier's internal log.
 
 ### `"log stdout"`
 
