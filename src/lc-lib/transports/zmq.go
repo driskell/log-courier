@@ -25,7 +25,6 @@ import (
 	"fmt"
 	zmq "github.com/alecthomas/gozmq"
 	"github.com/driskell/log-courier/src/lc-lib/core"
-	"net"
 	"regexp"
 	"runtime"
 	"sync"
@@ -297,34 +296,30 @@ func (t *TransportZmq) Init() (err error) {
 	}
 
 	// Register endpoints
+	pool := NewAddressPool(t.net_config.Servers)
 	endpoints := 0
-	for _, hostport := range t.net_config.Servers {
-		submatch := t.config.hostport_re.FindSubmatch([]byte(hostport))
-		if submatch == nil {
-			log.Warning("Invalid host:port given: %s", hostport)
-			continue
-		}
 
-		// Lookup the server in DNS (if this is IP it will implicitly return)
-		host := string(submatch[1])
-		port := string(submatch[2])
-		addresses, err := net.LookupHost(host)
+	if t.net_config.Rfc2782Srv {
+		pool.SetRfc2782(true, t.net_config.Rfc2782Service)
+	}
+
+	for {
+		addressport, desc, err := pool.Next()
 		if err != nil {
-			log.Warning("DNS lookup failure \"%s\": %s", host, err)
-			continue
+			return err
 		}
 
-		// Register each address
-		for _, address := range addresses {
-			addressport := net.JoinHostPort(address, port)
+		if err = t.dealer.Connect("tcp://" + addressport.String()); err != nil {
+			log.Warning("Failed to register %s with ZMQ, skipping", desc)
+			goto NextAddress
+		}
 
-			if err = t.dealer.Connect("tcp://" + addressport); err != nil {
-				log.Warning("Failed to register %s (%s) with ZMQ, skipping", addressport, host)
-				continue
-			}
+		log.Info("Registered %s with ZMQ", desc)
+		endpoints++
 
-			log.Info("Registered %s (%s) with ZMQ", addressport, host)
-			endpoints++
+	NextAddress:
+		if pool.IsLast() {
+			break
 		}
 	}
 
