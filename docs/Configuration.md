@@ -545,7 +545,7 @@ following.
 
 	[ {
 		"paths": [ "/var/log/httpd/access.log" ],
-		"fields": [ "type": "access_log" ]
+		"fields": { "type": "access_log" }
 	} ]
 
 ## `"stdin"`
