@@ -29,9 +29,10 @@ import (
 )
 
 type HarvesterFinish struct {
-	Last_Offset int64
-	Error       error
-	Last_Stat   os.FileInfo
+	Last_Event_Offset int64
+	Last_Read_Offset  int64
+	Error             error
+	Last_Stat         os.FileInfo
 }
 
 type Harvester struct {
@@ -96,7 +97,8 @@ func (h *Harvester) Start(output chan<- *core.EventDescriptor) {
 
 	go func() {
 		status := &HarvesterFinish{}
-		status.Last_Offset, status.Error = h.harvest(output)
+		status.Last_Event_Offset, status.Error = h.harvest(output)
+		status.Last_Read_Offset = h.offset
 		status.Last_Stat = h.fileinfo
 		h.return_chan <- status
 		close(h.return_chan)

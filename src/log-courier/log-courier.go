@@ -132,17 +132,17 @@ SignalLoop:
 			admin_listener.Respond(lc.processCommand(command))
 		case finished := <-harvester_wait:
 			if finished.Error != nil {
-				log.Notice("An error occurred reading from stdin at offset %d: %s", finished.Last_Offset, finished.Error)
+				log.Notice("An error occurred reading from stdin at offset %d: %s", finished.Last_Read_Offset, finished.Error)
 			} else {
-				log.Notice("Finished reading from stdin at offset %d", finished.Last_Offset)
+				log.Notice("Finished reading from stdin at offset %d", finished.Last_Read_Offset)
 			}
 			lc.harvester = nil
 
 			// Flush the spooler
 			spooler_imp.Flush()
 
-			// Wait for StdinRegistrar to finish
-			registrar_imp.(*StdinRegistrar).Wait(finished.Last_Offset)
+			// Wait for StdinRegistrar to receive ACK for the last event we sent
+			registrar_imp.(*StdinRegistrar).Wait(finished.Last_Event_Offset)
 
 			lc.cleanShutdown()
 			break SignalLoop
@@ -326,7 +326,7 @@ func (lc *LogCourier) cleanShutdown() {
 	if lc.harvester != nil {
 		lc.harvester.Stop()
 		finished := <-lc.harvester.OnFinish()
-		log.Notice("Aborted reading from stdin at offset %d", finished.Last_Offset)
+		log.Notice("Aborted reading from stdin at offset %d", finished.Last_Read_Offset)
 	}
 
 	lc.pipeline.Shutdown()

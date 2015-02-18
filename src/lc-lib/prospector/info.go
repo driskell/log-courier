@@ -111,7 +111,9 @@ func (pi *prospectorInfo) getSnapshot() *core.Snapshot {
 
 func (pi *prospectorInfo) setHarvesterStopped(status *harvester.HarvesterFinish) {
 	pi.running = false
-	pi.finish_offset = status.Last_Offset
+	// Resume harvesting from the last event offset, not the last read, to allow codec to read from the last event
+	// This ensures multiline codec populates correctly on resume
+	pi.finish_offset = status.Last_Event_Offset
 	if status.Error != nil {
 		pi.status = Status_Failed
 		pi.err = status.Error
