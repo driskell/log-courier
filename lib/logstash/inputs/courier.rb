@@ -108,6 +108,7 @@ module LogStash
 
       def run(output_queue)
         @log_courier.run do |event|
+          event['tags'] = [event['tags']] if event.has_key?('tags') && !event['tags'].is_a?(Array)
           event = LogStash::Event.new(event)
           decorate event
           output_queue << event
