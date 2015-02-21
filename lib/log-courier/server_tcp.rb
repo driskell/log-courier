@@ -144,7 +144,7 @@ module LogCourier
           client = @server.accept
         rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
           # Accept failure or other issue
-          @logger.warn 'Connection failed to accept', :error => e.message, :peer => @tcp_server.peer unless @logger.nil
+          @logger.warn 'Connection failed to accept', :error => e.message, :peer => @tcp_server.peer unless @logger.nil?
           client.close rescue nil unless client.nil?
           next
         end
