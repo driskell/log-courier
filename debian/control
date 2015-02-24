@@ -1,0 +1,16 @@
+Source: log-courier
+Section: admin
+Priority: optional
+Standards-Version: 3.9.2
+Maintainer: Matthew Newton <mcn4@leicester.ac.uk>
+Build-Depends: debhelper (>= 9), golang-go
+
+Package: log-courier
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Log file shipper
+ Log Courier is a tool created to transmit log files speedily and securely to
+ remote Logstash instances for processing whilst using small amounts of local
+ resources. The project is an enhanced fork of Logstash Forwarder 0.3.1 with
+ many enhancements and behavioural improvements.
+

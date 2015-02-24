@@ -1,0 +1,18 @@
+To build the debian package on wheezy
+=====================================
+
+The version of 'go' available in the golang-go package available in Debian
+wheezy is not recent enough to build this package. The following procedure
+can be followed as a workaround.
+
+First, grab the latest go from https://golang.org/ and install as standard in
+/usr/local/go (debian's current packaged version is not new enough).
+
+Add go to the PATH
+
+    $ export PATH=/usr/local/go/bin:$PATH
+
+Build the packages
+
+    $ dpkg-buildpackage 
+

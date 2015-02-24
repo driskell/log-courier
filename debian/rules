@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	make
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -m 0755 bin/log-courier debian/log-courier/usr/bin/log-courier
+	install -m 0755 bin/lc-admin debian/log-courier/usr/bin/lc-admin
+	install -m 0755 bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
+	install -m 0755 debian/log-courier.conf debian/log-courier/etc/log-courier/log-courier.conf
+	cp -av docs/* debian/log-courier/usr/share/doc/log-courier/
+	install -m 0644 LICENSE debian/log-courier/usr/share/doc/log-courier/copyright
+
