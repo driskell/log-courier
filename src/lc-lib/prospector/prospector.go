@@ -206,11 +206,8 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
 			if is_known {
 				if info.status != Status_Invalid {
 					// The current entry is not an error, orphan it so we can log one
-					info.orphaned = Orphaned_Yes
-				} else if info.err.Error() != err.Error() {
-					// The error is different, remove this entry we'll log a new one
-					delete(p.prospectors, info)
-				} else {
+					info.orphaned = Orphaned_Maybe
+				} else if info.err.Error() == err.Error() {
 					// The same error occurred - don't log it again
 					info.update(nil, p.iteration)
 					continue
@@ -345,9 +342,6 @@ func (p *Prospector) flagDuplicateError(file string, info *prospectorInfo) {
 				return
 			}
 		}
-
-		// Remove the old info
-		delete(p.prospectors, info)
 	}
 
 	// Flag duplicate error and save it
