@@ -304,21 +304,21 @@ func (t *TransportZmq) Init() (err error) {
 	}
 
 	for {
-		addressport, desc, err := pool.Next()
+		addressport, err := pool.NextServer()
 		if err != nil {
 			return err
 		}
 
-		if err = t.dealer.Connect("tcp://" + addressport.String()); err != nil {
-			log.Warning("Failed to register %s with ZMQ, skipping", desc)
+		if err = t.dealer.Connect("tcp://" + addressport); err != nil {
+			log.Warning("Failed to register %s with ZMQ, skipping", addressport)
 			goto NextAddress
 		}
 
-		log.Info("Registered %s with ZMQ", desc)
+		log.Info("Registered %s with ZMQ", addressport)
 		endpoints++
 
 	NextAddress:
-		if pool.IsLast() {
+		if pool.IsLastServer() {
 			break
 		}
 	}

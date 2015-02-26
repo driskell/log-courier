@@ -49,7 +49,10 @@ func NewAddressPool(servers []string) *AddressPool {
 	// Randomise the initial host - after this it will round robin
 	// Round robin after initial attempt ensures we don't retry same host twice,
 	// and also ensures we try all hosts one by one
-	ret.roundrobin = rand.Intn(len(servers))
+	rnd := rand.Intn(len(servers))
+	if rnd != 0 {
+		ret.servers = append(append(make([]string, 0), servers[rnd:]...), servers[:rnd]...)
+	}
 
 	return ret
 }
@@ -60,13 +63,19 @@ func (p *AddressPool) SetRfc2782(enabled bool, service string) {
 }
 
 func (p *AddressPool) IsLast() bool {
-	return p.addresses == nil && p.roundrobin%len(p.servers) == 0
+	return p.addresses == nil
+}
+
+func (p *AddressPool) IsLastServer() bool {
+	return p.roundrobin%len(p.servers) == 0
 }
 
 func (p *AddressPool) Next() (*net.TCPAddr, string, error) {
 	// Have we exhausted the address list we had?
 	if p.addresses == nil {
+		p.addresses = make([]*net.TCPAddr, 0)
 		if err := p.populateAddresses(); err != nil {
+			p.addresses = nil
 			return nil, "", err
 		}
 	}
@@ -88,50 +97,52 @@ func (p *AddressPool) Next() (*net.TCPAddr, string, error) {
 	return next, desc, nil
 }
 
-func (p *AddressPool) Host() string {
-	return p.host
-}
-
-func (p *AddressPool) populateAddresses() (err error) {
+func (p *AddressPool) NextServer() (string, error) {
 	// Round robin to the next server
 	selected := p.servers[p.roundrobin%len(p.servers)]
 	p.roundrobin++
 
-	p.addresses = make([]*net.TCPAddr, 0)
+	// @hostname means SRV record where the host and port are in the record
+	if len(selected) > 0 && selected[0] == '@' {
+		srvs, err := p.processSrv(selected[1:])
+		if err != nil {
+			return "", err
+		}
+		return net.JoinHostPort(srvs[0].Target, strconv.FormatUint(uint64(srvs[0].Port), 10)), nil
+	}
+
+	return selected, nil
+}
+
+func (p *AddressPool) Host() string {
+	return p.host
+}
+
+func (p *AddressPool) populateAddresses() (error) {
+	// Round robin to the next server
+	selected := p.servers[p.roundrobin%len(p.servers)]
+	p.roundrobin++
 
 	// @hostname means SRV record where the host and port are in the record
 	if len(selected) > 0 && selected[0] == '@' {
-		var srvs []*net.SRV
-		var service, protocol string
-
-		p.host = selected[1:]
-		p.host_is_ip = false
-
-		if p.rfc2782 {
-			service, protocol = p.rfc2782Service, "tcp"
-		} else {
-			service, protocol = "", ""
-		}
-
-		_, srvs, err = net.LookupSRV(service, protocol, p.host)
+		srvs, err := p.processSrv(selected[1:])
 		if err != nil {
-			return fmt.Errorf("DNS SRV lookup failure \"%s\": %s", p.host, err)
-		} else if len(srvs) == 0 {
-			return fmt.Errorf("DNS SRV lookup failure \"%s\": No targets found", p.host)
+			return err
 		}
 
 		for _, srv := range srvs {
-			if _, err = p.populateLookup(srv.Target, int(srv.Port)); err != nil {
-				return
+			if _, err := p.populateLookup(srv.Target, int(srv.Port)); err != nil {
+				return err
 			}
 		}
 
-		return
+		return nil
 	}
 
 	// Standard host:port declaration
 	var port_str string
 	var port uint64
+	var err error
 	if p.host, port_str, err = net.SplitHostPort(selected); err != nil {
 		return fmt.Errorf("Invalid hostport given: %s", selected)
 	}
@@ -141,10 +152,32 @@ func (p *AddressPool) populateAddresses() (err error) {
 	}
 
 	if p.host_is_ip, err = p.populateLookup(p.host, int(port)); err != nil {
-		return
+		return err
 	}
 
 	return nil
+}
+
+func (p *AddressPool) processSrv(server string) ([]*net.SRV, error) {
+	var service, protocol string
+
+	p.host = server
+	p.host_is_ip = false
+
+	if p.rfc2782 {
+		service, protocol = p.rfc2782Service, "tcp"
+	} else {
+		service, protocol = "", ""
+	}
+
+	_, srvs, err := net.LookupSRV(service, protocol, p.host)
+	if err != nil {
+		return nil, fmt.Errorf("DNS SRV lookup failure \"%s\": %s", p.host, err)
+	} else if len(srvs) == 0 {
+		return nil, fmt.Errorf("DNS SRV lookup failure \"%s\": No targets found", p.host)
+	}
+
+	return srvs, nil
 }
 
 func (p *AddressPool) populateLookup(host string, port int) (bool, error) {
