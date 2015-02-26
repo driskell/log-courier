@@ -207,7 +207,7 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
 				if info.status != Status_Invalid {
 					// The current entry is not an error, orphan it so we can log one
 					info.orphaned = Orphaned_Yes
-				} else if info.err != err {
+				} else if info.err.Error() != err.Error() {
 					// The error is different, remove this entry we'll log a new one
 					delete(p.prospectors, info)
 				} else {
