@@ -64,18 +64,18 @@ To install the Log Courier repository, download the corresponding `.repo`
 configuration file below, and place it in `/etc/yum.repos.d`. Log Courier may
 then be installed using `yum install log-courier`.
 
-* ***CentOS/RedHat 6.x***: [driskell-log-courier-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-6.repo) 
-* ***CentOS/RedHat 7.x***:
+* **CentOS/RedHat 6.x**: [driskell-log-courier-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-6.repo) 
+* **CentOS/RedHat 7.x**:
 [driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-7.repo)
 
-***NOTE:*** The RPM packages versions of Log Courier do not currently support
-the `zmq` encrypted transport. They do support the `plainzmq` transport.
+***NOTE:*** *The RPM packages versions of Log Courier are built using ZeroMQ 3.2 and
+therefore do not support the encrypted `zmq` transport. They do support the
+unencrypted `plainzmq` transport.*
 
 ### DEB
 
-A Debian/Ubuntu compatible PPA repository is under consideration. At the moment,
-no such repository exists. PRs and geberal advice are all welcome and will be
-appreciated.
+A Debian/Ubuntu compatible **PPA** repository is under consideration. At the moment,
+no such repository exists.
 
 ## Building From Source
 
