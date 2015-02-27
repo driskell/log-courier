@@ -29,9 +29,10 @@ import (
 )
 
 type HarvesterFinish struct {
-	Last_Offset int64
-	Error       error
-	Last_Stat   os.FileInfo
+	Last_Event_Offset int64
+	Last_Read_Offset  int64
+	Error             error
+	Last_Stat         os.FileInfo
 }
 
 type Harvester struct {
@@ -72,7 +73,6 @@ func NewHarvester(stream core.Stream, config *core.Config, stream_config *core.S
 
 	ret := &Harvester{
 		stop_chan:     make(chan interface{}),
-		return_chan:   make(chan *HarvesterFinish, 1),
 		stream:        stream,
 		fileinfo:      fileinfo,
 		path:          path,
@@ -88,11 +88,20 @@ func NewHarvester(stream core.Stream, config *core.Config, stream_config *core.S
 }
 
 func (h *Harvester) Start(output chan<- *core.EventDescriptor) {
+	if h.return_chan != nil {
+		h.Stop()
+		<-h.return_chan
+	}
+
+	h.return_chan = make(chan *HarvesterFinish, 1)
+
 	go func() {
 		status := &HarvesterFinish{}
-		status.Last_Offset, status.Error = h.harvest(output)
+		status.Last_Event_Offset, status.Error = h.harvest(output)
+		status.Last_Read_Offset = h.offset
 		status.Last_Stat = h.fileinfo
 		h.return_chan <- status
+		close(h.return_chan)
 	}()
 }
 

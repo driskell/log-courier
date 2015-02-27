@@ -47,23 +47,17 @@ const (
 	Status_Reconnecting
 )
 
-type EventSpool interface {
-	Close()
-	Add(registrar.RegistrarEvent)
-	Send()
-}
-
 type NullEventSpool struct {
 }
 
-func newNullEventSpool() EventSpool {
+func newNullEventSpool() *NullEventSpool {
 	return &NullEventSpool{}
 }
 
 func (s *NullEventSpool) Close() {
 }
 
-func (s *NullEventSpool) Add(event registrar.RegistrarEvent) {
+func (s *NullEventSpool) Add(event registrar.EventProcessor) {
 }
 
 func (s *NullEventSpool) Send() {
@@ -87,7 +81,7 @@ type Publisher struct {
 	num_payloads     int64
 	out_of_sync      int
 	input            chan []*core.EventDescriptor
-	registrar_spool  EventSpool
+	registrar_spool  registrar.EventSpooler
 	shutdown         bool
 	line_count       int64
 	retry_count      int64
@@ -100,7 +94,7 @@ type Publisher struct {
 	last_measurement time.Time
 }
 
-func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar *registrar.Registrar) (*Publisher, error) {
+func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar registrar.Registrator) (*Publisher, error) {
 	ret := &Publisher{
 		config: config,
 		input:  make(chan []*core.EventDescriptor, 1),

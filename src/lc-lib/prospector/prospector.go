@@ -41,15 +41,15 @@ type Prospector struct {
 	from_beginning  bool
 	iteration       uint32
 	lastscan        time.Time
-	registrar       *registrar.Registrar
-	registrar_spool *registrar.RegistrarEventSpool
+	registrar       registrar.Registrator
+	registrar_spool registrar.EventSpooler
 	snapshot_chan   chan interface{}
 	snapshot_sink   chan []*core.Snapshot
 
 	output chan<- *core.EventDescriptor
 }
 
-func NewProspector(pipeline *core.Pipeline, config *core.Config, from_beginning bool, registrar_imp *registrar.Registrar, spooler_imp *spooler.Spooler) (*Prospector, error) {
+func NewProspector(pipeline *core.Pipeline, config *core.Config, from_beginning bool, registrar_imp registrar.Registrator, spooler_imp *spooler.Spooler) (*Prospector, error) {
 	ret := &Prospector{
 		config:          config,
 		prospectorindex: make(map[string]*prospectorInfo),

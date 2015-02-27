@@ -38,11 +38,14 @@ func TestFilter(t *testing.T) {
 	codec.Event(6, 7, "DEBUG Next line")
 
 	if len(filter_lines) != 1 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
+		t.Error("Wrong line count received")
 	} else if filter_lines[0] != "NEXT line" {
-		t.Logf("Wrong line[0] received: %s", filter_lines[0])
-		t.FailNow()
+		t.Error("Wrong line[0] received: %s", filter_lines[0])
+	}
+
+	offset := codec.Teardown()
+	if offset != 7 {
+		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
 
@@ -61,17 +64,18 @@ func TestFilterNegate(t *testing.T) {
 	codec.Event(6, 7, "DEBUG Next line")
 
 	if len(filter_lines) != 3 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
+		t.Error("Wrong line count received")
 	} else if filter_lines[0] != "DEBUG First line" {
-		t.Logf("Wrong line[0] received: %s", filter_lines[0])
-		t.FailNow()
+		t.Error("Wrong line[0] received: %s", filter_lines[0])
 	} else if filter_lines[1] != "ANOTHER line" {
-		t.Logf("Wrong line[1] received: %s", filter_lines[1])
-		t.FailNow()
+		t.Error("Wrong line[1] received: %s", filter_lines[1])
 	} else if filter_lines[2] != "DEBUG Next line" {
-		t.Logf("Wrong line[2] received: %s", filter_lines[2])
-		t.FailNow()
+		t.Error("Wrong line[2] received: %s", filter_lines[2])
+	}
+
+	offset := codec.Teardown()
+	if offset != 7 {
+		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
 
@@ -90,13 +94,15 @@ func TestFilterMultiple(t *testing.T) {
 	codec.Event(6, 7, "DEBUG Next line")
 
 	if len(filter_lines) != 2 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
+		t.Error("Wrong line count received")
 	} else if filter_lines[0] != "DEBUG First line" {
-		t.Logf("Wrong line[0] received: %s", filter_lines[0])
-		t.FailNow()
+		t.Error("Wrong line[0] received: %s", filter_lines[0])
 	} else if filter_lines[1] != "NEXT line" {
-		t.Logf("Wrong line[1] received: %s", filter_lines[1])
-		t.FailNow()
+		t.Error("Wrong line[1] received: %s", filter_lines[1])
+	}
+
+	offset := codec.Teardown()
+	if offset != 7 {
+		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }

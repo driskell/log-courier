@@ -29,12 +29,17 @@ import (
 
 type LoadPreviousFunc func(string, *FileState) (core.Stream, error)
 
+type Registrator interface {
+	Connect() EventSpooler
+	LoadPrevious(LoadPreviousFunc) (bool, error)
+}
+
 type Registrar struct {
 	core.PipelineSegment
 
 	sync.Mutex
 
-	registrar_chan chan []RegistrarEvent
+	registrar_chan chan []EventProcessor
 	references     int
 	persistdir     string
 	statefile      string
@@ -43,7 +48,7 @@ type Registrar struct {
 
 func NewRegistrar(pipeline *core.Pipeline, persistdir string) *Registrar {
 	ret := &Registrar{
-		registrar_chan: make(chan []RegistrarEvent, 16), // TODO: Make configurable?
+		registrar_chan: make(chan []EventProcessor, 16), // TODO: Make configurable?
 		persistdir:     persistdir,
 		statefile:      ".log-courier",
 		state:          make(map[core.Stream]*FileState),
@@ -109,22 +114,21 @@ func (r *Registrar) LoadPrevious(callback_func LoadPreviousFunc) (have_previous 
 	return
 }
 
-func (r *Registrar) Connect() *RegistrarEventSpool {
+func (r *Registrar) Connect() EventSpooler {
 	r.Lock()
-	ret := newRegistrarEventSpool(r)
+	defer r.Unlock()
 	r.references++
-	r.Unlock()
-	return ret
+	return newEventSpool(r)
 }
 
 func (r *Registrar) dereferenceSpooler() {
 	r.Lock()
+	defer r.Unlock()
 	r.references--
 	if r.references == 0 {
 		// Shutdown registrar, all references are closed
 		close(r.registrar_chan)
 	}
-	r.Unlock()
 }
 
 func (r *Registrar) toCanonical() (canonical map[string]*FileState) {

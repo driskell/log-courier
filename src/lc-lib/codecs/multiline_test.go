@@ -85,6 +85,11 @@ func TestMultilinePrevious(t *testing.T) {
 		t.Logf("Wrong line count received")
 		t.FailNow()
 	}
+
+	offset := codec.Teardown()
+	if offset != 5 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
 }
 
 func TestMultilinePreviousNegate(t *testing.T) {
@@ -107,6 +112,11 @@ func TestMultilinePreviousNegate(t *testing.T) {
 		t.Logf("Wrong line count received")
 		t.FailNow()
 	}
+
+	offset := codec.Teardown()
+	if offset != 5 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
 }
 
 func TestMultilinePreviousTimeout(t *testing.T) {
@@ -117,7 +127,7 @@ func TestMultilinePreviousTimeout(t *testing.T) {
 		"pattern":          "^(ANOTHER|NEXT) ",
 		"what":             "previous",
 		"negate":           false,
-		"previous timeout": "5s",
+		"previous timeout": "3s",
 	}, checkMultiline, t)
 
 	// Send some data
@@ -126,8 +136,8 @@ func TestMultilinePreviousTimeout(t *testing.T) {
 	codec.Event(4, 5, "ANOTHER line")
 	codec.Event(6, 7, "DEBUG Next line")
 
-	// Allow 3 seconds
-	time.Sleep(3 * time.Second)
+	// Allow a second
+	time.Sleep(time.Second)
 
 	multiline_lock.Lock()
 	if multiline_lines != 1 {
@@ -136,8 +146,8 @@ func TestMultilinePreviousTimeout(t *testing.T) {
 	}
 	multiline_lock.Unlock()
 
-	// Allow 7 seconds
-	time.Sleep(7 * time.Second)
+	// Allow 5 seconds
+	time.Sleep(5 * time.Second)
 
 	multiline_lock.Lock()
 	if multiline_lines != 2 {
@@ -146,7 +156,10 @@ func TestMultilinePreviousTimeout(t *testing.T) {
 	}
 	multiline_lock.Unlock()
 
-	codec.Teardown()
+	offset := codec.Teardown()
+	if offset != 7 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
 }
 
 func TestMultilineNext(t *testing.T) {
@@ -169,6 +182,11 @@ func TestMultilineNext(t *testing.T) {
 		t.Logf("Wrong line count received")
 		t.FailNow()
 	}
+
+	offset := codec.Teardown()
+	if offset != 5 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
 }
 
 func TestMultilineNextNegate(t *testing.T) {
@@ -190,6 +208,11 @@ func TestMultilineNextNegate(t *testing.T) {
 	if multiline_lines != 1 {
 		t.Logf("Wrong line count received")
 		t.FailNow()
+	}
+
+	offset := codec.Teardown()
+	if offset != 5 {
+		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
 
@@ -230,5 +253,10 @@ func TestMultilineMaxBytes(t *testing.T) {
 	if multiline_lines != 2 {
 		t.Logf("Wrong line count received")
 		t.FailNow()
+	}
+
+	offset := codec.Teardown()
+	if offset != 5 {
+		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }

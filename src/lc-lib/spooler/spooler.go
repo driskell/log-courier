@@ -60,6 +60,10 @@ func (s *Spooler) Connect() chan<- *core.EventDescriptor {
 	return s.input
 }
 
+func (s *Spooler) Flush() {
+	s.input <- nil
+}
+
 func (s *Spooler) Run() {
 	defer func() {
 		s.Done()
@@ -72,6 +76,19 @@ SpoolerLoop:
 	for {
 		select {
 		case event := <-s.input:
+			// Nil event means flush
+			if event == nil {
+				if len(s.spool) > 0 {
+					log.Debug("Spooler flushing %d events due to flush event", len(s.spool))
+
+					if !s.sendSpool() {
+						break SpoolerLoop
+					}
+				}
+
+				continue
+			}
+
 			if len(s.spool) > 0 && int64(s.spool_size)+int64(len(event.Event))+event_header_size >= s.config.SpoolMaxBytes {
 				log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spool_size, s.config.SpoolMaxBytes, len(event.Event)+4)
 
