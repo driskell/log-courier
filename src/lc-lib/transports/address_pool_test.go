@@ -48,9 +48,9 @@ func TestAddressPoolHost(t *testing.T) {
     t.Error("Address pool did not parse Host correctly: ", err)
   } else if addr == nil {
     t.Error("Address pool did not returned nil addr")
-  } else if desc != "8.8.8.8:555 (google-public-dns-a.google.com)" {
+  } else if desc != "8.8.8.8:555 (google-public-dns-a.google.com)" && desc != "[2001:4860:4860::8888]:555 (google-public-dns-a.google.com)" {
     t.Error("Address pool did not return correct desc: ", desc)
-  } else if addr.String() != "8.8.8.8:555" {
+  } else if addr.String() != "8.8.8.8:555" && addr.String() != "[2001:4860:4860::8888]:555" {
     t.Error("Address pool did not return correct addr: ", addr.String())
   }
 }
