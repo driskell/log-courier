@@ -134,7 +134,7 @@ func TestAddressPoolHostFailure(t *testing.T) {
 
 func TestAddressPoolIsLast(t *testing.T) {
   // Test that IsLastServer works correctly
-  pool := NewAddressPool([]string{"google.com:1234"})
+  pool := NewAddressPool([]string{"outlook.com:1234"})
 
   // Should report as last
   if !pool.IsLast() {
