@@ -34,6 +34,8 @@ type StdinRegistrar struct {
 	registrar_chan chan []registrar.EventProcessor
 	signal_chan    chan int64
 	references     int
+	wait_offset    *int64
+	last_offset    int64
 }
 
 func newStdinRegistrar(pipeline *core.Pipeline) *StdinRegistrar {
@@ -55,9 +57,6 @@ func (r *StdinRegistrar) Run() {
 		r.group.Done()
 	}()
 
-	var wait_offset *int64
-	var last_offset int64
-
 	state := make(map[core.Stream]*registrar.FileState)
 	state[nil] = &registrar.FileState{}
 
@@ -65,25 +64,25 @@ RegistrarLoop:
 	for {
 		select {
 		case signal := <-r.signal_chan:
-			if last_offset == signal {
+			r.wait_offset = new(int64)
+			*r.wait_offset = signal
+
+			if r.last_offset == signal {
 				break RegistrarLoop
 			}
 
-			wait_offset = new(int64)
-			*wait_offset = signal
-
-			log.Debug("Stdin registrar received stdin EOF offset of %d", *wait_offset)
+			log.Debug("Stdin registrar received stdin EOF offset of %d", *r.wait_offset)
 		case events := <-r.registrar_chan:
 			for _, event := range events {
 				event.Process(state)
 			}
 
-			if wait_offset != nil && state[nil].Offset >= *wait_offset {
+			r.last_offset = state[nil].Offset
+
+			if r.wait_offset != nil && state[nil].Offset >= *r.wait_offset {
 				log.Debug("Stdin registrar has reached end of stdin")
 				break RegistrarLoop
 			}
-
-			last_offset = state[nil].Offset
 		case <-r.OnShutdown():
 			break RegistrarLoop
 		}
