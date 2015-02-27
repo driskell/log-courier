@@ -12,10 +12,10 @@ with many fixes and behavioural improvements.
 
 - [Features](#features)
 - [Installation](#installation)
-  - [Requirements](#requirements)
-  - [Building](#building)
+  - [Public Repositories](#public-repositories)
+  - [From Source](#from-source)
   - [Logstash Integration](#logstash-integration)
-  - [Building with ZMQ support](#building-with-zmq-support)
+  - [ZeroMQ support](#zeromq-support)
   - [Generating Certificates and Keys](#generating-certificates-and-keys)
 - [Documentation](#documentation)
 
@@ -48,28 +48,58 @@ plugin
 
 ## Installation
 
-### Requirements
+### Public Repositories
 
-1. \*nix, OS X or Windows
+**RPM**
+
+The author maintains a **COPR** repository with RedHat/CentOS compatible RPMs
+that may be installed using `yum`. This repository depends on the widely used
+**EPEL** repository for dependencies.
+
+The **EPEL** repository can be installed automatically on CentOS distributions
+by running `yum install epel-release`. Otherwise, you may follow the
+instructions on the [EPEL homepage](https://fedoraproject.org/wiki/EPEL).
+
+To install the Log Courier repository, download the corresponding `.repo`
+configuration file below, and place it in `/etc/yum.repos.d`. Log Courier may
+then be installed using `yum install log-courier`.
+
+***CentOS/RedHat 6.x***: [driskell-log-courier-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-6.repo)
+***CentOS/RedHat 7.x***:
+[driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-7.repo)
+
+***NOTE:*** The RPM packages versions of Log Courier do not currently support
+the `zmq` encrypted transport. They do support the `plainzmq` transport.
+
+**DEB**
+
+A Debian/Ubuntu compatible PPA repository is under consideration. At the moment,
+no such repository exists.
+
+### From Source
+
+You will need the following:
+
+1. Linux, Unix, OS X or Windows
 1. The [golang](http://golang.org/doc/install) compiler tools (1.2-1.4)
 1. [git](http://git-scm.com)
 1. GNU make
 
-***\*nix:*** *Most requirements can usually be installed by your favourite package
+***Linux/Unix:*** *Most requirements can usually be installed by your favourite package
 manager.*  
 ***OS X:*** *Git and GNU make are provided automatically by XCode.*  
 ***Windows:*** *GNU make for Windows can be found
 [here](http://gnuwin32.sourceforge.net/packages/make.htm).*
 
-### Building
-
-To build, simply run `make` as follows.
+To build the binaries, simply run `make` as follows.
 
 	git clone https://github.com/driskell/log-courier
 	cd log-courier
 	make
 
-The log-courier program can then be found in the 'bin' folder.
+The log-courier program can then be found in the 'bin' folder. This can be
+manually installed anywhere on your system. Startup scripts for various
+platforms can be found in the [contrib/initscripts](contrib/initscripts) folder.
 
 *Note: If you receive errors whilst running `make`, try `gmake` instead.*
 
@@ -87,14 +117,14 @@ Install using the Logstash 1.5+ Plugin manager.
 Detailed instructions, including integration with Logstash 1.4.x, can be found
 on the [Logstash Integration](docs/LogstashIntegration.md) page.
 
-### Building with ZMQ support
+### ZeroMQ support
 
-To use the 'plainzmq' and 'zmq' transports, you will need to install
-[ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for cleartext
-'plainzmq', >=4.0 for encrypted 'zmq').
+To use the 'plainzmq' or 'zmq' transports, you will need to install
+[ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for 'plainzmq', >=4.0
+for 'zmq' which supports encryption).
 
-***\*nix:*** *ZeroMQ >=3.2 is usually available via the package manager. ZeroMQ >=4.0
-may need to be built and installed manually.*  
+***Linux\Unix:*** *ZeroMQ >=3.2 is usually available via the package manager.
+ZeroMQ >=4.0 may need to be built and installed manually.*  
 ***OS X:*** *ZeroMQ can be installed via [Homebrew](http://brew.sh).*  
 ***Windows:*** *ZeroMQ will need to be built and installed manually.*
 
