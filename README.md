@@ -1,4 +1,7 @@
-# Log Courier [![Build Status](https://img.shields.io/travis/driskell/log-courier/develop.svg)](https://travis-ci.org/driskell/log-courier) [![Latest Release](https://img.shields.io/github/release/driskell/log-courier.svg)](https://github.com/driskell/log-courier/releases/latest) [![Gem Version](https://img.shields.io/gem/v/log-courier.svg)](https://rubygems.org/gems/log-courier)
+# Log Courier
+
+[![Build Status](https://img.shields.io/travis/driskell/log-courier/develop.svg)](https://travis-ci.org/driskell/log-courier)
+[![Latest Release](https://img.shields.io/github/release/driskell/log-courier.svg)](https://github.com/driskell/log-courier/releases/latest)
 
 Log Courier is a lightweight tool created to ship log files speedily and
 securely, with low resource usage, to remote [Logstash](http://logstash.net)
