@@ -242,23 +242,27 @@ ReadLoop:
 			return h.codec.Teardown(), err
 		}
 
-		// Store latest stat()
-		h.fileinfo = info
-
 		if info.Size() < h.offset {
 			log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
 			h.file.Seek(0, os.SEEK_SET)
 			h.offset = 0
 			// TODO: How does this impact a partial line reader buffer?
-			// TODO: How does this imapct multiline?
+			// TODO: How does this impact multiline?
 			continue
 		}
 
-		if age := time.Since(last_read_time); age > h.stream_config.DeadTime {
-			// if last_read_time was more than dead time, this file is probably dead. Stop watching it.
+		// If last_read_time was more than dead time, this file is probably dead.
+		// Stop only if the mtime did not change since last check - this stops a
+		// race where we hit EOF but as we Stat() the mtime is updated - this mtime
+		// is the one we monitor in order to resume checking, so we need to check it
+		// didn't already update
+		if age := time.Since(last_read_time); age > h.stream_config.DeadTime && h.fileinfo.ModTime() == info.ModTime() {
 			log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
 			return h.codec.Teardown(), nil
 		}
+
+		// Store latest stat()
+		h.fileinfo = info
 	}
 
 	log.Info("Harvester for %s exiting", h.path)
