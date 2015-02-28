@@ -53,18 +53,20 @@ Log Courier is an enhanced fork of
 [Logstash Forwarder](https://github.com/elasticsearch/logstash-forwarder) 0.3.1
 with many fixes and behavioural improvements. The primary changes are:
 
-* The publisher protocol was rewritten to avoid many causes of "i/o timeout"
-that would result in duplicate events sent to Logstash
-* The prospector and registrar were heavily revamped to handle log rotations and
+* The publisher protocol is rewritten to avoid many causes of "i/o timeout"
+which would result in duplicate events sent to Logstash
+* The prospector and registrar are heavily revamped to handle log rotations and
 movements far more reliably, and to report errors cleanly
-* The harvester was improved to retry if an error occurred rather than stop
+* The harvester is improved to retry if an error occurred rather than stop
 * The configuration can be reloaded without restarting
-* An administration tool was created to display the shipping speed and status
+* An administration tool is available which can display the shipping speed and
+status of all watched log files
 * Fields configurations can contain arrays and dictionaries, not just strings
-* Codec support has been added to allow multiline processing at the sender side
-* A TCP transport was implemented to allow configuration without the need for
-SSL certificates
-* Support for client SSL certificate verification
+* Codec support is available which allows multiline processing at the sender
+side
+* A TCP transport is available which removes the requirement for SSL
+certificates
+* There is support for client SSL certificate verification
 * Peer IP address and certificate DN can be added to received events in Logstash
 to distinguish events send from different instances
 * Windows: Log files are not locked allowing log rotation to occur
