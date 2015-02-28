@@ -72,6 +72,7 @@ log target every 10 seconds. Only a single error should be reported (#119)
 accept (#118)
 * Fix Logstash input plugin crash with plainzmq and zmq transports when the
 listen address is already in use (Thanks to @mheese - #112)
+* Add support for SRV records in the servers configuration (#85)
 
 ***Security***
 
