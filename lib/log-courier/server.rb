@@ -36,7 +36,7 @@ module LogCourier
     def initialize(options = {})
       @options = {
         logger:    nil,
-        transport: 'tls'
+        transport: 'tls',
       }.merge!(options)
 
       @logger = @options[:logger]
