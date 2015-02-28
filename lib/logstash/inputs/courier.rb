@@ -79,7 +79,7 @@ module LogStash
       public
 
       def register
-        @logger.info('Starting courier input listener', :address => "#{@host}:#{@port}")
+        @logger.info 'Starting courier input listener', :address => "#{@host}:#{@port}"
 
         options = {
           logger:                @logger,
@@ -108,6 +108,7 @@ module LogStash
 
       def run(output_queue)
         @log_courier.run do |event|
+          event['tags'] = [event['tags']] if event.has_key?('tags') && !event['tags'].is_a?(Array)
           event = LogStash::Event.new(event)
           decorate event
           output_queue << event

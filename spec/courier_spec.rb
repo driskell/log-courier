@@ -29,11 +29,9 @@ describe 'log-courier' do
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "localhost:#{server_port}" ]
       },
-      "files": [
-        {
-          "paths": [ "-" ]
-        }
-      ]
+      "stdin": {
+        "fields": { "type": "stdin" }
+      }
     }
     config
 
@@ -49,8 +47,11 @@ describe 'log-courier' do
       expect(e['message']).to eq "stdin line test #{i}"
       expect(e['host']).to eq host
       expect(e['path']).to eq '-'
+      expect(e['type']).to eq 'stdin'
       i += 1
     end
+
+    stdin_shutdown
   end
 
   it 'should split lines that are too long' do
@@ -59,12 +60,7 @@ describe 'log-courier' do
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
-      },
-      "files": [
-        {
-          "paths": [ "-" ]
-        }
-      ]
+      }
     }
     config
 
@@ -90,6 +86,8 @@ describe 'log-courier' do
       expect(e['path']).to eq '-'
       i += 1
     end
+
+    stdin_shutdown
   end
 
   it 'should follow a file from the end' do
@@ -496,12 +494,9 @@ describe 'log-courier' do
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
       },
-      "files": [
-        {
-          "paths": [ "-" ],
-          "fields": { "array": [ 1, 2 ] }
-        }
-      ]
+      "stdin": {
+        "fields": { "array": [ 1, 2 ] }
+      }
     }
     config
 
@@ -521,6 +516,8 @@ describe 'log-courier' do
       expect(e['path']).to eq '-'
       i += 1
     end
+
+    stdin_shutdown
   end
 
   it 'should allow dictionaries inside field configuration' do
@@ -530,12 +527,9 @@ describe 'log-courier' do
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
       },
-      "files": [
-        {
-          "paths": [ "-" ],
-          "fields": { "dict": { "first": "first", "second": 5 } }
-        }
-      ]
+      "stdin": {
+        "fields": { "dict": { "first": "first", "second": 5 } }
+      }
     }
     config
 
@@ -555,6 +549,8 @@ describe 'log-courier' do
       expect(e['path']).to eq '-'
       i += 1
     end
+
+    stdin_shutdown
   end
 
   it 'should accept globs of configuration files to include' do

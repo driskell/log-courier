@@ -23,16 +23,15 @@ require 'thread'
 
 module LogCourier
   # TLS transport implementation
-  class ClientTls
+  class ClientTcp
     def initialize(options = {})
       @options = {
         logger:             nil,
-        port:               nil,
-        addresses:          [],
+        transport:         'tls',
         ssl_ca:             nil,
         ssl_certificate:    nil,
         ssl_key:            nil,
-        ssl_key_passphrase: nil
+        ssl_key_passphrase: nil,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -41,14 +40,13 @@ module LogCourier
         fail "output/courier: '#{k}' is required" if @options[k].nil?
       end
 
-      fail 'output/courier: \'addresses\' must contain at least one address' if @options[:addresses].empty?
-
-      c = 0
-      [:ssl_certificate, :ssl_key].each do
-        c += 1
+      if @options[:transport] == 'tls'
+        c = 0
+        [:ssl_certificate, :ssl_key].each do
+          c += 1
+        end
+        fail 'output/courier: \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
       end
-
-      fail 'output/courier: \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
     end
 
     def connect(io_control)
@@ -139,14 +137,18 @@ module LogCourier
         end
       end
       return
-    rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
+    rescue OpenSSL::SSL::SSLError => e
       @logger.warn 'SSL write error', :error => e.message unless @logger.nil?
+      io_control << ['F']
+      return
+    rescue IOError, Errno::ECONNRESET => e
+      @logger.warn 'Write error', :error => e.message unless @logger.nil?
       io_control << ['F']
       return
     rescue ShutdownSignal
       return
     rescue StandardError, NativeException => e
-      @logger.warn e, :hint => 'Unknown SSL write error' unless @logger.nil?
+      @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
       io_control << ['F']
       return
     end
@@ -174,8 +176,12 @@ module LogCourier
         io_control << ['R', signature, message]
       end
       return
-    rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
+    rescue OpenSSL::SSL::SSLError => e
       @logger.warn 'SSL read error', :error => e.message unless @logger.nil?
+      io_control << ['F']
+      return
+    rescue IOError, Errno::ECONNRESET => e
+      @logger.warn 'Read error', :error => e.message unless @logger.nil?
       io_control << ['F']
       return
     rescue EOFError
@@ -185,7 +191,7 @@ module LogCourier
     rescue ShutdownSignal
       return
     rescue => e
-      @logger.warn e, :hint => 'Unknown SSL read error' unless @logger.nil?
+      @logger.warn e, :hint => 'Unknown read error' unless @logger.nil?
       io_control << ['F']
       return
     end
@@ -200,24 +206,37 @@ module LogCourier
       begin
         tcp_socket = TCPSocket.new(address, port)
 
-        ssl = OpenSSL::SSL::SSLContext.new
+        if @options[:transport] == 'tls'
+          ssl = OpenSSL::SSL::SSLContext.new
 
-        unless @options[:ssl_certificate].nil?
-          ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
-          ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
+          # Disable SSLv2 and SSLv3
+          # Call set_params first to ensure options attribute is there (hmmmm?)
+          ssl.set_params
+          # Modify the default options to ensure SSLv2 and SSLv3 is disabled
+          # This retains any beneficial options set by default in the current Ruby implementation
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv2 if defined?(OpenSSL::SSL::OP_NO_SSLv2)
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv3 if defined?(OpenSSL::SSL::OP_NO_SSLv3)
+
+          # Set the certificate file
+          unless @options[:ssl_certificate].nil?
+            ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
+            ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
+          end
+
+          cert_store = OpenSSL::X509::Store.new
+          cert_store.add_file(@options[:ssl_ca])
+          ssl.cert_store = cert_store
+          ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
+
+          @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
+
+          socket = @ssl_client.connect
+
+          # Verify certificate
+          socket.post_connection_check(address)
+        else
+          socket = tcp_socket.connect
         end
-
-        cert_store = OpenSSL::X509::Store.new
-        cert_store.add_file(@options[:ssl_ca])
-        ssl.cert_store = cert_store
-        ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
-
-        @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
-
-        socket = @ssl_client.connect
-
-        # Verify certificate
-        socket.post_connection_check(address)
 
         # Add extra logging data now we're connected
         @logger['address'] = address
