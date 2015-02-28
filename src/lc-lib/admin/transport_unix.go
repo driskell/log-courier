@@ -14,13 +14,14 @@
 * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 * See the License for the specific language governing permissions and
 * limitations under the License.
-*/
+ */
 
 package admin
 
 import (
 	"fmt"
 	"net"
+	"os"
 )
 
 func init() {
@@ -47,6 +48,14 @@ func listenUnix(transport, addr string) (NetListener, error) {
 	uaddr, err := net.ResolveUnixAddr("unix", addr)
 	if err != nil {
 		return nil, fmt.Errorf("The admin bind address specified is not valid: %s", err)
+	}
+
+	// Remove previous socket file if it's still there or we'll get address
+	// already in use error
+	if _, err = os.Stat(addr); err == nil || !os.IsNotExist(err) {
+		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("Failed to remove the existing socket file: %s", err)
+		}
 	}
 
 	listener, err := net.ListenUnix("unix", uaddr)

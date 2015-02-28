@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Allow the source code to refer to github.com/driskell/log-courier paths
+mkdir -p src/github.com/driskell
+ln -nsf ../../.. src/github.com/driskell/log-courier

@@ -19,9 +19,9 @@
 package harvester
 
 import (
-  "os"
+	"os"
 )
 
 func (h *Harvester) openFile(path string) (*os.File, error) {
-  return os.Open(path)
+	return os.Open(path)
 }

@@ -21,5 +21,5 @@ import "github.com/op/go-logging"
 var log *logging.Logger
 
 func init() {
-  log = logging.MustGetLogger("spooler")
+	log = logging.MustGetLogger("spooler")
 }

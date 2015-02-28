@@ -1,32 +1,35 @@
 #!/bin/bash
 
-# If this is not a git repository, use the existing version
-if [ ! -d '.git' ]; then
-	exit
-fi
-
 if [ -n "$1" ]; then
+	# When specified on the command line, it's always short, and means we're preparing a release
 	VERSION="$1"
+	VERSION_SHORT="$VERSION"
+elif [ ! -d '.git' ]; then
+	# Not a git repository, so use the existing version_short.txt
+	VERSION="$(cat version_short.txt)"
+	VERSION_SHORT="$VERSION"
 else
 	# Describe version from Git, and ensure the only "-xxx" is the git revision
 	# This ensures that gem builds only add one ".pre" tag automatically
 	VERSION="$(git describe | sed 's/-\([0-9][0-9]*\)-\([0-9a-z][0-9a-z]*\)$/.\1.\2/g')"
 	VERSION="${VERSION#v}"
+	VERSION_SHORT=$(git describe --abbrev=0)
+	VERSION_SHORT="${VERSION_SHORT#v}"
 fi
 
 # Patch version.go
-sed "s/\\(const  *Log_Courier_Version  *string  *=  *\"\\)[^\"]*\\(\"\\)/\\1${VERSION}\\2/g" src/lc-lib/core/version.go > src/lc-lib/core/version.go.tmp
-\mv -f src/lc-lib/core/version.go.tmp src/lc-lib/core/version.go
+sed "s/<VERSION>/${VERSION}/g" src/lc-lib/core/version.go.tmpl > src/lc-lib/core/version.go
 
 # Patch the gemspecs
 for GEM in log-courier logstash-input-log-courier logstash-output-log-courier; do
-	sed "s/\\(gem.version *= *'\\)[^']*\\('\\)/\\1${VERSION}\\2/g" ${GEM}.gemspec > ${GEM}.gemspec.tmp
-	\mv -f ${GEM}.gemspec.tmp ${GEM}.gemspec
-	[ ${GEM#logstash-} != $GEM ] && {
-		sed "s/\\(gem.add_runtime_dependency  *'log-courier' *,  *'= *\\)[^']*\\('\\)/\\1${VERSION}\\2/g" ${GEM}.gemspec > ${GEM}.gemspec.tmp
-		\mv -f ${GEM}.gemspec.tmp ${GEM}.gemspec
-	}
+	sed "s/<VERSION>/${VERSION}/g" ${GEM}.gemspec.tmpl > ${GEM}.gemspec
 done
 
+# Store the full version in version.txt for other scripts to use, such as push_gems
 echo "${VERSION}" > version.txt
+
+# Store the nearest tag in version_short.txt - this is the only file stored in the repo
+# This file is used as the version if we download Log Courier as a non-git package
+echo "${VERSION_SHORT}" > version_short.txt
+
 echo "Set Log Courier Version ${VERSION}"

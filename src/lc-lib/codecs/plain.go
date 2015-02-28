@@ -17,49 +17,49 @@
 package codecs
 
 import (
-  "lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/core"
 )
 
 type CodecPlainFactory struct {
 }
 
 type CodecPlain struct {
-  last_offset   int64
-  callback_func core.CodecCallbackFunc
+	last_offset   int64
+	callback_func core.CodecCallbackFunc
 }
 
 func NewPlainCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
-  if err := config.ReportUnusedConfig(config_path, unused); err != nil {
-    return nil, err
-  }
-  return &CodecPlainFactory{}, nil
+	if err := config.ReportUnusedConfig(config_path, unused); err != nil {
+		return nil, err
+	}
+	return &CodecPlainFactory{}, nil
 }
 
 func (f *CodecPlainFactory) NewCodec(callback_func core.CodecCallbackFunc, offset int64) core.Codec {
-  return &CodecPlain{
-    last_offset:   offset,
-    callback_func: callback_func,
-  }
+	return &CodecPlain{
+		last_offset:   offset,
+		callback_func: callback_func,
+	}
 }
 
 func (c *CodecPlain) Teardown() int64 {
-  return c.last_offset
+	return c.last_offset
 }
 
 func (c *CodecPlain) Event(start_offset int64, end_offset int64, text string) {
-  c.last_offset = end_offset
+	c.last_offset = end_offset
 
-  c.callback_func(start_offset, end_offset, text)
+	c.callback_func(start_offset, end_offset, text)
 }
 
 func (c *CodecPlain) Meter() {
 }
 
 func (c *CodecPlain) Snapshot() *core.Snapshot {
-  return nil
+	return nil
 }
 
 // Register the codec
 func init() {
-  core.RegisterCodec("plain", NewPlainCodecFactory)
+	core.RegisterCodec("plain", NewPlainCodecFactory)
 }

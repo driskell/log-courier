@@ -20,32 +20,32 @@
 package registrar
 
 import (
-  "encoding/json"
-  "fmt"
-  "os"
+	"encoding/json"
+	"fmt"
+	"os"
 )
 
 func (r *Registrar) writeRegistry() error {
-  fname := r.persistdir + string(os.PathSeparator) + r.statefile
-  tname := fname + ".new"
-  file, err := os.Create(tname)
-  if err != nil {
-    return err
-  }
+	fname := r.persistdir + string(os.PathSeparator) + r.statefile
+	tname := fname + ".new"
+	file, err := os.Create(tname)
+	if err != nil {
+		return err
+	}
 
-  encoder := json.NewEncoder(file)
-  encoder.Encode(r.toCanonical())
-  file.Close()
+	encoder := json.NewEncoder(file)
+	encoder.Encode(r.toCanonical())
+	file.Close()
 
-  var d_err error
-  if _, err = os.Stat(fname); err == nil || !os.IsNotExist(err) {
-    d_err = os.Remove(fname)
-  }
+	var d_err error
+	if _, err = os.Stat(fname); err == nil || !os.IsNotExist(err) {
+		d_err = os.Remove(fname)
+	}
 
-  err = os.Rename(tname, fname)
-  if err != nil {
-    return fmt.Errorf("%s -> %s", d_err, err)
-  }
+	err = os.Rename(tname, fname)
+	if err != nil {
+		return fmt.Errorf("%s -> %s", d_err, err)
+	}
 
-  return nil
+	return nil
 }

@@ -19,46 +19,46 @@
 package main
 
 import (
-  "fmt"
-  "github.com/op/go-logging"
-  "os"
-  "os/signal"
-  "syscall"
-  "unsafe"
+	"fmt"
+	"github.com/op/go-logging"
+	"os"
+	"os/signal"
+	"syscall"
+	"unsafe"
 )
 
 func (lc *LogCourier) registerSignals() {
-  // *nix systems support SIGTERM so handle shutdown on that too
-  signal.Notify(lc.shutdown_chan, os.Interrupt, syscall.SIGTERM)
+	// *nix systems support SIGTERM so handle shutdown on that too
+	signal.Notify(lc.shutdown_chan, os.Interrupt, syscall.SIGTERM)
 
-  // *nix has SIGHUP for reload
-  signal.Notify(lc.reload_chan, syscall.SIGHUP)
+	// *nix has SIGHUP for reload
+	signal.Notify(lc.reload_chan, syscall.SIGHUP)
 }
 
 func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
-  // Make it color if it's a TTY
-  // TODO: This could be prone to problems when updating logging in future
-  if lc.isatty(os.Stdout) && lc.config.General.LogStdout {
-    (*backends)[0].(*logging.LogBackend).Color = true
-  }
+	// Make it color if it's a TTY
+	// TODO: This could be prone to problems when updating logging in future
+	if lc.isatty(os.Stdout) && lc.config.General.LogStdout {
+		(*backends)[0].(*logging.LogBackend).Color = true
+	}
 
-  if lc.config.General.LogSyslog {
-    syslog_backend, err := logging.NewSyslogBackend("log-courier")
-    if err != nil {
-      return fmt.Errorf("Failed to open syslog: %s", err)
-    }
-    new_backends := append(*backends, syslog_backend)
-    *backends = new_backends
-  }
+	if lc.config.General.LogSyslog {
+		syslog_backend, err := logging.NewSyslogBackend("log-courier")
+		if err != nil {
+			return fmt.Errorf("Failed to open syslog: %s", err)
+		}
+		new_backends := append(*backends, syslog_backend)
+		*backends = new_backends
+	}
 
-  return nil
+	return nil
 }
 
 func (lc *LogCourier) isatty(f *os.File) bool {
-  var pgrp int64
-  // Most real isatty implementations use TIOCGETA
-  // However, TIOCGPRGP is easier than TIOCGETA as it only requires an int and not a termios struct
-  // There is a possibility it may not have the exact same effect - but seems fine to me
-  _, _, err := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), syscall.TIOCGPGRP, uintptr(unsafe.Pointer(&pgrp)))
-  return err == 0
+	var pgrp int64
+	// Most real isatty implementations use TIOCGETA
+	// However, TIOCGPRGP is easier than TIOCGETA as it only requires an int and not a termios struct
+	// There is a possibility it may not have the exact same effect - but seems fine to me
+	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), syscall.TIOCGPGRP, uintptr(unsafe.Pointer(&pgrp)))
+	return err == 0
 }

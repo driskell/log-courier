@@ -17,33 +17,33 @@
 package registrar
 
 import (
-  "lc-lib/core"
-  "os"
+	"github.com/driskell/log-courier/src/lc-lib/core"
+	"os"
 )
 
 type DiscoverEvent struct {
-  stream   core.Stream
-  source   string
-  offset   int64
-  fileinfo os.FileInfo
+	stream   core.Stream
+	source   string
+	offset   int64
+	fileinfo os.FileInfo
 }
 
 func NewDiscoverEvent(stream core.Stream, source string, offset int64, fileinfo os.FileInfo) *DiscoverEvent {
-  return &DiscoverEvent{
-    stream:   stream,
-    source:   source,
-    offset:   offset,
-    fileinfo: fileinfo,
-  }
+	return &DiscoverEvent{
+		stream:   stream,
+		source:   source,
+		offset:   offset,
+		fileinfo: fileinfo,
+	}
 }
 
 func (e *DiscoverEvent) Process(state map[core.Stream]*FileState) {
-  log.Debug("Registrar received a new file event for %s", e.source)
+	log.Debug("Registrar received a new file event for %s", e.source)
 
-  // A new file we need to save offset information for so we can resume
-  state[e.stream] = &FileState{
-    Source: &e.source,
-    Offset: e.offset,
-  }
-  state[e.stream].PopulateFileIds(e.fileinfo)
+	// A new file we need to save offset information for so we can resume
+	state[e.stream] = &FileState{
+		Source: &e.source,
+		Offset: e.offset,
+	}
+	state[e.stream].PopulateFileIds(e.fileinfo)
 }

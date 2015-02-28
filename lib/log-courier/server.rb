@@ -36,11 +36,11 @@ module LogCourier
     def initialize(options = {})
       @options = {
         logger:    nil,
-        transport: 'tls'
+        transport: 'tls',
       }.merge!(options)
 
       @logger = @options[:logger]
-      @logger['plugin'] = 'input/courier'
+      @logger['plugin'] = 'input/courier' unless @logger.nil?
 
       case @options[:transport]
       when 'tcp', 'tls'
@@ -59,7 +59,7 @@ module LogCourier
 
       # Load the json adapter
       @json_adapter = MultiJson.adapter.instance
-      @json_options = { raw: true, use_bigdecimal: true }
+      @json_options = { raw: true }
     end
 
     def run(&block)

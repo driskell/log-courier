@@ -194,7 +194,7 @@ shared_context 'Helpers' do
         if block.nil?
           found = @files.find do |f|
             next unless f.pending?
-            f.logged?(event: e, **args)
+            f.logged?({event: e}.merge!(args))
           end
           expect(found).to_not be_nil, "Event received not recognised: #{e}"
         else

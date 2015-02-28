@@ -1,79 +1,134 @@
-# Log Courier [![Build Status](https://travis-ci.org/driskell/log-courier.svg?branch=develop)](https://travis-ci.org/driskell/log-courier)
+# Log Courier
 
-Log Courier is a tool created to ship log files speedily and securely to
-remote [Logstash](http://logstash.net) instances for processing whilst using
-small amounts of local resources. The project is an enhanced fork of
+[![Build Status](https://img.shields.io/travis/driskell/log-courier/develop.svg)](https://travis-ci.org/driskell/log-courier)
+[![Latest Release](https://img.shields.io/github/release/driskell/log-courier.svg)](https://github.com/driskell/log-courier/releases/latest)
+
+Log Courier is a lightweight tool created to ship log files speedily and
+securely, with low resource usage, to remote [Logstash](http://logstash.net)
+instances. The project is an enhanced fork of
 [Logstash Forwarder](https://github.com/elasticsearch/logstash-forwarder) 0.3.1
 with many fixes and behavioural improvements.
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [Features](#features)
-- [Installation](#installation)
-  - [Requirements](#requirements)
-  - [Building](#building)
-  - [Logstash Integration](#logstash-integration)
-  - [Building with ZMQ support](#building-with-zmq-support)
-  - [Generating Certificates and Keys](#generating-certificates-and-keys)
+- [Main Features](#main-features)
+- [Differences to Logstash Forwarder](#differences-to-logstash-forwarder)
+- [Public Repositories](#public-repositories)
+  - [RPM](#rpm)
+  - [DEB](#deb)
+- [Building From Source](#building-from-source)
+- [Logstash Integration](#logstash-integration)
+- [Generating Certificates and Keys](#generating-certificates-and-keys)
+- [ZeroMQ support](#zeromq-support)
 - [Documentation](#documentation)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## Features
+## Main Features
 
-Log Courier implements the following features:
-
-* Follow active log files
-* Follow rotations
-* Follow standard input stream
-* Suspend tailing after periods of inactivity
-* Set [extra fields](docs/Configuration.md#fields), supporting hashes and arrays
-(`tags: ['one','two']`)
+* Read events from a file or over a Unix pipeline
+* Follow log file rotations and movements
+* Close files after inactivity, reopening if they change
+* Add [extra fields](docs/Configuration.md#fields) to events prior to shipping
 * [Reload configuration](docs/Configuration.md#reloading) without restarting
-* Secure TLS shipping transport with server certificate verification
-* TLS client certificate verification
-* Secure CurveZMQ shipping transport to load balance across multiple Logstash
-instances (optional, requires ZeroMQ 4+)
-* Plaintext TCP shipping transport for configuration simplicity in local
-networks
-* Plaintext ZMQ shipping transport
-* [Administration utility](docs/AdministrationUtility.md) to monitor the
-shipping speed and status
-* [Multiline](docs/codecs/Multiline.md) codec
-* [Filter](docs/codecs/Filter.md) codec
+* Ship events securely using TLS with server (and optionally client) certificate
+verification
+* Ship events securely to multiple Logstash instances using ZeroMQ with Curve
+security (requires ZeroMQ 4+)
+* Ship events in plaintext using TCP
+* Ship events in plaintext using ZeroMQ (requires ZeroMQ 3+)
+* Monitor shipping speed and status with the
+[Administration utility](docs/AdministrationUtility.md)
+* Pre-process events using codecs (e.g. [Multiline](docs/codecs/Multiline.md),
+[Filter](docs/codecs/Filter.md))
 * [Logstash Integration](docs/LogstashIntegration.md) with an input and output
 plugin
+* Very low resource usage
 
-## Installation
+## Differences to Logstash Forwarder
 
-### Requirements
+Log Courier is an enhanced fork of
+[Logstash Forwarder](https://github.com/elasticsearch/logstash-forwarder) 0.3.1
+with many fixes and behavioural improvements. The primary changes are:
 
-1. \*nix, OS X or Windows
+* The publisher protocol is rewritten to avoid many causes of "i/o timeout"
+which would result in duplicate events sent to Logstash
+* The prospector and registrar are heavily revamped to handle log rotations and
+movements far more reliably, and to report errors cleanly
+* The harvester is improved to retry if an error occurred rather than stop
+* The configuration can be reloaded without restarting
+* An administration tool is available which can display the shipping speed and
+status of all watched log files
+* Fields configurations can contain arrays and dictionaries, not just strings
+* Codec support is available which allows multiline processing at the sender
+side
+* A TCP transport is available which removes the requirement for SSL
+certificates
+* There is support for client SSL certificate verification
+* Peer IP address and certificate DN can be added to received events in Logstash
+to distinguish events send from different instances
+* Windows: Log files are not locked allowing log rotation to occur
+* Windows: Log rotation is detected correctly
+
+## Public Repositories
+
+### RPM
+
+The author maintains a **COPR** repository with RedHat/CentOS compatible RPMs
+that may be installed using `yum`. This repository depends on the widely used
+**EPEL** repository for dependencies.
+
+The **EPEL** repository can be installed automatically on CentOS distributions
+by running `yum install epel-release`. Otherwise, you may follow the
+instructions on the [EPEL homepage](https://fedoraproject.org/wiki/EPEL).
+
+To install the Log Courier repository, download the corresponding `.repo`
+configuration file below, and place it in `/etc/yum.repos.d`. Log Courier may
+then be installed using `yum install log-courier`.
+
+* **CentOS/RedHat 6.x**: [driskell-log-courier-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-6.repo)
+* **CentOS/RedHat 7.x**:
+[driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-7.repo)
+
+***NOTE:*** *The RPM packages versions of Log Courier are built using ZeroMQ 3.2
+and therefore do not support the encrypted `zmq` transport. They do support the
+unencrypted `plainzmq` transport.*
+
+### DEB
+
+A Debian/Ubuntu compatible **PPA** repository is under consideration. At the
+moment, no such repository exists.
+
+## Building From Source
+
+Requirements:
+
+1. Linux, Unix, OS X or Windows
 1. The [golang](http://golang.org/doc/install) compiler tools (1.2-1.4)
 1. [git](http://git-scm.com)
 1. GNU make
 
-***\*nix:*** *Most requirements can usually be installed by your favourite package
-manager.*  
+***Linux/Unix:*** *Most requirements can usually be installed by your favourite
+package manager.*  
 ***OS X:*** *Git and GNU make are provided automatically by XCode.*  
 ***Windows:*** *GNU make for Windows can be found
 [here](http://gnuwin32.sourceforge.net/packages/make.htm).*
 
-### Building
-
-To build, simply run `make` as follows.
+To build the binaries, simply run `make` as follows.
 
 	git clone https://github.com/driskell/log-courier
 	cd log-courier
 	make
 
-The log-courier program can then be found in the 'bin' folder.
+The log-courier program can then be found in the 'bin' folder. This can be
+manually installed anywhere on your system. Startup scripts for various
+platforms can be found in the [contrib/initscripts](contrib/initscripts) folder.
 
 *Note: If you receive errors whilst running `make`, try `gmake` instead.*
 
-### Logstash Integration
+## Logstash Integration
 
 Log Courier does not utilise the lumberjack Logstash plugin and instead uses its
 own custom plugin. This allows significant enhancements to the integration far
@@ -87,14 +142,29 @@ Install using the Logstash 1.5+ Plugin manager.
 Detailed instructions, including integration with Logstash 1.4.x, can be found
 on the [Logstash Integration](docs/LogstashIntegration.md) page.
 
-### Building with ZMQ support
+## Generating Certificates and Keys
 
-To use the 'plainzmq' and 'zmq' transports, you will need to install
-[ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for cleartext
-'plainzmq', >=4.0 for encrypted 'zmq').
+Log Courier provides two commands to help generate SSL certificates and Curve
+keys, `lc-tlscert` and `lc-curvekey` respectively. Both are bundled with the
+packages provided by the public repositories.
 
-***\*nix:*** *ZeroMQ >=3.2 is usually available via the package manager. ZeroMQ >=4.0
-may need to be built and installed manually.*  
+When building from source, running `make selfsigned` will automatically build
+and run the `lc-tlscert` utility that can quickly and easily generate a
+self-signed certificate for the TLS shipping transport.
+
+Likewise, running `make curvekey` will automatically build and run the
+`lc-curvekey` utility that can quickly and easily generate CurveZMQ key pairs
+for the CurveZMQ shipping transport. This tool is only available when Log
+Courier is built with ZeroMQ >=4.0.
+
+## ZeroMQ support
+
+To use the 'plainzmq' or 'zmq' transports, you will need to install
+[ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for 'plainzmq', >=4.0
+for 'zmq' which supports encryption).
+
+***Linux\Unix:*** *ZeroMQ >=3.2 is usually available via the package manager.
+ZeroMQ >=4.0 may need to be built and installed manually.*  
 ***OS X:*** *ZeroMQ can be installed via [Homebrew](http://brew.sh).*  
 ***Windows:*** *ZeroMQ will need to be built and installed manually.*
 
@@ -112,19 +182,6 @@ command to build Log Courier with the ZMQ transports.
 the Log Courier hosts are of the same major version. A Log Courier host that has
 ZeroMQ 4.0.5 will not work with a Logstash host using ZeroMQ 3.2.4 (but will
 work with a Logstash host using ZeroMQ 4.0.4.)**
-
-### Generating Certificates and Keys
-
-Running `make selfsigned` will automatically build and run the `lc-tlscert`
-utility that can quickly and easily generate a self-signed certificate for the
-TLS shipping transport.
-
-Likewise, running `make curvekey` will automatically build and run the
-`lc-curvekey` utility that can quickly and easily generate CurveZMQ key pairs
-for the CurveZMQ shipping transport. This tool is only available when Log
-Courier is built with ZeroMQ >=4.0.
-
-Both tools also generate the required configuration file snippets.
 
 ## Documentation
 

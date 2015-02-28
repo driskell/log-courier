@@ -17,27 +17,27 @@
 package registrar
 
 import (
-  "lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/core"
 )
 
 type DeletedEvent struct {
-  stream core.Stream
+	stream core.Stream
 }
 
 func NewDeletedEvent(stream core.Stream) *DeletedEvent {
-  return &DeletedEvent{
-    stream: stream,
-  }
+	return &DeletedEvent{
+		stream: stream,
+	}
 }
 
 func (e *DeletedEvent) Process(state map[core.Stream]*FileState) {
-  if _, ok := state[e.stream]; ok {
-    log.Debug("Registrar received a deletion event for %s", *state[e.stream].Source)
-  } else {
-    log.Warning("Registrar received a deletion event for UNKNOWN (%p)", e.stream)
-  }
+	if _, ok := state[e.stream]; ok {
+		log.Debug("Registrar received a deletion event for %s", *state[e.stream].Source)
+	} else {
+		log.Warning("Registrar received a deletion event for UNKNOWN (%p)", e.stream)
+	}
 
-  // Purge the registrar entry - means the file is deleted so we can't resume
-  // This keeps the state clean so it doesn't build up after thousands of log files
-  delete(state, e.stream)
+	// Purge the registrar entry - means the file is deleted so we can't resume
+	// This keeps the state clean so it doesn't build up after thousands of log files
+	delete(state, e.stream)
 }

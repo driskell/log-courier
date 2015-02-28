@@ -20,267 +20,315 @@
 package main
 
 import (
-  "flag"
-  "fmt"
-  "github.com/op/go-logging"
-  "lc-lib/admin"
-  "lc-lib/core"
-  "lc-lib/prospector"
-  "lc-lib/spooler"
-  "lc-lib/publisher"
-  "lc-lib/registrar"
-  stdlog "log"
-  "os"
-  "runtime/pprof"
-  "time"
+	"flag"
+	"fmt"
+	"github.com/driskell/log-courier/src/lc-lib/admin"
+	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/harvester"
+	"github.com/driskell/log-courier/src/lc-lib/prospector"
+	"github.com/driskell/log-courier/src/lc-lib/publisher"
+	"github.com/driskell/log-courier/src/lc-lib/registrar"
+	"github.com/driskell/log-courier/src/lc-lib/spooler"
+	"github.com/op/go-logging"
+	stdlog "log"
+	"os"
+	"runtime/pprof"
+	"time"
 )
 
-import _ "lc-lib/codecs"
-import _ "lc-lib/transports"
+import _ "github.com/driskell/log-courier/src/lc-lib/codecs"
+import _ "github.com/driskell/log-courier/src/lc-lib/transports"
 
 func main() {
-  logcourier := NewLogCourier()
-  logcourier.Run()
+	logcourier := NewLogCourier()
+	logcourier.Run()
 }
 
 type LogCourier struct {
-  pipeline       *core.Pipeline
-  config         *core.Config
-  shutdown_chan  chan os.Signal
-  reload_chan    chan os.Signal
-  config_file    string
-  from_beginning bool
-  log_file       *os.File
-  last_snapshot  time.Time
-  snapshot       *core.Snapshot
+	pipeline       *core.Pipeline
+	config         *core.Config
+	shutdown_chan  chan os.Signal
+	reload_chan    chan os.Signal
+	config_file    string
+	stdin          bool
+	from_beginning bool
+	harvester      *harvester.Harvester
+	log_file       *DefaultLogBackend
+	last_snapshot  time.Time
+	snapshot       *core.Snapshot
 }
 
 func NewLogCourier() *LogCourier {
-  ret := &LogCourier{
-    pipeline: core.NewPipeline(),
-  }
-  return ret
+	ret := &LogCourier{
+		pipeline: core.NewPipeline(),
+	}
+	return ret
 }
 
 func (lc *LogCourier) Run() {
-  var admin_listener *admin.Listener
-  var on_command <-chan string
+	var admin_listener *admin.Listener
+	var on_command <-chan string
+	var harvester_wait <-chan *harvester.HarvesterFinish
+	var registrar_imp registrar.Registrator
 
-  lc.startUp()
+	lc.startUp()
 
-  log.Info("Log Courier version %s pipeline starting", core.Log_Courier_Version)
+	log.Info("Log Courier version %s pipeline starting", core.Log_Courier_Version)
 
-  if lc.config.General.AdminEnabled {
-    var err error
+	// If reading from stdin, skip admin, and set up a null registrar
+	if lc.stdin {
+		registrar_imp = newStdinRegistrar(lc.pipeline)
+	} else {
+		if lc.config.General.AdminEnabled {
+			var err error
 
-    admin_listener, err = admin.NewListener(lc.pipeline, &lc.config.General)
-    if err != nil {
-      log.Fatalf("Failed to initialise: %s", err)
-    }
+			admin_listener, err = admin.NewListener(lc.pipeline, &lc.config.General)
+			if err != nil {
+				log.Fatalf("Failed to initialise: %s", err)
+			}
 
-    on_command = admin_listener.OnCommand()
-  }
+			on_command = admin_listener.OnCommand()
+		}
 
-  registrar := registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
+		registrar_imp = registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
+	}
 
-  publisher, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar)
-  if err != nil {
-    log.Fatalf("Failed to initialise: %s", err)
-  }
+	publisher_imp, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar_imp)
+	if err != nil {
+		log.Fatalf("Failed to initialise: %s", err)
+	}
 
-  spooler := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher)
+	spooler_imp := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher_imp)
 
-  if _, err := prospector.NewProspector(lc.pipeline, lc.config, lc.from_beginning, registrar, spooler); err != nil {
-    log.Fatalf("Failed to initialise: %s", err)
-  }
+	// If reading from stdin, don't start prospector, directly start a harvester
+	if lc.stdin {
+		lc.harvester = harvester.NewHarvester(nil, lc.config, &lc.config.Stdin, 0)
+		lc.harvester.Start(spooler_imp.Connect())
+		harvester_wait = lc.harvester.OnFinish()
+	} else {
+		if _, err := prospector.NewProspector(lc.pipeline, lc.config, lc.from_beginning, registrar_imp, spooler_imp); err != nil {
+			log.Fatalf("Failed to initialise: %s", err)
+		}
+	}
 
-  // Start the pipeline
-  lc.pipeline.Start()
+	// Start the pipeline
+	lc.pipeline.Start()
 
-  log.Notice("Pipeline ready")
+	log.Notice("Pipeline ready")
 
-  lc.shutdown_chan = make(chan os.Signal, 1)
-  lc.reload_chan = make(chan os.Signal, 1)
-  lc.registerSignals()
+	lc.shutdown_chan = make(chan os.Signal, 1)
+	lc.reload_chan = make(chan os.Signal, 1)
+	lc.registerSignals()
 
 SignalLoop:
-  for {
-    select {
-    case <-lc.shutdown_chan:
-      lc.cleanShutdown()
-      break SignalLoop
-    case <-lc.reload_chan:
-      lc.reloadConfig()
-    case command := <-on_command:
-      admin_listener.Respond(lc.processCommand(command))
-    }
-  }
+	for {
+		select {
+		case <-lc.shutdown_chan:
+			lc.cleanShutdown()
+			break SignalLoop
+		case <-lc.reload_chan:
+			lc.reloadConfig()
+		case command := <-on_command:
+			admin_listener.Respond(lc.processCommand(command))
+		case finished := <-harvester_wait:
+			if finished.Error != nil {
+				log.Notice("An error occurred reading from stdin at offset %d: %s", finished.Last_Read_Offset, finished.Error)
+			} else {
+				log.Notice("Finished reading from stdin at offset %d", finished.Last_Read_Offset)
+			}
+			lc.harvester = nil
 
-  log.Notice("Exiting")
+			// Flush the spooler
+			spooler_imp.Flush()
 
-  if lc.log_file != nil {
-    lc.log_file.Close()
-  }
+			// Wait for StdinRegistrar to receive ACK for the last event we sent
+			registrar_imp.(*StdinRegistrar).Wait(finished.Last_Event_Offset)
+
+			lc.cleanShutdown()
+			break SignalLoop
+		}
+	}
+
+	log.Notice("Exiting")
+
+	if lc.log_file != nil {
+		lc.log_file.Close()
+	}
 }
 
 func (lc *LogCourier) startUp() {
-  var version bool
-  var config_test bool
-  var list_supported bool
-  var cpu_profile string
+	var version bool
+	var config_test bool
+	var list_supported bool
+	var cpu_profile string
 
-  flag.BoolVar(&version, "version", false, "show version information")
-  flag.BoolVar(&config_test, "config-test", false, "Test the configuration specified by -config and exit")
-  flag.BoolVar(&list_supported, "list-supported", false, "List supported transports and codecs")
-  flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
+	flag.BoolVar(&version, "version", false, "show version information")
+	flag.BoolVar(&config_test, "config-test", false, "Test the configuration specified by -config and exit")
+	flag.BoolVar(&list_supported, "list-supported", false, "List supported transports and codecs")
+	flag.StringVar(&cpu_profile, "cpuprofile", "", "write cpu profile to file")
 
-  flag.StringVar(&lc.config_file, "config", "", "The config file to load")
-  flag.BoolVar(&lc.from_beginning, "from-beginning", false, "On first run, read new files from the beginning instead of the end")
+	flag.StringVar(&lc.config_file, "config", "", "The config file to load")
+	flag.BoolVar(&lc.stdin, "stdin", false, "Read from stdin instead of files listed in the config file")
+	flag.BoolVar(&lc.from_beginning, "from-beginning", false, "On first run, read new files from the beginning instead of the end")
 
-  flag.Parse()
+	flag.Parse()
 
-  if version {
-    fmt.Printf("Log Courier version %s\n", core.Log_Courier_Version)
-    os.Exit(0)
-  }
+	if version {
+		fmt.Printf("Log Courier version %s\n", core.Log_Courier_Version)
+		os.Exit(0)
+	}
 
-  if list_supported {
-    fmt.Printf("Available transports:\n")
-    for _, transport := range core.AvailableTransports() {
-      fmt.Printf("  %s\n", transport)
-    }
+	if list_supported {
+		fmt.Printf("Available transports:\n")
+		for _, transport := range core.AvailableTransports() {
+			fmt.Printf("  %s\n", transport)
+		}
 
-    fmt.Printf("Available codecs:\n")
-    for _, codec := range core.AvailableCodecs() {
-      fmt.Printf("  %s\n", codec)
-    }
-    os.Exit(0)
-  }
+		fmt.Printf("Available codecs:\n")
+		for _, codec := range core.AvailableCodecs() {
+			fmt.Printf("  %s\n", codec)
+		}
+		os.Exit(0)
+	}
 
-  if lc.config_file == "" {
-    fmt.Fprintf(os.Stderr, "Please specify a configuration file with -config.\n\n")
-    flag.PrintDefaults()
-    os.Exit(1)
-  }
+	if lc.config_file == "" {
+		fmt.Fprintf(os.Stderr, "Please specify a configuration file with -config.\n\n")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
 
-  err := lc.loadConfig()
+	err := lc.loadConfig()
 
-  if config_test {
-    if err == nil {
-      fmt.Printf("Configuration OK\n")
-      os.Exit(0)
-    }
-    fmt.Printf("Configuration test failed: %s\n", err)
-    os.Exit(1)
-  }
+	if config_test {
+		if err == nil {
+			fmt.Printf("Configuration OK\n")
+			os.Exit(0)
+		}
+		fmt.Printf("Configuration test failed: %s\n", err)
+		os.Exit(1)
+	}
 
-  if err != nil {
-    fmt.Printf("Configuration error: %s\n", err)
-    os.Exit(1)
-  }
+	if err != nil {
+		fmt.Printf("Configuration error: %s\n", err)
+		os.Exit(1)
+	}
 
-  if err = lc.configureLogging(); err != nil {
-    fmt.Printf("Failed to initialise logging: %s", err)
-    os.Exit(1)
-  }
+	if err = lc.configureLogging(); err != nil {
+		fmt.Printf("Failed to initialise logging: %s", err)
+		os.Exit(1)
+	}
 
-  if cpu_profile != "" {
-    log.Notice("Starting CPU profiler")
-    f, err := os.Create(cpu_profile)
-    if err != nil {
-      log.Fatal(err)
-    }
-    pprof.StartCPUProfile(f)
-    go func() {
-      time.Sleep(60 * time.Second)
-      pprof.StopCPUProfile()
-      log.Panic("CPU profile completed")
-    }()
-  }
+	if cpu_profile != "" {
+		log.Notice("Starting CPU profiler")
+		f, err := os.Create(cpu_profile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		go func() {
+			time.Sleep(60 * time.Second)
+			pprof.StopCPUProfile()
+			log.Panic("CPU profile completed")
+		}()
+	}
 }
 
 func (lc *LogCourier) configureLogging() (err error) {
-  backends := make([]logging.Backend, 0, 1)
+	backends := make([]logging.Backend, 0, 1)
 
-  // First, the stdout backend
-  if lc.config.General.LogStdout {
-    backends = append(backends, logging.NewLogBackend(os.Stdout, "", stdlog.LstdFlags|stdlog.Lmicroseconds))
-  }
+	// First, the stdout backend
+	if lc.config.General.LogStdout {
+		backends = append(backends, logging.NewLogBackend(os.Stdout, "", stdlog.LstdFlags|stdlog.Lmicroseconds))
+	}
 
-  // Log file?
-  if lc.config.General.LogFile != "" {
-    lc.log_file, err = os.OpenFile(lc.config.General.LogFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0640)
-    if err != nil {
-      return
-    }
+	// Log file?
+	if lc.config.General.LogFile != "" {
+		lc.log_file, err = NewDefaultLogBackend(lc.config.General.LogFile, "", stdlog.LstdFlags|stdlog.Lmicroseconds)
+		if err != nil {
+			return
+		}
 
-    backends = append(backends, logging.NewLogBackend(lc.log_file, "", stdlog.LstdFlags|stdlog.Lmicroseconds))
-  }
+		backends = append(backends, lc.log_file)
+	}
 
-  if err = lc.configureLoggingPlatform(&backends); err != nil {
-    return
-  }
+	if err = lc.configureLoggingPlatform(&backends); err != nil {
+		return
+	}
 
-  // Set backends BEFORE log level (or we reset log level)
-  logging.SetBackend(backends...)
+	// Set backends BEFORE log level (or we reset log level)
+	logging.SetBackend(backends...)
 
-  // Set the logging level
-  logging.SetLevel(lc.config.General.LogLevel, "")
+	// Set the logging level
+	logging.SetLevel(lc.config.General.LogLevel, "")
 
-  return nil
+	return nil
 }
 
 func (lc *LogCourier) loadConfig() error {
-  lc.config = core.NewConfig()
-  if err := lc.config.Load(lc.config_file); err != nil {
-    return err
-  }
+	lc.config = core.NewConfig()
+	if err := lc.config.Load(lc.config_file); err != nil {
+		return err
+	}
 
-  if len(lc.config.Files) == 0 {
-    return fmt.Errorf("No file groups were found in the configuration.")
-  }
+	if lc.stdin {
+		// TODO: Where to find stdin config for codec and fields?
+	} else if len(lc.config.Files) == 0 {
+		log.Warning("No file groups were found in the configuration.")
+	}
 
-  return nil
+	return nil
 }
 
 func (lc *LogCourier) reloadConfig() error {
-  if err := lc.loadConfig(); err != nil {
-    return err
-  }
+	if err := lc.loadConfig(); err != nil {
+		return err
+	}
 
-  log.Notice("Configuration reload successful")
+	log.Notice("Configuration reload successful")
 
-  // Update the log level
-  logging.SetLevel(lc.config.General.LogLevel, "")
+	// Update the log level
+	logging.SetLevel(lc.config.General.LogLevel, "")
 
-  // Pass the new config to the pipeline workers
-  lc.pipeline.SendConfig(lc.config)
+	// Reopen the log file if we specified one
+	if lc.log_file != nil {
+		lc.log_file.Reopen()
+		log.Notice("Log file reopened")
+	}
 
-  return nil
+	// Pass the new config to the pipeline workers
+	lc.pipeline.SendConfig(lc.config)
+
+	return nil
 }
 
 func (lc *LogCourier) processCommand(command string) *admin.Response {
-  switch command {
-  case "RELD":
-    if err := lc.reloadConfig(); err != nil {
-      return &admin.Response{&admin.ErrorResponse{Message: fmt.Sprintf("Configuration error, reload unsuccessful: %s", err.Error())}}
-    }
-    return &admin.Response{&admin.ReloadResponse{}}
-  case "SNAP":
-    if lc.snapshot == nil || time.Since(lc.last_snapshot) >= time.Second {
-      lc.snapshot = lc.pipeline.Snapshot()
-      lc.snapshot.Sort()
-      lc.last_snapshot = time.Now()
-    }
-    return &admin.Response{lc.snapshot}
-  }
+	switch command {
+	case "RELD":
+		if err := lc.reloadConfig(); err != nil {
+			return &admin.Response{&admin.ErrorResponse{Message: fmt.Sprintf("Configuration error, reload unsuccessful: %s", err.Error())}}
+		}
+		return &admin.Response{&admin.ReloadResponse{}}
+	case "SNAP":
+		if lc.snapshot == nil || time.Since(lc.last_snapshot) >= time.Second {
+			lc.snapshot = lc.pipeline.Snapshot()
+			lc.snapshot.Sort()
+			lc.last_snapshot = time.Now()
+		}
+		return &admin.Response{lc.snapshot}
+	}
 
-
-  return &admin.Response{&admin.ErrorResponse{Message: "Unknown command"}}
+	return &admin.Response{&admin.ErrorResponse{Message: "Unknown command"}}
 }
 
 func (lc *LogCourier) cleanShutdown() {
-  log.Notice("Initiating shutdown")
-  lc.pipeline.Shutdown()
-  lc.pipeline.Wait()
+	log.Notice("Initiating shutdown")
+
+	if lc.harvester != nil {
+		lc.harvester.Stop()
+		finished := <-lc.harvester.OnFinish()
+		log.Notice("Aborted reading from stdin at offset %d", finished.Last_Read_Offset)
+	}
+
+	lc.pipeline.Shutdown()
+	lc.pipeline.Wait()
 }

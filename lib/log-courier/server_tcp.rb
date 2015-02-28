@@ -87,6 +87,16 @@ module LogCourier
 
         if @options[:transport] == 'tls'
           ssl = OpenSSL::SSL::SSLContext.new
+
+          # Disable SSLv2 and SSLv3
+          # Call set_params first to ensure options attribute is there (hmmmm?)
+          ssl.set_params
+          # Modify the default options to ensure SSLv2 and SSLv3 is disabled
+          # This retains any beneficial options set by default in the current Ruby implementation
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv2 if defined?(OpenSSL::SSL::OP_NO_SSLv2)
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv3 if defined?(OpenSSL::SSL::OP_NO_SSLv3)
+
+          # Set the certificate file
           ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
           ssl.key = OpenSSL::PKey::RSA.new(File.read(@options[:ssl_key]), @options[:ssl_key_passphrase])
 
@@ -134,7 +144,7 @@ module LogCourier
           client = @server.accept
         rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
           # Accept failure or other issue
-          @logger.warn 'Connection failed to accept', :error => e.message, :peer => @tcp_server.peer unless @logger.nil
+          @logger.warn 'Connection failed to accept', :error => e.message, :peer => @tcp_server.peer unless @logger.nil?
           client.close rescue nil unless client.nil?
           next
         end
@@ -254,9 +264,13 @@ module LogCourier
         @logger.info 'Connection closed', :peer => @peer unless @logger.nil?
       end
       return
-    rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
+    rescue OpenSSL::SSL::SSLError => e
       # Read errors, only action is to shutdown which we'll do in ensure
       @logger.warn 'SSL error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
+      return
+    rescue IOError, Errno::ECONNRESET => e
+      # Read errors, only action is to shutdown which we'll do in ensure
+      @logger.warn 'Connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
       return
     rescue ProtocolError => e
       # Connection abort request due to a protocol error

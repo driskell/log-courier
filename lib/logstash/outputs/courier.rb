@@ -20,7 +20,7 @@
 module LogStash
   module Outputs
     # Send events using the Log Courier protocol
-    class LogCourier < LogStash::Outputs::Base
+    class Courier < LogStash::Outputs::Base
       config_name 'courier'
       milestone 1
 
@@ -51,9 +51,10 @@ module LogStash
       public
 
       def register
-        require 'log-courier/client'
+        @logger.info 'Starting courier output'
 
-        @client = LogCourier::Client.new(
+        options = {
+          logger:             @logger,
           addresses:          @hosts,
           port:               @port,
           ssl_ca:             @ssl_ca,
@@ -61,8 +62,11 @@ module LogStash
           ssl_key:            @ssl_key,
           ssl_key_passphrase: @ssl_key_passphrase,
           spool_size:         @spool_size,
-          idle_timeout:       @idle_timeout
-        )
+          idle_timeout:       @idle_timeout,
+        }
+
+        require 'log-courier/client'
+        @client = LogCourier::Client.new(options)
       end
 
       public

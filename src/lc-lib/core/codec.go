@@ -17,16 +17,16 @@
 package core
 
 type Codec interface {
-  Teardown() int64
-  Event(int64, int64, string)
-  Meter()
-  Snapshot() *Snapshot
+	Teardown() int64
+	Event(int64, int64, string)
+	Meter()
+	Snapshot() *Snapshot
 }
 
 type CodecCallbackFunc func(int64, int64, string)
 
 type CodecFactory interface {
-  NewCodec(CodecCallbackFunc, int64) Codec
+	NewCodec(CodecCallbackFunc, int64) Codec
 }
 
 type CodecRegistrarFunc func(*Config, string, map[string]interface{}, string) (CodecFactory, error)
@@ -34,13 +34,13 @@ type CodecRegistrarFunc func(*Config, string, map[string]interface{}, string) (C
 var registered_Codecs map[string]CodecRegistrarFunc = make(map[string]CodecRegistrarFunc)
 
 func RegisterCodec(codec string, registrar_func CodecRegistrarFunc) {
-  registered_Codecs[codec] = registrar_func
+	registered_Codecs[codec] = registrar_func
 }
 
 func AvailableCodecs() (ret []string) {
-  ret = make([]string, 0, len(registered_Codecs))
-  for k := range registered_Codecs {
-    ret = append(ret, k)
-  }
-  return
+	ret = make([]string, 0, len(registered_Codecs))
+	for k := range registered_Codecs {
+		ret = append(ret, k)
+	}
+	return
 }

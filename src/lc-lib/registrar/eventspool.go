@@ -17,41 +17,48 @@
 package registrar
 
 import (
-  "lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/core"
 )
 
-type RegistrarEvent interface {
-  Process(state map[core.Stream]*FileState)
+type EventProcessor interface {
+	Process(state map[core.Stream]*FileState)
 }
 
-type RegistrarEventSpool struct {
-  registrar *Registrar
-  events    []RegistrarEvent
+type EventSpooler interface {
+	Close()
+	Add(EventProcessor)
+	Send()
 }
 
-func newRegistrarEventSpool(r *Registrar) *RegistrarEventSpool {
-  ret := &RegistrarEventSpool{
-    registrar: r,
-  }
-  ret.reset()
-  return ret
+type EventSpool struct {
+	registrar *Registrar
+	events    []EventProcessor
 }
 
-func (r *RegistrarEventSpool) Close() {
-  r.registrar.dereferenceSpooler()
+func newEventSpool(r *Registrar) *EventSpool {
+	ret := &EventSpool{
+		registrar: r,
+	}
+	ret.reset()
+	return ret
 }
 
-func (r *RegistrarEventSpool) Add(event RegistrarEvent) {
-  r.events = append(r.events, event)
+func (r *EventSpool) Close() {
+	r.registrar.dereferenceSpooler()
+	r.registrar = nil
 }
 
-func (r *RegistrarEventSpool) Send() {
-  if len(r.events) != 0 {
-    r.registrar.registrar_chan <- r.events
-    r.reset()
-  }
+func (r *EventSpool) Add(event EventProcessor) {
+	r.events = append(r.events, event)
 }
 
-func (r *RegistrarEventSpool) reset() {
-  r.events = make([]RegistrarEvent, 0, 0)
+func (r *EventSpool) Send() {
+	if len(r.events) != 0 {
+		r.registrar.registrar_chan <- r.events
+		r.reset()
+	}
+}
+
+func (r *EventSpool) reset() {
+	r.events = make([]EventProcessor, 0, 0)
 }
