@@ -25,7 +25,7 @@ module LogStash
       milestone 1
 
       # The list of addresses Log Courier should send to
-      config :addresses, :validate => :array, :required => true
+      config :hosts, :validate => :array, :required => true
 
       # The port to connect to
       config :port, :validate => :number, :required => true
@@ -55,7 +55,7 @@ module LogStash
 
         options = {
           logger:             @logger,
-          addresses:          @addresses,
+          addresses:          @hosts,
           port:               @port,
           ssl_ca:             @ssl_ca,
           ssl_certificate:    @ssl_certificate,
