@@ -28,8 +28,6 @@ module LogCourier
       @options = {
         logger:             nil,
         transport:         'tls',
-        port:               nil,
-        addresses:          [],
         ssl_ca:             nil,
         ssl_certificate:    nil,
         ssl_key:            nil,
@@ -41,8 +39,6 @@ module LogCourier
       [:port, :ssl_ca].each do |k|
         fail "output/courier: '#{k}' is required" if @options[k].nil?
       end
-
-      fail 'output/courier: \'addresses\' must contain at least one address' if @options[:addresses].empty?
 
       if @options[:transport] == 'tls'
         c = 0
