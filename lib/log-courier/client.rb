@@ -96,6 +96,8 @@ module LogCourier
         transport:    'tls',
         spool_size:   1024,
         idle_timeout: 5,
+        port:         nil,
+        addresses:    [],
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -108,6 +110,9 @@ module LogCourier
       else
         fail 'output/courier: \'transport\' must be tcp or tls'
       end
+
+      fail 'output/courier: \'addresses\' must contain at least one address' if @options[:addresses].empty?
+      fail 'output/courier: \'addresses\' only supports a single address at this time' if @options[:addresses].length > 1
 
       @event_queue = EventQueue.new @options[:spool_size]
       @pending_payloads = {}
@@ -364,7 +369,7 @@ module LogCourier
       # Reconnect due to timeout
       @logger.warn 'Timeout occurred' unless @logger.nil?
     rescue ShutdownSignal => e
-      fail e
+      raise
     rescue StandardError, NativeException => e
       # Unknown error occurred
       @logger.warn e, :hint => 'Unknown error' unless @logger.nil?
