@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"regexp"
 	"sync"
@@ -72,11 +71,7 @@ type TransportTcp struct {
 
 	can_send chan int
 
-	roundrobin int
-	host_is_ip bool
-	host       string
-	port       string
-	addresses  []net.IP
+	addressPool *AddressPool
 }
 
 func NewTcpTransportFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.TransportFactory, error) {
@@ -139,14 +134,14 @@ func NewTcpTransportFactory(config *core.Config, config_path string, unused map[
 
 func (f *TransportTcpFactory) NewTransport(config *core.NetworkConfig) (core.Transport, error) {
 	ret := &TransportTcp{
-		config:     f,
-		net_config: config,
+		config:      f,
+		net_config:  config,
+		addressPool: NewAddressPool(config.Servers),
 	}
 
-	// Randomise the initial host - after this it will round robin
-	// Round robin after initial attempt ensures we don't retry same host twice,
-	// and also ensures we try all hosts one by one
-	ret.roundrobin = rand.Intn(len(config.Servers))
+	if ret.net_config.Rfc2782Srv {
+		ret.addressPool.SetRfc2782(true, ret.net_config.Rfc2782Service)
+	}
 
 	return ret, nil
 }
@@ -165,6 +160,11 @@ func (t *TransportTcp) ReloadConfig(new_net_config *core.NetworkConfig) int {
 
 	// Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
 	t.net_config = new_net_config
+	t.addressPool = NewAddressPool(t.net_config.Servers)
+
+	if t.net_config.Rfc2782Srv {
+		t.addressPool.SetRfc2782(true, t.net_config.Rfc2782Service)
+	}
 
 	return core.Reload_None
 }
@@ -174,51 +174,15 @@ func (t *TransportTcp) Init() error {
 		t.disconnect()
 	}
 
-	// Have we exhausted the address list we had?
-	if t.addresses == nil {
-		var err error
-
-		// Round robin to the next server
-		selected := t.net_config.Servers[t.roundrobin%len(t.net_config.Servers)]
-		t.roundrobin++
-
-		t.host, t.port, err = net.SplitHostPort(selected)
-		if err != nil {
-			return fmt.Errorf("Invalid hostport given: %s", selected)
-		}
-
-		// Are we an IP?
-		if ip := net.ParseIP(t.host); ip != nil {
-			t.host_is_ip = true
-			t.addresses = []net.IP{ip}
-		} else {
-			// Lookup the server in DNS
-			t.host_is_ip = false
-			t.addresses, err = net.LookupIP(t.host)
-			if err != nil {
-				return fmt.Errorf("DNS lookup failure \"%s\": %s", t.host, err)
-			}
-		}
-	}
-
-	// Try next address and drop it from our list
-	addressport := net.JoinHostPort(t.addresses[0].String(), t.port)
-	if len(t.addresses) > 1 {
-		t.addresses = t.addresses[1:]
-	} else {
-		t.addresses = nil
-	}
-
-	var desc string
-	if t.host_is_ip {
-		desc = fmt.Sprintf("%s", addressport)
-	} else {
-		desc = fmt.Sprintf("%s (%s)", addressport, t.host)
+	// Try next address
+	addressport, desc, err := t.addressPool.Next()
+	if err != nil {
+		return err
 	}
 
 	log.Info("Attempting to connect to %s", desc)
 
-	tcpsocket, err := net.DialTimeout("tcp", addressport, t.net_config.Timeout)
+	tcpsocket, err := net.DialTimeout("tcp", addressport.String(), t.net_config.Timeout)
 	if err != nil {
 		return fmt.Errorf("Failed to connect to %s: %s", desc, err)
 	}
@@ -229,7 +193,7 @@ func (t *TransportTcp) Init() error {
 		t.config.tls_config.MinVersion = tls.VersionTLS10
 
 		// Set the tlsconfig server name for server validation (required since Go 1.3)
-		t.config.tls_config.ServerName = t.host
+		t.config.tls_config.ServerName = t.addressPool.Host()
 
 		t.tlssocket = tls.Client(&transportTcpWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
 		t.tlssocket.SetDeadline(time.Now().Add(t.net_config.Timeout))
@@ -432,8 +396,6 @@ func (t *TransportTcp) Shutdown() {
 
 // Register the transports
 func init() {
-	rand.Seed(time.Now().UnixNano())
-
 	core.RegisterTransport("tcp", NewTcpTransportFactory)
 	core.RegisterTransport("tls", NewTcpTransportFactory)
 }

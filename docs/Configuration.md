@@ -36,6 +36,8 @@
   - [`"curve secret key"`](#curve-secret-key)
   - [`"max pending payloads"`](#max-pending-payloads)
   - [`"reconnect"`](#reconnect)
+  - [`"rfc 2782 srv"`](#rfc-2782-srv)
+  - [`"rfc 2782 service"`](#rfc-2782-service)
   - [`"servers"`](#servers)
   - [`"ssl ca"`](#ssl-ca)
   - [`"ssl certificate"`](#ssl-certificate)
@@ -418,17 +420,36 @@ this slows down the rate of reconnection attempts.
 When using the ZMQ transport, this is how long to wait before restarting the ZMQ
 stack when it was reset.
 
+### `"rfc 2782 srv"`
+
+*Boolean. Optional. Default: true*
+
+When performing SRV DNS lookups for entries in the [`"servers"`](#servers) list,
+use RFC 2782 style lookups of the form `_service._proto.example.com`.
+
+### `"rfc 2782 service"`
+
+*String. Optional. Default: "courier"*
+
+Specifies the service to request when using RFC 2782 style SRV lookups. Using
+the default, "courier", an "@example.com" server entry would result in a lookup
+for `_courier._tcp.example.com`.
+
 ### `"servers"`
 
 *Array of Strings. Required*
 
-Sets the list of servers to send logs to. DNS names are resolved into IP
-addresses each time connections are made and all available IP addresses are
-used.
+Sets the list of servers to send logs to. Accepted formats for each server entry
+are:
 
-Only the initial server is randomly selected. Subsequent connection attempts are
-made to the next IP address available (if the server had multiple IP addresses)
-or to the next server listed in the configuration file (if all addresses for the
+* `ipaddress:port`
+* `hostname:port` (A DNS lookup is performed)
+* `@hostname` (A SRV DNS lookup is performed, with further DNS lookups if
+required)
+
+The initial server is randomly selected. Subsequent connection attempts are made
+to the next IP address available (if the server had multiple IP addresses) or to
+the next server listed in the configuration file (if all addresses for the
 previous server were exausted.)
 
 ### `"ssl ca"`
