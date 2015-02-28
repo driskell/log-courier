@@ -66,7 +66,7 @@ To install the Log Courier repository, download the corresponding `.repo`
 configuration file below, and place it in `/etc/yum.repos.d`. Log Courier may
 then be installed using `yum install log-courier`.
 
-* **CentOS/RedHat 6.x**: [driskell-log-courier-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-6.repo) 
+* **CentOS/RedHat 6.x**: [driskell-log-courier-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-6.repo)
 * **CentOS/RedHat 7.x**:
 [driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-7.repo)
 
@@ -112,7 +112,8 @@ Log Courier does not utilise the lumberjack Logstash plugin and instead uses its
 own custom plugin. This allows significant enhancements to the integration far
 beyond the lumberjack protocol allows.
 
-Install using the Logstash 1.5+ Plugin manager.
+You may install the input plugin using the Logstash 1.5 Plugin manager. (Tested
+with beta1 and beta2.)
 
 	cd /path/to/logstash
 	bin/logstash plugin install logstash-input-log-courier
