@@ -36,6 +36,8 @@
   - [`"curve secret key"`](#curve-secret-key)
   - [`"max pending payloads"`](#max-pending-payloads)
   - [`"reconnect"`](#reconnect)
+  - [`"rfc 2782 srv"`](#rfc-2782-srv)
+  - [`"rfc 2782 service"`](#rfc-2782-service)
   - [`"servers"`](#servers)
   - [`"ssl ca"`](#ssl-ca)
   - [`"ssl certificate"`](#ssl-certificate)
@@ -430,18 +432,20 @@ use RFC 2782 style lookups of the form `_service._proto.example.com`.
 *String. Optional. Default: "courier"*
 
 Specifies the service to request when using RFC 2782 style SRV lookups. Using
-the default, "courier", would result in a lookup for
-`_courier._tcp.example.com`.
+the default, "courier", an "@example.com" server entry would result in a lookup
+for `_courier._tcp.example.com`.
 
 ### `"servers"`
 
 *Array of Strings. Required*
 
-Sets the list of servers to send logs to. Accepted formats for each server entry are:
+Sets the list of servers to send logs to. Accepted formats for each server entry
+are:
 
 * `ipaddress:port`
 * `hostname:port` (A DNS lookup is performed)
-* `@hostname` (A SRV DNS lookup is performed, with further DNS lookups if required)
+* `@hostname` (A SRV DNS lookup is performed, with further DNS lookups if
+required)
 
 The initial server is randomly selected. Subsequent connection attempts are made
 to the next IP address available (if the server had multiple IP addresses) or to
