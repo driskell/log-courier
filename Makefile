@@ -100,7 +100,7 @@ ifneq ($(implyclean),yes)
 endif
 
 fix_version:
-	build/fix_version
+	build/fix_version "${FIX_VERSION}"
 
 setup_root:
 	build/setup_root
