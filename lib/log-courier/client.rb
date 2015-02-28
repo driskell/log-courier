@@ -122,6 +122,16 @@ module LogCourier
         run_spooler
       end
 
+      # TODO: Make these configurable?
+      @keepalive_timeout = 1800
+      @network_timeout = 30
+
+      # TODO: Make pending payload max configurable?
+      @max_pending_payloads = 100
+
+      @retry_payload = nil
+      @received_payloads = Queue.new
+
       @pending_ping = false
 
       # Start the IO thread
@@ -137,11 +147,17 @@ module LogCourier
       return
     end
 
-    def shutdown
-      # Raise a shutdown signal in the spooler and wait for it
-      @spooler_thread.raise ShutdownSignal
-      @io_thread.raise ShutdownSignal
-      @spooler_thread.join
+    def shutdown(force=false)
+      if force
+        # Raise a shutdown signal in the spooler and wait for it
+        @spooler_thread.raise ShutdownSignal
+        @spooler_thread.join
+        @io_thread.raise ShutdownSignal
+      else
+        @event_queue.push nil
+        @spooler_thread.join
+        @io_control << ['!', nil]
+      end
       @io_thread.join
       return @pending_payloads.length == 0
     end
@@ -157,7 +173,13 @@ module LogCourier
         begin
           loop do
             event = @event_queue.pop next_flush - Time.now.to_i
+
+            if event.nil?
+              raise ShutdownSignal
+            end
+
             spooled.push(event)
+
             break if spooled.length >= @options[:spool_size]
           end
         rescue TimeoutError
@@ -166,17 +188,18 @@ module LogCourier
         end
 
         if spooled.length >= @options[:spool_size]
-          @logger.debug 'Flushing full spool', :events => spooled.length
+          @logger.debug 'Flushing full spool', :events => spooled.length unless @logger.nil?
         else
-          @logger.debug 'Flushing spool due to timeout', :events => spooled.length
+          @logger.debug 'Flushing spool due to timeout', :events => spooled.length unless @logger.nil?
         end
 
         # Pass through to io_control but only if we're ready to send
         @send_mutex.synchronize do
-          @send_cond.wait(@send_mutex) unless @send_ready
+          @send_cond.wait(@send_mutex) until @send_ready
           @send_ready = false
-          @io_control << ['E', spooled]
         end
+
+        @io_control << ['E', spooled]
       end
       return
     rescue ShutdownSignal
@@ -184,118 +207,17 @@ module LogCourier
     end
 
     def run_io
-      # TODO: Make keepalive configurable?
-      @keepalive_timeout = 1800
-
-      # TODO: Make pending payload max configurable?
-      max_pending_payloads = 100
-
-      retry_payload = nil
-
-      can_send = true
-
       loop do
         # Reconnect loop
         @client.connect @io_control
 
-        reset_keepalive
+        @timeout = Time.now.to_i + @keepalive_timeout
 
-        # Capture send exceptions
-        begin
-          # IO loop
-          loop do
-            catch :keepalive do
-              begin
-                action = @io_control.pop @keepalive_next - Time.now.to_i
-
-                # Process the action
-                case action[0]
-                when 'S'
-                  # If we're flushing through the pending, pick from there
-                  unless retry_payload.nil?
-                    # Regenerate data if we need to
-                    retry_payload.data = buffer_jdat_data(retry_payload.events, retry_payload.nonce) if retry_payload.data == nil
-
-                    # Send and move onto next
-                    @client.send 'JDAT', retry_payload.data
-
-                    retry_payload = retry_payload.next
-                    throw :keepalive
-                  end
-
-                  # Ready to send, allow spooler to pass us something
-                  @send_mutex.synchronize do
-                    @send_ready = true
-                    @send_cond.signal
-                  end
-
-                  can_send = true
-                when 'E'
-                  # If we have too many pending payloads, pause the IO
-                  if @pending_payloads.length + 1 >= max_pending_payloads
-                    @client.pause_send
-                  end
-
-                  # Received some events - send them
-                  send_jdat action[1]
-
-                  # The send action will trigger another "S" if we have more send buffer
-                  can_send = false
-                when 'R'
-                  # Received a message
-                  signature, message = action[1..2]
-                  case signature
-                  when 'PONG'
-                    process_pong message
-                  when 'ACKN'
-                    process_ackn message
-                  else
-                    # Unknown message - only listener is allowed to respond with a "????" message
-                    # TODO: What should we do? Just ignore for now and let timeouts conquer
-                  end
-                when 'F'
-                  # Reconnect, an error occurred
-                  break
-                end
-              rescue TimeoutError
-                # Keepalive timeout hit, send a PING unless we were awaiting a PONG
-                if @pending_ping
-                  # Timed out, break into reconnect
-                  fail TimeoutError
-                end
-
-                # Is send full? can_send will be false if so
-                # We should've started receiving ACK by now so time out
-                fail TimeoutError unless can_send
-
-                # Send PING
-                send_ping
-
-                # We may have filled send buffer
-                can_send = false
-              end
-            end
-
-            # Reset keepalive timeout
-            reset_keepalive
-          end
-        rescue ProtocolError => e
-          # Reconnect required due to a protocol error
-          @logger.warn 'Protocol error', :error => e.message unless @logger.nil?
-        rescue TimeoutError
-          # Reconnect due to timeout
-          @logger.warn 'Timeout occurred' unless @logger.nil?
-        rescue ShutdownSignal
-          # Shutdown, break out
-          break
-        rescue StandardError, NativeException => e
-          # Unknown error occurred
-          @logger.warn e, :hint => 'Unknown error' unless @logger.nil?
-        end
+        run_io_loop
 
         # Disconnect and retry payloads
         @client.disconnect
-        retry_payload = @first_payload
+        @retry_payload = @first_payload
 
         # TODO: Make reconnect time configurable?
         sleep 5
@@ -303,11 +225,164 @@ module LogCourier
 
       @client.disconnect
       return
+    rescue ShutdownSignal
+      # Ensure disconnected
+      @client.disconnect
     end
 
-    def reset_keepalive
-      @keepalive_next = Time.now.to_i + @keepalive_timeout
-      return
+    def run_io_loop()
+      io_stop = false
+      can_send = false
+
+      # IO loop
+      loop do
+        begin
+          action = @io_control.pop @timeout - Time.now.to_i
+
+          # Process the action
+          case action[0]
+          when 'S'
+            # If we're flushing through the pending, pick from there
+            unless @retry_payload.nil?
+              @logger.debug 'Send is ready, retrying previous payload' unless @logger.nil?
+
+              # Regenerate data if we need to
+              @retry_payload.data = buffer_jdat_data(@retry_payload.events, @retry_payload.nonce) if @retry_payload.data == nil
+
+              # Send and move onto next
+              @client.send 'JDAT', @retry_payload.data
+
+              @retry_payload = @retry_payload.next
+
+              # If first send, exit idle mode
+              if @retry_payload == @first_payload
+                @timeout = Time.now.to_i + @network_timeout
+              end
+              break
+            end
+
+            # Ready to send, allow spooler to pass us something if we don't
+            # have something already
+            if @received_payloads.length != 0
+              @logger.debug 'Send is ready, using events from backlog' unless @logger.nil?
+              send_payload @received_payloads.pop()
+            else
+              @logger.debug 'Send is ready, requesting events' unless @logger.nil?
+
+              can_send = true
+
+              @send_mutex.synchronize do
+                @send_ready = true
+                @send_cond.signal
+              end
+            end
+          when 'E'
+            # Were we expecting a payload? Store it if not
+            if can_send
+              @logger.debug 'Sending events', :events => action[1].length unless @logger.nil?
+              send_payload action[1]
+              can_send = false
+            else
+              @logger.debug 'Events received when not ready; saved to backlog' unless @logger.nil?
+              @received_payloads.push action[1]
+            end
+          when 'R'
+            # Received a message
+            signature, message = action[1..2]
+            case signature
+            when 'PONG'
+              process_pong message
+            when 'ACKN'
+              process_ackn message
+            else
+              # Unknown message - only listener is allowed to respond with a "????" message
+              # TODO: What should we do? Just ignore for now and let timeouts conquer
+            end
+
+            # Any pending payloads left?
+            if @pending_payloads.length == 0
+              # Handle shutdown
+              if io_stop
+                raise ShutdownSignal
+              end
+
+              # Enter idle mode
+              @timeout = Time.now.to_i + @keepalive_timeout
+            else
+              # Set network timeout
+              @timeout = Time.now.to_i + @network_timeout
+            end
+          when 'F'
+            # Reconnect, an error occurred
+            break
+          when '!'
+            @logger.debug 'Shutdown request received' unless @logger.nil?
+
+            # Shutdown request received
+            if @pending_payloads.length == 0
+              raise ShutdownSignal
+            end
+
+            @logger.debug 'Delaying shutdown due to pending payloads', :payloads => @pending_payloads.length unless @logger.nil?
+
+            io_stop = true
+
+            # Stop spooler sending
+            can_send = false
+            @send_mutex.synchronize do
+              @send_ready = false
+            end
+          end
+        rescue TimeoutError
+          if @pending_payloads != 0
+            # Network timeout
+            fail TimeoutError
+          end
+
+          # Keepalive timeout hit, send a PING unless we were awaiting a PONG
+          if @pending_ping
+            # Timed out, break into reconnect
+            fail TimeoutError
+          end
+
+          # Stop spooler sending
+          can_send = false
+          @send_mutex.synchronize do
+            @send_ready = false
+          end
+
+          # Send PING
+          send_ping
+
+          @timeout = Time.now.to_i + @network_timeout
+        end
+      end
+    rescue ProtocolError => e
+      # Reconnect required due to a protocol error
+      @logger.warn 'Protocol error', :error => e.message unless @logger.nil?
+    rescue TimeoutError
+      # Reconnect due to timeout
+      @logger.warn 'Timeout occurred' unless @logger.nil?
+    rescue ShutdownSignal => e
+      fail e
+    rescue StandardError, NativeException => e
+      # Unknown error occurred
+      @logger.warn e, :hint => 'Unknown error' unless @logger.nil?
+    end
+
+    def send_payload(payload)
+      # If we have too many pending payloads, pause the IO
+      if @pending_payloads.length + 1 >= @max_pending_payloads
+        @client.pause_send
+      end
+
+      # Received some events - send them
+      send_jdat payload
+
+      # Leave idle mode if this is the first payload after idle
+      if @pending_payloads.length == 1
+        @timeout = Time.now.to_i + @network_timeout
+      end
     end
 
     def generate_nonce
