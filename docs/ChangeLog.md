@@ -4,7 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [1.4](#14)
+- [1.5](#15)
 - [1.3](#13)
 - [1.2](#12)
 - [1.1](#11)
@@ -20,9 +20,9 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## 1.4
+## 1.5
 
-*???*
+*28th February 2015*
 
 ***Breaking Changes***
 
@@ -33,6 +33,9 @@ argument, and configure the codec and additional fields in the new `stdin`
 configuration file section. Log Courier will now also exit cleanly once all data
 from stdin has been read and acknowledged by the server (previously it would
 hang forever.)
+* The output plugin will fail startup if more than a single `host` address is
+provided. Previous versions would simply ignore additional hosts and cause
+potential confusion.
 
 ***Changes***
 
@@ -43,7 +46,7 @@ failures will still round robin.
 configuration. (Thanks @mhughes - #88)
 * A configuration reload will now reopen log files. (#91)
 * Implement support for SRV record server entries (#85)
-* Fix Log Courier output plugin (#96)
+* Fix Log Courier output plugin (#96 #98)
 * Fix Logstash input plugin with zmq transport failing when discarding a message
 due to peer_recv_queue being exceeded (#92)
 * Fix a TCP transport race condition that could deadlock publisher on a send()
@@ -58,6 +61,17 @@ support it. Also, using this option enables it globally within Logstash due to
 option leakage within the JrJackson gem (#103)
 * Fix filter codec not saving offset correctly when dead time reached or stdin
 EOF reached (reported in #108)
+* Fix Logstash input plugin crash if the fields configuration for Log Courier
+specifies a "tags" field that is not an Array, and the input configuration for
+Logstash also specified tags (#118)
+* Fix a registrar conflict bug that can occur if a followed log file becomes
+inaccessible to Log Courier (#122)
+* Fix inaccessible log files causing errors to be reported to the Log Courier
+log target every 10 seconds. Only a single error should be reported (#119)
+* Fix unknown plugin error in Logstash input plugin if a connection fails to
+accept (#118)
+* Fix Logstash input plugin crash with plainzmq and zmq transports when the
+listen address is already in use (Thanks to @mheese - #112)
 
 ***Security***
 
@@ -66,7 +80,7 @@ courier plugins to further enhance security when using the TLS transport.
 
 ## 1.3
 
-*2nd January 2014*
+*2nd January 2015*
 
 ***Changes***
 
