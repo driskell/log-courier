@@ -32,10 +32,8 @@ Requires: zeromq3
 Requires: logrotate
 
 %description
-Log Courier is a tool created to transmit log files speedily and securely to
-remote Logstash instances for processing whilst using small amounts of local
-resources. The project is an enhanced fork of Logstash Forwarder 0.3.1 with many
-enhancements and behavioural improvements.
+Log Courier is a lightweight tool created to ship log files speedily and
+securely, with low resource usage, to remote Logstash instances.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -71,6 +69,8 @@ mkdir -p %{buildroot}%{_sysconfdir}/init.d
 install -m 0755 contrib/initscripts/redhat-sysv.init %{buildroot}%{_sysconfdir}/init.d/log-courier
 touch %{buildroot}%{_var}/run/log-courier.pid
 %endif
+mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
+install -m 0644 contrib/initscripts/log-courier.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/log-courier
 
 # Make the state dir
 mkdir -p %{buildroot}%{_var}/lib/log-courier
@@ -117,7 +117,9 @@ fi
 %endif
 
 %defattr(0644,root,root,0755)
-%{_sysconfdir}/log-courier
+%dir %{_sysconfdir}/log-courier
+%{_sysconfdir}/log-courier/examples
+%config(noreplace) %{_sysconfdir}/sysconfig/log-courier
 %if 0%{?rhel} < 7
 %ghost %{_var}/run/log-courier.pid
 %endif
@@ -127,6 +129,12 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Mon Jan 5 2015 Jason Woods <devel@jasonwoods.me.uk> - 1.3-1
+- Upgrade to v1.3
+
+* Wed Dec 3 2014 Jason Woods <devel@jasonwoods.me.uk> - 1.2-5
+- Upgrade to v1.2 final
+
 * Sat Nov 8 2014 Jason Woods <devel@jasonwoods.me.uk> - 1.2-4
 - Upgrade to v1.2
 - Fix stop message on future upgrade
