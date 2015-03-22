@@ -53,6 +53,7 @@ func NewEndpointSink(config *core.NetworkConfig) *EndpointSink {
 // AddEndpoint initialises a new endpoint for a given server entry
 func (f *EndpointSink) AddEndpoint(server string, addressPool *AddressPool) *Endpoint {
 	endpoint := &Endpoint{
+		server:      server,
 		addressPool: addressPool,
 	}
 

@@ -17,6 +17,7 @@
 package publisher
 
 import (
+	"errors"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"math/rand"
 	"sync"
@@ -38,13 +39,12 @@ type Endpoint struct {
 	TimeoutFunc TimeoutFunc
 	TimeoutDue  time.Time
 
-	// State information
-	PongPending bool
-
+	server          string
 	addressPool     *AddressPool
 	transport       core.Transport
 	pendingPayloads map[string]*PendingPayload
 	numPayloads     int
+	pongPending     bool
 
 	lineCount int64
 }
@@ -61,12 +61,18 @@ func (e *Endpoint) wait() {
 	e.transport.Wait()
 }
 
+// Server returns the server string from the configuration file that this
+// endpoint is associated with
+func (e *Endpoint) Server() string {
+	return e.server
+}
+
 // SendPayload adds an event spool to the queue, sending it to the transport.
 // Always called from Publisher routine to ensure concurrent pending payload
 // access.
 //
 // Should return the payload so the publisher can track it accordingly.
-func (e *Endpoint) SendPayload(payload *PendingPayload) {
+func (e *Endpoint) SendPayload(payload *PendingPayload) error {
 	// Calculate a nonce
 	nonce := e.generateNonce()
 	for {
@@ -81,7 +87,7 @@ func (e *Endpoint) SendPayload(payload *PendingPayload) {
 	e.pendingPayloads[nonce] = payload
 	e.numPayloads++
 
-	e.transport.Write(payload)
+	return e.transport.Write(payload)
 }
 
 // generateNonce creates a random string for payload identification
@@ -97,9 +103,15 @@ func (e *Endpoint) generateNonce() string {
 // SendPing requests that the transport ensure its connection is still available
 // by sending data across it and calling back with Pong(). Some transports may
 // simply do nothing and Pong() back immediately if they are managed as such.
-func (e *Endpoint) SendPing() {
-	// TODO
-	//e.transport.Ping()
+func (e *Endpoint) SendPing() error {
+	e.pongPending = true
+	return e.transport.Ping()
+}
+
+// IsPinging returns true if the endpoint is still awaiting for a PONG response
+// to a previous Ping request
+func (e *Endpoint) IsPinging() bool {
+	return e.pongPending
 }
 
 // ProcessAck processes a received acknowledgement message.
@@ -136,6 +148,17 @@ func (e *Endpoint) ProcessAck(a *AckResponse) (*PendingPayload, bool) {
 	}
 
 	return payload, ackEvents == 0
+}
+
+// ProcessPong processes a received PONG message
+func (e *Endpoint) ProcessPong() error {
+	if !e.pongPending {
+		return errors.New("Unexpected PONG received")
+	}
+
+	e.pongPending = false
+
+	return nil
 }
 
 // HasPending returns true if the Endpoint has pending payloads

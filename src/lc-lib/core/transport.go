@@ -26,6 +26,7 @@ type Transport interface {
 	// TODO: Implement this in new transport systems
 	//ReloadConfig(*NetworkConfig) int
 	Write(interface{}) error
+	Ping() error
 	Shutdown()
 	Wait()
 }

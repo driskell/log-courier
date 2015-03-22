@@ -114,29 +114,32 @@ PublishLoop:
 	for {
 		select {
 		case endpoint := <-p.ifReadyChan:
-		log.Debug("Endpoint ready")
 			if p.nextSpool != nil {
+				log.Debug("[%s] Send is now ready, sending %d queued events", endpoint.Server(), len(p.nextSpool))
 				// We have events, send it to the endpoint and wait for more
 				p.sendPayload(endpoint, p.nextSpool)
 				p.nextSpool = nil
 				p.waitSpool()
 			} else {
+				log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
 				// No events, save on the ready list and start the keepalive timer if none set
 				p.registerReady(endpoint)
 				if endpoint.TimeoutFunc == nil {
+					log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
 					p.registerTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
 				}
 
 				p.ifReadyChan = nil
 			}
 		case spool := <-p.ifSpoolChan:
-			log.Debug("Spool received")
 			if p.readyHead != nil {
+				log.Debug("[%s] %d new events queued, sending to endpoint", p.readyHead.Server(), len(spool))
 				// We have a ready endpoint, send the spool to it
 				p.sendPayload(p.readyHead, spool)
 				p.readyHead = p.readyHead.NextReady
 				p.waitReady()
 			} else {
+				log.Debug("%d new events queued, awaiting endpoint readiness", len(spool))
 				// No ready endpoint, wait for one
 				p.nextSpool = spool
 				p.ifSpoolChan = nil
@@ -147,12 +150,13 @@ PublishLoop:
 			case *AckResponse:
 				err = p.processAck(msg.Endpoint(), msg.Response.(*AckResponse))
 				if p.shuttingDown && p.numPayloads == 0 {
+					log.Debug("Final ACK received, shutting down")
 					break PublishLoop
 				}
 			case *PongResponse:
 				err = p.processPong(msg.Endpoint(), msg.Response.(*PongResponse))
 			default:
-				err = fmt.Errorf("BUG: Unknown message type \"%T\"", msg)
+				err = fmt.Errorf("[%s] BUG ASSERTION: Unknown message type \"%T\"", msg.Endpoint().Server(), msg)
 			}
 			if err != nil {
 				p.failEndpoint(msg.Endpoint(), err)
@@ -167,6 +171,7 @@ PublishLoop:
 
 				callback := endpoint.TimeoutFunc
 				endpoint.TimeoutFunc = nil
+				log.Debug("[%s] Processing timeout", endpoint.Server())
 				callback(p, endpoint)
 
 				if p.timeoutHead == nil || p.timeoutHead.TimeoutDue.After(time.Now()) {
@@ -178,14 +183,15 @@ PublishLoop:
 			statsTimer.Reset(time.Second)
 		case <-onShutdown:
 			if p.numPayloads == 0 {
+				log.Debug("Publisher has no outstanding payloads, shutting down")
 				break PublishLoop
 			}
 
+			log.Warning("Publisher has outstanding payloads, waiting for responses before shutting down")
 			onShutdown = nil
 			p.ifSpoolChan = nil
 			p.shuttingDown = true
 		}
-		log.Debug("Looping")
 	}
 
 	p.endpointSink.Shutdown()
@@ -208,6 +214,7 @@ func (p *Publisher) waitSpool() {
 func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescriptor) {
 	// If this is the first payload, start the network timeout
 	if !endpoint.HasPending() {
+		log.Debug("[%s] First payload, starting pending timeout", endpoint.Server())
 		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 	}
 
@@ -215,8 +222,6 @@ func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescript
 	if err != nil {
 		return
 	}
-
-	endpoint.SendPayload(payload)
 
 	if p.firstPayload == nil {
 		p.firstPayload = payload
@@ -228,6 +233,10 @@ func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescript
 	p.Lock()
 	p.numPayloads++
 	p.Unlock()
+
+	if err := endpoint.SendPayload(payload); err != nil {
+		p.failEndpoint(endpoint, err)
+	}
 }
 
 func (p *Publisher) processAck(endpoint *Endpoint, msg *AckResponse) error {
@@ -279,22 +288,25 @@ func (p *Publisher) processAck(endpoint *Endpoint, msg *AckResponse) error {
 
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.HasPending() {
+		log.Debug("[%s] Resetting pending timeout", endpoint.Server())
 		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+	} else {
+		log.Debug("[%s] Last payload acknowledged, starting keepalive timeout", endpoint.Server())
+		p.registerTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
 	}
 
 	return nil
 }
 
 func (p *Publisher) processPong(endpoint *Endpoint, msg *PongResponse) error {
-	// TODO: Move to endpoint
-	if !endpoint.PongPending {
-		return fmt.Errorf("Unexpected PONG received")
+	log.Debug("[%s] Received PONG message", endpoint.Server())
+	if err := endpoint.ProcessPong(); err != nil {
+		return err
 	}
-
-	endpoint.PongPending = false
 
 	// If we haven't started sending anything, return to keepalive timeout
 	if !endpoint.HasPending() {
+		log.Debug("[%s] Resetting keepalive timeout", endpoint.Server())
 		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutKeepalive)
 	}
 
@@ -302,6 +314,7 @@ func (p *Publisher) processPong(endpoint *Endpoint, msg *PongResponse) error {
 }
 
 func (p *Publisher) failEndpoint(endpoint *Endpoint, err error) {
+	log.Error("[%s] Endpoint failed: %s", endpoint.Server(), err)
 	// TODO:
 }
 
@@ -340,18 +353,21 @@ func (p *Publisher) registerTimeout(endpoint *Endpoint, timeoutDue time.Time, ti
 
 func (p *Publisher) timeoutPending(endpoint *Endpoint) {
 	// Trigger a failure
-	if endpoint.PongPending {
-		endpoint.Remote.Fail(ErrNetworkTimeout)
+	if endpoint.IsPinging() {
+		p.failEndpoint(endpoint, ErrNetworkPing)
 	} else {
-		endpoint.Remote.Fail(ErrNetworkPing)
+		p.failEndpoint(endpoint, ErrNetworkTimeout)
 	}
 }
 
 func (p *Publisher) timeoutKeepalive(endpoint *Endpoint) {
 	// Timeout for PING
+	log.Debug("[%s] Sending PING and starting pending timeout", endpoint.Server())
 	p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 
-	endpoint.SendPing()
+	if err := endpoint.SendPing(); err != nil {
+		p.failEndpoint(endpoint, err)
+	}
 }
 
 func (p *Publisher) updateStatistics() {

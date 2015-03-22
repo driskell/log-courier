@@ -45,7 +45,7 @@ const (
 	// Essentially, this is how often we should check for disconnect/shutdown during socket reads
 	socket_interval_seconds = 1
 	// TODO(driskell): Make the idle timeout configurable like the network timeout is?
-	keepalive_timeout = 900
+	keepalive_timeout = 15
 )
 
 type TransportTcpRegistrar struct {
@@ -547,6 +547,15 @@ func (t *TransportTcp) Write(ipayload interface{}) error {
 	}
 
 	t.send_chan <- messageBuffer.Bytes()
+	return nil
+}
+
+// Ping the remote server
+func (t *TransportTcp) Ping() error {
+	// Encapsulate the ping into a message
+	// 4-byte message header (PING)
+	// 4-byte uint32 data length (0 length for PING)
+	t.send_chan <- []byte{'P','I','N','G',0,0,0,0}
 	return nil
 }
 
