@@ -24,7 +24,7 @@ plugins extremely easy.
 
 Simply run the following commands to install the latest stable version of the
 Log Courier plugins. If you are only receiving events, you only need to install
-the input plugin. (Tested with beta1 and beta2.)
+the input plugin.
 
 		cd /path/to/logstash
 		bin/logstash plugin install logstash-input-log-courier
