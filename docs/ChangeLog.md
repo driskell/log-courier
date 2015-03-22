@@ -20,6 +20,19 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## 1.6
+
+*???*
+
+***Plugin-only release***
+
+* The output plugin would fail if the connection to the remote Logstash was lost
+and events had to be resent (#136)
+* The input and output plugins were incompatible with Logstash RC1 and RC2 due
+to breaking changes that occurred after the release of Beta1 (#121)
+
+No changes were made to Log Courier.
+
 ## 1.5
 
 *28th February 2015*
