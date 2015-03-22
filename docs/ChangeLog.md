@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [1.6](#16)
 - [1.5](#15)
 - [1.3](#13)
 - [1.2](#12)
@@ -19,6 +20,19 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## 1.6
+
+*22nd March 2015*
+
+***Plugin-only release***
+
+* The output plugin would fail if the connection to the remote Logstash was lost
+and events had to be resent (#136)
+* The input and output plugins were incompatible with Logstash RC1 and RC2 due
+to breaking changes that occurred after the release of Beta1 (#121)
+
+No changes were made to Log Courier.
 
 ## 1.5
 

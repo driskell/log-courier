@@ -78,12 +78,14 @@ module LogCourier
         lines = @sequence_len - @last_sequence
         @last_sequence = sequence
         @payload = nil
+        @events = []
         return lines, true
       end
 
       lines = sequence - @last_sequence
       @last_sequence = sequence
       @payload = nil
+      @events.shift(lines)
       return lines, false
     end
   end
@@ -252,10 +254,10 @@ module LogCourier
               @logger.debug 'Send is ready, retrying previous payload' unless @logger.nil?
 
               # Regenerate data if we need to
-              @retry_payload.data = buffer_jdat_data(@retry_payload.events, @retry_payload.nonce) if @retry_payload.data == nil
+              @retry_payload.generate if @retry_payload.payload.nil?
 
               # Send and move onto next
-              @client.send 'JDAT', @retry_payload.data
+              @client.send 'JDAT', @retry_payload.payload
 
               @retry_payload = @retry_payload.next
 
@@ -263,7 +265,7 @@ module LogCourier
               if @retry_payload == @first_payload
                 @timeout = Time.now.to_i + @network_timeout
               end
-              break
+              next
             end
 
             # Ready to send, allow spooler to pass us something if we don't
