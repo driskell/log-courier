@@ -21,17 +21,20 @@ package transports
 
 import (
 	"bytes"
+	"compress/zlib"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
-	"github.com/driskell/log-courier/src/lc-lib/core"
 	"io/ioutil"
 	"net"
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/publisher"
 )
 
 // Support for newer SSL signature algorithms
@@ -41,6 +44,8 @@ import _ "crypto/sha512"
 const (
 	// Essentially, this is how often we should check for disconnect/shutdown during socket reads
 	socket_interval_seconds = 1
+	// TODO(driskell): Make the idle timeout configurable like the network timeout is?
+	keepalive_timeout = 900
 )
 
 type TransportTcpRegistrar struct {
@@ -55,31 +60,39 @@ type TransportTcpFactory struct {
 
 	hostport_re *regexp.Regexp
 	tls_config  tls.Config
+	net_config  *core.NetworkConfig
 }
 
 type TransportTcp struct {
-	config     *TransportTcpFactory
-	net_config *core.NetworkConfig
-	socket     net.Conn
-	tlssocket  *tls.Conn
+	config    *TransportTcpFactory
+	socket    net.Conn
+	tlssocket *tls.Conn
 
-	wait     sync.WaitGroup
-	shutdown chan interface{}
+	controllerChan chan int
+	controllerWait sync.WaitGroup
+	endpoint       *publisher.EndpointRemote
+	fail_chan      chan error
+
+	wait        sync.WaitGroup
+	sendControl chan int
+	recvControl chan int
 
 	send_chan chan []byte
-	recv_chan chan interface{}
 
-	can_send chan int
-
-	addressPool *AddressPool
+	// Use in receiver routine only
+	pong_pending bool
+	pong_timer   *time.Timer
 }
 
-func NewTcpTransportFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.TransportFactory, error) {
+// NewTransportTcpFactory create a new TransportTcpFactory from the provided
+// configuration data, reporting back any configuration errors it discovers.
+func NewTransportTcpFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.TransportFactory, error) {
 	var err error
 
 	ret := &TransportTcpFactory{
 		transport:   name,
 		hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
+		net_config:  &config.Network,
 	}
 
 	// Only allow SSL configurations if this is "tls"
@@ -132,57 +145,122 @@ func NewTcpTransportFactory(config *core.Config, config_path string, unused map[
 	return ret, nil
 }
 
-func (f *TransportTcpFactory) NewTransport(config *core.NetworkConfig) (core.Transport, error) {
+// NewTransport returns a new Transport interface using the settings from the
+// TransportTcpFactory.
+func (f *TransportTcpFactory) NewTransport(iendpoint interface{}) core.Transport {
+	// TODO: Remove hack for stopping EndpointRemote needing to be in core
+	endpoint := iendpoint.(*publisher.EndpointRemote)
+
 	ret := &TransportTcp{
-		config:      f,
-		net_config:  config,
-		addressPool: NewAddressPool(config.Servers),
+		config:         f,
+		endpoint:       endpoint,
+		controllerChan: make(chan int),
 	}
 
-	if ret.net_config.Rfc2782Srv {
-		ret.addressPool.SetRfc2782(true, ret.net_config.Rfc2782Service)
-	}
+	ret.controllerWait.Add(1)
 
-	return ret, nil
+	go ret.controller()
+
+	return ret
 }
 
-func (t *TransportTcp) ReloadConfig(new_net_config *core.NetworkConfig) int {
+// TODO: This is not called anymore
+/*func (t *TransportTcp) ReloadConfig(new_net_config *core.NetworkConfig) int {
 	// Check we can grab new TCP config to compare, if not force transport reinit
 	new_config, ok := new_net_config.TransportFactory.(*TransportTcpFactory)
 	if !ok {
 		return core.Reload_Transport
 	}
 
-	// TODO - This does not catch changes to the underlying certificate file!
+	// TODO: Check timestamps of underlying certificate files to detect changes
 	if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
 		return core.Reload_Transport
 	}
 
 	// Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
-	t.net_config = new_net_config
-	t.addressPool = NewAddressPool(t.net_config.Servers)
-
-	if t.net_config.Rfc2782Srv {
-		t.addressPool.SetRfc2782(true, t.net_config.Rfc2782Service)
-	}
+	t.config.net_config = new_net_config
 
 	return core.Reload_None
+}*/
+
+// controller is the master routine which handles connection and reconnection
+// When reconnecting, the socket and all routines are torn down and restarted.
+// It also
+func (t *TransportTcp) controller() {
+	defer func() {
+		t.controllerWait.Done()
+	}()
+
+	// Main connect loop
+	for {
+		var err error
+
+		err = t.connect()
+		if err == nil {
+			// Connected - sit and wait for shutdown or error
+			select {
+			// TODO: Handle configuration reload
+			case <-t.controllerChan:
+				// Shutdown request
+				t.disconnect()
+				return
+			case err = <-t.fail_chan:
+			}
+		}
+
+		// Error occurred
+		log.Error("Transport error, will try again: %s", err)
+
+		t.disconnect()
+
+		// If this returns false, we are shutting down
+		if !t.reconnectWait() {
+			break
+		}
+	}
 }
 
-func (t *TransportTcp) Init() error {
-	if t.shutdown != nil {
+// reconnectWait waits the reconnect timeout before attempting to reconnect.
+// It also monitors for shutdown and configuration reload events while waiting.
+func (t *TransportTcp) reconnectWait() bool {
+	now := time.Now()
+	reconnect_due := now.Add(t.config.net_config.Reconnect)
+
+	for {
+		select {
+		// TODO: Handle configuration reload
+		case <-t.controllerChan:
+			// Shutdown request
+			return false
+		case <-time.After(reconnect_due.Sub(now)):
+			break
+		}
+
+		now = time.Now()
+		if now.After(reconnect_due) {
+			break
+		}
+	}
+
+	return true
+}
+
+// connect connects the socket and starts the sender and receiver routines
+func (t *TransportTcp) connect() error {
+	if t.sendControl != nil {
 		t.disconnect()
 	}
 
-	// Try next address
-	addressport, desc, err := t.addressPool.Next()
+	addr, err := t.endpoint.AddressPool.Next()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to select next address for %s: %s", t.endpoint.AddressPool.Server(), err)
 	}
+
+	desc := t.endpoint.AddressPool.Desc()
 
 	log.Info("Attempting to connect to %s", desc)
 
-	tcpsocket, err := net.DialTimeout("tcp", addressport.String(), t.net_config.Timeout)
+	tcpsocket, err := net.DialTimeout("tcp", addr.String(), t.config.net_config.Timeout)
 	if err != nil {
 		return fmt.Errorf("Failed to connect to %s: %s", desc, err)
 	}
@@ -193,10 +271,10 @@ func (t *TransportTcp) Init() error {
 		t.config.tls_config.MinVersion = tls.VersionTLS10
 
 		// Set the tlsconfig server name for server validation (required since Go 1.3)
-		t.config.tls_config.ServerName = t.addressPool.Host()
+		t.config.tls_config.ServerName = t.endpoint.AddressPool.Host()
 
 		t.tlssocket = tls.Client(&transportTcpWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
-		t.tlssocket.SetDeadline(time.Now().Add(t.net_config.Timeout))
+		t.tlssocket.SetDeadline(time.Now().Add(t.config.net_config.Timeout))
 		err = t.tlssocket.Handshake()
 		if err != nil {
 			t.tlssocket.Close()
@@ -212,38 +290,44 @@ func (t *TransportTcp) Init() error {
 	log.Info("Connected to %s", desc)
 
 	// Signal channels
-	t.shutdown = make(chan interface{}, 1)
+	t.sendControl = make(chan int, 1)
+	t.recvControl = make(chan int, 1)
 	t.send_chan = make(chan []byte, 1)
-	// Buffer of two for recv_chan since both routines may send an error to it
-	// First error we get back initiates disconnect, thus we must not block routines
+
+	// Failure channel - ensure we can fit 2 errors here, one from sender and one
+	// from receive - otherwise if both fail at the same time, disconnect blocks
 	// NOTE: This may not be necessary anymore - both recv_chan pushes also select
 	//       on the shutdown channel, which will close on the first error returned
-	t.recv_chan = make(chan interface{}, 2)
-	t.can_send = make(chan int, 1)
+	t.fail_chan = make(chan error, 2)
 
 	// Start with a send
-	t.can_send <- 1
+	t.endpoint.Ready()
 
 	t.wait.Add(2)
 
-	// Start separate sender and receiver so we can asynchronously send and receive for max performance
-	// They have to be different routines too because we don't have cross-platform poll, so they will need to block
-	// Of course, we'll time out and check shutdown on occasion
+	// Start separate sender and receiver so we can asynchronously send and
+	// receive for max performance. They have to be different routines too because
+	// we don't have cross-platform poll, so they will need to block. Of course,
+	// we'll time out and check shutdown on occasion
 	go t.sender()
 	go t.receiver()
 
 	return nil
 }
 
+// disconnect shuts down the sender and receiver routines and disconnects the
+// socket
 func (t *TransportTcp) disconnect() {
-	if t.shutdown == nil {
+	if t.sendControl == nil {
 		return
 	}
 
 	// Send shutdown request
-	close(t.shutdown)
+	close(t.sendControl)
+	close(t.recvControl)
 	t.wait.Wait()
-	t.shutdown = nil
+	t.sendControl = nil
+	t.recvControl = nil
 
 	// If tls, shutdown tls socket first
 	if t.config.transport == "tls" {
@@ -253,30 +337,34 @@ func (t *TransportTcp) disconnect() {
 	t.socket.Close()
 }
 
+// sender handles socket writes
 func (t *TransportTcp) sender() {
+	ping_timer := time.NewTimer(keepalive_timeout * time.Second)
+
 SendLoop:
 	for {
 		select {
-		case <-t.shutdown:
+		case <-t.sendControl:
 			// Shutdown
 			break SendLoop
+		case <-ping_timer.C:
 		case msg := <-t.send_chan:
 			// Ask for more while we send this
-			t.setChan(t.can_send)
+			t.endpoint.Ready()
+
 			// Write deadline is managed by our net.Conn wrapper that tls will call into
 			_, err := t.socket.Write(msg)
 			if err != nil {
 				if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
 					// Shutdown will have been received by the wrapper
 					break SendLoop
-				} else {
-					// Pass the error back and abort
-					select {
-					case <-t.shutdown:
-					case t.recv_chan <- err:
-					}
-					break SendLoop
 				}
+				// Fail the transport
+				select {
+				case <-t.sendControl:
+				case t.fail_chan <- err:
+				}
+				break SendLoop
 			}
 		}
 	}
@@ -284,13 +372,16 @@ SendLoop:
 	t.wait.Done()
 }
 
+// receiver handles socket reads
 func (t *TransportTcp) receiver() {
 	var err error
 	var shutdown bool
+	var message []byte
+
 	header := make([]byte, 8)
 
 	for {
-		if err, shutdown = t.receiverRead(header); err != nil || shutdown {
+		if shutdown, err = t.receiverRead(header); shutdown || err != nil {
 			break
 		}
 
@@ -303,39 +394,55 @@ func (t *TransportTcp) receiver() {
 			break
 		}
 
-		// Allocate for full message
-		message := make([]byte, length)
-
-		if err, shutdown = t.receiverRead(message); err != nil || shutdown {
-			break
+		if length > 0 {
+			// Allocate for full message
+			message = make([]byte, length)
+			if shutdown, err = t.receiverRead(message); shutdown || err != nil {
+				break
+			}
+		} else {
+			message = []byte("")
 		}
 
-		// Pass back the message
-		select {
-		case <-t.shutdown:
+		switch {
+		case bytes.Compare(header[0:4], []byte("PONG")) == 0:
+			if shutdown = t.sendResponse(&publisher.PongResponse{}); shutdown {
+				break
+			}
+		case bytes.Compare(header[0:4], []byte("ACKN")) == 0:
+			if shutdown, err = t.processAckn(message); shutdown || err != nil {
+				break
+			}
+		default:
+			err = fmt.Errorf("Unexpected message code: %s", header[0:4])
 			break
-		case t.recv_chan <- [][]byte{header[0:4], message}:
 		}
-	} /* loop until shutdown */
+	}
 
 	if err != nil {
 		// Pass the error back and abort
-		select {
-		case <-t.shutdown:
-		case t.recv_chan <- err:
+		for {
+			select {
+			case <-t.recvControl:
+				// Shutdown
+				break
+			case t.fail_chan <- err:
+			}
 		}
 	}
 
 	t.wait.Done()
 }
 
-func (t *TransportTcp) receiverRead(data []byte) (error, bool) {
+// receiverRead will repeatedly read from the socket until the given byte array
+// is filled.
+func (t *TransportTcp) receiverRead(data []byte) (bool, error) {
 	received := 0
 
 RecvLoop:
 	for {
 		select {
-		case <-t.shutdown:
+		case <-t.recvControl:
 			// Shutdown
 			break RecvLoop
 		default:
@@ -344,66 +451,117 @@ RecvLoop:
 
 			length, err := t.socket.Read(data[received:])
 			received += length
+
 			if received >= len(data) {
 				// Success
-				return nil, false
-			} else if err == nil {
-				// Keep trying
-				continue
-			} else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
-				// Keep trying
-				continue
-			} else {
-				// Pass an error back
-				return err, false
+				return false, nil
 			}
-		} /* select */
-	} /* loop until required amount receive or shutdown */
 
-	return nil, true
-}
+			if err == nil {
+				// Keep trying
+				continue
+			}
 
-func (t *TransportTcp) setChan(set chan<- int) {
-	select {
-	case set <- 1:
-	default:
-	}
-}
+			if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
+				// Keep trying
+				continue
+			}
 
-func (t *TransportTcp) CanSend() <-chan int {
-	return t.can_send
-}
-
-func (t *TransportTcp) Write(signature string, message []byte) (err error) {
-	var write_buffer *bytes.Buffer
-	write_buffer = bytes.NewBuffer(make([]byte, 0, len(signature)+4+len(message)))
-
-	if _, err = write_buffer.Write([]byte(signature)); err != nil {
-		return
-	}
-	if err = binary.Write(write_buffer, binary.BigEndian, uint32(len(message))); err != nil {
-		return
-	}
-	if len(message) != 0 {
-		if _, err = write_buffer.Write(message); err != nil {
-			return
+			// Pass an error back
+			return false, err
 		}
 	}
 
-	t.send_chan <- write_buffer.Bytes()
+	return true, nil
+}
+
+// processAckn parses an acknowledgement message and passes the information to
+// the Publisher for processing
+func (t *TransportTcp) processAckn(data []byte) (bool, error) {
+	if len(data) != 20 {
+		return false, fmt.Errorf("Protocol error: Corrupt message (ACKN size %d != 20)", len(data))
+	}
+
+	return t.sendResponse(&publisher.AckResponse{string(data[0:16]), binary.BigEndian.Uint32(data[16:20])}), nil
+}
+
+// sendResponse ships a response to the Publisher whilst also monitoring for any
+// shutdown signal. Returns true if shutdown was signalled
+func (t *TransportTcp) sendResponse(response interface{}) bool {
+	select {
+	case <-t.recvControl:
+		return true
+	case t.endpoint.ResponseChan() <- t.endpoint.NewResponse(response):
+	}
+	return false
+}
+
+// Write a message to the transport
+func (t *TransportTcp) Write(ipayload interface{}) error {
+	// TODO: This is a hack to prevent us having to put PendingPayload in core
+	payload := ipayload.(*publisher.PendingPayload)
+
+	var dataBuffer bytes.Buffer
+
+	// Create the compressed data payload
+	// 16-byte Nonce, followed by the compressed event data
+	// The event data is each event, prefixed with a 4-byte uint32 length, one
+	// after the other
+	if _, err := dataBuffer.Write([]byte(payload.Nonce)); err != nil {
+		return err
+	}
+
+	compressor, err := zlib.NewWriterLevel(&dataBuffer, 3)
+	if err != nil {
+		return err
+	}
+
+	for _, event := range payload.Events() {
+		if err := binary.Write(compressor, binary.BigEndian, uint32(len(event.Event))); err != nil {
+			return err
+		}
+
+		if _, err := compressor.Write(event.Event); err != nil {
+			return err
+		}
+	}
+
+	compressor.Close()
+
+	// Encapsulate the data into the message
+	// 4-byte message header (JDAT = JSON Data, Compressed)
+	// 4-byte uint32 data length
+	// Then the data
+	messageBuffer := bytes.NewBuffer(make([]byte, 0, 4+4+dataBuffer.Len()))
+
+	if _, err := messageBuffer.Write([]byte("JDAT")); err != nil {
+		return err
+	}
+
+	if err := binary.Write(messageBuffer, binary.BigEndian, uint32(dataBuffer.Len())); err != nil {
+		return err
+	}
+
+	if _, err := messageBuffer.ReadFrom(&dataBuffer); err != nil {
+		return err
+	}
+
+	t.send_chan <- messageBuffer.Bytes()
 	return nil
 }
 
-func (t *TransportTcp) Read() <-chan interface{} {
-	return t.recv_chan
+// Shutdown the transport
+func (t *TransportTcp) Shutdown() {
+	close(t.controllerChan)
 }
 
-func (t *TransportTcp) Shutdown() {
-	t.disconnect()
+// Wait until close finishes
+func (t *TransportTcp) Wait() {
+	t.controllerWait.Wait()
 }
 
 // Register the transports
 func init() {
-	core.RegisterTransport("tcp", NewTcpTransportFactory)
-	core.RegisterTransport("tls", NewTcpTransportFactory)
+	core.RegisterTransport("tcp", NewTransportTcpFactory)
+	core.RegisterTransport("tls", NewTransportTcpFactory)
 }

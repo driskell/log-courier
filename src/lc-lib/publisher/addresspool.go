@@ -17,69 +17,58 @@
  * limitations under the License.
  */
 
-package transports
+package publisher
 
 import (
 	"fmt"
 	"net"
-	"math/rand"
 	"strconv"
-	"time"
 )
 
+// AddressPool looks up server addresses and manages a pool of IPs
 type AddressPool struct {
-	servers        []string
+	server         string
 	rfc2782        bool
 	rfc2782Service string
-	roundrobin     int
-	host_is_ip     bool
+	hostIsIP       bool
 	host           string
+	desc           string
 	addresses      []*net.TCPAddr
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
-func NewAddressPool(servers []string) *AddressPool {
-	ret := &AddressPool{
-		servers: servers,
+// NewAddressPool creates a new AddressPool instance for a server
+func NewAddressPool(server string) *AddressPool {
+	return &AddressPool{
+		server: server,
 	}
-
-	ret.shuffleServers()
-
-	return ret
 }
 
-func (p *AddressPool) shuffleServers() {
-	var newList []string
-	oldList := p.servers
-	for _, v := range rand.Perm(len(oldList)) {
-		newList = append(newList, oldList[v])
-	}
-	p.servers = newList
-}
-
+// SetRfc2782 enables RFC compliant handling of SRV server entries using the
+// given service name
 func (p *AddressPool) SetRfc2782(enabled bool, service string) {
 	p.rfc2782 = enabled
 	p.rfc2782Service = service
 }
 
+// IsLast returns true if the next call to Next will return the first address
+// in the pool. In other words, if the last call to Next returned the last entry
+// or has never been called
 func (p *AddressPool) IsLast() bool {
 	return p.addresses == nil
 }
 
-func (p *AddressPool) IsLastServer() bool {
-	return p.roundrobin%len(p.servers) == 0
-}
-
-func (p *AddressPool) Next() (*net.TCPAddr, string, error) {
-	// Have we exhausted the address list we had?
+// Next returns the next available IP address from the pool
+// Each time all IPs have been returned, the server is looked up again if
+// necessary and the IP addresses are returned again in order.
+func (p *AddressPool) Next() (*net.TCPAddr, error) {
+	// Have we exhausted the address list we had? Look up the addresses again
+	// TODO: Should we expire the list to ensure old entries are not reused after
+	// many many hours/days?
 	if p.addresses == nil {
 		p.addresses = make([]*net.TCPAddr, 0)
 		if err := p.populateAddresses(); err != nil {
 			p.addresses = nil
-			return nil, "", err
+			return nil, err
 		}
 	}
 
@@ -90,51 +79,41 @@ func (p *AddressPool) Next() (*net.TCPAddr, string, error) {
 		p.addresses = nil
 	}
 
-	var desc string
-	if p.host_is_ip {
-		desc = fmt.Sprintf("%s", next)
+	if p.hostIsIP {
+		p.desc = fmt.Sprintf("%s", next)
 	} else {
-		desc = fmt.Sprintf("%s (%s)", next, p.host)
+		p.desc = fmt.Sprintf("%s (%s)", next, p.host)
 	}
 
-	return next, desc, nil
+	return next, nil
 }
 
-func (p *AddressPool) NextServer() (string, error) {
-	// Round robin to the next server
-	selected := p.servers[p.roundrobin%len(p.servers)]
-	p.roundrobin++
-
-	// @hostname means SRV record where the host and port are in the record
-	if len(selected) > 0 && selected[0] == '@' {
-		srvs, err := p.processSrv(selected[1:])
-		if err != nil {
-			return "", err
-		}
-		return net.JoinHostPort(srvs[0].Target, strconv.FormatUint(uint64(srvs[0].Port), 10)), nil
-	}
-
-	return selected, nil
+// Server returns the server configuration entry the address pool was associated
+// with
+func (p *AddressPool) Server() string {
+	return p.server
 }
 
+// Host returns the DNS hostname for the last returned address. This can be used
+// for server name verification such as with TLS
 func (p *AddressPool) Host() string {
 	return p.host
 }
 
-func (p *AddressPool) populateAddresses() (error) {
-	// If we've iterated all servers, shuffle them again
-	if p.roundrobin >= len(p.servers) {
-		p.shuffleServers()
-		p.roundrobin = 0
-	}
+// Desc returns a friendly description of the last returned server.
+// Example for an IP: 127.0.0.1
+//                Hostname: localhost (127.0.0.1)
+// TODO: Improve Desc result for SRV records to include the SRV record
+func (p *AddressPool) Desc() string {
+	return p.host
+}
 
-	// Round robin to the next server
-	selected := p.servers[p.roundrobin]
-	p.roundrobin++
-
+// populateAddresses performs the lookups necessary to obtain the pool of IP
+// addresses for the associated server
+func (p *AddressPool) populateAddresses() error {
 	// @hostname means SRV record where the host and port are in the record
-	if len(selected) > 0 && selected[0] == '@' {
-		srvs, err := p.processSrv(selected[1:])
+	if len(p.server) > 0 && p.server[0] == '@' {
+		srvs, err := p.processSrv(p.server[1:])
 		if err != nil {
 			return err
 		}
@@ -149,29 +128,32 @@ func (p *AddressPool) populateAddresses() (error) {
 	}
 
 	// Standard host:port declaration
-	var port_str string
+	var portStr string
 	var port uint64
 	var err error
-	if p.host, port_str, err = net.SplitHostPort(selected); err != nil {
-		return fmt.Errorf("Invalid hostport given: %s", selected)
+	if p.host, portStr, err = net.SplitHostPort(p.server); err != nil {
+		return fmt.Errorf("Invalid hostport given: %s", p.server)
 	}
 
-	if port, err = strconv.ParseUint(port_str, 10, 16); err != nil {
-		return fmt.Errorf("Invalid port given: %s", port_str)
+	if port, err = strconv.ParseUint(portStr, 10, 16); err != nil {
+		return fmt.Errorf("Invalid port given: %s", portStr)
 	}
 
-	if p.host_is_ip, err = p.populateLookup(p.host, int(port)); err != nil {
+	if p.hostIsIP, err = p.populateLookup(p.host, int(port)); err != nil {
 		return err
 	}
 
 	return nil
 }
 
+// processSrv looks up SRV records based on the SRV settings
+// TODO: processSrv sets Host() to the SRV record name, not the target hostname,
+//       which would potentially break certificate name verification
 func (p *AddressPool) processSrv(server string) ([]*net.SRV, error) {
 	var service, protocol string
 
 	p.host = server
-	p.host_is_ip = false
+	p.hostIsIP = false
 
 	if p.rfc2782 {
 		service, protocol = p.rfc2782Service, "tcp"
@@ -189,6 +171,7 @@ func (p *AddressPool) processSrv(server string) ([]*net.SRV, error) {
 	return srvs, nil
 }
 
+// populateLookup detects IP addresses and looks up DNS A records
 func (p *AddressPool) populateLookup(host string, port int) (bool, error) {
 	if ip := net.ParseIP(host); ip != nil {
 		// IP address

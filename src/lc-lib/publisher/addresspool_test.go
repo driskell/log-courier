@@ -1,3 +1,4 @@
+// +build ignore
 /*
  * Copyright 2014 Jason Woods.
  *
@@ -14,7 +15,7 @@
  * limitations under the License.
  */
 
-package transports
+package publisher
 
 import (
   "testing"

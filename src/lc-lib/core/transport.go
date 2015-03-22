@@ -23,16 +23,15 @@ const (
 )
 
 type Transport interface {
-	ReloadConfig(*NetworkConfig) int
-	Init() error
-	CanSend() <-chan int
-	Write(string, []byte) error
-	Read() <-chan interface{}
+	// TODO: Implement this in new transport systems
+	//ReloadConfig(*NetworkConfig) int
+	Write(interface{}) error
 	Shutdown()
+	Wait()
 }
 
 type TransportFactory interface {
-	NewTransport(*NetworkConfig) (Transport, error)
+	NewTransport(interface{}) Transport
 }
 
 type TransportRegistrarFunc func(*Config, string, map[string]interface{}, string) (TransportFactory, error)

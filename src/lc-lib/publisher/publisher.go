@@ -20,20 +20,17 @@
 package publisher
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"github.com/driskell/log-courier/src/lc-lib/registrar"
-	"math/rand"
 	"sync"
 	"time"
 )
 
 var (
 	ErrNetworkTimeout = errors.New("Server did not respond within network timeout")
-	ErrNetworkPing    = errors.New("Server did not respond to PING")
+	ErrNetworkPing    = errors.New("Server did not respond to keepalive")
 )
 
 const (
@@ -41,109 +38,355 @@ const (
 	keepalive_timeout time.Duration = 900 * time.Second
 )
 
-const (
-	Status_Disconnected = iota
-	Status_Connected
-	Status_Reconnecting
-)
-
-type NullEventSpool struct {
-}
-
-func newNullEventSpool() *NullEventSpool {
-	return &NullEventSpool{}
-}
-
-func (s *NullEventSpool) Close() {
-}
-
-func (s *NullEventSpool) Add(event registrar.EventProcessor) {
-}
-
-func (s *NullEventSpool) Send() {
-}
+type TimeoutFunc func(*Publisher, *Endpoint)
 
 type Publisher struct {
 	core.PipelineSegment
-	core.PipelineConfigReceiver
+	//core.PipelineConfigReceiver
 	core.PipelineSnapshotProvider
 
 	sync.RWMutex
 
 	config           *core.NetworkConfig
-	transport        core.Transport
-	status           int
-	can_send         <-chan int
-	pending_ping     bool
-	pending_payloads map[string]*pendingPayload
-	first_payload    *pendingPayload
-	last_payload     *pendingPayload
-	num_payloads     int64
-	out_of_sync      int
-	input            chan []*core.EventDescriptor
-	registrar_spool  registrar.EventSpooler
-	shutdown         bool
-	line_count       int64
-	retry_count      int64
-	seconds_no_ack   int
+	endpointSink     *EndpointSink
 
-	timeout_count    int64
+	firstPayload     *PendingPayload
+	lastPayload      *PendingPayload
+	numPayloads      int64
+	outOfSync        int
+	spoolChan        chan []*core.EventDescriptor
+	registrarSpool   registrar.EventSpooler
+	shuttingDown     bool
+
+	line_count       int64
 	line_speed       float64
 	last_line_count  int64
-	last_retry_count int64
 	last_measurement time.Time
+	seconds_no_ack   int
+
+	timeoutTimer *time.Timer
+	timeoutHead  *Endpoint
+	ifReadyChan  <-chan *Endpoint
+	readyHead    *Endpoint
+	ifSpoolChan  <-chan []*core.EventDescriptor
+	nextSpool    []*core.EventDescriptor
 }
 
-func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar registrar.Registrator) (*Publisher, error) {
+func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar registrar.Registrator) *Publisher {
 	ret := &Publisher{
 		config: config,
-		input:  make(chan []*core.EventDescriptor, 1),
+		endpointSink: NewEndpointSink(config),
+		spoolChan: make(chan []*core.EventDescriptor, 1),
+		timeoutTimer: time.NewTimer(1 * time.Second),
 	}
+
+	ret.timeoutTimer.Stop()
 
 	if registrar == nil {
-		ret.registrar_spool = newNullEventSpool()
+		ret.registrarSpool = newNullEventSpool()
 	} else {
-		ret.registrar_spool = registrar.Connect()
+		ret.registrarSpool = registrar.Connect()
 	}
 
-	if err := ret.init(); err != nil {
-		return nil, err
+	// TODO: Option for round robin instead of load balanced?
+	for _, server := range config.Servers {
+		addressPool := NewAddressPool(server)
+		ret.endpointSink.AddEndpoint(server, addressPool)
 	}
 
 	pipeline.Register(ret)
 
-	return ret, nil
-}
-
-func (p *Publisher) init() error {
-	var err error
-
-	p.pending_payloads = make(map[string]*pendingPayload)
-
-	// Set up the selected transport
-	if err = p.loadTransport(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (p *Publisher) loadTransport() error {
-	transport, err := p.config.TransportFactory.NewTransport(p.config)
-	if err != nil {
-		return err
-	}
-
-	p.transport = transport
-
-	return nil
+	return ret
 }
 
 func (p *Publisher) Connect() chan<- []*core.EventDescriptor {
-	return p.input
+	return p.spoolChan
 }
 
 func (p *Publisher) Run() {
+	statsTimer := time.NewTimer(time.Second)
+	onShutdown := p.OnShutdown()
+
+	p.waitReady()
+	p.waitSpool()
+
+PublishLoop:
+	for {
+		select {
+		case endpoint := <-p.ifReadyChan:
+		log.Debug("Endpoint ready")
+			if p.nextSpool != nil {
+				// We have events, send it to the endpoint and wait for more
+				p.sendPayload(endpoint, p.nextSpool)
+				p.nextSpool = nil
+				p.waitSpool()
+			} else {
+				// No events, save on the ready list and start the keepalive timer if none set
+				p.registerReady(endpoint)
+				if endpoint.TimeoutFunc == nil {
+					p.registerTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
+				}
+
+				p.ifReadyChan = nil
+			}
+		case spool := <-p.ifSpoolChan:
+			log.Debug("Spool received")
+			if p.readyHead != nil {
+				// We have a ready endpoint, send the spool to it
+				p.sendPayload(p.readyHead, spool)
+				p.readyHead = p.readyHead.NextReady
+				p.waitReady()
+			} else {
+				// No ready endpoint, wait for one
+				p.nextSpool = spool
+				p.ifSpoolChan = nil
+			}
+		case msg := <-p.endpointSink.ResponseChan:
+			var err error
+			switch msg.Response.(type) {
+			case *AckResponse:
+				err = p.processAck(msg.Endpoint(), msg.Response.(*AckResponse))
+				if p.shuttingDown && p.numPayloads == 0 {
+					break PublishLoop
+				}
+			case *PongResponse:
+				err = p.processPong(msg.Endpoint(), msg.Response.(*PongResponse))
+			default:
+				err = fmt.Errorf("BUG: Unknown message type \"%T\"", msg)
+			}
+			if err != nil {
+				p.failEndpoint(msg.Endpoint(), err)
+			}
+		case failure := <-p.endpointSink.FailChan:
+			p.failEndpoint(failure.Endpoint, failure.Error)
+		case <-p.timeoutTimer.C:
+			// Process triggered timers
+			for {
+				endpoint := p.timeoutHead
+				p.timeoutHead = p.timeoutHead.NextTimeout
+
+				callback := endpoint.TimeoutFunc
+				endpoint.TimeoutFunc = nil
+				callback(p, endpoint)
+
+				if p.timeoutHead == nil || p.timeoutHead.TimeoutDue.After(time.Now()) {
+					continue
+				}
+			}
+		case <-statsTimer.C:
+			p.updateStatistics()
+			statsTimer.Reset(time.Second)
+		case <-onShutdown:
+			if p.numPayloads == 0 {
+				break PublishLoop
+			}
+
+			onShutdown = nil
+			p.ifSpoolChan = nil
+			p.shuttingDown = true
+		}
+		log.Debug("Looping")
+	}
+
+	p.endpointSink.Shutdown()
+	p.endpointSink.Wait()
+	p.registrarSpool.Close()
+
+	log.Info("Publisher exiting")
+
+	p.Done()
+}
+
+func (p *Publisher) waitReady() {
+	p.ifReadyChan = p.endpointSink.ReadyChan
+}
+
+func (p *Publisher) waitSpool() {
+	p.ifSpoolChan = p.spoolChan
+}
+
+func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescriptor) {
+	// If this is the first payload, start the network timeout
+	if !endpoint.HasPending() {
+		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+	}
+
+	payload, err := NewPendingPayload(events)
+	if err != nil {
+		return
+	}
+
+	endpoint.SendPayload(payload)
+
+	if p.firstPayload == nil {
+		p.firstPayload = payload
+	} else {
+		p.lastPayload.nextPayload = payload
+	}
+	p.lastPayload = payload
+
+	p.Lock()
+	p.numPayloads++
+	p.Unlock()
+}
+
+func (p *Publisher) processAck(endpoint *Endpoint, msg *AckResponse) error {
+	payload, firstAck := endpoint.ProcessAck(msg)
+
+	// We potentially receive out-of-order ACKs due to payloads distributed across servers
+	// This is where we enforce ordering again to ensure registrar receives ACK in order
+	if payload == p.firstPayload {
+		// The out of sync count we have will never include the first payload, so
+		// take the value +1
+		outOfSync := p.outOfSync + 1
+
+		// For each full payload we mark off, we decrease this count, the first we
+		// mark off will always be the first payload - thus the +1. Subsequent
+		// payloads are the out of sync ones - so if we mark them off we decrease
+		// the out of sync count
+		for payload.HasAck() {
+			p.registrarSpool.Add(registrar.NewAckEvent(payload.Rollup()))
+
+			if !payload.Complete() {
+				break
+			}
+
+			payload = payload.nextPayload
+			p.firstPayload = payload
+			outOfSync--
+			p.outOfSync = outOfSync
+
+			p.Lock()
+			p.numPayloads--
+			p.Unlock()
+
+			// TODO: Resume sending if we stopped due to excessive pending payload count
+			//if !p.shutdown && p.can_send == nil {
+			//	p.can_send = p.transport.CanSend()
+			//}
+
+			if payload == nil {
+				break
+			}
+		}
+
+		p.registrarSpool.Send()
+	} else if firstAck {
+		// If this is NOT the first payload, and this is the first acknowledgement
+		// for this payload, then increase out of sync payload count
+		p.outOfSync++
+	}
+
+	// Expect next ACK within network timeout if we still have pending
+	if endpoint.HasPending() {
+		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+	}
+
+	return nil
+}
+
+func (p *Publisher) processPong(endpoint *Endpoint, msg *PongResponse) error {
+	// TODO: Move to endpoint
+	if !endpoint.PongPending {
+		return fmt.Errorf("Unexpected PONG received")
+	}
+
+	endpoint.PongPending = false
+
+	// If we haven't started sending anything, return to keepalive timeout
+	if !endpoint.HasPending() {
+		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutKeepalive)
+	}
+
+	return nil
+}
+
+func (p *Publisher) failEndpoint(endpoint *Endpoint, err error) {
+	// TODO:
+}
+
+func (p *Publisher) registerReady(endpoint *Endpoint) {
+	// TODO: Enhance this to be fairer - maybe least pending payloads order
+	if p.readyHead != nil {
+		p.readyHead.NextReady = endpoint
+	}
+	p.readyHead = endpoint
+}
+
+func (p *Publisher) registerTimeout(endpoint *Endpoint, timeoutDue time.Time, timeoutFunc TimeoutFunc) {
+	endpoint.TimeoutFunc = timeoutFunc
+	endpoint.TimeoutDue = timeoutDue
+
+	head := p.timeoutHead
+
+	if head == nil || head.TimeoutDue.After(timeoutDue) {
+		p.timeoutHead = endpoint
+		endpoint.NextTimeout = head
+		return
+	}
+
+	var prev *Endpoint
+	for prev = head; head != nil; prev, head = head, head.NextTimeout {
+		if head.TimeoutDue.After(timeoutDue) {
+			prev.NextTimeout = endpoint
+			endpoint.NextTimeout = head
+			return
+		}
+	}
+
+	prev.NextTimeout = endpoint
+	endpoint.NextTimeout = nil
+}
+
+func (p *Publisher) timeoutPending(endpoint *Endpoint) {
+	// Trigger a failure
+	if endpoint.PongPending {
+		endpoint.Remote.Fail(ErrNetworkTimeout)
+	} else {
+		endpoint.Remote.Fail(ErrNetworkPing)
+	}
+}
+
+func (p *Publisher) timeoutKeepalive(endpoint *Endpoint) {
+	// Timeout for PING
+	p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+
+	endpoint.SendPing()
+}
+
+func (p *Publisher) updateStatistics() {
+	p.Lock()
+
+	p.line_speed = core.CalculateSpeed(time.Since(p.last_measurement), p.line_speed, float64(p.line_count-p.last_line_count), &p.seconds_no_ack)
+
+	p.last_line_count = p.line_count
+	p.last_measurement = time.Now()
+
+	p.Unlock()
+}
+
+func (p *Publisher) Snapshot() []*core.Snapshot {
+	p.RLock()
+
+	snapshot := core.NewSnapshot("Publisher")
+
+	snapshot.AddEntry("Speed (Lps)", p.line_speed)
+	snapshot.AddEntry("Published lines", p.last_line_count)
+	snapshot.AddEntry("Pending Payloads", p.numPayloads)
+
+	p.RUnlock()
+
+	return []*core.Snapshot{snapshot}
+}
+
+
+
+
+
+
+
+/*
+func (p *Publisher) RunOld() {
 	defer func() {
 		p.Done()
 	}()
@@ -521,15 +764,6 @@ func (p *Publisher) checkResend() (bool, error) {
 	return false, nil
 }
 
-func (p *Publisher) generateNonce() string {
-	// This could maybe be made a bit more efficient
-	nonce := make([]byte, 16)
-	for i := 0; i < 16; i++ {
-		nonce[i] = byte(rand.Intn(255))
-	}
-	return string(nonce)
-}
-
 func (p *Publisher) sendNewPayload(events []*core.EventDescriptor) (err error) {
 	// Calculate a nonce
 	nonce := p.generateNonce()
@@ -578,60 +812,32 @@ func (p *Publisher) processPong(message []byte) error {
 	return nil
 }
 
-func (p *Publisher) processAck(message []byte) (err error) {
-	if len(message) != 20 {
-		err = fmt.Errorf("ACKN message corruption (%d)", len(message))
-		return
-	}
-
-	// Read the nonce and sequence number acked
-	nonce, sequence := string(message[:16]), binary.BigEndian.Uint32(message[16:20])
-
-	log.Debug("ACKN message received for payload %x sequence %d", nonce, sequence)
-
-	// Grab the payload the ACK corresponds to by using nonce
-	payload, found := p.pending_payloads[nonce]
-	if !found {
-		// Don't fail here in case we had temporary issues and resend a payload, only for us to receive duplicate ACKN
-		return
-	}
-
-	ack_events := payload.ack_events
-
-	// Process ACK
-	lines, complete := payload.Ack(int(sequence))
-	p.line_count += int64(lines)
-
-	if complete {
-		// No more events left for this payload, remove from pending list
-		delete(p.pending_payloads, nonce)
-	}
-
+func (p *Publisher) processAck(payload *pendingPayload, ackEvents int) {
 	// We potentially receive out-of-order ACKs due to payloads distributed across servers
 	// This is where we enforce ordering again to ensure registrar receives ACK in order
-	if payload == p.first_payload {
+	if payload == p.firstPayload {
 		// The out of sync count we have will never include the first payload, so
 		// take the value +1
-		out_of_sync := p.out_of_sync + 1
+		outOfSync := p.outOfSync + 1
 
 		// For each full payload we mark off, we decrease this count, the first we
 		// mark off will always be the first payload - thus the +1. Subsequent
 		// payloads are the out of sync ones - so if we mark them off we decrease
 		// the out of sync count
 		for payload.HasAck() {
-			p.registrar_spool.Add(registrar.NewAckEvent(payload.Rollup()))
+			p.registrarSpool.Add(registrar.NewAckEvent(payload.Rollup()))
 
 			if !payload.Complete() {
 				break
 			}
 
 			payload = payload.next
-			p.first_payload = payload
-			out_of_sync--
-			p.out_of_sync = out_of_sync
+			p.firstPayload = payload
+			outOfSync--
+			p.outOfSync = outOfSync
 
 			p.Lock()
-			p.num_payloads--
+			p.numPayloads--
 			p.Unlock()
 
 			// Resume sending if we stopped due to excessive pending payload count
@@ -644,37 +850,10 @@ func (p *Publisher) processAck(message []byte) (err error) {
 			}
 		}
 
-		p.registrar_spool.Send()
-	} else if ack_events == 0 {
+		p.registrarSpool.Send()
+	} else if ackEvents == 0 {
 		// If this is NOT the first payload, and this is the first acknowledgement
 		// for this payload, then increase out of sync payload count
-		p.out_of_sync++
+		p.outOfSync++
 	}
-
-	return
-}
-
-func (p *Publisher) Snapshot() []*core.Snapshot {
-	p.RLock()
-
-	snapshot := core.NewSnapshot("Publisher")
-
-	switch p.status {
-	case Status_Connected:
-		snapshot.AddEntry("Status", "Connected")
-	case Status_Reconnecting:
-		snapshot.AddEntry("Status", "Reconnecting...")
-	default:
-		snapshot.AddEntry("Status", "Disconnected")
-	}
-
-	snapshot.AddEntry("Speed (Lps)", p.line_speed)
-	snapshot.AddEntry("Published lines", p.last_line_count)
-	snapshot.AddEntry("Pending Payloads", p.num_payloads)
-	snapshot.AddEntry("Timeouts", p.timeout_count)
-	snapshot.AddEntry("Retransmissions", p.last_retry_count)
-
-	p.RUnlock()
-
-	return []*core.Snapshot{snapshot}
-}
+}*/

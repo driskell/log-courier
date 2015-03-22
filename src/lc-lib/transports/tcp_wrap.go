@@ -53,7 +53,7 @@ RetrySend:
 		} else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
 			// Check for shutdown, then try again
 			select {
-			case <-w.transport.shutdown:
+			case <-w.transport.sendControl:
 				// Shutdown
 				return length, err
 			default:

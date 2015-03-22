@@ -17,113 +17,89 @@
 package publisher
 
 import (
-	"bytes"
-	"compress/zlib"
-	"encoding/binary"
-	"errors"
 	"github.com/driskell/log-courier/src/lc-lib/core"
-	"time"
 )
 
-var (
-	ErrPayloadCorrupt = errors.New("Payload is corrupt")
-)
+// PendingPayload holds the data and acknowledged status of a spool of events
+// and provides methods for processing acknowledgements so that a future resend
+// of the payload does not resend acknowledged events
+type PendingPayload struct {
+	Nonce         string
 
-type pendingPayload struct {
-	next          *pendingPayload
-	nonce         string
+	nextPayload   *PendingPayload
 	events        []*core.EventDescriptor
-	last_sequence int
-	sequence_len  int
-	ack_events    int
+	lastSequence  int
+	sequenceLen   int
+	ackEvents     int
 	processed     int
 	payload       []byte
-	timeout       time.Time
 }
 
-func newPendingPayload(events []*core.EventDescriptor, nonce string, timeout time.Duration) (*pendingPayload, error) {
-	payload := &pendingPayload{
-		events:  events,
-		nonce:   nonce,
-		timeout: time.Now().Add(timeout),
-	}
-
-	if err := payload.Generate(); err != nil {
-		return nil, err
+// NewPendingPayload creates a new structure from the given spool of events
+func NewPendingPayload(events []*core.EventDescriptor) (*PendingPayload, error) {
+	payload := &PendingPayload{
+		events:      events,
+		sequenceLen: len(events),
 	}
 
 	return payload, nil
 }
 
-func (pp *pendingPayload) Generate() (err error) {
-	var buffer bytes.Buffer
-
-	// Assertion
-	if len(pp.events) == 0 {
-		return ErrPayloadCorrupt
-	}
-
-	// Begin with the nonce
-	if _, err = buffer.Write([]byte(pp.nonce)[0:16]); err != nil {
-		return
-	}
-
-	var compressor *zlib.Writer
-	if compressor, err = zlib.NewWriterLevel(&buffer, 3); err != nil {
-		return
-	}
-
-	// Append all the events
-	for _, event := range pp.events[pp.ack_events:] {
-		if err = binary.Write(compressor, binary.BigEndian, uint32(len(event.Event))); err != nil {
-			return
-		}
-		if _, err = compressor.Write(event.Event); err != nil {
-			return
-		}
-	}
-
-	compressor.Close()
-
-	pp.payload = buffer.Bytes()
-	pp.last_sequence = 0
-	pp.sequence_len = len(pp.events) - pp.ack_events
-
-	return
+// Events returns the unacknowledged set of events in the payload
+func (pp *PendingPayload) Events() []*core.EventDescriptor {
+	return pp.events[pp.ackEvents:]
 }
 
-func (pp *pendingPayload) Ack(sequence int) (int, bool) {
-	if sequence <= pp.last_sequence {
+// Ack processes an acknowledgement sequence, marking events as sent and
+// preventing resends from sending those events
+// Returns the number of events acknowledged, with the second return value true
+// if the payload is now completely acknowledged
+func (pp *PendingPayload) Ack(sequence int) (int, bool) {
+	if sequence <= pp.lastSequence {
 		// No change
 		return 0, false
-	} else if sequence >= pp.sequence_len {
+	} else if sequence >= pp.sequenceLen {
 		// Full ACK
-		lines := pp.sequence_len - pp.last_sequence
-		pp.ack_events = len(pp.events)
-		pp.last_sequence = sequence
+		lines := pp.sequenceLen - pp.lastSequence
+		pp.ackEvents = len(pp.events)
+		pp.lastSequence = sequence
 		pp.payload = nil
 		return lines, true
 	}
 
-	lines := sequence - pp.last_sequence
-	pp.ack_events += lines
-	pp.last_sequence = sequence
+	lines := sequence - pp.lastSequence
+	pp.ackEvents += lines
+	pp.lastSequence = sequence
 	pp.payload = nil
 	return lines, false
 }
 
-func (pp *pendingPayload) HasAck() bool {
-	return pp.ack_events != 0
+// ResetSequence makes the first unacknowledged event have a sequence ID of 1
+// This should be called before resending to ensure the ACK messages returned
+// (which will use an ID of 1 for the first unacknowledged event) are understood
+// correctly
+func (pp *PendingPayload) ResetSequence() {
+	pp.lastSequence = 0
+	pp.sequenceLen = len(pp.events) - pp.ackEvents
 }
 
-func (pp *pendingPayload) Complete() bool {
+// HasAck returns true if the payload has had at least one event acknowledged
+func (pp *PendingPayload) HasAck() bool {
+	return pp.ackEvents != 0
+}
+
+// Complete returns true if all events in this payload have been acknowledged
+func (pp *PendingPayload) Complete() bool {
 	return len(pp.events) == 0
 }
 
-func (pp *pendingPayload) Rollup() []*core.EventDescriptor {
-	pp.processed += pp.ack_events
-	rollup := pp.events[:pp.ack_events]
-	pp.events = pp.events[pp.ack_events:]
-	pp.ack_events = 0
+// Rollup removes acknowledged events from the payload and returns them so they
+// may be passed onto the Registrar
+func (pp *PendingPayload) Rollup() []*core.EventDescriptor {
+	pp.processed += pp.ackEvents
+	rollup := pp.events[:pp.ackEvents]
+	pp.events = pp.events[pp.ackEvents:]
+	pp.ackEvents = 0
+	pp.ResetSequence()
 	return rollup
 }

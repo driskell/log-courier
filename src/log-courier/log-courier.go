@@ -93,10 +93,7 @@ func (lc *LogCourier) Run() {
 		registrar_imp = registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
 	}
 
-	publisher_imp, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar_imp)
-	if err != nil {
-		log.Fatalf("Failed to initialise: %s", err)
-	}
+	publisher_imp := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar_imp)
 
 	spooler_imp := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher_imp)
 

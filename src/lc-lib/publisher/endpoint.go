@@ -1,0 +1,161 @@
+/*
+ * Copyright 2014 Jason Woods.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package publisher
+
+import (
+	"github.com/driskell/log-courier/src/lc-lib/core"
+	"math/rand"
+	"sync"
+	"time"
+)
+
+// Endpoint structure represents a single remote endpoint
+type Endpoint struct {
+	sync.Mutex
+
+	// The associated remote
+	Remote *EndpointRemote
+
+	// Linked lists for internal use by Publisher
+	NextTimeout *Endpoint
+	NextReady *Endpoint
+
+	// Timeout callback and when it should trigger
+	TimeoutFunc TimeoutFunc
+	TimeoutDue  time.Time
+
+	// State information
+	PongPending bool
+
+	addressPool     *AddressPool
+	transport       core.Transport
+	pendingPayloads map[string]*PendingPayload
+	numPayloads     int
+
+	lineCount int64
+}
+
+// Shutdown signals the transport to start shutting down
+func (e *Endpoint) shutdown() {
+	e.transport.Shutdown()
+}
+
+// Wait for the transport to finish
+// Disconnect() should be called first on all endpoints to start them
+// disconnecting, and then Wait called to allow them to finish.
+func (e *Endpoint) wait() {
+	e.transport.Wait()
+}
+
+// SendPayload adds an event spool to the queue, sending it to the transport.
+// Always called from Publisher routine to ensure concurrent pending payload
+// access.
+//
+// Should return the payload so the publisher can track it accordingly.
+func (e *Endpoint) SendPayload(payload *PendingPayload) {
+	// Calculate a nonce
+	nonce := e.generateNonce()
+	for {
+		if _, found := e.pendingPayloads[nonce]; !found {
+			break
+		}
+		// Collision - generate again - should be extremely rare
+		nonce = e.generateNonce()
+	}
+
+	payload.Nonce = nonce
+	e.pendingPayloads[nonce] = payload
+	e.numPayloads++
+
+	e.transport.Write(payload)
+}
+
+// generateNonce creates a random string for payload identification
+func (e *Endpoint) generateNonce() string {
+	// This could maybe be made a bit more efficient
+	nonce := make([]byte, 16)
+	for i := 0; i < 16; i++ {
+		nonce[i] = byte(rand.Intn(255))
+	}
+	return string(nonce)
+}
+
+// SendPing requests that the transport ensure its connection is still available
+// by sending data across it and calling back with Pong(). Some transports may
+// simply do nothing and Pong() back immediately if they are managed as such.
+func (e *Endpoint) SendPing() {
+	// TODO
+	//e.transport.Ping()
+}
+
+// ProcessAck processes a received acknowledgement message.
+//
+// When Ack() is called by the transport we feed a channel through to the
+// publisher, which calls the message processor. This message processer passes
+// control here to allow us to clear pending payloads.
+// The reason for this is to ensure all payload allocation and manipulation
+// happens on the publisher main routine.
+//
+// We should return the payload that was acked, and whether this is the first
+// acknoweldgement or a later one, so the publisher may track out of sync
+// payload processing accordingly.
+func (e *Endpoint) ProcessAck(a *AckResponse) (*PendingPayload, bool) {
+	log.Debug("Acknowledgement received for payload %x sequence %d", a.Nonce, a.Sequence)
+
+	// Grab the payload the ACK corresponds to by using nonce
+	payload, found := e.pendingPayloads[a.Nonce]
+	if !found {
+		// Don't fail here in case we had temporary issues and resend a payload, only for us to receive duplicate ACKN
+		return nil, false
+	}
+
+	ackEvents := payload.ackEvents
+
+	// Process ACK
+	lines, complete := payload.Ack(int(a.Sequence))
+	e.lineCount += int64(lines)
+
+	if complete {
+		// No more events left for this payload, remove from pending list
+		delete(e.pendingPayloads, a.Nonce)
+		e.numPayloads--
+	}
+
+	return payload, ackEvents == 0
+}
+
+// HasPending returns true if the Endpoint has pending payloads
+func (e *Endpoint) HasPending() bool {
+	return e.numPayloads != 0
+}
+
+// Recover all queued payloads and return them back to the publisher
+// Called when a failure happens
+func (e *Endpoint) Recover() []*PendingPayload {
+	pending := make([]*PendingPayload, len(e.pendingPayloads))
+	for _, payload := range e.pendingPayloads {
+		pending = append(pending, payload)
+	}
+	e.resetPayloads()
+	return pending
+}
+
+// resetPayloads resets the internal state for pending payloads
+func (e *Endpoint) resetPayloads() {
+	e.pendingPayloads = make(map[string]*PendingPayload)
+	e.numPayloads = 0
+}
