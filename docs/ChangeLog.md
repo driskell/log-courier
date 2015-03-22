@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [1.6](#16)
 - [1.5](#15)
 - [1.3](#13)
 - [1.2](#12)
@@ -22,7 +23,7 @@
 
 ## 1.6
 
-*???*
+*22nd March 2015*
 
 ***Plugin-only release***
 

@@ -8,7 +8,7 @@ Log Courier is built to work seamlessly with [Logstash](http://logstash.net)
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Installation](#installation)
-  - [Logstash 1.5+ Plugin Manager](#logstash-15-plugin-manager)
+  - [Logstash 1.5 Plugin Manager](#logstash-15-plugin-manager)
   - [Manual installation](#manual-installation)
   - [Local-only Installation](#local-only-installation)
 - [Configuration](#configuration)
