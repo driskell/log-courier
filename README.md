@@ -134,7 +134,8 @@ Log Courier does not utilise the lumberjack Logstash plugin and instead uses its
 own custom plugin. This allows significant enhancements to the integration far
 beyond the lumberjack protocol allows.
 
-Install using the Logstash 1.5+ Plugin manager.
+You may install the input plugin using the Logstash 1.5 Plugin manager. (Tested
+with beta1 and beta2.)
 
 	cd /path/to/logstash
 	bin/logstash plugin install logstash-input-log-courier

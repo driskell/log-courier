@@ -13,8 +13,8 @@ Gem::Specification.new do |gem|
     lib/logstash/inputs/courier.rb
   )
 
-  gem.metadata = { 'logstash_plugin' => 'true', 'group' => 'input' }
+  gem.metadata = { 'logstash_plugin' => 'true', 'logstash_group' => 'input' }
 
-  gem.add_runtime_dependency 'logstash', '~> 1.4'
+  gem.add_runtime_dependency 'logstash-core', '~> 1.4'
   gem.add_runtime_dependency 'log-courier', '= <VERSION>'
 end
