@@ -31,8 +31,12 @@ type Endpoint struct {
 	// The associated remote
 	Remote *EndpointRemote
 
+	// Whether this endpoint is ready for events or not
+	Ready bool
+
 	// Linked lists for internal use by Publisher
 	NextTimeout *Endpoint
+	PrevTimeout *Endpoint
 	NextReady *Endpoint
 
 	// Timeout callback and when it should trigger
@@ -156,6 +160,7 @@ func (e *Endpoint) ProcessPong() error {
 		return errors.New("Unexpected PONG received")
 	}
 
+	log.Debug("[%s] Received PONG message", endpoint.Server())
 	e.pongPending = false
 
 	return nil

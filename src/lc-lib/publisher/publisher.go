@@ -66,7 +66,6 @@ type Publisher struct {
 
 	timeoutTimer *time.Timer
 	timeoutHead  *Endpoint
-	ifReadyChan  <-chan *Endpoint
 	readyHead    *Endpoint
 	ifSpoolChan  <-chan []*core.EventDescriptor
 	nextSpool    []*core.EventDescriptor
@@ -107,19 +106,18 @@ func (p *Publisher) Run() {
 	statsTimer := time.NewTimer(time.Second)
 	onShutdown := p.OnShutdown()
 
-	p.waitReady()
-	p.waitSpool()
+	p.ifSpoolChan = p.spoolChan
 
 PublishLoop:
 	for {
 		select {
-		case endpoint := <-p.ifReadyChan:
+		case endpoint := <-p.endpointSink.ReadyChan:
 			if p.nextSpool != nil {
 				log.Debug("[%s] Send is now ready, sending %d queued events", endpoint.Server(), len(p.nextSpool))
 				// We have events, send it to the endpoint and wait for more
 				p.sendPayload(endpoint, p.nextSpool)
 				p.nextSpool = nil
-				p.waitSpool()
+				p.ifSpoolChan = p.spoolChan
 			} else {
 				log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
 				// No events, save on the ready list and start the keepalive timer if none set
@@ -128,16 +126,14 @@ PublishLoop:
 					log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
 					p.registerTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
 				}
-
-				p.ifReadyChan = nil
 			}
 		case spool := <-p.ifSpoolChan:
 			if p.readyHead != nil {
 				log.Debug("[%s] %d new events queued, sending to endpoint", p.readyHead.Server(), len(spool))
 				// We have a ready endpoint, send the spool to it
+				p.readyHead.Ready = false
 				p.sendPayload(p.readyHead, spool)
 				p.readyHead = p.readyHead.NextReady
-				p.waitReady()
 			} else {
 				log.Debug("%d new events queued, awaiting endpoint readiness", len(spool))
 				// No ready endpoint, wait for one
@@ -175,8 +171,14 @@ PublishLoop:
 				callback(p, endpoint)
 
 				if p.timeoutHead == nil || p.timeoutHead.TimeoutDue.After(time.Now()) {
-					continue
+					break
 				}
+			}
+
+			// Clear previous on the new head
+			if p.timeoutHead != nil {
+				p.timeoutHead.PrevTimeout = nil
+				p.setTimer()
 			}
 		case <-statsTimer.C:
 			p.updateStatistics()
@@ -201,14 +203,6 @@ PublishLoop:
 	log.Info("Publisher exiting")
 
 	p.Done()
-}
-
-func (p *Publisher) waitReady() {
-	p.ifReadyChan = p.endpointSink.ReadyChan
-}
-
-func (p *Publisher) waitSpool() {
-	p.ifSpoolChan = p.spoolChan
 }
 
 func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescriptor) {
@@ -299,7 +293,6 @@ func (p *Publisher) processAck(endpoint *Endpoint, msg *AckResponse) error {
 }
 
 func (p *Publisher) processPong(endpoint *Endpoint, msg *PongResponse) error {
-	log.Debug("[%s] Received PONG message", endpoint.Server())
 	if err := endpoint.ProcessPong(); err != nil {
 		return err
 	}
@@ -319,36 +312,67 @@ func (p *Publisher) failEndpoint(endpoint *Endpoint, err error) {
 }
 
 func (p *Publisher) registerReady(endpoint *Endpoint) {
+	if endpoint.Ready {
+		return
+	}
+
 	// TODO: Enhance this to be fairer - maybe least pending payloads order
+	endpoint.Ready = true
 	if p.readyHead != nil {
 		p.readyHead.NextReady = endpoint
 	}
 	p.readyHead = endpoint
 }
 
+func (p *Publisher) setTimer() {
+	log.Debug("Timeout timer due at %v for %s", p.timeoutHead.TimeoutDue, p.timeoutHead.Server())
+	p.timeoutTimer.Reset(p.timeoutHead.TimeoutDue.Sub(time.Now()))
+}
+
 func (p *Publisher) registerTimeout(endpoint *Endpoint, timeoutDue time.Time, timeoutFunc TimeoutFunc) {
+	if endpoint.TimeoutFunc != nil {
+		// Remove existing entry
+		if endpoint.PrevTimeout == nil {
+			p.timeoutHead = endpoint.NextTimeout
+		} else {
+			endpoint.PrevTimeout.NextTimeout = endpoint.NextTimeout
+		}
+		if endpoint.NextTimeout != nil {
+			endpoint.NextTimeout.PrevTimeout = endpoint.PrevTimeout
+		}
+	}
+
 	endpoint.TimeoutFunc = timeoutFunc
 	endpoint.TimeoutDue = timeoutDue
 
-	head := p.timeoutHead
+	// Add to the list in time order
+	next := p.timeoutHead
 
-	if head == nil || head.TimeoutDue.After(timeoutDue) {
+	if next == nil || next.TimeoutDue.After(timeoutDue) {
 		p.timeoutHead = endpoint
-		endpoint.NextTimeout = head
+		endpoint.PrevTimeout = nil
+		endpoint.NextTimeout = next
+		if next != nil {
+			next.PrevTimeout = endpoint
+		}
+		p.setTimer()
 		return
 	}
 
 	var prev *Endpoint
-	for prev = head; head != nil; prev, head = head, head.NextTimeout {
-		if head.TimeoutDue.After(timeoutDue) {
-			prev.NextTimeout = endpoint
-			endpoint.NextTimeout = head
-			return
+	for prev = next; next != nil; prev, next = next, next.NextTimeout {
+		if next.TimeoutDue.After(timeoutDue) {
+			endpoint.PrevTimeout = prev
+			break
 		}
 	}
 
 	prev.NextTimeout = endpoint
-	endpoint.NextTimeout = nil
+	endpoint.PrevTimeout = prev
+	endpoint.NextTimeout = next
+	if next != nil {
+		next.PrevTimeout = endpoint
+	}
 }
 
 func (p *Publisher) timeoutPending(endpoint *Endpoint) {
