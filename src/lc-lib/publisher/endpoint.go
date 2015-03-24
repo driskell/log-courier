@@ -34,9 +34,16 @@ type Endpoint struct {
 	// Whether this endpoint is ready for events or not
 	Ready bool
 
+	// Whether this endpoint is ready for events, but is not allowed any more due
+	// to peer send queue limits
+	Full bool
+
 	// Linked lists for internal use by Publisher
+	// TODO: Should be use by EndpointSink only to allow separate endpoint package
 	NextTimeout *Endpoint
 	PrevTimeout *Endpoint
+	NextFull *Endpoint
+	PrevFull *Endpoint
 	NextReady *Endpoint
 
 	// Timeout callback and when it should trigger
@@ -160,15 +167,15 @@ func (e *Endpoint) ProcessPong() error {
 		return errors.New("Unexpected PONG received")
 	}
 
-	log.Debug("[%s] Received PONG message", endpoint.Server())
+	log.Debug("[%s] Received PONG message", e.Server())
 	e.pongPending = false
 
 	return nil
 }
 
-// HasPending returns true if the Endpoint has pending payloads
-func (e *Endpoint) HasPending() bool {
-	return e.numPayloads != 0
+// NumPending returns the number of pending payloads on this endpoint
+func (e *Endpoint) NumPending() int {
+	return e.numPayloads
 }
 
 // Recover all queued payloads and return them back to the publisher

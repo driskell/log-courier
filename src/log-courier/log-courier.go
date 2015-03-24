@@ -32,6 +32,7 @@ import (
 	"github.com/op/go-logging"
 	stdlog "log"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"time"
 )
@@ -228,6 +229,8 @@ func (lc *LogCourier) startUp() {
 			log.Panic("CPU profile completed")
 		}()
 	}
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
 func (lc *LogCourier) configureLogging() (err error) {

@@ -65,8 +65,10 @@ type Publisher struct {
 	seconds_no_ack   int
 
 	timeoutTimer *time.Timer
+	// TODO: Move these heads to EndpointSink
 	timeoutHead  *Endpoint
 	readyHead    *Endpoint
+	fullHead     *Endpoint
 	ifSpoolChan  <-chan []*core.EventDescriptor
 	nextSpool    []*core.EventDescriptor
 }
@@ -112,21 +114,7 @@ PublishLoop:
 	for {
 		select {
 		case endpoint := <-p.endpointSink.ReadyChan:
-			if p.nextSpool != nil {
-				log.Debug("[%s] Send is now ready, sending %d queued events", endpoint.Server(), len(p.nextSpool))
-				// We have events, send it to the endpoint and wait for more
-				p.sendPayload(endpoint, p.nextSpool)
-				p.nextSpool = nil
-				p.ifSpoolChan = p.spoolChan
-			} else {
-				log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
-				// No events, save on the ready list and start the keepalive timer if none set
-				p.registerReady(endpoint)
-				if endpoint.TimeoutFunc == nil {
-					log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
-					p.registerTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
-				}
-			}
+			p.registerReady(endpoint)
 		case spool := <-p.ifSpoolChan:
 			if p.readyHead != nil {
 				log.Debug("[%s] %d new events queued, sending to endpoint", p.readyHead.Server(), len(spool))
@@ -207,13 +195,14 @@ PublishLoop:
 
 func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescriptor) {
 	// If this is the first payload, start the network timeout
-	if !endpoint.HasPending() {
+	if endpoint.NumPending() == 0 {
 		log.Debug("[%s] First payload, starting pending timeout", endpoint.Server())
 		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 	}
 
 	payload, err := NewPendingPayload(events)
 	if err != nil {
+		// TODO: Handle this
 		return
 	}
 
@@ -228,6 +217,8 @@ func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescript
 	p.numPayloads++
 	p.Unlock()
 
+	// TODO: Don't queue if send fails? Allows us to immediately resend from caller
+	//       instead of waiting for failEndpoint to pull it back
 	if err := endpoint.SendPayload(payload); err != nil {
 		p.failEndpoint(endpoint, err)
 	}
@@ -281,12 +272,28 @@ func (p *Publisher) processAck(endpoint *Endpoint, msg *AckResponse) error {
 	}
 
 	// Expect next ACK within network timeout if we still have pending
-	if endpoint.HasPending() {
+	if endpoint.NumPending() != 0 {
 		log.Debug("[%s] Resetting pending timeout", endpoint.Server())
 		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 	} else {
 		log.Debug("[%s] Last payload acknowledged, starting keepalive timeout", endpoint.Server())
 		p.registerTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
+	}
+
+	// If we're no longer full, move to ready queue
+	// TODO: Use "peer send queue" - Move logic to EndpointSink
+	if endpoint.Full && endpoint.NumPending() < 4 {
+		log.Debug("[%s] Endpoint is no longer full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
+		if endpoint.PrevFull == nil {
+			p.fullHead = endpoint.NextFull
+		} else {
+			endpoint.PrevFull = endpoint.NextFull
+		}
+		if endpoint.NextFull != nil {
+			endpoint.NextFull.PrevFull = endpoint.PrevFull
+		}
+
+		p.registerReady(endpoint)
 	}
 
 	return nil
@@ -298,7 +305,7 @@ func (p *Publisher) processPong(endpoint *Endpoint, msg *PongResponse) error {
 	}
 
 	// If we haven't started sending anything, return to keepalive timeout
-	if !endpoint.HasPending() {
+	if endpoint.NumPending() == 0 {
 		log.Debug("[%s] Resetting keepalive timeout", endpoint.Server())
 		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutKeepalive)
 	}
@@ -316,12 +323,65 @@ func (p *Publisher) registerReady(endpoint *Endpoint) {
 		return
 	}
 
-	// TODO: Enhance this to be fairer - maybe least pending payloads order
-	endpoint.Ready = true
-	if p.readyHead != nil {
-		p.readyHead.NextReady = endpoint
+	// TODO: Move logic to Endpoint/EndpointSink
+	// TODO: Make configurable (bring back the "peer send queue" setting)
+	if endpoint.NumPending() >= 4 {
+		if endpoint.Full {
+			return
+		}
+
+		log.Debug("[%s] Endpoint is full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
+
+		endpoint.Full = true
+
+		endpoint.PrevFull = nil
+		endpoint.NextFull = p.fullHead
+		if p.fullHead != nil {
+			p.fullHead.PrevFull = endpoint
+		}
+		p.fullHead = endpoint
+		return
 	}
-	p.readyHead = endpoint
+
+	if p.nextSpool != nil {
+		log.Debug("[%s] Send is now ready, sending %d queued events", endpoint.Server(), len(p.nextSpool))
+		// We have events, send it to the endpoint and wait for more
+		p.sendPayload(endpoint, p.nextSpool)
+		p.nextSpool = nil
+		p.ifSpoolChan = p.spoolChan
+	} else {
+		log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
+		// No events, save on the ready list and start the keepalive timer if none set
+		p.addReady(endpoint)
+		if endpoint.TimeoutFunc == nil {
+			log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
+			p.registerTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
+		}
+	}
+}
+
+func (p *Publisher) addReady(endpoint *Endpoint) {
+	// TODO: Move logic to EndpointSink
+	endpoint.Ready = true
+
+	// Least pending payloads connection takes preference
+	next := p.readyHead
+
+	if next == nil || next.NumPending() > endpoint.NumPending() {
+		endpoint.NextReady = p.readyHead
+		p.readyHead = endpoint
+		return
+	}
+
+	var prev *Endpoint
+	for prev, next = next, next.NextReady; next != nil; prev, next = next, next.NextReady {
+		if next.NumPending() > endpoint.NumPending() {
+			break
+		}
+	}
+
+	prev.NextReady = endpoint
+	endpoint.NextReady = next
 }
 
 func (p *Publisher) setTimer() {
@@ -330,10 +390,13 @@ func (p *Publisher) setTimer() {
 }
 
 func (p *Publisher) registerTimeout(endpoint *Endpoint, timeoutDue time.Time, timeoutFunc TimeoutFunc) {
+	setTimer := false
+
 	if endpoint.TimeoutFunc != nil {
 		// Remove existing entry
 		if endpoint.PrevTimeout == nil {
 			p.timeoutHead = endpoint.NextTimeout
+			setTimer = true
 		} else {
 			endpoint.PrevTimeout.NextTimeout = endpoint.NextTimeout
 		}
@@ -360,7 +423,7 @@ func (p *Publisher) registerTimeout(endpoint *Endpoint, timeoutDue time.Time, ti
 	}
 
 	var prev *Endpoint
-	for prev = next; next != nil; prev, next = next, next.NextTimeout {
+	for prev, next = next, next.NextTimeout; next != nil; prev, next = next, next.NextTimeout {
 		if next.TimeoutDue.After(timeoutDue) {
 			endpoint.PrevTimeout = prev
 			break
@@ -372,6 +435,10 @@ func (p *Publisher) registerTimeout(endpoint *Endpoint, timeoutDue time.Time, ti
 	endpoint.NextTimeout = next
 	if next != nil {
 		next.PrevTimeout = endpoint
+	}
+
+	if setTimer {
+		p.setTimer()
 	}
 }
 

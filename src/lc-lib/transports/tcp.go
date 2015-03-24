@@ -226,6 +226,7 @@ func (t *TransportTcp) reconnectWait() bool {
 	now := time.Now()
 	reconnect_due := now.Add(t.config.net_config.Reconnect)
 
+ReconnectWaitLoop:
 	for {
 		select {
 		// TODO: Handle configuration reload
@@ -233,7 +234,7 @@ func (t *TransportTcp) reconnectWait() bool {
 			// Shutdown request
 			return false
 		case <-time.After(reconnect_due.Sub(now)):
-			break
+			break ReconnectWaitLoop
 		}
 
 		now = time.Now()
@@ -341,12 +342,12 @@ func (t *TransportTcp) disconnect() {
 func (t *TransportTcp) sender() {
 	ping_timer := time.NewTimer(keepalive_timeout * time.Second)
 
-SendLoop:
+SenderLoop:
 	for {
 		select {
 		case <-t.sendControl:
 			// Shutdown
-			break SendLoop
+			break SenderLoop
 		case <-ping_timer.C:
 		case msg := <-t.send_chan:
 			// Ask for more while we send this
@@ -357,14 +358,14 @@ SendLoop:
 			if err != nil {
 				if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
 					// Shutdown will have been received by the wrapper
-					break SendLoop
+					break SenderLoop
 				}
 				// Fail the transport
 				select {
 				case <-t.sendControl:
 				case t.fail_chan <- err:
 				}
-				break SendLoop
+				break SenderLoop
 			}
 		}
 	}
@@ -380,6 +381,7 @@ func (t *TransportTcp) receiver() {
 
 	header := make([]byte, 8)
 
+ReceiverLoop:
 	for {
 		if shutdown, err = t.receiverRead(header); shutdown || err != nil {
 			break
@@ -407,25 +409,26 @@ func (t *TransportTcp) receiver() {
 		switch {
 		case bytes.Compare(header[0:4], []byte("PONG")) == 0:
 			if shutdown = t.sendResponse(&publisher.PongResponse{}); shutdown {
-				break
+				break ReceiverLoop
 			}
 		case bytes.Compare(header[0:4], []byte("ACKN")) == 0:
 			if shutdown, err = t.processAckn(message); shutdown || err != nil {
-				break
+				break ReceiverLoop
 			}
 		default:
 			err = fmt.Errorf("Unexpected message code: %s", header[0:4])
-			break
+			break ReceiverLoop
 		}
 	}
 
 	if err != nil {
 		// Pass the error back and abort
+	FailLoop:
 		for {
 			select {
 			case <-t.recvControl:
 				// Shutdown
-				break
+				break FailLoop
 			case t.fail_chan <- err:
 			}
 		}
@@ -439,12 +442,12 @@ func (t *TransportTcp) receiver() {
 func (t *TransportTcp) receiverRead(data []byte) (bool, error) {
 	received := 0
 
-RecvLoop:
+ReceiverReadLoop:
 	for {
 		select {
 		case <-t.recvControl:
 			// Shutdown
-			break RecvLoop
+			break ReceiverReadLoop
 		default:
 			// Timeout after socket_interval_seconds, check for shutdown, and try again
 			t.socket.SetReadDeadline(time.Now().Add(socket_interval_seconds * time.Second))
