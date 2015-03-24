@@ -117,19 +117,31 @@ PublishLoop:
 			p.registerReady(endpoint)
 		case spool := <-p.ifSpoolChan:
 			if p.readyHead != nil {
+				// We have ready endpoints, send the spool
 				log.Debug("[%s] %d new events queued, sending to endpoint", p.readyHead.Server(), len(spool))
-				// We have a ready endpoint, send the spool to it
-				p.readyHead.Ready = false
-				p.sendPayload(p.readyHead, spool)
-				p.readyHead = p.readyHead.NextReady
-			} else {
-				log.Debug("%d new events queued, awaiting endpoint readiness", len(spool))
-				// No ready endpoint, wait for one
-				p.nextSpool = spool
-				p.ifSpoolChan = nil
+
+				for {
+					p.readyHead.Ready = false
+					err := p.sendPayload(p.readyHead, spool)
+					p.readyHead = p.readyHead.NextReady
+
+					if err == nil {
+						continue PublishLoop
+					}
+
+					if p.readyHead == nil {
+						break
+					}
+				}
 			}
+
+			log.Debug("%d new events queued, awaiting endpoint readiness", len(spool))
+			// No ready endpoint, wait for one
+			p.nextSpool = spool
+			p.ifSpoolChan = nil
 		case msg := <-p.endpointSink.ResponseChan:
 			var err error
+
 			switch msg.Response.(type) {
 			case *AckResponse:
 				err = p.processAck(msg.Endpoint(), msg.Response.(*AckResponse))
@@ -142,6 +154,7 @@ PublishLoop:
 			default:
 				err = fmt.Errorf("[%s] BUG ASSERTION: Unknown message type \"%T\"", msg.Endpoint().Server(), msg)
 			}
+
 			if err != nil {
 				p.failEndpoint(msg.Endpoint(), err)
 			}
@@ -193,18 +206,8 @@ PublishLoop:
 	p.Done()
 }
 
-func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescriptor) {
-	// If this is the first payload, start the network timeout
-	if endpoint.NumPending() == 0 {
-		log.Debug("[%s] First payload, starting pending timeout", endpoint.Server())
-		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
-	}
-
-	payload, err := NewPendingPayload(events)
-	if err != nil {
-		// TODO: Handle this
-		return
-	}
+func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescriptor) error {
+	payload := NewPendingPayload(events)
 
 	if p.firstPayload == nil {
 		p.firstPayload = payload
@@ -217,11 +220,19 @@ func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescript
 	p.numPayloads++
 	p.Unlock()
 
-	// TODO: Don't queue if send fails? Allows us to immediately resend from caller
-	//       instead of waiting for failEndpoint to pull it back
+	// Don't queue if send fails and fail the endpoint
 	if err := endpoint.SendPayload(payload); err != nil {
 		p.failEndpoint(endpoint, err)
+		return err
 	}
+
+	// If this is the first payload, start the network timeout
+	if endpoint.NumPending() == 1 {
+		log.Debug("[%s] First payload, starting pending timeout", endpoint.Server())
+		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+	}
+
+	return nil
 }
 
 func (p *Publisher) processAck(endpoint *Endpoint, msg *AckResponse) error {
@@ -346,9 +357,10 @@ func (p *Publisher) registerReady(endpoint *Endpoint) {
 	if p.nextSpool != nil {
 		log.Debug("[%s] Send is now ready, sending %d queued events", endpoint.Server(), len(p.nextSpool))
 		// We have events, send it to the endpoint and wait for more
-		p.sendPayload(endpoint, p.nextSpool)
-		p.nextSpool = nil
-		p.ifSpoolChan = p.spoolChan
+		if err := p.sendPayload(endpoint, p.nextSpool); err == nil {
+			p.nextSpool = nil
+			p.ifSpoolChan = p.spoolChan
+		}
 	} else {
 		log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
 		// No events, save on the ready list and start the keepalive timer if none set

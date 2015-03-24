@@ -36,13 +36,11 @@ type PendingPayload struct {
 }
 
 // NewPendingPayload creates a new structure from the given spool of events
-func NewPendingPayload(events []*core.EventDescriptor) (*PendingPayload, error) {
-	payload := &PendingPayload{
+func NewPendingPayload(events []*core.EventDescriptor) *PendingPayload {
+	return &PendingPayload{
 		events:      events,
 		sequenceLen: len(events),
 	}
-
-	return payload, nil
 }
 
 // Events returns the unacknowledged set of events in the payload
