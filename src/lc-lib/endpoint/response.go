@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-package publisher
+package endpoint
 
-// EndpointResponse is a wrapper that joins a response with an endpoint
+// Response is a wrapper that joins a response with an endpoint
 // identifier which can then be sent to the Publisher
-type EndpointResponse struct {
+type Response struct {
   endpoint *Endpoint
   Response interface{}
 }
 
 // Endpoint returns the associated endpoint
-func (r *EndpointResponse) Endpoint() *Endpoint {
+func (r *Response) Endpoint() *Endpoint {
 	return r.endpoint
 }
 

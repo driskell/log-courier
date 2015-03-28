@@ -25,7 +25,7 @@ const (
 type Transport interface {
 	// TODO: Implement this in new transport systems
 	//ReloadConfig(*NetworkConfig) int
-	Write(interface{}) error
+	Write(string, []*EventDescriptor) error
 	Ping() error
 	Shutdown()
 	Wait()

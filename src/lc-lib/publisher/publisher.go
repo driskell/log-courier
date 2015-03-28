@@ -22,7 +22,10 @@ package publisher
 import (
 	"errors"
 	"fmt"
+	"github.com/driskell/log-courier/src/lc-lib/addresspool"
 	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/endpoint"
+	"github.com/driskell/log-courier/src/lc-lib/payload"
 	"github.com/driskell/log-courier/src/lc-lib/registrar"
 	"sync"
 	"time"
@@ -38,7 +41,7 @@ const (
 	keepalive_timeout time.Duration = 900 * time.Second
 )
 
-type TimeoutFunc func(*Publisher, *Endpoint)
+type TimeoutFunc func(*Publisher, *endpoint.Endpoint)
 
 type Publisher struct {
 	core.PipelineSegment
@@ -48,10 +51,10 @@ type Publisher struct {
 	sync.RWMutex
 
 	config           *core.NetworkConfig
-	endpointSink     *EndpointSink
+	endpointSink     *endpoint.Sink
 
-	firstPayload     *PendingPayload
-	lastPayload      *PendingPayload
+	firstPayload     *payload.Pending
+	lastPayload      *payload.Pending
 	numPayloads      int64
 	outOfSync        int
 	spoolChan        chan []*core.EventDescriptor
@@ -64,11 +67,6 @@ type Publisher struct {
 	last_measurement time.Time
 	seconds_no_ack   int
 
-	timeoutTimer *time.Timer
-	// TODO: Move these heads to EndpointSink
-	timeoutHead  *Endpoint
-	readyHead    *Endpoint
-	fullHead     *Endpoint
 	ifSpoolChan  <-chan []*core.EventDescriptor
 	nextSpool    []*core.EventDescriptor
 }
@@ -76,12 +74,9 @@ type Publisher struct {
 func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar registrar.Registrator) *Publisher {
 	ret := &Publisher{
 		config: config,
-		endpointSink: NewEndpointSink(config),
+		endpointSink: endpoint.NewSink(config),
 		spoolChan: make(chan []*core.EventDescriptor, 1),
-		timeoutTimer: time.NewTimer(1 * time.Second),
 	}
-
-	ret.timeoutTimer.Stop()
 
 	if registrar == nil {
 		ret.registrarSpool = newNullEventSpool()
@@ -91,7 +86,7 @@ func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar
 
 	// TODO: Option for round robin instead of load balanced?
 	for _, server := range config.Servers {
-		addressPool := NewAddressPool(server)
+		addressPool := addresspool.NewPool(server)
 		ret.endpointSink.AddEndpoint(server, addressPool)
 	}
 
@@ -113,25 +108,18 @@ func (p *Publisher) Run() {
 PublishLoop:
 	for {
 		select {
-		case endpoint := <-p.endpointSink.ReadyChan:
-			p.registerReady(endpoint)
+		case endpoint := <-p.endpointSink.ReadyChan():
+			p.readyEndpoint(endpoint)
 		case spool := <-p.ifSpoolChan:
-			if p.readyHead != nil {
+			for p.endpointSink.HasReady() {
 				// We have ready endpoints, send the spool
-				log.Debug("[%s] %d new events queued, sending to endpoint", p.readyHead.Server(), len(spool))
+				endpoint := p.endpointSink.NextReady()
 
-				for {
-					p.readyHead.Ready = false
-					err := p.sendPayload(p.readyHead, spool)
-					p.readyHead = p.readyHead.NextReady
+				log.Debug("[%s] %d new events queued, sending to endpoint", endpoint.Server(), len(spool))
+				err := p.sendPayload(endpoint, spool)
 
-					if err == nil {
-						continue PublishLoop
-					}
-
-					if p.readyHead == nil {
-						break
-					}
+				if err == nil {
+					continue PublishLoop
 				}
 			}
 
@@ -139,18 +127,18 @@ PublishLoop:
 			// No ready endpoint, wait for one
 			p.nextSpool = spool
 			p.ifSpoolChan = nil
-		case msg := <-p.endpointSink.ResponseChan:
+		case msg := <-p.endpointSink.ResponseChan():
 			var err error
 
 			switch msg.Response.(type) {
-			case *AckResponse:
-				err = p.processAck(msg.Endpoint(), msg.Response.(*AckResponse))
+			case *endpoint.AckResponse:
+				err = p.processAck(msg.Endpoint(), msg.Response.(*endpoint.AckResponse))
 				if p.shuttingDown && p.numPayloads == 0 {
 					log.Debug("Final ACK received, shutting down")
 					break PublishLoop
 				}
-			case *PongResponse:
-				err = p.processPong(msg.Endpoint(), msg.Response.(*PongResponse))
+			case *endpoint.PongResponse:
+				err = p.processPong(msg.Endpoint(), msg.Response.(*endpoint.PongResponse))
 			default:
 				err = fmt.Errorf("[%s] BUG ASSERTION: Unknown message type \"%T\"", msg.Endpoint().Server(), msg)
 			}
@@ -158,29 +146,25 @@ PublishLoop:
 			if err != nil {
 				p.failEndpoint(msg.Endpoint(), err)
 			}
-		case failure := <-p.endpointSink.FailChan:
+		case failure := <-p.endpointSink.FailChan():
 			p.failEndpoint(failure.Endpoint, failure.Error)
-		case <-p.timeoutTimer.C:
+		case <-p.endpointSink.TimeoutChan():
 			// Process triggered timers
 			for {
-				endpoint := p.timeoutHead
-				p.timeoutHead = p.timeoutHead.NextTimeout
+				endpoint, callback, more := p.endpointSink.NextTimeout()
+				if endpoint != nil {
+					break
+				}
 
-				callback := endpoint.TimeoutFunc
-				endpoint.TimeoutFunc = nil
 				log.Debug("[%s] Processing timeout", endpoint.Server())
-				callback(p, endpoint)
+				callback.(TimeoutFunc)(p, endpoint)
 
-				if p.timeoutHead == nil || p.timeoutHead.TimeoutDue.After(time.Now()) {
+				if !more {
 					break
 				}
 			}
 
-			// Clear previous on the new head
-			if p.timeoutHead != nil {
-				p.timeoutHead.PrevTimeout = nil
-				p.setTimer()
-			}
+			p.endpointSink.ResetTimeoutTimer()
 		case <-statsTimer.C:
 			p.updateStatistics()
 			statsTimer.Reset(time.Second)
@@ -206,13 +190,13 @@ PublishLoop:
 	p.Done()
 }
 
-func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescriptor) error {
-	payload := NewPendingPayload(events)
+func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, events []*core.EventDescriptor) error {
+	payload := payload.NewPending(events)
 
 	if p.firstPayload == nil {
 		p.firstPayload = payload
 	} else {
-		p.lastPayload.nextPayload = payload
+		p.lastPayload.NextPayload = payload
 	}
 	p.lastPayload = payload
 
@@ -229,13 +213,13 @@ func (p *Publisher) sendPayload(endpoint *Endpoint, events []*core.EventDescript
 	// If this is the first payload, start the network timeout
 	if endpoint.NumPending() == 1 {
 		log.Debug("[%s] First payload, starting pending timeout", endpoint.Server())
-		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 	}
 
 	return nil
 }
 
-func (p *Publisher) processAck(endpoint *Endpoint, msg *AckResponse) error {
+func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *endpoint.AckResponse) error {
 	payload, firstAck := endpoint.ProcessAck(msg)
 
 	// We potentially receive out-of-order ACKs due to payloads distributed across servers
@@ -256,7 +240,7 @@ func (p *Publisher) processAck(endpoint *Endpoint, msg *AckResponse) error {
 				break
 			}
 
-			payload = payload.nextPayload
+			payload = payload.NextPayload
 			p.firstPayload = payload
 			outOfSync--
 			p.outOfSync = outOfSync
@@ -285,32 +269,23 @@ func (p *Publisher) processAck(endpoint *Endpoint, msg *AckResponse) error {
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.NumPending() != 0 {
 		log.Debug("[%s] Resetting pending timeout", endpoint.Server())
-		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 	} else {
 		log.Debug("[%s] Last payload acknowledged, starting keepalive timeout", endpoint.Server())
-		p.registerTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
+		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
 	}
 
 	// If we're no longer full, move to ready queue
-	// TODO: Use "peer send queue" - Move logic to EndpointSink
-	if endpoint.Full && endpoint.NumPending() < 4 {
-		log.Debug("[%s] Endpoint is no longer full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
-		if endpoint.PrevFull == nil {
-			p.fullHead = endpoint.NextFull
-		} else {
-			endpoint.PrevFull = endpoint.NextFull
-		}
-		if endpoint.NextFull != nil {
-			endpoint.NextFull.PrevFull = endpoint.PrevFull
-		}
-
-		p.registerReady(endpoint)
+	// TODO: Use "peer send queue" - Move logic to endpoint.EndpointSink
+	if endpoint.IsFull() && endpoint.NumPending() < 4 {
+		log.Debug("[%s] endpoint.Endpoint is no longer full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
+		p.readyEndpoint(endpoint)
 	}
 
 	return nil
 }
 
-func (p *Publisher) processPong(endpoint *Endpoint, msg *PongResponse) error {
+func (p *Publisher) processPong(endpoint *endpoint.Endpoint, msg *endpoint.PongResponse) error {
 	if err := endpoint.ProcessPong(); err != nil {
 		return err
 	}
@@ -318,39 +293,22 @@ func (p *Publisher) processPong(endpoint *Endpoint, msg *PongResponse) error {
 	// If we haven't started sending anything, return to keepalive timeout
 	if endpoint.NumPending() == 0 {
 		log.Debug("[%s] Resetting keepalive timeout", endpoint.Server())
-		p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutKeepalive)
+		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutKeepalive)
 	}
 
 	return nil
 }
 
-func (p *Publisher) failEndpoint(endpoint *Endpoint, err error) {
-	log.Error("[%s] Endpoint failed: %s", endpoint.Server(), err)
+func (p *Publisher) failEndpoint(endpoint *endpoint.Endpoint, err error) {
+	log.Error("[%s] endpoint.Endpoint failed: %s", endpoint.Server(), err)
 	// TODO:
 }
 
-func (p *Publisher) registerReady(endpoint *Endpoint) {
-	if endpoint.Ready {
-		return
-	}
-
-	// TODO: Move logic to Endpoint/EndpointSink
+func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 	// TODO: Make configurable (bring back the "peer send queue" setting)
 	if endpoint.NumPending() >= 4 {
-		if endpoint.Full {
-			return
-		}
-
-		log.Debug("[%s] Endpoint is full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
-
-		endpoint.Full = true
-
-		endpoint.PrevFull = nil
-		endpoint.NextFull = p.fullHead
-		if p.fullHead != nil {
-			p.fullHead.PrevFull = endpoint
-		}
-		p.fullHead = endpoint
+		log.Debug("[%s] endpoint.Endpoint is full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
+		p.endpointSink.RegisterFull(endpoint)
 		return
 	}
 
@@ -364,97 +322,15 @@ func (p *Publisher) registerReady(endpoint *Endpoint) {
 	} else {
 		log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
 		// No events, save on the ready list and start the keepalive timer if none set
-		p.addReady(endpoint)
-		if endpoint.TimeoutFunc == nil {
+		p.endpointSink.RegisterReady(endpoint)
+		if !endpoint.HasTimeout() {
 			log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
-			p.registerTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
+			p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
 		}
 	}
 }
 
-func (p *Publisher) addReady(endpoint *Endpoint) {
-	// TODO: Move logic to EndpointSink
-	endpoint.Ready = true
-
-	// Least pending payloads connection takes preference
-	next := p.readyHead
-
-	if next == nil || next.NumPending() > endpoint.NumPending() {
-		endpoint.NextReady = p.readyHead
-		p.readyHead = endpoint
-		return
-	}
-
-	var prev *Endpoint
-	for prev, next = next, next.NextReady; next != nil; prev, next = next, next.NextReady {
-		if next.NumPending() > endpoint.NumPending() {
-			break
-		}
-	}
-
-	prev.NextReady = endpoint
-	endpoint.NextReady = next
-}
-
-func (p *Publisher) setTimer() {
-	log.Debug("Timeout timer due at %v for %s", p.timeoutHead.TimeoutDue, p.timeoutHead.Server())
-	p.timeoutTimer.Reset(p.timeoutHead.TimeoutDue.Sub(time.Now()))
-}
-
-func (p *Publisher) registerTimeout(endpoint *Endpoint, timeoutDue time.Time, timeoutFunc TimeoutFunc) {
-	setTimer := false
-
-	if endpoint.TimeoutFunc != nil {
-		// Remove existing entry
-		if endpoint.PrevTimeout == nil {
-			p.timeoutHead = endpoint.NextTimeout
-			setTimer = true
-		} else {
-			endpoint.PrevTimeout.NextTimeout = endpoint.NextTimeout
-		}
-		if endpoint.NextTimeout != nil {
-			endpoint.NextTimeout.PrevTimeout = endpoint.PrevTimeout
-		}
-	}
-
-	endpoint.TimeoutFunc = timeoutFunc
-	endpoint.TimeoutDue = timeoutDue
-
-	// Add to the list in time order
-	next := p.timeoutHead
-
-	if next == nil || next.TimeoutDue.After(timeoutDue) {
-		p.timeoutHead = endpoint
-		endpoint.PrevTimeout = nil
-		endpoint.NextTimeout = next
-		if next != nil {
-			next.PrevTimeout = endpoint
-		}
-		p.setTimer()
-		return
-	}
-
-	var prev *Endpoint
-	for prev, next = next, next.NextTimeout; next != nil; prev, next = next, next.NextTimeout {
-		if next.TimeoutDue.After(timeoutDue) {
-			endpoint.PrevTimeout = prev
-			break
-		}
-	}
-
-	prev.NextTimeout = endpoint
-	endpoint.PrevTimeout = prev
-	endpoint.NextTimeout = next
-	if next != nil {
-		next.PrevTimeout = endpoint
-	}
-
-	if setTimer {
-		p.setTimer()
-	}
-}
-
-func (p *Publisher) timeoutPending(endpoint *Endpoint) {
+func (p *Publisher) timeoutPending(endpoint *endpoint.Endpoint) {
 	// Trigger a failure
 	if endpoint.IsPinging() {
 		p.failEndpoint(endpoint, ErrNetworkPing)
@@ -463,10 +339,10 @@ func (p *Publisher) timeoutPending(endpoint *Endpoint) {
 	}
 }
 
-func (p *Publisher) timeoutKeepalive(endpoint *Endpoint) {
+func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 	// Timeout for PING
 	log.Debug("[%s] Sending PING and starting pending timeout", endpoint.Server())
-	p.registerTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+	p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 
 	if err := endpoint.SendPing(); err != nil {
 		p.failEndpoint(endpoint, err)

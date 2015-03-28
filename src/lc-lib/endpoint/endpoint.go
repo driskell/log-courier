@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
-package publisher
+package endpoint
 
 import (
 	"errors"
+	"github.com/driskell/log-courier/src/lc-lib/addresspool"
 	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/internallist"
+	"github.com/driskell/log-courier/src/lc-lib/payload"
 	"math/rand"
 	"sync"
 	"time"
@@ -29,35 +32,43 @@ type Endpoint struct {
 	sync.Mutex
 
 	// The associated remote
-	Remote *EndpointRemote
+	remote *Remote
 
 	// Whether this endpoint is ready for events or not
-	Ready bool
+	ready bool
 
 	// Whether this endpoint is ready for events, but is not allowed any more due
 	// to peer send queue limits
-	Full bool
+	full bool
 
-	// Linked lists for internal use by Publisher
-	// TODO: Should be use by EndpointSink only to allow separate endpoint package
-	NextTimeout *Endpoint
-	PrevTimeout *Endpoint
-	NextFull *Endpoint
-	PrevFull *Endpoint
-	NextReady *Endpoint
+	// Element structures for internal use by InternalList via EndpointSink
+	// MUST have Value member initialised
+	timeoutElement internallist.Element
+	readyElement   internallist.Element
+	fullElement    internallist.Element
 
 	// Timeout callback and when it should trigger
-	TimeoutFunc TimeoutFunc
-	TimeoutDue  time.Time
+	timeoutFunc interface{}
+	timeoutDue  time.Time
 
 	server          string
-	addressPool     *AddressPool
+	addressPool     *addresspool.Pool
 	transport       core.Transport
-	pendingPayloads map[string]*PendingPayload
+	pendingPayloads map[string]*payload.Pending
 	numPayloads     int
 	pongPending     bool
 
 	lineCount int64
+}
+
+// init prepares the internal Element structures for InternalList and sets the
+// overall initial state
+func (e *Endpoint) init() {
+	e.timeoutElement.Value = e
+	e.readyElement.Value = e
+	e.fullElement.Value = e
+
+	e.resetPayloads()
 }
 
 // Shutdown signals the transport to start shutting down
@@ -83,7 +94,7 @@ func (e *Endpoint) Server() string {
 // access.
 //
 // Should return the payload so the publisher can track it accordingly.
-func (e *Endpoint) SendPayload(payload *PendingPayload) error {
+func (e *Endpoint) SendPayload(payload *payload.Pending) error {
 	// Calculate a nonce
 	nonce := e.generateNonce()
 	for {
@@ -98,7 +109,7 @@ func (e *Endpoint) SendPayload(payload *PendingPayload) error {
 	e.pendingPayloads[nonce] = payload
 	e.numPayloads++
 
-	return e.transport.Write(payload)
+	return e.transport.Write(payload.Nonce, payload.Events())
 }
 
 // generateNonce creates a random string for payload identification
@@ -136,7 +147,7 @@ func (e *Endpoint) IsPinging() bool {
 // We should return the payload that was acked, and whether this is the first
 // acknoweldgement or a later one, so the publisher may track out of sync
 // payload processing accordingly.
-func (e *Endpoint) ProcessAck(a *AckResponse) (*PendingPayload, bool) {
+func (e *Endpoint) ProcessAck(a *AckResponse) (*payload.Pending, bool) {
 	log.Debug("Acknowledgement received for payload %x sequence %d", a.Nonce, a.Sequence)
 
 	// Grab the payload the ACK corresponds to by using nonce
@@ -146,7 +157,7 @@ func (e *Endpoint) ProcessAck(a *AckResponse) (*PendingPayload, bool) {
 		return nil, false
 	}
 
-	ackEvents := payload.ackEvents
+	firstAck := !payload.HasAck()
 
 	// Process ACK
 	lines, complete := payload.Ack(int(a.Sequence))
@@ -158,7 +169,7 @@ func (e *Endpoint) ProcessAck(a *AckResponse) (*PendingPayload, bool) {
 		e.numPayloads--
 	}
 
-	return payload, ackEvents == 0
+	return payload, firstAck
 }
 
 // ProcessPong processes a received PONG message
@@ -180,8 +191,8 @@ func (e *Endpoint) NumPending() int {
 
 // Recover all queued payloads and return them back to the publisher
 // Called when a failure happens
-func (e *Endpoint) Recover() []*PendingPayload {
-	pending := make([]*PendingPayload, len(e.pendingPayloads))
+func (e *Endpoint) Recover() []*payload.Pending {
+	pending := make([]*payload.Pending, len(e.pendingPayloads))
 	for _, payload := range e.pendingPayloads {
 		pending = append(pending, payload)
 	}
@@ -189,8 +200,18 @@ func (e *Endpoint) Recover() []*PendingPayload {
 	return pending
 }
 
+// HasTimeout returns true if this endpoint already has an associated timeout
+func (e *Endpoint) HasTimeout() bool {
+	return e.timeoutFunc != nil
+}
+
+// IsFull returns true if this endpoint has been marked as full
+func (e *Endpoint) IsFull() bool {
+	return e.full
+}
+
 // resetPayloads resets the internal state for pending payloads
 func (e *Endpoint) resetPayloads() {
-	e.pendingPayloads = make(map[string]*PendingPayload)
+	e.pendingPayloads = make(map[string]*payload.Pending)
 	e.numPayloads = 0
 }

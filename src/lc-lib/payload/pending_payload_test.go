@@ -14,7 +14,7 @@
 * limitations under the License.
  */
 
-package publisher
+package payload
 
 import (
 	"github.com/driskell/log-courier/src/lc-lib/core"
@@ -36,7 +36,7 @@ func createTestPayload(t *testing.T, num_events int) *pendingPayload {
 		}
 	}
 
-	payload, err := newPendingPayload(test_events, test_nonce, time.Second)
+	payload, err := newPending(test_events, test_nonce, time.Second)
 	if err != nil {
 		t.Log("Failed to create pending payload structure")
 		t.FailNow()

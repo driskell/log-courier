@@ -14,19 +14,21 @@
 * limitations under the License.
  */
 
-package publisher
+package payload
 
 import (
 	"github.com/driskell/log-courier/src/lc-lib/core"
 )
 
-// PendingPayload holds the data and acknowledged status of a spool of events
+// Pending holds the data and acknowledged status of a spool of events
 // and provides methods for processing acknowledgements so that a future resend
 // of the payload does not resend acknowledged events
-type PendingPayload struct {
+type Pending struct {
 	Nonce         string
 
-	nextPayload   *PendingPayload
+	// TODO: Use internallist
+	NextPayload   *Pending
+
 	events        []*core.EventDescriptor
 	lastSequence  int
 	sequenceLen   int
@@ -35,16 +37,16 @@ type PendingPayload struct {
 	payload       []byte
 }
 
-// NewPendingPayload creates a new structure from the given spool of events
-func NewPendingPayload(events []*core.EventDescriptor) *PendingPayload {
-	return &PendingPayload{
+// NewPending creates a new structure from the given spool of events
+func NewPending(events []*core.EventDescriptor) *Pending {
+	return &Pending{
 		events:      events,
 		sequenceLen: len(events),
 	}
 }
 
 // Events returns the unacknowledged set of events in the payload
-func (pp *PendingPayload) Events() []*core.EventDescriptor {
+func (pp *Pending) Events() []*core.EventDescriptor {
 	return pp.events[pp.ackEvents:]
 }
 
@@ -52,7 +54,7 @@ func (pp *PendingPayload) Events() []*core.EventDescriptor {
 // preventing resends from sending those events
 // Returns the number of events acknowledged, with the second return value true
 // if the payload is now completely acknowledged
-func (pp *PendingPayload) Ack(sequence int) (int, bool) {
+func (pp *Pending) Ack(sequence int) (int, bool) {
 	if sequence <= pp.lastSequence {
 		// No change
 		return 0, false
@@ -76,24 +78,24 @@ func (pp *PendingPayload) Ack(sequence int) (int, bool) {
 // This should be called before resending to ensure the ACK messages returned
 // (which will use an ID of 1 for the first unacknowledged event) are understood
 // correctly
-func (pp *PendingPayload) ResetSequence() {
+func (pp *Pending) ResetSequence() {
 	pp.lastSequence = 0
 	pp.sequenceLen = len(pp.events) - pp.ackEvents
 }
 
 // HasAck returns true if the payload has had at least one event acknowledged
-func (pp *PendingPayload) HasAck() bool {
+func (pp *Pending) HasAck() bool {
 	return pp.ackEvents != 0
 }
 
 // Complete returns true if all events in this payload have been acknowledged
-func (pp *PendingPayload) Complete() bool {
+func (pp *Pending) Complete() bool {
 	return len(pp.events) == 0
 }
 
 // Rollup removes acknowledged events from the payload and returns them so they
 // may be passed onto the Registrar
-func (pp *PendingPayload) Rollup() []*core.EventDescriptor {
+func (pp *Pending) Rollup() []*core.EventDescriptor {
 	pp.processed += pp.ackEvents
 	rollup := pp.events[:pp.ackEvents]
 	pp.events = pp.events[pp.ackEvents:]

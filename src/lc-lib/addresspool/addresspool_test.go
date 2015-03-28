@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package publisher
+package addresspool
 
 import (
   "testing"

@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package publisher
+package addresspool
 
 import (
 	"fmt"
@@ -25,8 +25,8 @@ import (
 	"strconv"
 )
 
-// AddressPool looks up server addresses and manages a pool of IPs
-type AddressPool struct {
+// Pool looks up server addresses and manages a pool of IPs
+type Pool struct {
 	server         string
 	rfc2782        bool
 	rfc2782Service string
@@ -36,16 +36,16 @@ type AddressPool struct {
 	addresses      []*net.TCPAddr
 }
 
-// NewAddressPool creates a new AddressPool instance for a server
-func NewAddressPool(server string) *AddressPool {
-	return &AddressPool{
+// NewPool creates a new Pool instance for a server
+func NewPool(server string) *Pool {
+	return &Pool{
 		server: server,
 	}
 }
 
 // SetRfc2782 enables RFC compliant handling of SRV server entries using the
 // given service name
-func (p *AddressPool) SetRfc2782(enabled bool, service string) {
+func (p *Pool) SetRfc2782(enabled bool, service string) {
 	p.rfc2782 = enabled
 	p.rfc2782Service = service
 }
@@ -53,14 +53,14 @@ func (p *AddressPool) SetRfc2782(enabled bool, service string) {
 // IsLast returns true if the next call to Next will return the first address
 // in the pool. In other words, if the last call to Next returned the last entry
 // or has never been called
-func (p *AddressPool) IsLast() bool {
+func (p *Pool) IsLast() bool {
 	return p.addresses == nil
 }
 
 // Next returns the next available IP address from the pool
 // Each time all IPs have been returned, the server is looked up again if
 // necessary and the IP addresses are returned again in order.
-func (p *AddressPool) Next() (*net.TCPAddr, error) {
+func (p *Pool) Next() (*net.TCPAddr, error) {
 	// Have we exhausted the address list we had? Look up the addresses again
 	// TODO: Should we expire the list to ensure old entries are not reused after
 	// many many hours/days?
@@ -90,13 +90,13 @@ func (p *AddressPool) Next() (*net.TCPAddr, error) {
 
 // Server returns the server configuration entry the address pool was associated
 // with
-func (p *AddressPool) Server() string {
+func (p *Pool) Server() string {
 	return p.server
 }
 
 // Host returns the DNS hostname for the last returned address. This can be used
 // for server name verification such as with TLS
-func (p *AddressPool) Host() string {
+func (p *Pool) Host() string {
 	return p.host
 }
 
@@ -104,13 +104,13 @@ func (p *AddressPool) Host() string {
 // Example for an IP: 127.0.0.1
 //                Hostname: localhost (127.0.0.1)
 // TODO: Improve Desc result for SRV records to include the SRV record
-func (p *AddressPool) Desc() string {
+func (p *Pool) Desc() string {
 	return p.host
 }
 
 // populateAddresses performs the lookups necessary to obtain the pool of IP
 // addresses for the associated server
-func (p *AddressPool) populateAddresses() error {
+func (p *Pool) populateAddresses() error {
 	// @hostname means SRV record where the host and port are in the record
 	if len(p.server) > 0 && p.server[0] == '@' {
 		srvs, err := p.processSrv(p.server[1:])
@@ -149,7 +149,7 @@ func (p *AddressPool) populateAddresses() error {
 // processSrv looks up SRV records based on the SRV settings
 // TODO: processSrv sets Host() to the SRV record name, not the target hostname,
 //       which would potentially break certificate name verification
-func (p *AddressPool) processSrv(server string) ([]*net.SRV, error) {
+func (p *Pool) processSrv(server string) ([]*net.SRV, error) {
 	var service, protocol string
 
 	p.host = server
@@ -172,7 +172,7 @@ func (p *AddressPool) processSrv(server string) ([]*net.SRV, error) {
 }
 
 // populateLookup detects IP addresses and looks up DNS A records
-func (p *AddressPool) populateLookup(host string, port int) (bool, error) {
+func (p *Pool) populateLookup(host string, port int) (bool, error) {
 	if ip := net.ParseIP(host); ip != nil {
 		// IP address
 		p.addresses = append(p.addresses, &net.TCPAddr{
