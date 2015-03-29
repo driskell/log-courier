@@ -20,6 +20,7 @@
 package spooler
 
 import (
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"github.com/driskell/log-courier/src/lc-lib/publisher"
 	"time"
@@ -34,7 +35,7 @@ type Spooler struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
 
-	config      *core.GeneralConfig
+	config      *config.General
 	spool       []*core.EventDescriptor
 	spool_size  int
 	input       chan *core.EventDescriptor
@@ -43,7 +44,7 @@ type Spooler struct {
 	timer       *time.Timer
 }
 
-func NewSpooler(pipeline *core.Pipeline, config *core.GeneralConfig, publisher_imp *publisher.Publisher) *Spooler {
+func NewSpooler(pipeline *core.Pipeline, config *config.General, publisher_imp *publisher.Publisher) *Spooler {
 	ret := &Spooler{
 		config: config,
 		spool:  make([]*core.EventDescriptor, 0, config.SpoolSize),
@@ -169,7 +170,7 @@ func (s *Spooler) resetTimer() {
 	s.timer.Reset(s.config.SpoolTimeout)
 }
 
-func (s *Spooler) reloadConfig(config *core.Config) bool {
+func (s *Spooler) reloadConfig(config *config.Config) bool {
 	s.config = &config.General
 
 	// Immediate flush?

@@ -23,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/driskell/log-courier/src/lc-lib/admin"
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"github.com/driskell/log-courier/src/lc-lib/harvester"
 	"github.com/driskell/log-courier/src/lc-lib/prospector"
@@ -47,7 +48,7 @@ func main() {
 
 type LogCourier struct {
 	pipeline       *core.Pipeline
-	config         *core.Config
+	config         *config.Config
 	shutdown_chan  chan os.Signal
 	reload_chan    chan os.Signal
 	config_file    string
@@ -178,12 +179,12 @@ func (lc *LogCourier) startUp() {
 
 	if list_supported {
 		fmt.Printf("Available transports:\n")
-		for _, transport := range core.AvailableTransports() {
+		for _, transport := range config.AvailableTransports() {
 			fmt.Printf("  %s\n", transport)
 		}
 
 		fmt.Printf("Available codecs:\n")
-		for _, codec := range core.AvailableCodecs() {
+		for _, codec := range config.AvailableCodecs() {
 			fmt.Printf("  %s\n", codec)
 		}
 		os.Exit(0)
@@ -265,7 +266,7 @@ func (lc *LogCourier) configureLogging() (err error) {
 }
 
 func (lc *LogCourier) loadConfig() error {
-	lc.config = core.NewConfig()
+	lc.config = config.NewConfig()
 	if err := lc.config.Load(lc.config_file); err != nil {
 		return err
 	}

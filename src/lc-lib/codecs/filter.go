@@ -19,6 +19,7 @@ package codecs
 import (
 	"errors"
 	"fmt"
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"regexp"
 )
@@ -34,11 +35,11 @@ type CodecFilter struct {
 	config         *CodecFilterFactory
 	last_offset    int64
 	filtered_lines uint64
-	callback_func  core.CodecCallbackFunc
+	callback_func  CallbackFunc
 	meter_filtered uint64
 }
 
-func NewFilterCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
+func NewFilterCodecFactory(config *config.Config, config_path string, unused map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	result := &CodecFilterFactory{}
@@ -61,7 +62,7 @@ func NewFilterCodecFactory(config *core.Config, config_path string, unused map[s
 	return result, nil
 }
 
-func (f *CodecFilterFactory) NewCodec(callback_func core.CodecCallbackFunc, offset int64) core.Codec {
+func (f *CodecFilterFactory) NewCodec(callback_func CallbackFunc, offset int64) Codec {
 	return &CodecFilter{
 		config:        f,
 		last_offset:   offset,
@@ -108,5 +109,5 @@ func (c *CodecFilter) Snapshot() *core.Snapshot {
 
 // Register the codec
 func init() {
-	core.RegisterCodec("filter", NewFilterCodecFactory)
+	config.RegisterCodec("filter", NewFilterCodecFactory)
 }

@@ -14,28 +14,34 @@
  * limitations under the License.
  */
 
-package endpoint
+package transports
 
-// Response is a wrapper that joins a response with an endpoint
-// identifier which can then be sent to the Publisher
-type Response struct {
-  endpoint *Endpoint
-  Response interface{}
-}
-
-// Endpoint returns the associated endpoint
-func (r *Response) Endpoint() *Endpoint {
-	return r.endpoint
+// Response is the generic interface implemented by all response structures
+// It allows the consumer to associate a response to an endpoint
+type Response interface {
+	Endpoint() Endpoint
 }
 
 // AckResponse contains information on which events have been acknowledged and
 // implements the Response interface
 type AckResponse struct {
+	endpoint Endpoint
 	Nonce    string
 	Sequence uint32
+}
+
+// Endpoint returns the associated endpoint
+func (r *AckResponse) Endpoint() Endpoint {
+	return r.endpoint
 }
 
 // PongResponse is received when a transport has responded to a Ping() request
 // and implements the Response interface
 type PongResponse struct {
+	endpoint Endpoint
+}
+
+// Endpoint returns the associated endpoint
+func (r *PongResponse) Endpoint() Endpoint {
+	return r.endpoint
 }

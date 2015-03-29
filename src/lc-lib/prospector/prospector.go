@@ -21,6 +21,7 @@ package prospector
 
 import (
 	"fmt"
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"github.com/driskell/log-courier/src/lc-lib/harvester"
 	"github.com/driskell/log-courier/src/lc-lib/registrar"
@@ -35,7 +36,7 @@ type Prospector struct {
 	core.PipelineConfigReceiver
 	core.PipelineSnapshotProvider
 
-	config          *core.Config
+	config          *config.Config
 	prospectorindex map[string]*prospectorInfo
 	prospectors     map[*prospectorInfo]*prospectorInfo
 	from_beginning  bool
@@ -49,7 +50,7 @@ type Prospector struct {
 	output chan<- *core.EventDescriptor
 }
 
-func NewProspector(pipeline *core.Pipeline, config *core.Config, from_beginning bool, registrar_imp registrar.Registrator, spooler_imp *spooler.Spooler) (*Prospector, error) {
+func NewProspector(pipeline *core.Pipeline, config *config.Config, from_beginning bool, registrar_imp registrar.Registrator, spooler_imp *spooler.Spooler) (*Prospector, error) {
 	ret := &Prospector{
 		config:          config,
 		prospectorindex: make(map[string]*prospectorInfo),
@@ -178,7 +179,7 @@ ProspectLoop:
 	log.Info("Prospector exiting")
 }
 
-func (p *Prospector) scan(path string, config *core.FileConfig) {
+func (p *Prospector) scan(path string, config *config.File) {
 	// Evaluate the path as a wildcards/shell glob
 	matches, err := filepath.Glob(path)
 	if err != nil {
@@ -351,7 +352,7 @@ func (p *Prospector) flagDuplicateError(file string, info *prospectorInfo) {
 	p.prospectorindex[file] = info
 }
 
-func (p *Prospector) startHarvester(info *prospectorInfo, fileconfig *core.FileConfig) {
+func (p *Prospector) startHarvester(info *prospectorInfo, fileconfig *config.File) {
 	var offset int64
 
 	if p.from_beginning {
@@ -366,9 +367,9 @@ func (p *Prospector) startHarvester(info *prospectorInfo, fileconfig *core.FileC
 	p.startHarvesterWithOffset(info, fileconfig, offset)
 }
 
-func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileconfig *core.FileConfig, offset int64) {
+func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileconfig *config.File, offset int64) {
 	// TODO - hook in a shutdown channel
-	info.harvester = harvester.NewHarvester(info, p.config, &fileconfig.StreamConfig, offset)
+	info.harvester = harvester.NewHarvester(info, p.config, &fileconfig.Stream, offset)
 	info.running = true
 	info.status = Status_Ok
 	info.harvester.Start(p.output)

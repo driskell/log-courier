@@ -17,6 +17,7 @@
 package codecs
 
 import (
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 )
 
@@ -25,17 +26,17 @@ type CodecPlainFactory struct {
 
 type CodecPlain struct {
 	last_offset   int64
-	callback_func core.CodecCallbackFunc
+	callback_func CallbackFunc
 }
 
-func NewPlainCodecFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.CodecFactory, error) {
+func NewPlainCodecFactory(config *config.Config, config_path string, unused map[string]interface{}, name string) (interface{}, error) {
 	if err := config.ReportUnusedConfig(config_path, unused); err != nil {
 		return nil, err
 	}
 	return &CodecPlainFactory{}, nil
 }
 
-func (f *CodecPlainFactory) NewCodec(callback_func core.CodecCallbackFunc, offset int64) core.Codec {
+func (f *CodecPlainFactory) NewCodec(callback_func CallbackFunc, offset int64) Codec {
 	return &CodecPlain{
 		last_offset:   offset,
 		callback_func: callback_func,
@@ -64,5 +65,5 @@ func (c *CodecPlain) Snapshot() *core.Snapshot {
 
 // Register the codec
 func init() {
-	core.RegisterCodec("plain", NewPlainCodecFactory)
+	config.RegisterCodec("plain", NewPlainCodecFactory)
 }

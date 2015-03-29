@@ -33,8 +33,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/core"
-	"github.com/driskell/log-courier/src/lc-lib/endpoint"
 )
 
 // Support for newer SSL signature algorithms
@@ -60,7 +60,7 @@ type TransportTcpFactory struct {
 
 	hostport_re *regexp.Regexp
 	tls_config  tls.Config
-	net_config  *core.NetworkConfig
+	net_config  *config.Network
 }
 
 type TransportTcp struct {
@@ -70,7 +70,7 @@ type TransportTcp struct {
 
 	controllerChan chan int
 	controllerWait sync.WaitGroup
-	endpoint       *endpoint.Remote
+	endpoint       Endpoint
 	fail_chan      chan error
 
 	wait        sync.WaitGroup
@@ -86,7 +86,7 @@ type TransportTcp struct {
 
 // NewTransportTcpFactory create a new TransportTcpFactory from the provided
 // configuration data, reporting back any configuration errors it discovers.
-func NewTransportTcpFactory(config *core.Config, config_path string, unused map[string]interface{}, name string) (core.TransportFactory, error) {
+func NewTransportTcpFactory(config *config.Config, config_path string, unused map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	ret := &TransportTcpFactory{
@@ -147,10 +147,7 @@ func NewTransportTcpFactory(config *core.Config, config_path string, unused map[
 
 // NewTransport returns a new Transport interface using the settings from the
 // TransportTcpFactory.
-func (f *TransportTcpFactory) NewTransport(iendpoint interface{}) core.Transport {
-	// TODO: Remove hack for stopping Remote needing to be in core
-	endpoint := iendpoint.(*endpoint.Remote)
-
+func (f *TransportTcpFactory) NewTransport(endpoint Endpoint) Transport {
 	ret := &TransportTcp{
 		config:         f,
 		endpoint:       endpoint,
@@ -165,22 +162,22 @@ func (f *TransportTcpFactory) NewTransport(iendpoint interface{}) core.Transport
 }
 
 // TODO: This is not called anymore
-/*func (t *TransportTcp) ReloadConfig(new_net_config *core.NetworkConfig) int {
+/*func (t *TransportTcp) ReloadConfig(new_net_config *config.Network) int {
 	// Check we can grab new TCP config to compare, if not force transport reinit
 	new_config, ok := new_net_config.TransportFactory.(*TransportTcpFactory)
 	if !ok {
-		return core.Reload_Transport
+		return reloadTransport
 	}
 
 	// TODO: Check timestamps of underlying certificate files to detect changes
 	if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
-		return core.Reload_Transport
+		return reloadTransport
 	}
 
 	// Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
 	t.config.net_config = new_net_config
 
-	return core.Reload_None
+	return reloadNone
 }*/
 
 // controller is the master routine which handles connection and reconnection
@@ -252,12 +249,12 @@ func (t *TransportTcp) connect() error {
 		t.disconnect()
 	}
 
-	addr, err := t.endpoint.AddressPool.Next()
+	addr, err := t.endpoint.Pool().Next()
 	if err != nil {
-		return fmt.Errorf("Failed to select next address for %s: %s", t.endpoint.AddressPool.Server(), err)
+		return fmt.Errorf("Failed to select next address for %s: %s", t.endpoint.Pool().Server(), err)
 	}
 
-	desc := t.endpoint.AddressPool.Desc()
+	desc := t.endpoint.Pool().Desc()
 
 	log.Info("Attempting to connect to %s", desc)
 
@@ -272,7 +269,7 @@ func (t *TransportTcp) connect() error {
 		t.config.tls_config.MinVersion = tls.VersionTLS10
 
 		// Set the tlsconfig server name for server validation (required since Go 1.3)
-		t.config.tls_config.ServerName = t.endpoint.AddressPool.Host()
+		t.config.tls_config.ServerName = t.endpoint.Pool().Host()
 
 		t.tlssocket = tls.Client(&transportTcpWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
 		t.tlssocket.SetDeadline(time.Now().Add(t.config.net_config.Timeout))
@@ -408,7 +405,7 @@ ReceiverLoop:
 
 		switch {
 		case bytes.Compare(header[0:4], []byte("PONG")) == 0:
-			if shutdown = t.sendResponse(&endpoint.PongResponse{}); shutdown {
+			if shutdown = t.sendResponse(&PongResponse{t.endpoint}); shutdown {
 				break ReceiverLoop
 			}
 		case bytes.Compare(header[0:4], []byte("ACKN")) == 0:
@@ -485,16 +482,16 @@ func (t *TransportTcp) processAckn(data []byte) (bool, error) {
 		return false, fmt.Errorf("Protocol error: Corrupt message (ACKN size %d != 20)", len(data))
 	}
 
-	return t.sendResponse(&endpoint.AckResponse{string(data[0:16]), binary.BigEndian.Uint32(data[16:20])}), nil
+	return t.sendResponse(&AckResponse{t.endpoint, string(data[0:16]), binary.BigEndian.Uint32(data[16:20])}), nil
 }
 
 // sendResponse ships a response to the Publisher whilst also monitoring for any
 // shutdown signal. Returns true if shutdown was signalled
-func (t *TransportTcp) sendResponse(response interface{}) bool {
+func (t *TransportTcp) sendResponse(response Response) bool {
 	select {
 	case <-t.recvControl:
 		return true
-	case t.endpoint.ResponseChan() <- t.endpoint.NewResponse(response):
+	case t.endpoint.ResponseChan() <- response:
 	}
 	return false
 }
@@ -571,6 +568,6 @@ func (t *TransportTcp) Wait() {
 
 // Register the transports
 func init() {
-	core.RegisterTransport("tcp", NewTransportTcpFactory)
-	core.RegisterTransport("tls", NewTransportTcpFactory)
+	config.RegisterTransport("tcp", NewTransportTcpFactory)
+	config.RegisterTransport("tls", NewTransportTcpFactory)
 }

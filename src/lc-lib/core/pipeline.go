@@ -17,6 +17,7 @@
 package core
 
 import (
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"sync"
 )
 
@@ -24,7 +25,7 @@ type Pipeline struct {
 	pipes          []IPipelineSegment
 	signal         chan interface{}
 	group          sync.WaitGroup
-	config_sinks   map[*PipelineConfigReceiver]chan *Config
+	config_sinks   map[*PipelineConfigReceiver]chan *config.Config
 	snapshot_chan  chan []*Snapshot
 	snapshot_pipes map[IPipelineSnapshotProvider]IPipelineSnapshotProvider
 }
@@ -33,7 +34,7 @@ func NewPipeline() *Pipeline {
 	return &Pipeline{
 		pipes:          make([]IPipelineSegment, 0, 5),
 		signal:         make(chan interface{}),
-		config_sinks:   make(map[*PipelineConfigReceiver]chan *Config),
+		config_sinks:   make(map[*PipelineConfigReceiver]chan *config.Config),
 		snapshot_chan:  make(chan []*Snapshot),
 		snapshot_pipes: make(map[IPipelineSnapshotProvider]IPipelineSnapshotProvider),
 	}
@@ -50,7 +51,7 @@ func (p *Pipeline) Register(ipipe IPipelineSegment) {
 
 	if ipipe_ext, ok := ipipe.(IPipelineConfigReceiver); ok {
 		pipe_ext := ipipe_ext.getConfigReceiverStruct()
-		sink := make(chan *Config)
+		sink := make(chan *config.Config)
 		p.config_sinks[pipe_ext] = sink
 		pipe_ext.config_chan = sink
 	}
@@ -74,7 +75,7 @@ func (p *Pipeline) Wait() {
 	p.group.Wait()
 }
 
-func (p *Pipeline) SendConfig(config *Config) {
+func (p *Pipeline) SendConfig(config *config.Config) {
 	for _, sink := range p.config_sinks {
 		sink <- config
 	}
@@ -123,14 +124,14 @@ type IPipelineConfigReceiver interface {
 }
 
 type PipelineConfigReceiver struct {
-	config_chan <-chan *Config
+	config_chan <-chan *config.Config
 }
 
 func (s *PipelineConfigReceiver) getConfigReceiverStruct() *PipelineConfigReceiver {
 	return s
 }
 
-func (s *PipelineConfigReceiver) OnConfig() <-chan *Config {
+func (s *PipelineConfigReceiver) OnConfig() <-chan *config.Config {
 	return s.config_chan
 }
 

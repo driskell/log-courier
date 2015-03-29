@@ -18,6 +18,7 @@ package admin
 
 import (
 	"fmt"
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"net"
 	"strings"
@@ -28,7 +29,7 @@ type Listener struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
 
-	config          *core.GeneralConfig
+	config          *config.General
 	command_chan    chan string
 	response_chan   chan *Response
 	listener        NetListener
@@ -37,7 +38,7 @@ type Listener struct {
 	client_ended    chan interface{}
 }
 
-func NewListener(pipeline *core.Pipeline, config *core.GeneralConfig) (*Listener, error) {
+func NewListener(pipeline *core.Pipeline, config *config.General) (*Listener, error) {
 	var err error
 
 	ret := &Listener{
@@ -59,7 +60,7 @@ func NewListener(pipeline *core.Pipeline, config *core.GeneralConfig) (*Listener
 	return ret, nil
 }
 
-func (l *Listener) listen(config *core.GeneralConfig) (NetListener, error) {
+func (l *Listener) listen(config *config.General) (NetListener, error) {
 	bind := strings.SplitN(config.AdminBind, ":", 2)
 	if len(bind) == 1 {
 		bind = append(bind, bind[0])

@@ -19,9 +19,9 @@ package endpoint
 import (
 	"errors"
 	"github.com/driskell/log-courier/src/lc-lib/addresspool"
-	"github.com/driskell/log-courier/src/lc-lib/core"
 	"github.com/driskell/log-courier/src/lc-lib/internallist"
 	"github.com/driskell/log-courier/src/lc-lib/payload"
+	"github.com/driskell/log-courier/src/lc-lib/transports"
 	"math/rand"
 	"sync"
 	"time"
@@ -30,9 +30,6 @@ import (
 // Endpoint structure represents a single remote endpoint
 type Endpoint struct {
 	sync.Mutex
-
-	// The associated remote
-	remote *Remote
 
 	// Whether this endpoint is ready for events or not
 	ready bool
@@ -51,9 +48,10 @@ type Endpoint struct {
 	timeoutFunc interface{}
 	timeoutDue  time.Time
 
+	sink            *Sink
 	server          string
 	addressPool     *addresspool.Pool
-	transport       core.Transport
+	transport       transports.Transport
 	pendingPayloads map[string]*payload.Pending
 	numPayloads     int
 	pongPending     bool
@@ -147,7 +145,7 @@ func (e *Endpoint) IsPinging() bool {
 // We should return the payload that was acked, and whether this is the first
 // acknoweldgement or a later one, so the publisher may track out of sync
 // payload processing accordingly.
-func (e *Endpoint) ProcessAck(a *AckResponse) (*payload.Pending, bool) {
+func (e *Endpoint) ProcessAck(a *transports.AckResponse) (*payload.Pending, bool) {
 	log.Debug("Acknowledgement received for payload %x sequence %d", a.Nonce, a.Sequence)
 
 	// Grab the payload the ACK corresponds to by using nonce
@@ -214,4 +212,33 @@ func (e *Endpoint) IsFull() bool {
 func (e *Endpoint) resetPayloads() {
 	e.pendingPayloads = make(map[string]*payload.Pending)
 	e.numPayloads = 0
+}
+
+// Pool returns the associated address pool
+// This implements part of the transports.Endpoint interface for callbacks
+func (e *Endpoint) Pool() *addresspool.Pool {
+  return e.addressPool
+}
+
+// Ready is called by a transport to signal it is ready for events.
+// This should be triggered once connection is successful and the transport is
+// ready to send data. It should NOT be called again until the transport
+// receives data, otherwise the call may block.
+// This implements part of the transports.Endpoint interface for callbacks
+func (e *Endpoint) Ready() {
+	e.sink.readyChan <- e
+}
+
+// ResponseChan returns the channel that responses should be sent on
+// This implements part of the transports.Endpoint interface for callbacks
+func (e *Endpoint) ResponseChan() chan<- transports.Response {
+	return e.sink.responseChan
+}
+
+// Fail is called by a transport to signal an error has occurred, and that all
+// pending payloads should be returned to the publisher for retransmission
+// elsewhere.
+// This implements part of the transports.Endpoint interface for callbacks
+func (e *Endpoint) Fail(err error) {
+	e.sink.failChan <- &Failure{e, err}
 }

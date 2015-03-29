@@ -18,8 +18,9 @@ package endpoint
 
 import (
 	"github.com/driskell/log-courier/src/lc-lib/addresspool"
-	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/internallist"
+	"github.com/driskell/log-courier/src/lc-lib/transports"
 	"time"
 )
 
@@ -33,10 +34,10 @@ type Failure struct {
 // will utilise. The newEndpoint method attaches new endpoints to this
 type Sink struct {
 	endpoints    map[string]*Endpoint
-	config       *core.NetworkConfig
+	config       *config.Network
 
 	readyChan    chan *Endpoint
-	responseChan chan *Response
+	responseChan chan transports.Response
 	failChan     chan *Failure
 
 	timeoutTimer *time.Timer
@@ -47,14 +48,14 @@ type Sink struct {
 }
 
 // NewSink initialises a new message sink for endpoints
-func NewSink(config *core.NetworkConfig) *Sink {
+func NewSink(config *config.Network) *Sink {
 	// TODO: Make channel sizes configurable?
 	ret := &Sink{
 		endpoints:    make(map[string]*Endpoint),
 		config:       config,
 
 		readyChan:    make(chan *Endpoint, 10),
-		responseChan: make(chan *Response, 10),
+		responseChan: make(chan transports.Response, 10),
 		failChan:     make(chan *Failure, 10),
 
 		timeoutTimer: time.NewTimer(1 * time.Second),
@@ -68,18 +69,12 @@ func NewSink(config *core.NetworkConfig) *Sink {
 // AddEndpoint initialises a new endpoint for a given server entry
 func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool) *Endpoint {
 	endpoint := &Endpoint{
+		sink:        f,
 		server:      server,
 		addressPool: addressPool,
 	}
 
-	remote := &Remote{
-		sink:        f,
-		endpoint:    endpoint,
-		AddressPool: addressPool,
-	}
-
-	endpoint.remote = remote
-	endpoint.transport = f.config.TransportFactory.NewTransport(remote)
+	endpoint.transport = transports.NewTransport(f.config.Factory, endpoint)
 	endpoint.init()
 
 	f.endpoints[server] = endpoint
@@ -110,7 +105,7 @@ func (f *Sink) ReadyChan() <-chan *Endpoint {
 
 // ResponseChan returns the response channel
 // All responses received from endpoints are sent through here
-func (f *Sink) ResponseChan() <-chan *Response {
+func (f *Sink) ResponseChan() <-chan transports.Response {
 	return f.responseChan
 }
 
