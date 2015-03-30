@@ -27,22 +27,54 @@ import (
 	"time"
 )
 
+// status holds an Endpoint status
+type status int
+
+// Endpoint statuses
+const (
+	// Not yet ready
+	endpointStatusIdle status = iota
+
+	// Ready to receive events
+	endpointStatusReady
+
+	// Could receive events but too many are oustanding
+	endpointStatusFull
+
+	// Do not use this endpoint, it has failed
+	endpointStatusFailed
+)
+
+// StatusChange holds a value that represents a change in endpoint status that
+// is sent over the status channel of the Sink
+type StatusChange int
+
+// Endpoint status signals
+const (
+	Ready     = iota
+	Recovered
+	Failed
+)
+
+// Status structure contains the reason for failure, or nil if recovered
+type Status struct {
+	Endpoint *Endpoint
+	Status   StatusChange
+}
+
 // Endpoint structure represents a single remote endpoint
 type Endpoint struct {
 	sync.Mutex
 
-	// Whether this endpoint is ready for events or not
-	ready bool
-
-	// Whether this endpoint is ready for events, but is not allowed any more due
-	// to peer send queue limits
-	full bool
+	// The endpoint status
+	status status
 
 	// Element structures for internal use by InternalList via EndpointSink
 	// MUST have Value member initialised
 	timeoutElement internallist.Element
 	readyElement   internallist.Element
 	fullElement    internallist.Element
+	failedElement  internallist.Element
 
 	// Timeout callback and when it should trigger
 	timeoutFunc interface{}
@@ -52,16 +84,16 @@ type Endpoint struct {
 	server          string
 	addressPool     *addresspool.Pool
 	transport       transports.Transport
-	pendingPayloads map[string]*payload.Pending
+	pendingPayloads map[string]*payload.Payload
 	numPayloads     int
 	pongPending     bool
 
 	lineCount int64
 }
 
-// init prepares the internal Element structures for InternalList and sets the
-// overall initial state
-func (e *Endpoint) init() {
+// Init prepares the internal Element structures for InternalList and prepares
+// the pending payload structures
+func (e *Endpoint) Init() {
 	e.timeoutElement.Value = e
 	e.readyElement.Value = e
 	e.fullElement.Value = e
@@ -92,7 +124,7 @@ func (e *Endpoint) Server() string {
 // access.
 //
 // Should return the payload so the publisher can track it accordingly.
-func (e *Endpoint) SendPayload(payload *payload.Pending) error {
+func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 	// Calculate a nonce
 	nonce := e.generateNonce()
 	for {
@@ -145,7 +177,7 @@ func (e *Endpoint) IsPinging() bool {
 // We should return the payload that was acked, and whether this is the first
 // acknoweldgement or a later one, so the publisher may track out of sync
 // payload processing accordingly.
-func (e *Endpoint) ProcessAck(a *transports.AckResponse) (*payload.Pending, bool) {
+func (e *Endpoint) ProcessAck(a *transports.AckResponse) (*payload.Payload, bool) {
 	log.Debug("Acknowledgement received for payload %x sequence %d", a.Nonce, a.Sequence)
 
 	// Grab the payload the ACK corresponds to by using nonce
@@ -187,10 +219,10 @@ func (e *Endpoint) NumPending() int {
 	return e.numPayloads
 }
 
-// Recover all queued payloads and return them back to the publisher
+// PullBackPending returns all queued payloads back to the publisher
 // Called when a failure happens
-func (e *Endpoint) Recover() []*payload.Pending {
-	pending := make([]*payload.Pending, len(e.pendingPayloads))
+func (e *Endpoint) PullBackPending() []*payload.Payload {
+	pending := make([]*payload.Payload, 0, len(e.pendingPayloads))
 	for _, payload := range e.pendingPayloads {
 		pending = append(pending, payload)
 	}
@@ -203,14 +235,19 @@ func (e *Endpoint) HasTimeout() bool {
 	return e.timeoutFunc != nil
 }
 
+// IsFailed returns true if this endpoint has been marked as failed
+func (e *Endpoint) IsFailed() bool {
+	return e.status == endpointStatusFailed
+}
+
 // IsFull returns true if this endpoint has been marked as full
 func (e *Endpoint) IsFull() bool {
-	return e.full
+	return e.status == endpointStatusFull
 }
 
 // resetPayloads resets the internal state for pending payloads
 func (e *Endpoint) resetPayloads() {
-	e.pendingPayloads = make(map[string]*payload.Pending)
+	e.pendingPayloads = make(map[string]*payload.Payload)
 	e.numPayloads = 0
 }
 
@@ -222,11 +259,10 @@ func (e *Endpoint) Pool() *addresspool.Pool {
 
 // Ready is called by a transport to signal it is ready for events.
 // This should be triggered once connection is successful and the transport is
-// ready to send data. It should NOT be called again until the transport
-// receives data, otherwise the call may block.
+// ready to send data.
 // This implements part of the transports.Endpoint interface for callbacks
 func (e *Endpoint) Ready() {
-	e.sink.readyChan <- e
+	e.sink.statusChan <- &Status{e, Ready}
 }
 
 // ResponseChan returns the channel that responses should be sent on
@@ -237,8 +273,17 @@ func (e *Endpoint) ResponseChan() chan<- transports.Response {
 
 // Fail is called by a transport to signal an error has occurred, and that all
 // pending payloads should be returned to the publisher for retransmission
-// elsewhere.
+// elsewhere. All subsequent Ready signals will also be ignored until Recover()
+// is called
 // This implements part of the transports.Endpoint interface for callbacks
-func (e *Endpoint) Fail(err error) {
-	e.sink.failChan <- &Failure{e, err}
+func (e *Endpoint) Fail() {
+	e.sink.statusChan <- &Status{e, Failed}
+}
+
+// Recover is called by a transport to signal a failure has recovered
+// Sending of payloads will begin immediately as if a ready signal was sent to
+// an idle endpoint
+// This implements part of the transports.Endpoint interface for callbacks
+func (e *Endpoint) Recover() {
+	e.sink.statusChan <- &Status{e, Recovered}
 }

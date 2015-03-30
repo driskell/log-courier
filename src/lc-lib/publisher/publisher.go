@@ -26,6 +26,7 @@ import (
 	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"github.com/driskell/log-courier/src/lc-lib/endpoint"
+	"github.com/driskell/log-courier/src/lc-lib/internallist"
 	"github.com/driskell/log-courier/src/lc-lib/payload"
 	"github.com/driskell/log-courier/src/lc-lib/registrar"
 	"github.com/driskell/log-courier/src/lc-lib/transports"
@@ -55,8 +56,7 @@ type Publisher struct {
 	config           *config.Network
 	endpointSink     *endpoint.Sink
 
-	firstPayload     *payload.Pending
-	lastPayload      *payload.Pending
+	payloadList      internallist.List
 	numPayloads      int64
 	outOfSync        int
 	spoolChan        chan []*core.EventDescriptor
@@ -71,6 +71,7 @@ type Publisher struct {
 
 	ifSpoolChan  <-chan []*core.EventDescriptor
 	nextSpool    []*core.EventDescriptor
+	resendList   internallist.List
 }
 
 func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar registrar.Registrator) *Publisher {
@@ -110,22 +111,29 @@ func (p *Publisher) Run() {
 PublishLoop:
 	for {
 		select {
-		case endpoint := <-p.endpointSink.ReadyChan():
-			p.readyEndpoint(endpoint)
+		case status := <-p.endpointSink.StatusChan():
+			if status.Status == endpoint.Ready {
+				p.readyEndpoint(status.Endpoint)
+			} else if status.Status == endpoint.Recovered {
+				p.recoverEndpoint(status.Endpoint)
+				p.readyEndpoint(status.Endpoint)
+			} else {
+				p.failEndpoint(status.Endpoint)
+			}
 		case spool := <-p.ifSpoolChan:
 			for p.endpointSink.HasReady() {
 				// We have ready endpoints, send the spool
 				endpoint := p.endpointSink.NextReady()
 
-				log.Debug("[%s] %d new events queued, sending to endpoint", endpoint.Server(), len(spool))
-				err := p.sendPayload(endpoint, spool)
+				log.Debug("[%s] %d new events, sending to endpoint", endpoint.Server(), len(spool))
+				err := p.sendEvents(endpoint, spool)
 
 				if err == nil {
 					continue PublishLoop
 				}
 			}
 
-			log.Debug("%d new events queued, awaiting endpoint readiness", len(spool))
+			log.Debug("%d new events queued awaiting endpoint readiness", len(spool))
 			// No ready endpoint, wait for one
 			p.nextSpool = spool
 			p.ifSpoolChan = nil
@@ -148,10 +156,8 @@ PublishLoop:
 			}
 
 			if err != nil {
-				p.failEndpoint(endpoint, err)
+				p.forceEndpointFailure(endpoint, err)
 			}
-		case failure := <-p.endpointSink.FailChan():
-			p.failEndpoint(failure.Endpoint, failure.Error)
 		case <-p.endpointSink.TimeoutChan():
 			// Process triggered timers
 			for {
@@ -194,23 +200,22 @@ PublishLoop:
 	p.Done()
 }
 
-func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, events []*core.EventDescriptor) error {
-	payload := payload.NewPending(events)
+func (p *Publisher) sendEvents(endpoint *endpoint.Endpoint, events []*core.EventDescriptor) error {
+	pendingPayload := payload.NewPayload(events)
 
-	if p.firstPayload == nil {
-		p.firstPayload = payload
-	} else {
-		p.lastPayload.NextPayload = payload
-	}
-	p.lastPayload = payload
+	p.payloadList.PushBack(&pendingPayload.Element)
 
 	p.Lock()
 	p.numPayloads++
 	p.Unlock()
 
+	return p.sendPayload(endpoint, pendingPayload)
+}
+
+func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload) error {
 	// Don't queue if send fails and fail the endpoint
-	if err := endpoint.SendPayload(payload); err != nil {
-		p.failEndpoint(endpoint, err)
+	if err := endpoint.SendPayload(pendingPayload); err != nil {
+		p.forceEndpointFailure(endpoint, err)
 		return err
 	}
 
@@ -224,11 +229,11 @@ func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, events []*core.Even
 }
 
 func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckResponse) error {
-	payload, firstAck := endpoint.ProcessAck(msg)
+	pendingPayload, firstAck := endpoint.ProcessAck(msg)
 
 	// We potentially receive out-of-order ACKs due to payloads distributed across servers
 	// This is where we enforce ordering again to ensure registrar receives ACK in order
-	if payload == p.firstPayload {
+	if pendingPayload == p.payloadList.Front().Value.(*payload.Payload) {
 		// The out of sync count we have will never include the first payload, so
 		// take the value +1
 		outOfSync := p.outOfSync + 1
@@ -237,15 +242,14 @@ func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckR
 		// mark off will always be the first payload - thus the +1. Subsequent
 		// payloads are the out of sync ones - so if we mark them off we decrease
 		// the out of sync count
-		for payload.HasAck() {
-			p.registrarSpool.Add(registrar.NewAckEvent(payload.Rollup()))
+		for pendingPayload.HasAck() {
+			p.registrarSpool.Add(registrar.NewAckEvent(pendingPayload.Rollup()))
 
-			if !payload.Complete() {
+			if !pendingPayload.Complete() {
 				break
 			}
 
-			payload = payload.NextPayload
-			p.firstPayload = payload
+			p.payloadList.Remove(&pendingPayload.Element)
 			outOfSync--
 			p.outOfSync = outOfSync
 
@@ -258,9 +262,11 @@ func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckR
 			//	p.can_send = p.transport.CanSend()
 			//}
 
-			if payload == nil {
+			if p.payloadList.Len() == 0 {
 				break
 			}
+
+			pendingPayload = p.payloadList.Front().Value.(*payload.Payload)
 		}
 
 		p.registrarSpool.Send()
@@ -282,7 +288,7 @@ func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckR
 	// If we're no longer full, move to ready queue
 	// TODO: Use "peer send queue" - Move logic to endpoint.EndpointSink
 	if endpoint.IsFull() && endpoint.NumPending() < 4 {
-		log.Debug("[%s] endpoint.Endpoint is no longer full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
+		log.Debug("[%s] Endpoint is no longer full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
 		p.readyEndpoint(endpoint)
 	}
 
@@ -303,30 +309,80 @@ func (p *Publisher) processPong(endpoint *endpoint.Endpoint, msg *transports.Pon
 	return nil
 }
 
-func (p *Publisher) failEndpoint(endpoint *endpoint.Endpoint, err error) {
-	log.Error("[%s] endpoint.Endpoint failed: %s", endpoint.Server(), err)
-	// TODO:
+// recoverEndpoint moves an endpoint back into the idle status
+func (p *Publisher) recoverEndpoint(endpoint *endpoint.Endpoint) {
+	if endpoint.IsFailed() {
+		log.Info("[%s] Endpoint recovered", endpoint.Server())
+		p.endpointSink.RecoverFailed(endpoint)
+	}
+}
+
+// failEndpoint marks an endpoint as failed
+func (p *Publisher) failEndpoint(endpoint *endpoint.Endpoint) {
+	log.Info("[%s] Marking endpoint as failed", endpoint.Server())
+	p.endpointSink.RegisterFailed(endpoint)
+
+	// Pull back pending payloads so we can requeue them onto other endpoints
+	for _, pendingPayload := range endpoint.PullBackPending() {
+		p.resendList.PushBack(&pendingPayload.ResendElement)
+	}
+
+	// If any ready now, requeue immediately
+	for p.resendList.Len() != 0 && p.endpointSink.HasReady() {
+		// We have ready endpoints, send the spool
+		endpoint := p.endpointSink.NextReady()
+		pendingPayload := p.resendList.Front().Value.(*payload.Payload)
+
+		log.Debug("[%s] %d events require resending, sending to endpoint", endpoint.Server(), len(pendingPayload.Events()))
+		err := p.sendPayload(endpoint, pendingPayload)
+
+		if err == nil {
+			p.resendList.Remove(&pendingPayload.ResendElement)
+		}
+	}
+
+	log.Debug("%d payloads held for resend", p.resendList.Len())
+}
+
+// forceEndpointFailure is called by Publisher to force an endpoint to enter
+// the failed status. It reports the error and then processes the failure.
+func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
+	log.Error("[%s] An error occurred: %s", endpoint.Server(), err)
+	p.failEndpoint(endpoint)
 }
 
 func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 	// TODO: Make configurable (bring back the "peer send queue" setting)
 	if endpoint.NumPending() >= 4 {
-		log.Debug("[%s] endpoint.Endpoint is full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
+		log.Debug("[%s] Endpoint is full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
 		p.endpointSink.RegisterFull(endpoint)
 		return
 	}
 
-	if p.nextSpool != nil {
+	if p.resendList.Len() != 0 {
+		pendingPayload := p.resendList.Front().Value.(*payload.Payload)
+
+		log.Debug("[%s] Send is now ready, resending %d events", endpoint.Server(), len(pendingPayload.Events()))
+
+		// We have a payload to resend, send it now
+		if err := p.sendPayload(endpoint, pendingPayload); err != nil {
+			p.resendList.Remove(&pendingPayload.ResendElement)
+			log.Debug("%d payloads remain held for resend", p.resendList.Len())
+		}
+	} else if p.nextSpool != nil {
 		log.Debug("[%s] Send is now ready, sending %d queued events", endpoint.Server(), len(p.nextSpool))
+
 		// We have events, send it to the endpoint and wait for more
-		if err := p.sendPayload(endpoint, p.nextSpool); err == nil {
+		if err := p.sendEvents(endpoint, p.nextSpool); err == nil {
 			p.nextSpool = nil
 			p.ifSpoolChan = p.spoolChan
 		}
 	} else {
 		log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
+
 		// No events, save on the ready list and start the keepalive timer if none set
 		p.endpointSink.RegisterReady(endpoint)
+
 		if !endpoint.HasTimeout() {
 			log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
 			p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
@@ -337,9 +393,9 @@ func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 func (p *Publisher) timeoutPending(endpoint *endpoint.Endpoint) {
 	// Trigger a failure
 	if endpoint.IsPinging() {
-		p.failEndpoint(endpoint, ErrNetworkPing)
+		p.forceEndpointFailure(endpoint, ErrNetworkPing)
 	} else {
-		p.failEndpoint(endpoint, ErrNetworkTimeout)
+		p.forceEndpointFailure(endpoint, ErrNetworkTimeout)
 	}
 }
 
@@ -349,7 +405,7 @@ func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 	p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 
 	if err := endpoint.SendPing(); err != nil {
-		p.failEndpoint(endpoint, err)
+		p.forceEndpointFailure(endpoint, err)
 	}
 }
 

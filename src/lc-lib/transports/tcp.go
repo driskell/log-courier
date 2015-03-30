@@ -71,7 +71,7 @@ type TransportTcp struct {
 	controllerChan chan int
 	controllerWait sync.WaitGroup
 	endpoint       Endpoint
-	fail_chan      chan error
+	failChan       chan error
 
 	wait        sync.WaitGroup
 	sendControl chan int
@@ -201,12 +201,21 @@ func (t *TransportTcp) controller() {
 				// Shutdown request
 				t.disconnect()
 				return
-			case err = <-t.fail_chan:
+			case err = <-t.failChan:
+				// Error occurred
+				if err != nil {
+					// If err is nil, it's a forced failure by publisher so we need not
+					// call endpoint fail to let it know about it
+					t.endpoint.Fail()
+				}
 			}
 		}
 
-		// Error occurred
-		log.Error("Transport error, will try again: %s", err)
+		if err != nil {
+			log.Error("[%s] Transport error, reconnecting: %s", t.endpoint.Pool().Server(), err)
+		} else {
+			log.Info("[%s] Transport reconnecting", t.endpoint.Pool().Server())
+		}
 
 		t.disconnect()
 
@@ -251,12 +260,12 @@ func (t *TransportTcp) connect() error {
 
 	addr, err := t.endpoint.Pool().Next()
 	if err != nil {
-		return fmt.Errorf("Failed to select next address for %s: %s", t.endpoint.Pool().Server(), err)
+		return fmt.Errorf("Failed to select next address: %s", err)
 	}
 
 	desc := t.endpoint.Pool().Desc()
 
-	log.Info("Attempting to connect to %s", desc)
+	log.Info("[%s] Attempting to connect to %s", t.endpoint.Pool().Server(), desc)
 
 	tcpsocket, err := net.DialTimeout("tcp", addr.String(), t.config.net_config.Timeout)
 	if err != nil {
@@ -285,7 +294,7 @@ func (t *TransportTcp) connect() error {
 		t.socket = tcpsocket
 	}
 
-	log.Info("Connected to %s", desc)
+	log.Notice("[%s] Connected to %s", t.endpoint.Pool().Server(), desc)
 
 	// Signal channels
 	t.sendControl = make(chan int, 1)
@@ -296,10 +305,10 @@ func (t *TransportTcp) connect() error {
 	// from receive - otherwise if both fail at the same time, disconnect blocks
 	// NOTE: This may not be necessary anymore - both recv_chan pushes also select
 	//       on the shutdown channel, which will close on the first error returned
-	t.fail_chan = make(chan error, 2)
+	t.failChan = make(chan error, 2)
 
-	// Start with a send
-	t.endpoint.Ready()
+	// Send a recovery single - this implicitly means we're also ready
+	t.endpoint.Recover()
 
 	t.wait.Add(2)
 
@@ -333,6 +342,8 @@ func (t *TransportTcp) disconnect() {
 	}
 
 	t.socket.Close()
+
+	log.Notice("[%s] Disconnected from %s", t.endpoint.Pool().Server(), t.endpoint.Pool().Desc())
 }
 
 // sender handles socket writes
@@ -360,7 +371,7 @@ SenderLoop:
 				// Fail the transport
 				select {
 				case <-t.sendControl:
-				case t.fail_chan <- err:
+				case t.failChan <- err:
 				}
 				break SenderLoop
 			}
@@ -426,7 +437,7 @@ ReceiverLoop:
 			case <-t.recvControl:
 				// Shutdown
 				break FailLoop
-			case t.fail_chan <- err:
+			case t.failChan <- err:
 			}
 		}
 	}
@@ -554,6 +565,11 @@ func (t *TransportTcp) Ping() error {
 	// 4-byte uint32 data length (0 length for PING)
 	t.send_chan <- []byte{'P', 'I', 'N', 'G', 0, 0, 0, 0}
 	return nil
+}
+
+// Fail the transport
+func (t *TransportTcp) Fail() {
+	t.failChan <- nil
 }
 
 // Shutdown the transport

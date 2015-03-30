@@ -34,6 +34,7 @@ type Transport interface {
 	//ReloadConfig(*NetworkConfig) int
 	Write(string, []*core.EventDescriptor) error
 	Ping() error
+	Fail()
 	Shutdown()
 	Wait()
 }
@@ -44,7 +45,8 @@ type Endpoint interface {
   Pool() *addresspool.Pool
   Ready()
   ResponseChan() chan<- Response
-  Fail(error)
+  Fail()
+	Recover()
 }
 
 // transportFactory is the interface that all transport factories implement. The

@@ -24,27 +24,21 @@ import (
 	"time"
 )
 
-// Failure structure contains the reason for failure
-type Failure struct {
-	Endpoint *Endpoint
-	Error    error
-}
-
 // Sink structure contains the control channels that each endpoint
 // will utilise. The newEndpoint method attaches new endpoints to this
 type Sink struct {
 	endpoints    map[string]*Endpoint
 	config       *config.Network
 
-	readyChan    chan *Endpoint
+	statusChan   chan *Status
 	responseChan chan transports.Response
-	failChan     chan *Failure
 
 	timeoutTimer *time.Timer
 
 	timeoutList internallist.List
 	readyList   internallist.List
 	fullList    internallist.List
+	failedList  internallist.List
 }
 
 // NewSink initialises a new message sink for endpoints
@@ -54,9 +48,8 @@ func NewSink(config *config.Network) *Sink {
 		endpoints:    make(map[string]*Endpoint),
 		config:       config,
 
-		readyChan:    make(chan *Endpoint, 10),
+		statusChan:   make(chan *Status, 10),
 		responseChan: make(chan transports.Response, 10),
-		failChan:     make(chan *Failure, 10),
 
 		timeoutTimer: time.NewTimer(1 * time.Second),
 	}
@@ -75,7 +68,7 @@ func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool) *Endpoi
 	}
 
 	endpoint.transport = transports.NewTransport(f.config.Factory, endpoint)
-	endpoint.init()
+	endpoint.Init()
 
 	f.endpoints[server] = endpoint
 
@@ -96,25 +89,19 @@ func (f *Sink) Wait() {
 	}
 }
 
-// ReadyChan returns the readiness channel
-// Endpoints that appear from this channel can be saved to a pending ready list
-// using RegisterReady, or to a full list using RegisterFull
-func (f *Sink) ReadyChan() <-chan *Endpoint {
-	return f.readyChan
-}
-
 // ResponseChan returns the response channel
 // All responses received from endpoints are sent through here
 func (f *Sink) ResponseChan() <-chan transports.Response {
 	return f.responseChan
 }
 
-// FailChan returns the failure channel
+// StatusChan returns the status channel
 // Failed endpoints will send themselves through this channel along with the
 // reason for failure
+// Recovered endpoints will send themselves with a nil failure reason
 // TODO: Document handling of this
-func (f *Sink) FailChan() <-chan *Failure {
-	return f.failChan
+func (f *Sink) StatusChan() <-chan *Status {
+	return f.statusChan
 }
 
 // TimeoutChan returns a channel which will receive the current time when
@@ -185,38 +172,38 @@ func (f *Sink) HasReady() bool {
 // NextReady returns the next ready endpoint, in order of least pending payloads
 func (f *Sink) NextReady() *Endpoint {
 	endpoint := f.readyList.Remove(f.readyList.Front()).(*Endpoint)
-	endpoint.ready = false
+	endpoint.status = endpointStatusIdle
 	return endpoint
 }
 
 // RegisterFull marks an endpoint as full
 func (f *Sink) RegisterFull(endpoint *Endpoint) {
-	if endpoint.full {
+	// Ignore if we are already marked as full or were marked as failed
+	if endpoint.status == endpointStatusFull || endpoint.status == endpointStatusFailed {
 		return
 	}
 
-	if endpoint.ready {
-		endpoint.ready = false
+	if endpoint.status == endpointStatusReady {
 		f.readyList.Remove(&endpoint.readyElement)
 	}
 
-	endpoint.full = true
+	endpoint.status = endpointStatusFull
 
 	f.fullList.PushFront(&endpoint.fullElement)
 }
 
 // RegisterReady marks an endpoint as ready to receive events
 func (f *Sink) RegisterReady(endpoint *Endpoint) {
-	if endpoint.ready {
+	// Ignore if already ready or if we were marked as failed
+	if endpoint.status == endpointStatusReady || endpoint.status == endpointStatusFailed {
 		return
 	}
 
-	if endpoint.full {
-		endpoint.full = false
+	if endpoint.status == endpointStatusFull {
 		f.fullList.Remove(&endpoint.fullElement)
 	}
 
-	endpoint.ready = true
+	endpoint.status = endpointStatusReady
 
 	// Least pending payloads takes preference
 	var existing *internallist.Element
@@ -231,4 +218,32 @@ func (f *Sink) RegisterReady(endpoint *Endpoint) {
 	} else {
 		f.readyList.InsertBefore(&endpoint.readyElement, existing)
 	}
+}
+
+// RegisterFailed stores the endpoint on the failed list, removing it from the
+// ready or full lists so no more events are sent to it
+func (f *Sink) RegisterFailed(endpoint *Endpoint) {
+	if endpoint.status == endpointStatusReady {
+		f.readyList.Remove(&endpoint.readyElement)
+	}
+
+	if endpoint.status == endpointStatusFull {
+		f.fullList.Remove(&endpoint.readyElement)
+	}
+
+	endpoint.status = endpointStatusFailed
+
+	f.failedList.PushFront(&endpoint.failedElement)
+}
+
+// RecoverFailed removes an endpoint from the failed list and returns it to the
+// idle status, as soon as the next Ready signal is received, events will flow
+// again
+func (f *Sink) RecoverFailed(endpoint *Endpoint) {
+	// Ignore if we haven't failed
+	if endpoint.status != endpointStatusFailed {
+		return
+	}
+
+	f.failedList.Remove(&endpoint.failedElement)
 }

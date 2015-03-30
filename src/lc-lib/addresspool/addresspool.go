@@ -105,7 +105,7 @@ func (p *Pool) Host() string {
 //                Hostname: localhost (127.0.0.1)
 // TODO: Improve Desc result for SRV records to include the SRV record
 func (p *Pool) Desc() string {
-	return p.host
+	return p.desc
 }
 
 // populateAddresses performs the lookups necessary to obtain the pool of IP

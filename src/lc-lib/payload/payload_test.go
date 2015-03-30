@@ -26,7 +26,7 @@ const (
 	test_nonce = "12345678901234567890123456"
 )
 
-func createTestPayload(t *testing.T, num_events int) *pendingPayload {
+func createTestPayload(t *testing.T, num_events int) *Payload {
 	test_events := make([]*core.EventDescriptor, num_events)
 	for idx := range test_events {
 		test_events[idx] = &core.EventDescriptor{
@@ -36,7 +36,7 @@ func createTestPayload(t *testing.T, num_events int) *pendingPayload {
 		}
 	}
 
-	payload, err := newPending(test_events, test_nonce, time.Second)
+	payload, err := NewPayload(test_events, test_nonce, time.Second)
 	if err != nil {
 		t.Log("Failed to create pending payload structure")
 		t.FailNow()
@@ -45,7 +45,7 @@ func createTestPayload(t *testing.T, num_events int) *pendingPayload {
 	return payload
 }
 
-func verifyPayload(t *testing.T, payload *pendingPayload, ack bool, complete bool, num_events int, start_event int) {
+func verifyPayload(t *testing.T, payload *Payload, ack bool, complete bool, num_events int, start_event int) {
 	if got := payload.HasAck(); got != ack {
 		t.Logf("Payload has ack flag wrong, got: %t, should be: %t", got, ack)
 		t.FailNow()

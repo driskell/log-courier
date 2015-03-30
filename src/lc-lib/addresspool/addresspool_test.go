@@ -21,9 +21,9 @@ import (
   "testing"
 )
 
-func TestAddressPoolIP(t *testing.T) {
+func TestPoolIP(t *testing.T) {
   // Test failures when parsing
-  pool := NewAddressPool([]string{"127.0.0.1:1234"})
+  pool := NewPool([]string{"127.0.0.1:1234"})
 
   addr, desc, err := pool.Next()
 
@@ -39,9 +39,9 @@ func TestAddressPoolIP(t *testing.T) {
   }
 }
 
-func TestAddressPoolHost(t *testing.T) {
+func TestPoolHost(t *testing.T) {
   // Test failures when parsing
-  pool := NewAddressPool([]string{"google-public-dns-a.google.com:555"})
+  pool := NewPool([]string{"google-public-dns-a.google.com:555"})
 
   addr, desc, err := pool.Next()
 
@@ -56,9 +56,9 @@ func TestAddressPoolHost(t *testing.T) {
   }
 }
 
-func TestAddressPoolHostMultiple(t *testing.T) {
+func TestPoolHostMultiple(t *testing.T) {
   // Test failures when parsing
-  pool := NewAddressPool([]string{"google.com:555"})
+  pool := NewPool([]string{"google.com:555"})
 
   for i := 0; i < 2; i++ {
     addr, _, err := pool.Next()
@@ -78,9 +78,9 @@ func TestAddressPoolHostMultiple(t *testing.T) {
   }
 }
 
-func TestAddressPoolSrv(t *testing.T) {
+func TestPoolSrv(t *testing.T) {
   // Test failures when parsing
-  pool := NewAddressPool([]string{"@_xmpp-server._tcp.google.com"})
+  pool := NewPool([]string{"@_xmpp-server._tcp.google.com"})
 
   addr, _, err := pool.Next()
 
@@ -92,9 +92,9 @@ func TestAddressPoolSrv(t *testing.T) {
   }
 }
 
-func TestAddressPoolSrvRfc(t *testing.T) {
+func TestPoolSrvRfc(t *testing.T) {
   // Test failures when parsing
-  pool := NewAddressPool([]string{"@google.com"})
+  pool := NewPool([]string{"@google.com"})
   pool.SetRfc2782(true, "xmpp-server")
 
   addr, _, err := pool.Next()
@@ -107,9 +107,9 @@ func TestAddressPoolSrvRfc(t *testing.T) {
   }
 }
 
-func TestAddressPoolInvalid(t *testing.T) {
+func TestPoolInvalid(t *testing.T) {
   // Test failures when parsing
-  pool := NewAddressPool([]string{"127.0..0:1234"})
+  pool := NewPool([]string{"127.0..0:1234"})
 
   _, _, err := pool.Next()
 
@@ -120,9 +120,9 @@ func TestAddressPoolInvalid(t *testing.T) {
   }
 }
 
-func TestAddressPoolHostFailure(t *testing.T) {
+func TestPoolHostFailure(t *testing.T) {
   // Test failures when parsing
-  pool := NewAddressPool([]string{"google-public-dns-not-exist.google.com:1234"})
+  pool := NewPool([]string{"google-public-dns-not-exist.google.com:1234"})
 
   _, _, err := pool.Next()
 
@@ -133,9 +133,9 @@ func TestAddressPoolHostFailure(t *testing.T) {
   }
 }
 
-func TestAddressPoolIsLast(t *testing.T) {
+func TestPoolIsLast(t *testing.T) {
   // Test that IsLastServer works correctly
-  pool := NewAddressPool([]string{"outlook.com:1234"})
+  pool := NewPool([]string{"outlook.com:1234"})
 
   // Should report as last
   if !pool.IsLast() {
@@ -169,9 +169,9 @@ func TestAddressPoolIsLast(t *testing.T) {
   t.Error("Address pool IsLast did not return correctly")
 }
 
-func TestAddressPoolIsLastServer(t *testing.T) {
+func TestPoolIsLastServer(t *testing.T) {
   // Test that IsLastServer works correctly
-  pool := NewAddressPool([]string{"127.0.0.1:1234", "127.0.0.1:1234", "127.0.0.1:1234"})
+  pool := NewPool([]string{"127.0.0.1:1234", "127.0.0.1:1234", "127.0.0.1:1234"})
 
   // Should report as last server
   if !pool.IsLastServer() {
@@ -202,9 +202,9 @@ func TestAddressPoolIsLastServer(t *testing.T) {
   }
 }
 
-func TestAddressPoolNextServer(t *testing.T) {
+func TestPoolNextServer(t *testing.T) {
   // Test that IsLastServer works correctly
-  pool := NewAddressPool([]string{"google.com:1234", "google.com:1234"})
+  pool := NewPool([]string{"google.com:1234", "google.com:1234"})
 
   cnt := 0
   for i := 0; i < 42; i++ {
