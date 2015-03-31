@@ -27,10 +27,13 @@ Log Courier plugins. If you are only receiving events, you only need to install
 the input plugin.
 
 		cd /path/to/logstash
-		bin/logstash plugin install logstash-input-log-courier
-		bin/logstash plugin install logstash-output-log-courier
+		bin/plugin install logstash-input-log-courier
+		bin/plugin install logstash-output-log-courier
 
 Once the installation is complete, you can start using the plugins!
+
+*Note: If you receive a Plugin Conflict error, try updating the zeromq output
+plugin first using `bin/plugin update logstash-output-zeromq`*
 
 ### Manual installation
 

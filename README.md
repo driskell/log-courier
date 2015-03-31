@@ -137,10 +137,13 @@ beyond the lumberjack protocol allows.
 You may install the input plugin using the Logstash 1.5 Plugin manager.
 
 	cd /path/to/logstash
-	bin/logstash plugin install logstash-input-log-courier
+	bin/plugin install logstash-input-log-courier
 
 Detailed instructions, including integration with Logstash 1.4.x, can be found
 on the [Logstash Integration](docs/LogstashIntegration.md) page.
+
+*Note: If you receive a Plugin Conflict error, try updating the zeromq output
+plugin first using `bin/plugin update logstash-output-zeromq`*
 
 ## Generating Certificates and Keys
 
