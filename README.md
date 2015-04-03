@@ -18,7 +18,7 @@ with many fixes and behavioural improvements.
 - [Public Repositories](#public-repositories)
   - [RPM](#rpm)
   - [DEB](#deb)
-- [From Source](#from-source)
+- [Building from Source](#building-from-source)
 - [Logstash Integration](#logstash-integration)
 - [Generating Certificates](#generating-certificates)
 - [Documentation](#documentation)
@@ -75,7 +75,7 @@ to distinguish events send from different instances
 
 ### RPM
 
-*The Log Courier repository depends on the **EPEL** repository which can be
+*The Log Courier repository depends on the __EPEL__ repository which can be
 installed automatically on CentOS distributions by running
 `yum install epel-release`. For other distributions, please follow the
 installation instructions on the
@@ -100,7 +100,7 @@ Courier service to begin shipping.
 A Debian/Ubuntu compatible **PPA** repository is under consideration. At the
 moment, no such repository exists.
 
-## From Source
+## Building from Source
 
 Requirements:
 
@@ -109,10 +109,10 @@ Requirements:
 1. [git](http://git-scm.com)
 1. GNU make
 
-***Linux/Unix:*** *Most requirements can usually be installed by your favourite
+*__Linux/Unix:__ Most requirements can usually be installed by your favourite
 package manager.*  
-***OS X:*** *Git and GNU make are provided automatically by XCode.*  
-***Windows:*** *GNU make for Windows can be found
+*__OS X:__ Git and GNU make are provided automatically by XCode.*  
+*__Windows:__ GNU make for Windows can be found
 [here](http://gnuwin32.sourceforge.net/packages/make.htm).*
 
 To build the binaries, simply run `make` as follows.

@@ -49,31 +49,31 @@ Displays Log Courier's current shipping status in the requested format.
 
 Following is an example of the output this command provides.
 
-	"State: /var/log/nginx/access.log (0xc2080681e0)":
-	  Status: Running
-	  Harvester:
-	    Speed (Lps): 20205.40
-	    Speed (Bps): 1627565.16
-	    Processed lines: 43024
-	    Current offset: 3473919
-	    Last EOF Offset: Never
-	    Status: Alive
-	Prospector:
-	  Watched files: 1
-	  Active states: 1
-	Publisher:
-	  Status: Connected
-	  Speed (Lps): 8735.15
-	  Published lines: 23552
-	  Pending Payloads: 10
-	  Timeouts: 0
-	  Retransmissions: 0
+    "State: /var/log/nginx/access.log (0xc2080681e0)":
+      Status: Running
+      Harvester:
+        Speed (Lps): 20205.40
+        Speed (Bps): 1627565.16
+        Processed lines: 43024
+        Current offset: 3473919
+        Last EOF Offset: Never
+        Status: Alive
+    Prospector:
+      Watched files: 1
+      Active states: 1
+    Publisher:
+      Status: Connected
+      Speed (Lps): 8735.15
+      Published lines: 23552
+      Pending Payloads: 10
+      Timeouts: 0
+      Retransmissions: 0
 
 ## Command Line Options
 
 The `lc-admin` command accepts the following command line options.
 
-	-connect="tcp:127.0.0.1:1234": the Log Courier address to connect to
-	-quiet=false: quietly execute the command line argument and output only the result
-	-version=false: display the Log Courier client version
-	-watch=false: repeat the command specified on the command line every second
+    -connect="tcp:127.0.0.1:1234": the Log Courier address to connect to
+    -quiet=false: quietly execute the command line argument and output only the result
+    -version=false: display the Log Courier client version
+    -watch=false: repeat the command specified on the command line every second

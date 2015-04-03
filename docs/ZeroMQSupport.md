@@ -45,10 +45,10 @@ ZeroMQ >=4.0 may need to be built and installed manually.*
 Once the required version of ZeroMQ is installed, run the corresponding `make`
 command to build Log Courier with the ZMQ transports.
 
-	# ZeroMQ >=3.2 - cleartext 'plainzmq' transport
-	make with=zmq3
-	# ZeroMQ >=4.0 - both cleartext 'plainzmq' and encrypted 'zmq' transport
-	make with=zmq4
+    # ZeroMQ >=3.2 - cleartext 'plainzmq' transport
+    make with=zmq3
+    # ZeroMQ >=4.0 - both cleartext 'plainzmq' and encrypted 'zmq' transport
+    make with=zmq4
 
 *Note: If you receive errors whilst running `make`, try `gmake` instead.*
 

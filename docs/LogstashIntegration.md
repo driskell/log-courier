@@ -29,9 +29,9 @@ Simply run the following commands as the user Logstash was installed with to
 install the latest stable version of the Log Courier plugins. If you are only
 receiving events, you only need to install the input plugin.
 
-		cd /path/to/logstash
-		bin/plugin install logstash-input-log-courier
-		bin/plugin install logstash-output-log-courier
+    cd /path/to/logstash
+    bin/plugin install logstash-input-log-courier
+    bin/plugin install logstash-output-log-courier
 
 Once the installation is complete, you can start using the plugins!
 
@@ -45,9 +45,9 @@ For Logstash 1.4.x the plugins and dependencies need to be installed manually.
 First build the Log Courier gem the plugins require. The file you will need will
 be called log-courier-X.X.gem, where X.X is the version of Log Courier you have.
 
-		git clone https://github.com/driskell/log-courier
-		cd log-courier
-		make gem
+    git clone https://github.com/driskell/log-courier
+    cd log-courier
+    make gem
 
 Switch to the Logstash installation directory as the user Logstash was installed
 with and install the gem. Note that because this is JRuby it may take a minute
@@ -55,14 +55,14 @@ to finish the install. The ffi-rzmq-core and ffi-rzmq gems bundled with Logstash
 will be upgraded during the installation, which will require an internet
 connection.
 
-		cd /path/to/logstash
-		export GEM_HOME=vendor/bundle/jruby/1.9
-		java -jar vendor/jar/jruby-complete-1.7.11.jar -S gem install /path/to/the.gem
+    cd /path/to/logstash
+    export GEM_HOME=vendor/bundle/jruby/1.9
+    java -jar vendor/jar/jruby-complete-1.7.11.jar -S gem install /path/to/the.gem
 
 The remaining step is to manually install the Logstash plugins.
 
-		cd /path/to/log-courier
-		cp -rvf lib/logstash /path/to/logstash/lib
+    cd /path/to/log-courier
+    cp -rvf lib/logstash /path/to/logstash/lib
 
 ### Local-only Installation
 
@@ -81,13 +81,13 @@ Courier gem.
 The 'courier' input and output plugins will now be available. An example
 configuration for the input plugin follows.
 
-		input {
-				courier {
-						port            => 12345
-						ssl_certificate => "/opt/logstash/ssl/logstash.cer"
-						ssl_key         => "/opt/logstash/ssl/logstash.key"
-				}
-		}
+    input {
+        courier {
+            port            => 12345
+            ssl_certificate => "/opt/logstash/ssl/logstash.cer"
+            ssl_key         => "/opt/logstash/ssl/logstash.key"
+        }
+    }
 
 The following options are available for the input plugin:
 
