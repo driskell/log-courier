@@ -18,10 +18,9 @@ with many fixes and behavioural improvements.
 - [Public Repositories](#public-repositories)
   - [RPM](#rpm)
   - [DEB](#deb)
-- [Building From Source](#building-from-source)
+- [From Source](#from-source)
 - [Logstash Integration](#logstash-integration)
-- [Generating Certificates and Keys](#generating-certificates-and-keys)
-- [ZeroMQ support](#zeromq-support)
+- [Generating Certificates](#generating-certificates)
 - [Documentation](#documentation)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -76,13 +75,11 @@ to distinguish events send from different instances
 
 ### RPM
 
-The author maintains a **COPR** repository with RedHat/CentOS compatible RPMs
-that may be installed using `yum`. This repository depends on the widely used
-**EPEL** repository for dependencies.
-
-The **EPEL** repository can be installed automatically on CentOS distributions
-by running `yum install epel-release`. Otherwise, you may follow the
-instructions on the [EPEL homepage](https://fedoraproject.org/wiki/EPEL).
+*The Log Courier repository depends on the **EPEL** repository which can be
+installed automatically on CentOS distributions by running
+`yum install epel-release`. For other distributions, please follow the
+installation instructions on the
+[EPEL homepage](https://fedoraproject.org/wiki/EPEL).*
 
 To install the Log Courier repository, download the corresponding `.repo`
 configuration file below, and place it in `/etc/yum.repos.d`. Log Courier may
@@ -92,16 +89,18 @@ then be installed using `yum install log-courier`.
 * **CentOS/RedHat 7.x**:
 [driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-7.repo)
 
-***NOTE:*** *The RPM packages versions of Log Courier are built using ZeroMQ 3.2
-and therefore do not support the encrypted `zmq` transport. They do support the
-unencrypted `plainzmq` transport.*
+Once installed, modify the configuration file at
+`/etc/log-courier/log-courier.conf` to suit your needs, then start the Log
+Courier service to begin shipping.
+
+    service log-courier start
 
 ### DEB
 
 A Debian/Ubuntu compatible **PPA** repository is under consideration. At the
 moment, no such repository exists.
 
-## Building From Source
+## From Source
 
 Requirements:
 
@@ -118,27 +117,28 @@ package manager.*
 
 To build the binaries, simply run `make` as follows.
 
-	git clone https://github.com/driskell/log-courier
-	cd log-courier
-	make
+    git clone https://github.com/driskell/log-courier
+    cd log-courier
+    make
 
-The log-courier program can then be found in the 'bin' folder. This can be
-manually installed anywhere on your system. Startup scripts for various
-platforms can be found in the [contrib/initscripts](contrib/initscripts) folder.
+The log-courier program can then be found in the 'bin' folder. Service scripts
+for various platforms can be found in the
+[contrib/initscripts](contrib/initscripts) folder, or it can be run on the
+command line:
+
+    bin/log-courier -config /path/to/config.conf
 
 *Note: If you receive errors whilst running `make`, try `gmake` instead.*
 
 ## Logstash Integration
 
-Log Courier does not utilise the lumberjack Logstash plugin and instead uses its
-own custom plugin. This allows significant enhancements to the integration far
-beyond the lumberjack protocol allows.
+Log Courier communicates with Logstash via an input plugin called "courier".
 
-You may install the input plugin using the Logstash 1.5 Plugin manager. Run the
+You may install the plugin using the Logstash 1.5 Plugin manager. Run the
 following as the user Logstash was installed with.
 
-	cd /path/to/logstash
-	bin/plugin install logstash-input-log-courier
+    cd /path/to/logstash
+    bin/plugin install logstash-input-log-courier
 
 Detailed instructions, including integration with Logstash 1.4.x, can be found
 on the [Logstash Integration](docs/LogstashIntegration.md) page.
@@ -146,46 +146,16 @@ on the [Logstash Integration](docs/LogstashIntegration.md) page.
 *Note: If you receive a Plugin Conflict error, try updating the zeromq output
 plugin first using `bin/plugin update logstash-output-zeromq`*
 
-## Generating Certificates and Keys
+## Generating Certificates
 
-Log Courier provides two commands to help generate SSL certificates and Curve
-keys, `lc-tlscert` and `lc-curvekey` respectively. Both are bundled with the
-packages provided by the public repositories.
+Log Courier provides a commands to help generate SSL certificates: `lc-tlscert`.
+This utility is also bundled with the packaged versions of Log Courier, and
+should be immediately available at the command-line.
 
 When building from source, running `make selfsigned` will automatically build
 and run the `lc-tlscert` utility that can quickly and easily generate a
-self-signed certificate for the TLS shipping transport.
-
-Likewise, running `make curvekey` will automatically build and run the
-`lc-curvekey` utility that can quickly and easily generate CurveZMQ key pairs
-for the CurveZMQ shipping transport. This tool is only available when Log
-Courier is built with ZeroMQ >=4.0.
-
-## ZeroMQ support
-
-To use the 'plainzmq' or 'zmq' transports, you will need to install
-[ZeroMQ](http://zeromq.org/intro:get-the-software) (>=3.2 for 'plainzmq', >=4.0
-for 'zmq' which supports encryption).
-
-***Linux\Unix:*** *ZeroMQ >=3.2 is usually available via the package manager.
-ZeroMQ >=4.0 may need to be built and installed manually.*  
-***OS X:*** *ZeroMQ can be installed via [Homebrew](http://brew.sh).*  
-***Windows:*** *ZeroMQ will need to be built and installed manually.*
-
-Once the required version of ZeroMQ is installed, run the corresponding `make`
-command to build Log Courier with the ZMQ transports.
-
-	# ZeroMQ >=3.2 - cleartext 'plainzmq' transport
-	make with=zmq3
-	# ZeroMQ >=4.0 - both cleartext 'plainzmq' and encrypted 'zmq' transport
-	make with=zmq4
-
-*Note: If you receive errors whilst running `make`, try `gmake` instead.*
-
-**Please ensure that the versions of ZeroMQ installed on the Logstash hosts and
-the Log Courier hosts are of the same major version. A Log Courier host that has
-ZeroMQ 4.0.5 will not work with a Logstash host using ZeroMQ 3.2.4 (but will
-work with a Logstash host using ZeroMQ 4.0.4.)**
+self-signed certificate, along with the corresponding configuration snippets,
+for the 'tls' transport.
 
 ## Documentation
 
@@ -193,4 +163,5 @@ work with a Logstash host using ZeroMQ 4.0.4.)**
 * [Command Line Arguments](docs/CommandLineArguments.md)
 * [Configuration](docs/Configuration.md)
 * [Logstash Integration](docs/LogstashIntegration.md)
+* [ZeroMQ Support](docs/ZeroMQSupport.md)
 * [Change Log](docs/ChangeLog.md)
