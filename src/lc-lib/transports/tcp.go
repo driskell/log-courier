@@ -44,8 +44,6 @@ import _ "crypto/sha512"
 const (
 	// Essentially, this is how often we should check for disconnect/shutdown during socket reads
 	socket_interval_seconds = 1
-	// TODO(driskell): Make the idle timeout configurable like the network timeout is?
-	keepalive_timeout = 15
 )
 
 type TransportTcpRegistrar struct {
@@ -348,15 +346,12 @@ func (t *TransportTcp) disconnect() {
 
 // sender handles socket writes
 func (t *TransportTcp) sender() {
-	ping_timer := time.NewTimer(keepalive_timeout * time.Second)
-
 SenderLoop:
 	for {
 		select {
 		case <-t.sendControl:
 			// Shutdown
 			break SenderLoop
-		case <-ping_timer.C:
 		case msg := <-t.send_chan:
 			// Ask for more while we send this
 			t.endpoint.Ready()
@@ -420,7 +415,12 @@ ReceiverLoop:
 				break ReceiverLoop
 			}
 		case bytes.Compare(header[0:4], []byte("ACKN")) == 0:
-			if shutdown, err = t.processAckn(message); shutdown || err != nil {
+			if len(message) != 20 {
+				err = fmt.Errorf("Protocol error: Corrupt message (ACKN size %d != 20)", len(message))
+				break ReceiverLoop
+			}
+
+			if shutdown = t.sendResponse(&AckResponse{t.endpoint, string(message[0:16]), binary.BigEndian.Uint32(message[16:20])}); shutdown {
 				break ReceiverLoop
 			}
 		default:
@@ -484,16 +484,6 @@ ReceiverReadLoop:
 	}
 
 	return true, nil
-}
-
-// processAckn parses an acknowledgement message and passes the information to
-// the Publisher for processing
-func (t *TransportTcp) processAckn(data []byte) (bool, error) {
-	if len(data) != 20 {
-		return false, fmt.Errorf("Protocol error: Corrupt message (ACKN size %d != 20)", len(data))
-	}
-
-	return t.sendResponse(&AckResponse{t.endpoint, string(data[0:16]), binary.BigEndian.Uint32(data[16:20])}), nil
 }
 
 // sendResponse ships a response to the Publisher whilst also monitoring for any
