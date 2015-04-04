@@ -245,5 +245,7 @@ func (f *Sink) RecoverFailed(endpoint *Endpoint) {
 		return
 	}
 
+	endpoint.status = endpointStatusIdle
+
 	f.failedList.Remove(&endpoint.failedElement)
 }

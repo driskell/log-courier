@@ -139,6 +139,8 @@ func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 	e.pendingPayloads[nonce] = payload
 	e.numPayloads++
 
+	log.Debug("[%s] Sending payload %x", e.Server(), nonce)
+
 	return e.transport.Write(payload.Nonce, payload.Events())
 }
 
@@ -178,12 +180,13 @@ func (e *Endpoint) IsPinging() bool {
 // acknoweldgement or a later one, so the publisher may track out of sync
 // payload processing accordingly.
 func (e *Endpoint) ProcessAck(a *transports.AckResponse) (*payload.Payload, bool) {
-	log.Debug("Acknowledgement received for payload %x sequence %d", a.Nonce, a.Sequence)
+	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), a.Nonce, a.Sequence)
 
 	// Grab the payload the ACK corresponds to by using nonce
 	payload, found := e.pendingPayloads[a.Nonce]
 	if !found {
 		// Don't fail here in case we had temporary issues and resend a payload, only for us to receive duplicate ACKN
+		log.Debug("[%s] Duplicate/corrupt ACK received for message %x", e.Server(), a.Nonce)
 		return nil, false
 	}
 

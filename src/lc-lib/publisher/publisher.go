@@ -231,6 +231,35 @@ func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, pendingPayload *pay
 func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckResponse) error {
 	pendingPayload, firstAck := endpoint.ProcessAck(msg)
 
+	// Expect next ACK within network timeout if we still have pending
+	if endpoint.NumPending() != 0 {
+		log.Debug("[%s] Resetting pending timeout", endpoint.Server())
+		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+	} else {
+		log.Debug("[%s] Last payload acknowledged, starting keepalive timeout", endpoint.Server())
+		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
+	}
+
+	// If we're no longer full, move to ready queue
+	// TODO: Use "peer send queue" - Move logic to endpoint.EndpointSink
+	if endpoint.IsFull() && endpoint.NumPending() < 4 {
+		log.Debug("[%s] Endpoint is no longer full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
+		p.readyEndpoint(endpoint)
+	}
+
+	// Did the endpoint actually process the ACK?
+	if pendingPayload == nil {
+		return nil
+	}
+
+	// If we're on the resend queue and just completed, remove it
+	// This prevents a condition occurring where the endpoint incorrectly reports
+	// a failure but then afterwards reports an acknowledgement
+	if pendingPayload.Resending && pendingPayload.Complete() {
+		log.Debug("[%s] Retransmission was successful", endpoint.Server())
+		p.resendList.Remove(&pendingPayload.ResendElement)
+	}
+
 	// We potentially receive out-of-order ACKs due to payloads distributed across servers
 	// This is where we enforce ordering again to ensure registrar receives ACK in order
 	if pendingPayload == p.payloadList.Front().Value.(*payload.Payload) {
@@ -276,22 +305,6 @@ func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckR
 		p.outOfSync++
 	}
 
-	// Expect next ACK within network timeout if we still have pending
-	if endpoint.NumPending() != 0 {
-		log.Debug("[%s] Resetting pending timeout", endpoint.Server())
-		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
-	} else {
-		log.Debug("[%s] Last payload acknowledged, starting keepalive timeout", endpoint.Server())
-		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
-	}
-
-	// If we're no longer full, move to ready queue
-	// TODO: Use "peer send queue" - Move logic to endpoint.EndpointSink
-	if endpoint.IsFull() && endpoint.NumPending() < 4 {
-		log.Debug("[%s] Endpoint is no longer full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
-		p.readyEndpoint(endpoint)
-	}
-
 	return nil
 }
 
@@ -324,7 +337,10 @@ func (p *Publisher) failEndpoint(endpoint *endpoint.Endpoint) {
 
 	// Pull back pending payloads so we can requeue them onto other endpoints
 	for _, pendingPayload := range endpoint.PullBackPending() {
+		pendingPayload.Resending = true
+		log.Debug("PushBack %v - %v", pendingPayload.ResendElement, p.resendList)
 		p.resendList.PushBack(&pendingPayload.ResendElement)
+		log.Debug("PushBack done")
 	}
 
 	// If any ready now, requeue immediately
@@ -337,6 +353,7 @@ func (p *Publisher) failEndpoint(endpoint *endpoint.Endpoint) {
 		err := p.sendPayload(endpoint, pendingPayload)
 
 		if err == nil {
+			pendingPayload.Resending = false
 			p.resendList.Remove(&pendingPayload.ResendElement)
 		}
 	}
@@ -365,7 +382,8 @@ func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 		log.Debug("[%s] Send is now ready, resending %d events", endpoint.Server(), len(pendingPayload.Events()))
 
 		// We have a payload to resend, send it now
-		if err := p.sendPayload(endpoint, pendingPayload); err != nil {
+		if err := p.sendPayload(endpoint, pendingPayload); err == nil {
+			pendingPayload.Resending = false
 			p.resendList.Remove(&pendingPayload.ResendElement)
 			log.Debug("%d payloads remain held for resend", p.resendList.Len())
 		}

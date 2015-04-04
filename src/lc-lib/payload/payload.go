@@ -33,6 +33,7 @@ type Payload struct {
 	payload       []byte
 
 	Nonce         string
+	Resending     bool
 	Element       internallist.Element
 	ResendElement internallist.Element
 }
@@ -101,7 +102,7 @@ func (pp *Payload) HasAck() bool {
 
 // Complete returns true if all events in this payload have been acknowledged
 func (pp *Payload) Complete() bool {
-	return len(pp.events) == 0
+	return len(pp.events[pp.ackEvents:]) == 0
 }
 
 // Rollup removes acknowledged events from the payload and returns them so they
