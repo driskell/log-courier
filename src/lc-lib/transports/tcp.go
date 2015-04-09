@@ -68,7 +68,7 @@ type TransportTCP struct {
 
 	controllerChan chan int
 	controllerWait sync.WaitGroup
-	endpoint       Endpoint
+	endpoint       EndpointCallback
 	failChan       chan error
 
 	wait        sync.WaitGroup
@@ -145,7 +145,7 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unused map
 
 // NewTransport returns a new Transport interface using the settings from the
 // TransportTCPFactory.
-func (f *TransportTCPFactory) NewTransport(endpoint Endpoint) Transport {
+func (f *TransportTCPFactory) NewTransport(endpoint EndpointCallback) Transport {
 	ret := &TransportTCP{
 		config:         f,
 		endpoint:       endpoint,
@@ -278,7 +278,7 @@ func (t *TransportTCP) connect() error {
 		// Set the tlsconfig server name for server validation (required since Go 1.3)
 		t.config.tlsConfig.ServerName = t.endpoint.Pool().Host()
 
-		t.tlssocket = tls.Client(&TransportTCPWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tlsConfig)
+		t.tlssocket = tls.Client(&transportTCPWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tlsConfig)
 		t.tlssocket.SetDeadline(time.Now().Add(t.config.netConfig.Timeout))
 		err = t.tlssocket.Handshake()
 		if err != nil {

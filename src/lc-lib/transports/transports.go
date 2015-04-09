@@ -39,13 +39,13 @@ type Transport interface {
 	Wait()
 }
 
-// Endpoint is the interface implemented by the consumer of a transport, to
-// allow the transport to communicate back
-type Endpoint interface {
-  Pool() *addresspool.Pool
-  Ready()
-  ResponseChan() chan<- Response
-  Fail()
+// EndpointCallback is the interface implemented by the consumer of a transport,
+// to allow the transport to communicate back
+type EndpointCallback interface {
+	Pool() *addresspool.Pool
+	Ready()
+	ResponseChan() chan<- Response
+	Fail()
 	Recover()
 }
 
@@ -54,10 +54,10 @@ type Endpoint interface {
 // NewTransport is called, return an instance of the transport that obeys that
 // configuration
 type transportFactory interface {
-	NewTransport(Endpoint) Transport
+	NewTransport(EndpointCallback) Transport
 }
 
 // NewTransport returns a Transport interface initialised from the given Factory
-func NewTransport(factory interface{}, endpoint Endpoint) Transport {
+func NewTransport(factory interface{}, endpoint EndpointCallback) Transport {
 	return factory.(transportFactory).NewTransport(endpoint)
 }
