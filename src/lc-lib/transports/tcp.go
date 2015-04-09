@@ -37,32 +37,32 @@ import (
 	"github.com/driskell/log-courier/src/lc-lib/core"
 )
 
-// Support for newer SSL signature algorithms
-import _ "crypto/sha256"
-import _ "crypto/sha512"
+import _ "crypto/sha256" // Support for newer SSL signature algorithms
+import _ "crypto/sha512" // Support for newer SSL signature algorithms
 
 const (
 	// Essentially, this is how often we should check for disconnect/shutdown during socket reads
-	socket_interval_seconds = 1
+	socketIntervalSeconds = 1
 )
 
-type TransportTcpRegistrar struct {
-}
-
-type TransportTcpFactory struct {
+// TransportTCPFactory holds the configuration from the configuration file
+// It allows creation of TransportTCP instances that use this configuration
+type TransportTCPFactory struct {
 	transport string
 
 	SSLCertificate string `config:"ssl certificate"`
 	SSLKey         string `config:"ssl key"`
 	SSLCA          string `config:"ssl ca"`
 
-	hostport_re *regexp.Regexp
-	tls_config  tls.Config
-	net_config  *config.Network
+	hostportRegexp *regexp.Regexp
+	tlsConfig      tls.Config
+	netConfig      *config.Network
 }
 
-type TransportTcp struct {
-	config    *TransportTcpFactory
+// TransportTCP implements a transport that sends over TCP
+// It also can optionally introduce a TLS layer for security
+type TransportTCP struct {
+	config    *TransportTCPFactory
 	socket    net.Conn
 	tlssocket *tls.Conn
 
@@ -75,27 +75,27 @@ type TransportTcp struct {
 	sendControl chan int
 	recvControl chan int
 
-	send_chan chan []byte
+	sendChan chan []byte
 
 	// Use in receiver routine only
-	pong_pending bool
-	pong_timer   *time.Timer
+	pongPending bool
+	pongTimer   *time.Timer
 }
 
-// NewTransportTcpFactory create a new TransportTcpFactory from the provided
+// NewTransportTCPFactory create a new TransportTCPFactory from the provided
 // configuration data, reporting back any configuration errors it discovers.
-func NewTransportTcpFactory(config *config.Config, config_path string, unused map[string]interface{}, name string) (interface{}, error) {
+func NewTransportTCPFactory(config *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
-	ret := &TransportTcpFactory{
-		transport:   name,
-		hostport_re: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
-		net_config:  &config.Network,
+	ret := &TransportTCPFactory{
+		transport:      name,
+		hostportRegexp: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
+		netConfig:      &config.Network,
 	}
 
 	// Only allow SSL configurations if this is "tls"
 	if name == "tls" {
-		if err = config.PopulateConfig(ret, config_path, unused); err != nil {
+		if err = config.PopulateConfig(ret, configPath, unused); err != nil {
 			return nil, err
 		}
 
@@ -105,11 +105,11 @@ func NewTransportTcpFactory(config *config.Config, config_path string, unused ma
 				return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
 			}
 
-			ret.tls_config.Certificates = []tls.Certificate{cert}
+			ret.tlsConfig.Certificates = []tls.Certificate{cert}
 		}
 
 		if len(ret.SSLCA) > 0 {
-			ret.tls_config.RootCAs = x509.NewCertPool()
+			ret.tlsConfig.RootCAs = x509.NewCertPool()
 			pemdata, err := ioutil.ReadFile(ret.SSLCA)
 			if err != nil {
 				return nil, fmt.Errorf("Failure reading CA certificate: %s\n", err)
@@ -127,15 +127,15 @@ func NewTransportTcpFactory(config *config.Config, config_path string, unused ma
 					if err != nil {
 						return nil, fmt.Errorf("Failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
 					}
-					ret.tls_config.RootCAs.AddCert(cert)
-					pemBlockNum += 1
+					ret.tlsConfig.RootCAs.AddCert(cert)
+					pemBlockNum++
 				} else {
 					break
 				}
 			}
 		}
 	} else {
-		if err := config.ReportUnusedConfig(config_path, unused); err != nil {
+		if err := config.ReportUnusedConfig(configPath, unused); err != nil {
 			return nil, err
 		}
 	}
@@ -144,9 +144,9 @@ func NewTransportTcpFactory(config *config.Config, config_path string, unused ma
 }
 
 // NewTransport returns a new Transport interface using the settings from the
-// TransportTcpFactory.
-func (f *TransportTcpFactory) NewTransport(endpoint Endpoint) Transport {
-	ret := &TransportTcp{
+// TransportTCPFactory.
+func (f *TransportTCPFactory) NewTransport(endpoint Endpoint) Transport {
+	ret := &TransportTCP{
 		config:         f,
 		endpoint:       endpoint,
 		controllerChan: make(chan int),
@@ -160,9 +160,9 @@ func (f *TransportTcpFactory) NewTransport(endpoint Endpoint) Transport {
 }
 
 // TODO: This is not called anymore
-/*func (t *TransportTcp) ReloadConfig(new_net_config *config.Network) int {
+/*func (t *TransportTCP) ReloadConfig(new_net_config *config.Network) int {
 	// Check we can grab new TCP config to compare, if not force transport reinit
-	new_config, ok := new_net_config.TransportFactory.(*TransportTcpFactory)
+	new_config, ok := new_net_config.TransportFactory.(*TransportTCPFactory)
 	if !ok {
 		return reloadTransport
 	}
@@ -181,7 +181,7 @@ func (f *TransportTcpFactory) NewTransport(endpoint Endpoint) Transport {
 // controller is the master routine which handles connection and reconnection
 // When reconnecting, the socket and all routines are torn down and restarted.
 // It also
-func (t *TransportTcp) controller() {
+func (t *TransportTCP) controller() {
 	defer func() {
 		t.controllerWait.Done()
 	}()
@@ -226,9 +226,9 @@ func (t *TransportTcp) controller() {
 
 // reconnectWait waits the reconnect timeout before attempting to reconnect.
 // It also monitors for shutdown and configuration reload events while waiting.
-func (t *TransportTcp) reconnectWait() bool {
+func (t *TransportTCP) reconnectWait() bool {
 	now := time.Now()
-	reconnect_due := now.Add(t.config.net_config.Reconnect)
+	reconnectDue := now.Add(t.config.netConfig.Reconnect)
 
 ReconnectWaitLoop:
 	for {
@@ -237,12 +237,12 @@ ReconnectWaitLoop:
 		case <-t.controllerChan:
 			// Shutdown request
 			return false
-		case <-time.After(reconnect_due.Sub(now)):
+		case <-time.After(reconnectDue.Sub(now)):
 			break ReconnectWaitLoop
 		}
 
 		now = time.Now()
-		if now.After(reconnect_due) {
+		if now.After(reconnectDue) {
 			break
 		}
 	}
@@ -251,7 +251,7 @@ ReconnectWaitLoop:
 }
 
 // connect connects the socket and starts the sender and receiver routines
-func (t *TransportTcp) connect() error {
+func (t *TransportTCP) connect() error {
 	if t.sendControl != nil {
 		t.disconnect()
 	}
@@ -265,7 +265,7 @@ func (t *TransportTcp) connect() error {
 
 	log.Info("[%s] Attempting to connect to %s", t.endpoint.Pool().Server(), desc)
 
-	tcpsocket, err := net.DialTimeout("tcp", addr.String(), t.config.net_config.Timeout)
+	tcpsocket, err := net.DialTimeout("tcp", addr.String(), t.config.netConfig.Timeout)
 	if err != nil {
 		return fmt.Errorf("Failed to connect to %s: %s", desc, err)
 	}
@@ -273,13 +273,13 @@ func (t *TransportTcp) connect() error {
 	// Now wrap in TLS if this is the "tls" transport
 	if t.config.transport == "tls" {
 		// Disable SSLv3 (mitigate POODLE vulnerability)
-		t.config.tls_config.MinVersion = tls.VersionTLS10
+		t.config.tlsConfig.MinVersion = tls.VersionTLS10
 
 		// Set the tlsconfig server name for server validation (required since Go 1.3)
-		t.config.tls_config.ServerName = t.endpoint.Pool().Host()
+		t.config.tlsConfig.ServerName = t.endpoint.Pool().Host()
 
-		t.tlssocket = tls.Client(&transportTcpWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tls_config)
-		t.tlssocket.SetDeadline(time.Now().Add(t.config.net_config.Timeout))
+		t.tlssocket = tls.Client(&TransportTCPWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tlsConfig)
+		t.tlssocket.SetDeadline(time.Now().Add(t.config.netConfig.Timeout))
 		err = t.tlssocket.Handshake()
 		if err != nil {
 			t.tlssocket.Close()
@@ -297,7 +297,7 @@ func (t *TransportTcp) connect() error {
 	// Signal channels
 	t.sendControl = make(chan int, 1)
 	t.recvControl = make(chan int, 1)
-	t.send_chan = make(chan []byte, 1)
+	t.sendChan = make(chan []byte, 1)
 
 	// Failure channel - ensure we can fit 2 errors here, one from sender and one
 	// from receive - otherwise if both fail at the same time, disconnect blocks
@@ -322,7 +322,7 @@ func (t *TransportTcp) connect() error {
 
 // disconnect shuts down the sender and receiver routines and disconnects the
 // socket
-func (t *TransportTcp) disconnect() {
+func (t *TransportTCP) disconnect() {
 	if t.sendControl == nil {
 		return
 	}
@@ -345,21 +345,21 @@ func (t *TransportTcp) disconnect() {
 }
 
 // sender handles socket writes
-func (t *TransportTcp) sender() {
+func (t *TransportTCP) sender() {
 SenderLoop:
 	for {
 		select {
 		case <-t.sendControl:
 			// Shutdown
 			break SenderLoop
-		case msg := <-t.send_chan:
+		case msg := <-t.sendChan:
 			// Ask for more while we send this
 			t.endpoint.Ready()
 
 			// Write deadline is managed by our net.Conn wrapper that tls will call into
 			_, err := t.socket.Write(msg)
 			if err != nil {
-				if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					// Shutdown will have been received by the wrapper
 					break SenderLoop
 				}
@@ -377,7 +377,7 @@ SenderLoop:
 }
 
 // receiver handles socket reads
-func (t *TransportTcp) receiver() {
+func (t *TransportTCP) receiver() {
 	var err error
 	var shutdown bool
 	var message []byte
@@ -447,7 +447,7 @@ ReceiverLoop:
 
 // receiverRead will repeatedly read from the socket until the given byte array
 // is filled.
-func (t *TransportTcp) receiverRead(data []byte) (bool, error) {
+func (t *TransportTCP) receiverRead(data []byte) (bool, error) {
 	received := 0
 
 ReceiverReadLoop:
@@ -457,8 +457,8 @@ ReceiverReadLoop:
 			// Shutdown
 			break ReceiverReadLoop
 		default:
-			// Timeout after socket_interval_seconds, check for shutdown, and try again
-			t.socket.SetReadDeadline(time.Now().Add(socket_interval_seconds * time.Second))
+			// Timeout after socketIntervalSeconds, check for shutdown, and try again
+			t.socket.SetReadDeadline(time.Now().Add(socketIntervalSeconds * time.Second))
 
 			length, err := t.socket.Read(data[received:])
 			received += length
@@ -473,7 +473,7 @@ ReceiverReadLoop:
 				continue
 			}
 
-			if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				// Keep trying
 				continue
 			}
@@ -488,7 +488,7 @@ ReceiverReadLoop:
 
 // sendResponse ships a response to the Publisher whilst also monitoring for any
 // shutdown signal. Returns true if shutdown was signalled
-func (t *TransportTcp) sendResponse(response Response) bool {
+func (t *TransportTCP) sendResponse(response Response) bool {
 	select {
 	case <-t.recvControl:
 		return true
@@ -498,7 +498,7 @@ func (t *TransportTcp) sendResponse(response Response) bool {
 }
 
 // Write a message to the transport
-func (t *TransportTcp) Write(nonce string, events []*core.EventDescriptor) error {
+func (t *TransportTCP) Write(nonce string, events []*core.EventDescriptor) error {
 	var dataBuffer bytes.Buffer
 
 	// Create the compressed data payload
@@ -544,36 +544,36 @@ func (t *TransportTcp) Write(nonce string, events []*core.EventDescriptor) error
 		return err
 	}
 
-	t.send_chan <- messageBuffer.Bytes()
+	t.sendChan <- messageBuffer.Bytes()
 	return nil
 }
 
 // Ping the remote server
-func (t *TransportTcp) Ping() error {
+func (t *TransportTCP) Ping() error {
 	// Encapsulate the ping into a message
 	// 4-byte message header (PING)
 	// 4-byte uint32 data length (0 length for PING)
-	t.send_chan <- []byte{'P', 'I', 'N', 'G', 0, 0, 0, 0}
+	t.sendChan <- []byte{'P', 'I', 'N', 'G', 0, 0, 0, 0}
 	return nil
 }
 
 // Fail the transport
-func (t *TransportTcp) Fail() {
+func (t *TransportTCP) Fail() {
 	t.failChan <- nil
 }
 
 // Shutdown the transport
-func (t *TransportTcp) Shutdown() {
+func (t *TransportTCP) Shutdown() {
 	close(t.controllerChan)
 }
 
 // Wait until close finishes
-func (t *TransportTcp) Wait() {
+func (t *TransportTCP) Wait() {
 	t.controllerWait.Wait()
 }
 
 // Register the transports
 func init() {
-	config.RegisterTransport("tcp", NewTransportTcpFactory)
-	config.RegisterTransport("tls", NewTransportTcpFactory)
+	config.RegisterTransport("tcp", NewTransportTCPFactory)
+	config.RegisterTransport("tls", NewTransportTCPFactory)
 }
