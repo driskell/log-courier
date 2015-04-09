@@ -50,7 +50,7 @@ type timeoutFunc func(*Publisher, *endpoint.Endpoint)
 // acknowledgements to the Registrar
 type Publisher struct {
 	core.PipelineSegment
-	//core.PipelineConfigReceiver
+	core.PipelineConfigReceiver
 	core.PipelineSnapshotProvider
 
 	sync.RWMutex
@@ -92,13 +92,18 @@ func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar reg
 
 	// TODO: Option for round robin instead of load balanced?
 	for _, server := range config.Servers {
-		addressPool := addresspool.NewPool(server)
-		ret.endpointSink.AddEndpoint(server, addressPool)
+		ret.createEndpoint(server)
 	}
 
 	pipeline.Register(ret)
 
 	return ret
+}
+
+// createEndpoint is a helper to initialise an address pool and create a new
+// endpoint within the sink
+func (p *Publisher) createEndpoint(server string) {
+	p.endpointSink.AddEndpoint(server, addresspool.NewPool(server))
 }
 
 // Connect is used by Spooler
@@ -119,12 +124,27 @@ PublishLoop:
 	for {
 		select {
 		case status := <-p.endpointSink.StatusChan():
-			if status.Status == endpoint.Ready {
+			switch status.Status {
+			case endpoint.Ready:
 				p.readyEndpoint(status.Endpoint)
-			} else if status.Status == endpoint.Recovered {
+			case endpoint.Recovered:
 				p.recoverEndpoint(status.Endpoint)
 				p.readyEndpoint(status.Endpoint)
-			} else {
+			case endpoint.Finished:
+				server := status.Endpoint.Server()
+				p.endpointSink.RemoveEndpoint(server)
+				if p.shuttingDown && p.endpointSink.Count() == 0 {
+					// Finished shutting down!
+					break PublishLoop
+				}
+				// Recreate the endpoint if it's still in the config
+				for _, item := range p.config.Servers {
+					if item == server {
+						p.createEndpoint(server)
+						break
+					}
+				}
+			default:
 				p.failEndpoint(status.Endpoint)
 			}
 		case spool := <-p.ifSpoolChan:
@@ -152,9 +172,9 @@ PublishLoop:
 			switch msg := msg.(type) {
 			case *transports.AckResponse:
 				err = p.processAck(endpoint, msg)
-				if p.shuttingDown && p.numPayloads == 0 {
+				if err == nil && p.shuttingDown && p.numPayloads == 0 {
 					log.Debug("Final ACK received, shutting down")
-					break PublishLoop
+					p.endpointSink.Shutdown()
 				}
 			case *transports.PongResponse:
 				err = p.processPong(endpoint, msg)
@@ -185,26 +205,44 @@ PublishLoop:
 		case <-statsTimer.C:
 			p.updateStatistics()
 			statsTimer.Reset(time.Second)
+		case config := <-p.OnConfig():
+			p.reloadConfig(config)
 		case <-onShutdown:
-			if p.numPayloads == 0 {
-				log.Debug("Publisher has no outstanding payloads, shutting down")
-				break PublishLoop
-			}
-
-			log.Warning("Publisher has outstanding payloads, waiting for responses before shutting down")
 			onShutdown = nil
 			p.ifSpoolChan = nil
 			p.shuttingDown = true
+
+			if p.numPayloads == 0 {
+				log.Debug("Publisher has no outstanding payloads, shutting down")
+				p.endpointSink.Shutdown()
+			} else {
+				log.Warning("Publisher has outstanding payloads, waiting for responses before shutting down")
+			}
 		}
 	}
 
-	p.endpointSink.Shutdown()
-	p.endpointSink.Wait()
 	p.registrarSpool.Close()
 
 	log.Info("Publisher exiting")
 
 	p.Done()
+}
+
+func (p *Publisher) reloadConfig(config *config.Config) {
+	// Verify the same servers are present
+	for _, server := range config.Network.Servers {
+		if endpoint := p.endpointSink.Endpoint(server); endpoint == nil {
+			// Add a new endpoint
+			p.createEndpoint(server)
+		} else {
+			// TODO: Existing
+		}
+	}
+
+	// Shutdown removed servers
+	p.endpointSink.ShutdownIfMissing(config.Network.Servers)
+
+	p.config = &config.Network
 }
 
 func (p *Publisher) sendEvents(endpoint *endpoint.Endpoint, events []*core.EventDescriptor) error {

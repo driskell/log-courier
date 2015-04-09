@@ -67,7 +67,6 @@ type TransportTCP struct {
 	tlssocket *tls.Conn
 
 	controllerChan chan int
-	controllerWait sync.WaitGroup
 	endpoint       EndpointCallback
 	failChan       chan error
 
@@ -152,8 +151,6 @@ func (f *TransportTCPFactory) NewTransport(endpoint EndpointCallback) Transport 
 		controllerChan: make(chan int),
 	}
 
-	ret.controllerWait.Add(1)
-
 	go ret.controller()
 
 	return ret
@@ -183,7 +180,7 @@ func (f *TransportTCPFactory) NewTransport(endpoint EndpointCallback) Transport 
 // It also
 func (t *TransportTCP) controller() {
 	defer func() {
-		t.controllerWait.Done()
+		t.endpoint.Finished()
 	}()
 
 	// Main connect loop
@@ -565,11 +562,6 @@ func (t *TransportTCP) Fail() {
 // Shutdown the transport
 func (t *TransportTCP) Shutdown() {
 	close(t.controllerChan)
-}
-
-// Wait until close finishes
-func (t *TransportTCP) Wait() {
-	t.controllerWait.Wait()
 }
 
 // Register the transports

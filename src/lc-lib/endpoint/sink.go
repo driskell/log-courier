@@ -75,18 +75,84 @@ func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool) *Endpoi
 	return endpoint
 }
 
-// Shutdown signals all associated endpoints to begin shutting down
-func (f *Sink) Shutdown() {
-	for _, endpoint := range f.endpoints {
-		endpoint.shutdown()
+// Endpoint returns the endpoint associated with the given server entry, or nil
+// if no endpoint is associated
+func (f *Sink) Endpoint(server string) *Endpoint {
+	endpoint, ok := f.endpoints[server]
+	if !ok {
+		return nil
+	}
+	return endpoint
+}
+
+// RemoveEndpoint requests th endpoint associated with the given server to be
+// removed from the sink
+func (f *Sink) RemoveEndpoint(server string) {
+	endpoint, ok := f.endpoints[server]
+	if !ok {
+		return
+	}
+
+	// Ensure shutdown was called
+	if !endpoint.isShuttingDown() {
+		return
+	}
+
+	delete(f.endpoints, server)
+}
+
+// ShutdownEndpoint requests the endpoint associated with the given server
+// entry to shut down
+func (f *Sink) ShutdownEndpoint(server string) {
+	endpoint := f.Endpoint(server)
+	if endpoint == nil {
+		return
+	}
+
+	// Ensure we're in a valid state - that is, no pending payloads
+	if endpoint.NumPending() != 0 {
+		return
+	}
+
+	if endpoint.status == endpointStatusReady {
+		f.readyList.Remove(&endpoint.readyElement)
+	} else if endpoint.status == endpointStatusFailed {
+		f.failedList.Remove(&endpoint.failedElement)
+	}
+
+	if endpoint.timeoutFunc != nil {
+		f.timeoutList.Remove(&endpoint.timeoutElement)
+	}
+
+	endpoint.shutdown()
+}
+
+// ShutdownIfMissing shutsdown associated endpoints if their server is not
+// present in the given array
+func (f *Sink) ShutdownIfMissing(list []string) {
+EndpointLoop:
+	for server := range f.endpoints {
+		for _, item := range list {
+			if item == server {
+				continue EndpointLoop
+			}
+		}
+
+		// Not present in server list, shut down
+		f.ShutdownEndpoint(server)
 	}
 }
 
-// Wait for associated endpoints to complete shutting down
-func (f *Sink) Wait() {
-	for _, endpoint := range f.endpoints {
-		endpoint.wait()
+// Shutdown signals all associated endpoints to begin shutting down
+func (f *Sink) Shutdown() {
+	for server := range f.endpoints {
+		f.ShutdownEndpoint(server)
 	}
+}
+
+// Count returns the number of associated endpoints present
+func (f *Sink) Count() int {
+	return len(f.endpoints)
 }
 
 // ResponseChan returns the response channel

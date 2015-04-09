@@ -54,6 +54,7 @@ const (
 	Ready     = iota
 	Recovered
 	Failed
+	Finished
 )
 
 // Status structure contains the reason for failure, or nil if recovered
@@ -87,6 +88,7 @@ type Endpoint struct {
 	pendingPayloads map[string]*payload.Payload
 	numPayloads     int
 	pongPending     bool
+	shuttingDown    bool
 
 	lineCount int64
 }
@@ -101,16 +103,19 @@ func (e *Endpoint) Init() {
 	e.resetPayloads()
 }
 
-// Shutdown signals the transport to start shutting down
+// shutdown signals the transport to start shutting down
 func (e *Endpoint) shutdown() {
+	if e.shuttingDown {
+		return
+	}
+
 	e.transport.Shutdown()
+	e.shuttingDown = true
 }
 
-// Wait for the transport to finish
-// Disconnect() should be called first on all endpoints to start them
-// disconnecting, and then Wait called to allow them to finish.
-func (e *Endpoint) wait() {
-	e.transport.Wait()
+// isShuttingDown returns true if shutdown has been called
+func (e *Endpoint) isShuttingDown() bool {
+	return e.shuttingDown
 }
 
 // Server returns the server string from the configuration file that this
@@ -266,6 +271,14 @@ func (e *Endpoint) Pool() *addresspool.Pool {
 // This implements part of the transports.Endpoint interface for callbacks
 func (e *Endpoint) Ready() {
 	e.sink.statusChan <- &Status{e, Ready}
+}
+
+// Finished is called by a transport to signal it has shutdown.
+// This should be triggered only after Shutdown has been called and the
+// transport has disconnected and completely cleaned up, as during shutdown the
+// application will exit imminently
+func (e *Endpoint) Finished() {
+	e.sink.statusChan <- &Status{e, Finished}
 }
 
 // ResponseChan returns the channel that responses should be sent on

@@ -36,7 +36,6 @@ type Transport interface {
 	Ping() error
 	Fail()
 	Shutdown()
-	Wait()
 }
 
 // EndpointCallback is the interface implemented by the consumer of a transport,
@@ -47,6 +46,7 @@ type EndpointCallback interface {
 	ResponseChan() chan<- Response
 	Fail()
 	Recover()
+	Finished()
 }
 
 // transportFactory is the interface that all transport factories implement. The

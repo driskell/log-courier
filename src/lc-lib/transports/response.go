@@ -19,29 +19,29 @@ package transports
 // Response is the generic interface implemented by all response structures
 // It allows the consumer to associate a response to an endpoint
 type Response interface {
-	Endpoint() Endpoint
+	Endpoint() EndpointCallback
 }
 
 // AckResponse contains information on which events have been acknowledged and
 // implements the Response interface
 type AckResponse struct {
-	endpoint Endpoint
+	endpoint EndpointCallback
 	Nonce    string
 	Sequence uint32
 }
 
 // Endpoint returns the associated endpoint
-func (r *AckResponse) Endpoint() Endpoint {
+func (r *AckResponse) Endpoint() EndpointCallback {
 	return r.endpoint
 }
 
 // PongResponse is received when a transport has responded to a Ping() request
 // and implements the Response interface
 type PongResponse struct {
-	endpoint Endpoint
+	endpoint EndpointCallback
 }
 
 // Endpoint returns the associated endpoint
-func (r *PongResponse) Endpoint() Endpoint {
+func (r *PongResponse) Endpoint() EndpointCallback {
 	return r.endpoint
 }
