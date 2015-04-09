@@ -35,17 +35,19 @@ import (
 )
 
 var (
-	ErrNetworkTimeout = errors.New("Server did not respond within network timeout")
-	ErrNetworkPing    = errors.New("Server did not respond to keepalive")
+	errNetworkTimeout = errors.New("Server did not respond within network timeout")
+	errNetworkPing    = errors.New("Server did not respond to keepalive")
 )
 
 const (
 	// TODO(driskell): Make the idle timeout configurable like the network timeout is?
-	keepalive_timeout time.Duration = 900 * time.Second
+	keepaliveTimeout time.Duration = 900 * time.Second
 )
 
-type TimeoutFunc func(*Publisher, *endpoint.Endpoint)
+type timeoutFunc func(*Publisher, *endpoint.Endpoint)
 
+// Publisher handles payload and is responsible for passing ordered
+// acknowledgements to the Registrar
 type Publisher struct {
 	core.PipelineSegment
 	//core.PipelineConfigReceiver
@@ -63,17 +65,18 @@ type Publisher struct {
 	registrarSpool   registrar.EventSpooler
 	shuttingDown     bool
 
-	line_count       int64
-	line_speed       float64
-	last_line_count  int64
-	last_measurement time.Time
-	seconds_no_ack   int
+	lineCount       int64
+	lineSpeed       float64
+	lastLineCount  int64
+	lastMeasurement time.Time
+	secondsNoAck   int
 
 	ifSpoolChan  <-chan []*core.EventDescriptor
 	nextSpool    []*core.EventDescriptor
 	resendList   internallist.List
 }
 
+// NewPublisher creates a new publisher instance on the given pipeline
 func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar registrar.Registrator) *Publisher {
 	ret := &Publisher{
 		config: config,
@@ -98,10 +101,14 @@ func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar reg
 	return ret
 }
 
+// Connect is used by Spooler
+// TODO: Spooler doesn't need to know of publisher, only of events
 func (p *Publisher) Connect() chan<- []*core.EventDescriptor {
 	return p.spoolChan
 }
 
+// Run starts the publisher, this is usually started by the pipeline in its own
+// routine
 func (p *Publisher) Run() {
 	statsTimer := time.NewTimer(time.Second)
 	onShutdown := p.OnShutdown()
@@ -167,7 +174,7 @@ PublishLoop:
 				}
 
 				log.Debug("[%s] Processing timeout", endpoint.Server())
-				callback.(TimeoutFunc)(p, endpoint)
+				callback.(timeoutFunc)(p, endpoint)
 
 				if !more {
 					break
@@ -237,7 +244,7 @@ func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckR
 		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 	} else {
 		log.Debug("[%s] Last payload acknowledged, starting keepalive timeout", endpoint.Server())
-		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
+		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
 	}
 
 	// If we're no longer full, move to ready queue
@@ -403,7 +410,7 @@ func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 
 		if !endpoint.HasTimeout() {
 			log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
-			p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepalive_timeout), (*Publisher).timeoutKeepalive)
+			p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
 		}
 	}
 }
@@ -411,9 +418,9 @@ func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 func (p *Publisher) timeoutPending(endpoint *endpoint.Endpoint) {
 	// Trigger a failure
 	if endpoint.IsPinging() {
-		p.forceEndpointFailure(endpoint, ErrNetworkPing)
+		p.forceEndpointFailure(endpoint, errNetworkPing)
 	} else {
-		p.forceEndpointFailure(endpoint, ErrNetworkTimeout)
+		p.forceEndpointFailure(endpoint, errNetworkTimeout)
 	}
 }
 
@@ -430,21 +437,23 @@ func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 func (p *Publisher) updateStatistics() {
 	p.Lock()
 
-	p.line_speed = core.CalculateSpeed(time.Since(p.last_measurement), p.line_speed, float64(p.line_count-p.last_line_count), &p.seconds_no_ack)
+	p.lineSpeed = core.CalculateSpeed(time.Since(p.lastMeasurement), p.lineSpeed, float64(p.lineCount-p.lastLineCount), &p.secondsNoAck)
 
-	p.last_line_count = p.line_count
-	p.last_measurement = time.Now()
+	p.lastLineCount = p.lineCount
+	p.lastMeasurement = time.Now()
 
 	p.Unlock()
 }
 
+// Snapshot returns a snapshot of the current publisher status. This is normally
+// called by the pipeline when a pipeline snapshot is requested
 func (p *Publisher) Snapshot() []*core.Snapshot {
 	p.RLock()
 
 	snapshot := core.NewSnapshot("Publisher")
 
-	snapshot.AddEntry("Speed (Lps)", p.line_speed)
-	snapshot.AddEntry("Published lines", p.last_line_count)
+	snapshot.AddEntry("Speed (Lps)", p.lineSpeed)
+	snapshot.AddEntry("Published lines", p.lastLineCount)
 	snapshot.AddEntry("Pending Payloads", p.numPayloads)
 
 	p.RUnlock()
