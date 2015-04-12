@@ -351,6 +351,11 @@ func (c *Config) Load(path string) (err error) {
 		}
 	}
 
+	if len(c.Network.Servers) == 0 {
+		err = fmt.Errorf("No network servers were specified (/network/servers)")
+		return
+	}
+
 	if c.Network.Transport == "" {
 		c.Network.Transport = default_NetworkConfig_Transport
 	}
