@@ -19,19 +19,12 @@ package transports
 import (
 	"github.com/driskell/log-courier/src/lc-lib/addresspool"
 	"github.com/driskell/log-courier/src/lc-lib/core"
-)
-
-// Flags to state the action required to fulfil configuration reload
-const (
-	reloadNone = iota
-	reloadServers
-	reloadTransport
+	"github.com/driskell/log-courier/src/lc-lib/config"
 )
 
 // Transport is the generic interface that all transports implement
 type Transport interface {
-	// TODO: Implement this in new transport systems
-	//ReloadConfig(*NetworkConfig) int
+	ReloadConfig(*config.Network) bool
 	Write(string, []*core.EventDescriptor) error
 	Ping() error
 	Fail()

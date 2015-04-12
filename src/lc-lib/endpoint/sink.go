@@ -93,7 +93,7 @@ func (f *Sink) RemoveEndpoint(server string) {
 		return
 	}
 
-	// Ensure shutdown was called
+	// Ensure shutdown was called at the minimum (probably by our own Shutdown)
 	if !endpoint.isShuttingDown() {
 		return
 	}
@@ -105,12 +105,7 @@ func (f *Sink) RemoveEndpoint(server string) {
 // entry to shut down
 func (f *Sink) ShutdownEndpoint(server string) {
 	endpoint := f.Endpoint(server)
-	if endpoint == nil {
-		return
-	}
-
-	// Ensure we're in a valid state - that is, no pending payloads
-	if endpoint.NumPending() != 0 {
+	if endpoint == nil || endpoint.IsClosing() {
 		return
 	}
 
@@ -118,6 +113,13 @@ func (f *Sink) ShutdownEndpoint(server string) {
 		f.readyList.Remove(&endpoint.readyElement)
 	} else if endpoint.status == endpointStatusFailed {
 		f.failedList.Remove(&endpoint.failedElement)
+	}
+
+	endpoint.status = endpointStatusClosing
+
+	// If we still have pending payloads wait for them to finish
+	if endpoint.NumPending() != 0 {
+		return
 	}
 
 	if endpoint.timeoutFunc != nil {
@@ -244,8 +246,8 @@ func (f *Sink) NextReady() *Endpoint {
 
 // RegisterFull marks an endpoint as full
 func (f *Sink) RegisterFull(endpoint *Endpoint) {
-	// Ignore if we are already marked as full or were marked as failed
-	if endpoint.status == endpointStatusFull || endpoint.status == endpointStatusFailed {
+	// Ignore if we are already marked as full or were marked as failed/closing
+	if endpoint.status >= endpointStatusFull {
 		return
 	}
 
@@ -260,8 +262,8 @@ func (f *Sink) RegisterFull(endpoint *Endpoint) {
 
 // RegisterReady marks an endpoint as ready to receive events
 func (f *Sink) RegisterReady(endpoint *Endpoint) {
-	// Ignore if already ready or if we were marked as failed
-	if endpoint.status == endpointStatusReady || endpoint.status == endpointStatusFailed {
+	// Ignore if already ready or if we were marked as failed/closing
+	if endpoint.status == endpointStatusReady || endpoint.status >= endpointStatusFailed {
 		return
 	}
 
@@ -289,6 +291,11 @@ func (f *Sink) RegisterReady(endpoint *Endpoint) {
 // RegisterFailed stores the endpoint on the failed list, removing it from the
 // ready or full lists so no more events are sent to it
 func (f *Sink) RegisterFailed(endpoint *Endpoint) {
+	// Should never get here if we're closing, caller should check IsClosing()
+	if endpoint.status == endpointStatusClosing {
+		return
+	}
+
 	if endpoint.status == endpointStatusReady {
 		f.readyList.Remove(&endpoint.readyElement)
 	}
@@ -306,6 +313,11 @@ func (f *Sink) RegisterFailed(endpoint *Endpoint) {
 // idle status, as soon as the next Ready signal is received, events will flow
 // again
 func (f *Sink) RecoverFailed(endpoint *Endpoint) {
+	// Should never get here if we're closing, caller should check IsClosing()
+	if endpoint.status == endpointStatusClosing {
+		return
+	}
+
 	// Ignore if we haven't failed
 	if endpoint.status != endpointStatusFailed {
 		return

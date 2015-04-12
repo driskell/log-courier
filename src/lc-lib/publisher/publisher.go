@@ -126,23 +126,18 @@ PublishLoop:
 		case status := <-p.endpointSink.StatusChan():
 			switch status.Status {
 			case endpoint.Ready:
-				p.readyEndpoint(status.Endpoint)
-			case endpoint.Recovered:
-				p.recoverEndpoint(status.Endpoint)
-				p.readyEndpoint(status.Endpoint)
-			case endpoint.Finished:
-				server := status.Endpoint.Server()
-				p.endpointSink.RemoveEndpoint(server)
-				if p.shuttingDown && p.endpointSink.Count() == 0 {
-					// Finished shutting down!
-					break PublishLoop
+				// Ignore late messages from a closing endpoint
+				if !status.Endpoint.IsClosing() {
+					p.readyEndpoint(status.Endpoint)
 				}
-				// Recreate the endpoint if it's still in the config
-				for _, item := range p.config.Servers {
-					if item == server {
-						p.createEndpoint(server)
-						break
-					}
+			case endpoint.Recovered:
+				if !status.Endpoint.IsClosing() {
+					p.recoverEndpoint(status.Endpoint)
+					p.readyEndpoint(status.Endpoint)
+				}
+			case endpoint.Finished:
+				if p.finishEndpoint(status.Endpoint) {
+					break PublishLoop
 				}
 			default:
 				p.failEndpoint(status.Endpoint)
@@ -210,14 +205,10 @@ PublishLoop:
 		case <-onShutdown:
 			onShutdown = nil
 			p.ifSpoolChan = nil
+			p.nextSpool = nil
 			p.shuttingDown = true
 
-			if p.numPayloads == 0 {
-				log.Debug("Publisher has no outstanding payloads, shutting down")
-				p.endpointSink.Shutdown()
-			} else {
-				log.Warning("Publisher has outstanding payloads, waiting for responses before shutting down")
-			}
+			p.endpointSink.Shutdown()
 		}
 	}
 
@@ -235,7 +226,7 @@ func (p *Publisher) reloadConfig(config *config.Config) {
 			// Add a new endpoint
 			p.createEndpoint(server)
 		} else {
-			// TODO: Existing
+			endpoint.ReloadConfig(&config.Network)
 		}
 	}
 
@@ -373,6 +364,33 @@ func (p *Publisher) recoverEndpoint(endpoint *endpoint.Endpoint) {
 		log.Info("[%s] Endpoint recovered", endpoint.Server())
 		p.endpointSink.RecoverFailed(endpoint)
 	}
+}
+
+// finishEndpoint removes a finished endpoint, recreating it if it is still in
+// in the active configuration. Returns true if shutdown is completed
+func (p *Publisher) finishEndpoint(endpoint *endpoint.Endpoint) bool {
+	log.Debug("[%s] Endpoint has finished", endpoint.Server())
+	server := endpoint.Server()
+	p.endpointSink.RemoveEndpoint(server)
+
+	// Don't recreate anything if shutting down
+	if p.shuttingDown {
+		if p.endpointSink.Count() == 0 {
+			// Finished shutting down!
+			return true
+		}
+		return false
+	}
+
+	// Recreate the endpoint if it's still in the config
+	for _, item := range p.config.Servers {
+		if item == server {
+			p.createEndpoint(server)
+			break
+		}
+	}
+
+	return false
 }
 
 // failEndpoint marks an endpoint as failed

@@ -156,24 +156,20 @@ func (f *TransportTCPFactory) NewTransport(endpoint EndpointCallback) Transport 
 	return ret
 }
 
-// TODO: This is not called anymore
-/*func (t *TransportTCP) ReloadConfig(new_net_config *config.Network) int {
-	// Check we can grab new TCP config to compare, if not force transport reinit
-	new_config, ok := new_net_config.TransportFactory.(*TransportTCPFactory)
-	if !ok {
-		return reloadTransport
-	}
+// ReloadConfig returns true if the transport needs to be restarted in order
+// for the new configuration to apply
+func (t *TransportTCP) ReloadConfig(newNetConfig *config.Network) bool {
+	newConfig := newNetConfig.Factory.(*TransportTCPFactory)
 
 	// TODO: Check timestamps of underlying certificate files to detect changes
-	if new_config.SSLCertificate != t.config.SSLCertificate || new_config.SSLKey != t.config.SSLKey || new_config.SSLCA != t.config.SSLCA {
-		return reloadTransport
+	if newConfig.SSLCertificate != t.config.SSLCertificate || newConfig.SSLKey != t.config.SSLKey || newConfig.SSLCA != t.config.SSLCA {
+		return true
 	}
 
-	// Publisher handles changes to net_config, but ensure we store the latest in case it asks for a reconnect
-	t.config.net_config = new_net_config
+	t.config.netConfig = newNetConfig
 
-	return reloadNone
-}*/
+	return false
+}
 
 // controller is the master routine which handles connection and reconnection
 // When reconnecting, the socket and all routines are torn down and restarted.

@@ -19,6 +19,7 @@ package endpoint
 import (
 	"errors"
 	"github.com/driskell/log-courier/src/lc-lib/addresspool"
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/internallist"
 	"github.com/driskell/log-courier/src/lc-lib/payload"
 	"github.com/driskell/log-courier/src/lc-lib/transports"
@@ -43,6 +44,9 @@ const (
 
 	// Do not use this endpoint, it has failed
 	endpointStatusFailed
+
+	// The endpoint is about to shutdown once pending payloads are complete
+	endpointStatusClosing
 )
 
 // StatusChange holds a value that represents a change in endpoint status that
@@ -227,6 +231,11 @@ func (e *Endpoint) NumPending() int {
 	return e.numPayloads
 }
 
+// IsClosing returns true if this Endpoint is closing down
+func (e *Endpoint) IsClosing() bool {
+	return e.status == endpointStatusClosing
+}
+
 // PullBackPending returns all queued payloads back to the publisher
 // Called when a failure happens
 func (e *Endpoint) PullBackPending() []*payload.Payload {
@@ -236,6 +245,13 @@ func (e *Endpoint) PullBackPending() []*payload.Payload {
 	}
 	e.resetPayloads()
 	return pending
+}
+
+// ReloadConfig submits a new configuration to the transport, and returns true
+// if the transports requested that it be restarted in order for the
+// configuration to take effect
+func (e *Endpoint) ReloadConfig(config *config.Network) bool {
+	return e.transport.ReloadConfig(config)
 }
 
 // HasTimeout returns true if this endpoint already has an associated timeout
