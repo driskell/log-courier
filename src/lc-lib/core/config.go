@@ -136,6 +136,10 @@ func (c *Config) loadFile(path string) (stripped *bytes.Buffer, err error) {
 		err = fmt.Errorf("Stat failed for config file: %s", err)
 		return
 	}
+	if stat.Size() == 0 {
+		err = fmt.Errorf("Empty configuration file")
+		return
+	}
 	if stat.Size() > (10 << 20) {
 		err = fmt.Errorf("Config file too large (%s)", stat.Size())
 		return
@@ -216,6 +220,11 @@ func (c *Config) loadFile(path string) (stripped *bytes.Buffer, err error) {
 			p++
 		}
 		stripped.Write(buffer[s:p])
+	}
+
+	if stripped.Len() == 0 {
+		err = fmt.Errorf("Empty configuration file")
+		return
 	}
 
 	return
