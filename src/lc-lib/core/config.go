@@ -247,7 +247,14 @@ func (c *Config) parseSyntaxError(js []byte, err error) error {
 
 	line, pos := bytes.Count(js[:start], []byte("\n")), int(json_err.Offset) - start - 1
 
-	return fmt.Errorf("%s on line %d\n%s\n%s^", err, line, js[start:end], strings.Repeat(" ", pos))
+	var posStr string
+	if pos > 0 {
+		posStr = strings.Repeat(" ", pos)
+	} else {
+		posStr = ""
+	}
+
+	return fmt.Errorf("%s on line %d\n%s\n%s^", err, line, js[start:end], posStr)
 }
 
 // TODO: Config from a TOML? Maybe a custom one
