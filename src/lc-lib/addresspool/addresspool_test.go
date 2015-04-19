@@ -22,52 +22,54 @@ import (
 )
 
 func TestPoolIP(t *testing.T) {
-  // Test failures when parsing
-  pool := NewPool([]string{"127.0.0.1:1234"})
+  pool := NewPool("127.0.0.1:1234")
+  addr, err := pool.Next()
 
-  addr, desc, err := pool.Next()
-
-  // Should have succeeeded
   if err != nil {
     t.Error("Address pool did not parse IP correctly: ", err)
   } else if addr == nil {
-    t.Error("Address pool did not returned nil addr")
-  } else if desc != "127.0.0.1:1234" {
-    t.Error("Address pool did not return correct desc: ", desc)
+    t.Error("Address pool returned nil addr")
+  } else if pool.Server() != "127.0.0.1:1234" {
+    t.Error("Address pool did not return correct server: ", pool.Server())
+  } else if pool.Host() != "127.0.0.1" {
+    t.Error("Address pool did not return correct host: ", pool.Host())
+  } else if pool.Desc() != "127.0.0.1:1234" {
+    t.Error("Address pool did not return correct desc: ", pool.Desc())
   } else if addr.String() != "127.0.0.1:1234" {
     t.Error("Address pool did not return correct addr: ", addr.String())
   }
 }
 
 func TestPoolHost(t *testing.T) {
-  // Test failures when parsing
-  pool := NewPool([]string{"google-public-dns-a.google.com:555"})
-
-  addr, desc, err := pool.Next()
+  pool := NewPool("google-public-dns-a.google.com:555")
+  addr, err := pool.Next()
 
   if err != nil {
-    t.Error("Address pool did not parse Host correctly: ", err)
+    t.Error("Address pool did not parse IP correctly: ", err)
   } else if addr == nil {
-    t.Error("Address pool did not returned nil addr")
-  } else if desc != "8.8.8.8:555 (google-public-dns-a.google.com)" && desc != "[2001:4860:4860::8888]:555 (google-public-dns-a.google.com)" {
-    t.Error("Address pool did not return correct desc: ", desc)
+    t.Error("Address pool returned nil addr")
+  } else if pool.Server() != "google-public-dns-a.google.com:555" {
+    t.Error("Address pool did not return correct server: ", pool.Server())
+  } else if pool.Host() != "google-public-dns-a.google.com" {
+    t.Error("Address pool did not return correct host: ", pool.Host())
+  } else if pool.Desc() != "8.8.8.8:555 (google-public-dns-a.google.com)" && pool.Desc() != "[2001:4860:4860::8888]:555 (google-public-dns-a.google.com)" {
+    t.Error("Address pool did not return correct desc: ", pool.Desc())
   } else if addr.String() != "8.8.8.8:555" && addr.String() != "[2001:4860:4860::8888]:555" {
     t.Error("Address pool did not return correct addr: ", addr.String())
   }
 }
 
 func TestPoolHostMultiple(t *testing.T) {
-  // Test failures when parsing
-  pool := NewPool([]string{"google.com:555"})
+  pool := NewPool("google.com:555")
 
   for i := 0; i < 2; i++ {
-    addr, _, err := pool.Next()
+    addr, err := pool.Next()
 
     // Should have succeeeded
     if err != nil {
       t.Error("Address pool did not parse Host correctly: ", err)
     } else if addr == nil {
-      t.Error("Address pool did not returned nil addr")
+      t.Error("Address pool returned nil addr")
     }
 
     if i == 0 {
@@ -79,25 +81,21 @@ func TestPoolHostMultiple(t *testing.T) {
 }
 
 func TestPoolSrv(t *testing.T) {
-  // Test failures when parsing
-  pool := NewPool([]string{"@_xmpp-server._tcp.google.com"})
-
-  addr, _, err := pool.Next()
+  pool := NewPool("@_xmpp-server._tcp.google.com")
+  addr, err := pool.Next()
 
   // Should have succeeeded
   if err != nil {
     t.Error("Address pool did not parse SRV correctly: ", err)
   } else if addr == nil {
-    t.Error("Address pool did not returned nil addr")
+    t.Error("Address pool returned nil addr")
   }
 }
 
 func TestPoolSrvRfc(t *testing.T) {
-  // Test failures when parsing
-  pool := NewPool([]string{"@google.com"})
+  pool := NewPool("@google.com")
   pool.SetRfc2782(true, "xmpp-server")
-
-  addr, _, err := pool.Next()
+  addr, err := pool.Next()
 
   // Should have succeeeded
   if err != nil {
@@ -108,10 +106,8 @@ func TestPoolSrvRfc(t *testing.T) {
 }
 
 func TestPoolInvalid(t *testing.T) {
-  // Test failures when parsing
-  pool := NewPool([]string{"127.0..0:1234"})
-
-  _, _, err := pool.Next()
+  pool := NewPool("127.0..0:1234")
+  _, err := pool.Next()
 
   // Should have failed
   if err == nil {
@@ -121,10 +117,8 @@ func TestPoolInvalid(t *testing.T) {
 }
 
 func TestPoolHostFailure(t *testing.T) {
-  // Test failures when parsing
-  pool := NewPool([]string{"google-public-dns-not-exist.google.com:1234"})
-
-  _, _, err := pool.Next()
+  pool := NewPool("google-public-dns-not-exist.google.com:1234")
+  _, err := pool.Next()
 
   // Should have failed
   if err == nil {
@@ -134,8 +128,7 @@ func TestPoolHostFailure(t *testing.T) {
 }
 
 func TestPoolIsLast(t *testing.T) {
-  // Test that IsLastServer works correctly
-  pool := NewPool([]string{"outlook.com:1234"})
+  pool := NewPool("outlook.com:1234")
 
   // Should report as last
   if !pool.IsLast() {
@@ -143,7 +136,7 @@ func TestPoolIsLast(t *testing.T) {
   }
 
   for i := 0; i <= 42; i++ {
-    _, _, err := pool.Next()
+    _, err := pool.Next()
 
     // Should succeed
     if err != nil {
@@ -167,66 +160,4 @@ func TestPoolIsLast(t *testing.T) {
 
   // Hit 42 servers without hitting last
   t.Error("Address pool IsLast did not return correctly")
-}
-
-func TestPoolIsLastServer(t *testing.T) {
-  // Test that IsLastServer works correctly
-  pool := NewPool([]string{"127.0.0.1:1234", "127.0.0.1:1234", "127.0.0.1:1234"})
-
-  // Should report as last server
-  if !pool.IsLastServer() {
-    t.Error("Address pool IsLastServer did not return correctly")
-  }
-
-  for i := 0; i < 3; i++ {
-    _, _, err := pool.Next()
-
-    // Should succeed
-    if err != nil {
-      t.Error("Address pool did not parse IP correctly")
-    }
-
-    if i < 2 {
-      // Should not report as last server
-      if pool.IsLastServer() {
-        t.Error("Address pool IsLastServer did not return correctly")
-      }
-
-      continue
-    }
-  }
-
-  // Should report as last server
-  if !pool.IsLastServer() {
-    t.Error("Address pool IsLastServer did not return correctly")
-  }
-}
-
-func TestPoolNextServer(t *testing.T) {
-  // Test that IsLastServer works correctly
-  pool := NewPool([]string{"google.com:1234", "google.com:1234"})
-
-  cnt := 0
-  for i := 0; i < 42; i++ {
-    addr, err := pool.NextServer()
-
-    // Should succeed
-    if err != nil {
-      t.Error("Address pool did not parse IP correctly")
-    } else if addr != "google.com:1234" {
-      t.Error("Address pool returned incorrect address: ", addr)
-    }
-
-    cnt++
-
-    // Break on last server
-    if pool.IsLastServer() {
-      break
-    }
-  }
-
-  // Should have stopped at 2 servers
-  if cnt != 2 {
-    t.Error("Address pool NextServer failed")
-  }
 }

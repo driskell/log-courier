@@ -1,15 +1,16 @@
 package codecs
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/core"
 	"sync"
 	"testing"
 	"time"
 	"unicode"
+
+	"github.com/driskell/log-courier/src/lc-lib/config"
 )
 
-func createMultilineCodec(unused map[string]interface{}, callback core.CodecCallbackFunc, t *testing.T) core.Codec {
-	config := core.NewConfig()
+func createMultilineCodec(unused map[string]interface{}, callback CallbackFunc, t *testing.T) Codec {
+	config := config.NewConfig()
 	config.General.MaxLineBytes = 1048576
 	config.General.SpoolMaxBytes = 10485760
 
@@ -19,17 +20,17 @@ func createMultilineCodec(unused map[string]interface{}, callback core.CodecCall
 		t.FailNow()
 	}
 
-	return factory.NewCodec(callback, 0)
+	return NewCodec(factory, callback, 0)
 }
 
 type checkMultilineExpect struct {
 	start, end int64
-	text string
+	text       string
 }
 
 type checkMultiline struct {
 	expect []checkMultilineExpect
-	t *testing.T
+	t      *testing.T
 
 	mutex sync.Mutex
 	lines int
@@ -269,7 +270,7 @@ func TestMultilineNextNegate(t *testing.T) {
 func TestMultilineMaxBytes(t *testing.T) {
 	check := &checkMultiline{
 		expect: []checkMultilineExpect{
-			{0,  32, "DEBUG First line\nsecond line\nthi"},
+			{0, 32, "DEBUG First line\nsecond line\nthi"},
 			{32, 39, "rd line"},
 		},
 		t: t,
@@ -286,7 +287,7 @@ func TestMultilineMaxBytes(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0,  16, "DEBUG First line")
+	codec.Event(0, 16, "DEBUG First line")
 	codec.Event(17, 28, "second line")
 	codec.Event(29, 39, "third line")
 	codec.Event(40, 55, "DEBUG Next line")
@@ -302,7 +303,7 @@ func TestMultilineMaxBytes(t *testing.T) {
 func TestMultilineMaxBytesOverflow(t *testing.T) {
 	check := &checkMultiline{
 		expect: []checkMultilineExpect{
-			{0,  10, "START67890"},
+			{0, 10, "START67890"},
 			{10, 20, "abcdefg\n12"},
 			{20, 30, "34567890ab"},
 			{30, 39, "\nc1234567"},
@@ -324,7 +325,7 @@ func TestMultilineMaxBytesOverflow(t *testing.T) {
 	// Also ensure we can split a single long line multiple times (issue #188)
 	// Lastly, ensure we flush immediately if we receive max multiline bytes
 	// rather than carrying over a full buffer and then crashing (issue #118)
-	codec.Event(0,  17, "START67890abcdefg")
+	codec.Event(0, 17, "START67890abcdefg")
 	codec.Event(18, 30, "1234567890ab")
 	codec.Event(31, 39, "c1234567")
 	codec.Event(40, 45, "START")
@@ -370,3 +371,5 @@ func TestMultilineReset(t *testing.T) {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
+
+// TODO(driskell): Test for Reset()

@@ -19,55 +19,59 @@ package payload
 import (
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"testing"
-	"time"
 )
 
 const (
-	test_nonce = "12345678901234567890123456"
+	testNonce = "12345678901234567890123456"
 )
 
-func createTestPayload(t *testing.T, num_events int) *Payload {
-	test_events := make([]*core.EventDescriptor, num_events)
-	for idx := range test_events {
-		test_events[idx] = &core.EventDescriptor{
+func createTestPayload(t *testing.T, numEvents int) *Payload {
+	testEvents := make([]*core.EventDescriptor, numEvents)
+	for idx := range testEvents {
+		testEvents[idx] = &core.EventDescriptor{
 			Stream: nil,
 			Offset: int64(idx),
 			Event:  []byte(""),
 		}
 	}
 
-	payload, err := NewPayload(test_events, test_nonce, time.Second)
-	if err != nil {
-		t.Log("Failed to create pending payload structure")
-		t.FailNow()
-	}
-
-	return payload
+	return NewPayload(testEvents)
 }
 
-func verifyPayload(t *testing.T, payload *Payload, ack bool, complete bool, num_events int, start_event int) {
+func verifyAck(t *testing.T, payload *Payload, n int, expLines int, expFull bool) {
+	lines, full := payload.Ack(n)
+	if lines != expLines {
+		t.Errorf("Ack returned event count is wrong, got: %d, expected: %d", lines, expLines)
+	}
+	if full != expFull {
+		t.Errorf("Ack full signal is wrong, got: %t, expected: %t", full, expFull)
+	}
+}
+
+func verifyPayload(t *testing.T, payload *Payload, ack bool, complete bool, numEvents int, startEvent int) {
 	if got := payload.HasAck(); got != ack {
-		t.Logf("Payload has ack flag wrong, got: %t, should be: %t", got, ack)
-		t.FailNow()
+		t.Errorf("Payload has ack flag wrong, got: %t, expected: %t", got, ack)
 	}
 
 	if got := payload.Complete(); got != complete {
-		t.Logf("Payload has completed flag wrong, got: %t, should be: %t", got, complete)
-		t.FailNow()
+		t.Errorf("Payload has completed flag wrong, got: %t, expected: %t", got, complete)
 	}
 
 	events := payload.Rollup()
-	if len(events) != num_events {
-		t.Logf("Payload rollup event count wrong, got: %d, should be: %d", len(events), num_events)
-		t.FailNow()
+	if len(events) != numEvents {
+		t.Errorf("Payload rollup event count wrong, got: %d, expected: %d", len(events), numEvents)
+	}
+
+	// Ignore events if we already failed
+	if t.Failed() {
+		return
 	}
 
 	for _, event := range events {
-		if event.Offset != int64(start_event) {
-			t.Logf("Payload rollup event offset wrong, got: %d, should be: %d", event.Offset, start_event)
-			t.FailNow()
+		if event.Offset != int64(startEvent) {
+			t.Errorf("Payload rollup event offset wrong, got: %d, expected: %d", event.Offset, startEvent)
 		}
-		start_event++
+		startEvent++
 	}
 }
 
@@ -80,8 +84,11 @@ func TestPayloadNew(t *testing.T) {
 func TestPayloadFullAck(t *testing.T) {
 	payload := createTestPayload(t, 1024)
 
-	payload.Ack(1024)
-	verifyPayload(t, payload, true, false, 1024, 0)
+	verifyAck(t, payload, 1024, 1024, true)
+
+	t.Log("First check")
+	verifyPayload(t, payload, true, true, 1024, 0)
+	t.Log("Second check")
 	verifyPayload(t, payload, false, true, 0, 0)
 }
 
@@ -89,27 +96,27 @@ func TestPayloadPartialAck(t *testing.T) {
 	payload := createTestPayload(t, 1024)
 
 	t.Log("Initial partial ack")
-	payload.Ack(64)
+	verifyAck(t, payload, 64, 64, false)
 	verifyPayload(t, payload, true, false, 64, 0)
 	verifyPayload(t, payload, false, false, 0, 0)
 
 	t.Log("Second partial ack")
-	payload.Ack(132)
+	verifyAck(t, payload, 132, 68, false)
 	verifyPayload(t, payload, true, false, 68, 64)
 	verifyPayload(t, payload, false, false, 0, 0)
 
 	t.Log("Repeated partial ack")
-	payload.Ack(132)
+	verifyAck(t, payload, 132, 0, false)
 	verifyPayload(t, payload, false, false, 0, 0)
 
 	t.Log("Double ack")
-	payload.Ack(148)
-	payload.Ack(192)
+	verifyAck(t, payload, 148, 16, false)
+	verifyAck(t, payload, 192, 44, false)
 	verifyPayload(t, payload, true, false, 60, 132)
 
 	t.Log("Final ack")
-	payload.Ack(1024)
-	verifyPayload(t, payload, true, false, 832, 192)
+	verifyAck(t, payload, 1024, 832, true)
+	verifyPayload(t, payload, true, true, 832, 192)
 	verifyPayload(t, payload, false, true, 0, 0)
 }
 
@@ -117,19 +124,19 @@ func TestPayloadResend(t *testing.T) {
 	payload := createTestPayload(t, 1024)
 
 	t.Log("Initial partial ack")
-	payload.Ack(512)
+	verifyAck(t, payload, 512, 512, false)
 	verifyPayload(t, payload, true, false, 512, 0)
 	verifyPayload(t, payload, false, false, 0, 0)
 
-	payload.Generate()
+	payload.ResetSequence()
 
 	t.Log("Initial partial ack on new sequence")
-	payload.Ack(256)
+	verifyAck(t, payload, 256, 256, false)
 	verifyPayload(t, payload, true, false, 256, 512)
 	verifyPayload(t, payload, false, false, 0, 0)
 	t.Log("Final ack on new sequence")
-	payload.Ack(512)
-	verifyPayload(t, payload, true, false, 256, 768)
+	verifyAck(t, payload, 512, 256, true)
+	verifyPayload(t, payload, true, true, 256, 768)
 	verifyPayload(t, payload, false, true, 0, 0)
 }
 
@@ -137,23 +144,23 @@ func TestPayloadEdgeCases(t *testing.T) {
 	payload := createTestPayload(t, 1024)
 
 	t.Log("Invalid sequence < 0")
-	payload.Ack(-1024)
+	verifyAck(t, payload, -1024, 0, false)
 	verifyPayload(t, payload, false, false, 0, 0)
 
 	t.Log("Sequence revert - initial ack")
-	payload.Ack(500)
+	verifyAck(t, payload, 500, 500, false)
 	verifyPayload(t, payload, true, false, 500, 0)
 	verifyPayload(t, payload, false, false, 0, 0)
 	t.Log("Sequence revert - reverted ack")
-	payload.Ack(246)
+	verifyAck(t, payload, 246, 0, false)
 	verifyPayload(t, payload, false, false, 0, 0)
 	t.Log("Sequence revert - next ack")
-	payload.Ack(512)
+	verifyAck(t, payload, 512, 12, false)
 	verifyPayload(t, payload, true, false, 12, 500)
 	verifyPayload(t, payload, false, false, 0, 0)
 
 	t.Log("Sequence past end")
-	payload.Ack(2048)
-	verifyPayload(t, payload, true, false, 512, 512)
+	verifyAck(t, payload, 2048, 512, true)
+	verifyPayload(t, payload, true, true, 512, 512)
 	verifyPayload(t, payload, false, true, 0, 0)
 }
