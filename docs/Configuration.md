@@ -411,7 +411,7 @@ what transport and security to use.
 
 ### `"max pending payloads"`
 
-*Number. Optional. Default: 3*
+*Number. Optional. Default: 4*
 
 The maximum number of spools that can be in transit to a single server at any
 one time. Each spool will be kept in memory until the remote server acknowledges

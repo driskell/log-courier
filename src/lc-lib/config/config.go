@@ -52,7 +52,7 @@ const (
 	default_NetworkConfig_Rfc2782Service     string        = "courier"
 	default_NetworkConfig_Timeout            time.Duration = 15 * time.Second
 	default_NetworkConfig_Reconnect          time.Duration = 1 * time.Second
-	default_NetworkConfig_MaxPendingPayloads int64         = 3
+	default_NetworkConfig_MaxPendingPayloads int64         = 4
 	default_StreamConfig_Codec               string        = "plain"
 	default_StreamConfig_DeadTime            time.Duration = 24 * time.Hour
 	default_StreamConfig_AddHostField        bool          = true
