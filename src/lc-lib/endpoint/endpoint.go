@@ -103,6 +103,7 @@ func (e *Endpoint) Init() {
 	e.timeoutElement.Value = e
 	e.readyElement.Value = e
 	e.fullElement.Value = e
+	e.failedElement.Value = e
 
 	e.resetPayloads()
 }
