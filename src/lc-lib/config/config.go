@@ -46,6 +46,7 @@ const (
 	default_GeneralConfig_LogLevel           logging.Level = logging.INFO
 	default_GeneralConfig_LogStdout          bool          = true
 	default_GeneralConfig_LogSyslog          bool          = false
+	default_NetworkConfig_Method             string        = "failover"
 	default_NetworkConfig_Transport          string        = "tls"
 	default_NetworkConfig_Rfc2782Srv         bool          = true
 	default_NetworkConfig_Rfc2782Service     string        = "courier"
@@ -100,6 +101,7 @@ func (gc *General) InitDefaults() {
 type Network struct {
 	Transport          string        `config:"transport"`
 	Servers            []string      `config:"servers"`
+	Method             string        `config:"method"`
 	Rfc2782Srv         bool          `config:"rfc 2782 srv"`
 	Rfc2782Service     string        `config:"rfc 2782 service"`
 	Timeout            time.Duration `config:"timeout"`
@@ -370,6 +372,14 @@ func (c *Config) Load(path string) (err error) {
 		}
 	}
 
+	if c.Network.Method == "" {
+		c.Network.Method = default_NetworkConfig_Method
+	}
+	if c.Network.Method != "failover" && c.Network.Method != "loadbalance" {
+		err = fmt.Errorf("The network method (/network/method) is not recognised: %s", c.Network.Method)
+		return
+	}
+
 	if len(c.Network.Servers) == 0 {
 		err = fmt.Errorf("No network servers were specified (/network/servers)")
 		return
@@ -378,7 +388,7 @@ func (c *Config) Load(path string) (err error) {
 	servers := make(map[string]bool)
 	for _, server := range c.Network.Servers {
 		if _, exists := servers[server]; exists {
-			err = fmt.Errorf("The list of network servers must be unique: %s appears more than once", server)
+			err = fmt.Errorf("The list of network servers (/network/servers) must be unique: %s appears multiple times", server)
 			return
 		}
 		servers[server] = true

@@ -90,20 +90,9 @@ func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar reg
 		ret.registrarSpool = registrar.Connect()
 	}
 
-	// TODO: Option for round robin instead of load balanced?
-	for _, server := range config.Servers {
-		ret.createEndpoint(server)
-	}
-
 	pipeline.Register(ret)
 
 	return ret
-}
-
-// createEndpoint is a helper to initialise an address pool and create a new
-// endpoint within the sink
-func (p *Publisher) createEndpoint(server string) {
-	p.endpointSink.AddEndpoint(server, addresspool.NewPool(server))
 }
 
 // Connect is used by Spooler
@@ -220,20 +209,16 @@ PublishLoop:
 }
 
 func (p *Publisher) reloadConfig(config *config.Config) {
-	// Verify the same servers are present
-	for _, server := range config.Network.Servers {
-		if endpoint := p.endpointSink.Endpoint(server); endpoint == nil {
-			// Add a new endpoint
-			p.createEndpoint(server)
-		} else {
-			endpoint.ReloadConfig(&config.Network)
-		}
-	}
-
-	// Shutdown removed servers
-	p.endpointSink.ShutdownIfMissing(config.Network.Servers)
-
 	p.config = &config.Network
+
+	// Give sink the new config, and allow it to shutdown removed servers
+	p.endpointSink.ReloadConfig(&config.Network)
+
+	// The sink may have changed the priority endpoint after the reload, making
+	// an endpoint available for send
+	if p.eventsAvailable() && p.endpointSink.HasReady() {
+		p.sendIfAvailable(p.endpointSink.NextReady())
+	}
 }
 
 func (p *Publisher) sendEvents(endpoint *endpoint.Endpoint, events []*core.EventDescriptor) error {
@@ -385,7 +370,7 @@ func (p *Publisher) finishEndpoint(endpoint *endpoint.Endpoint) bool {
 	// Recreate the endpoint if it's still in the config
 	for _, item := range p.config.Servers {
 		if item == server {
-			p.createEndpoint(server)
+			p.endpointSink.AddEndpoint(server, addresspool.NewPool(server))
 			break
 		}
 	}
@@ -439,6 +424,31 @@ func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 		return
 	}
 
+	// If we're in failover mode, only send if this is the priority endpoint
+	if p.config.Method == "failover" && !p.endpointSink.IsPriorityEndpoint(endpoint) {
+		return
+	}
+
+	if p.sendIfAvailable(endpoint) {
+		return
+	}
+
+	log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
+
+	// No events, save on the ready list and start the keepalive timer if none set
+	p.endpointSink.RegisterReady(endpoint)
+
+	if !endpoint.HasTimeout() {
+		log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
+		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
+	}
+}
+
+func (p *Publisher) eventsAvailable() bool {
+	return p.resendList.Len() != 0 || p.nextSpool != nil
+}
+
+func (p *Publisher) sendIfAvailable(endpoint *endpoint.Endpoint) bool {
 	if p.resendList.Len() != 0 {
 		pendingPayload := p.resendList.Front().Value.(*payload.Payload)
 
@@ -450,7 +460,11 @@ func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 			p.resendList.Remove(&pendingPayload.ResendElement)
 			log.Debug("%d payloads remain held for resend", p.resendList.Len())
 		}
-	} else if p.nextSpool != nil {
+
+		return true
+	}
+
+	if p.nextSpool != nil {
 		log.Debug("[%s] Send is now ready, sending %d queued events", endpoint.Server(), len(p.nextSpool))
 
 		// We have events, send it to the endpoint and wait for more
@@ -458,17 +472,11 @@ func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 			p.nextSpool = nil
 			p.ifSpoolChan = p.spoolChan
 		}
-	} else {
-		log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
 
-		// No events, save on the ready list and start the keepalive timer if none set
-		p.endpointSink.RegisterReady(endpoint)
-
-		if !endpoint.HasTimeout() {
-			log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
-			p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
-		}
+		return true
 	}
+
+	return false
 }
 
 func (p *Publisher) timeoutPending(endpoint *endpoint.Endpoint) {

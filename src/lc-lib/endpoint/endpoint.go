@@ -76,10 +76,11 @@ type Endpoint struct {
 
 	// Element structures for internal use by InternalList via EndpointSink
 	// MUST have Value member initialised
-	timeoutElement internallist.Element
-	readyElement   internallist.Element
-	fullElement    internallist.Element
-	failedElement  internallist.Element
+	timeoutElement  internallist.Element
+	readyElement    internallist.Element
+	fullElement     internallist.Element
+	failedElement   internallist.Element
+	priorityElement internallist.Element
 
 	// Timeout callback and when it should trigger
 	timeoutFunc interface{}
@@ -104,6 +105,7 @@ func (e *Endpoint) Init() {
 	e.readyElement.Value = e
 	e.fullElement.Value = e
 	e.failedElement.Value = e
+	e.priorityElement.Value = e
 
 	e.resetPayloads()
 }
@@ -268,6 +270,11 @@ func (e *Endpoint) IsFailed() bool {
 // IsFull returns true if this endpoint has been marked as full
 func (e *Endpoint) IsFull() bool {
 	return e.status == endpointStatusFull
+}
+
+// IsReady returns true if this endpoint has been marked as ready
+func (e *Endpoint) IsReady() bool {
+	return e.status == endpointStatusReady
 }
 
 // resetPayloads resets the internal state for pending payloads
