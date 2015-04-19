@@ -112,6 +112,5 @@ func (pp *Payload) Rollup() []*core.EventDescriptor {
 	rollup := pp.events[:pp.ackEvents]
 	pp.events = pp.events[pp.ackEvents:]
 	pp.ackEvents = 0
-	pp.ResetSequence()
 	return rollup
 }
