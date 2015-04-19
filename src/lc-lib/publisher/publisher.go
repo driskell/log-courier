@@ -219,6 +219,9 @@ func (p *Publisher) reloadConfig(config *config.Config) {
 	if p.eventsAvailable() && p.endpointSink.HasReady() {
 		p.sendIfAvailable(p.endpointSink.NextReady())
 	}
+
+	// TODO: If MaxPendingPayloads is changed, update which endpoints should
+	//       be marked as full
 }
 
 func (p *Publisher) sendEvents(endpoint *endpoint.Endpoint, events []*core.EventDescriptor) error {
@@ -262,8 +265,7 @@ func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckR
 	}
 
 	// If we're no longer full, move to ready queue
-	// TODO: Use "peer send queue" - Move logic to endpoint.EndpointSink
-	if endpoint.IsFull() && endpoint.NumPending() < 4 {
+	if endpoint.IsFull() && endpoint.NumPending() < int(p.config.MaxPendingPayloads) {
 		log.Debug("[%s] Endpoint is no longer full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
 		p.readyEndpoint(endpoint)
 	}
@@ -417,8 +419,7 @@ func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error)
 }
 
 func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
-	// TODO: Make configurable (bring back the "peer send queue" setting)
-	if endpoint.NumPending() >= 4 {
+	if endpoint.NumPending() >= int(p.config.MaxPendingPayloads) {
 		log.Debug("[%s] Endpoint is full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
 		p.endpointSink.RegisterFull(endpoint)
 		return

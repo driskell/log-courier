@@ -411,15 +411,16 @@ what transport and security to use.
 
 ### `"max pending payloads"`
 
-*Number. Optional. Default: 10*
+*Number. Optional. Default: 3*
 
-The maximum number of spools that can be in transit at any one time. Each spool
-will be kept in memory until the remote server acknowledges it.
+The maximum number of spools that can be in transit to a single server at any
+one time. Each spool will be kept in memory until the remote server acknowledges
+it.
 
-If Log Courier has sent this many spools to the remote server, and has not yet
-received acknowledgement responses for them (either because the remote server
-is busy or because the link has high latency), it will pause and wait before
-sending anymore data.
+If Log Courier has sent this many spools to a remote server, and has not yet
+received acknowledgement responses for them (either because the remote server is
+busy or because the link has high latency), it will pause and wait before
+sending anymore.
 
 *For most installations you should leave this at the default as it is high
 enough to maintain throughput even on high latency links and low enough not to
