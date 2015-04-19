@@ -425,6 +425,22 @@ sending anymore data.
 enough to maintain throughput even on high latency links and low enough not to
 cause excessive memory usage.*
 
+### `"method"`
+
+*String. Optional. Default: "failover"
+Available values: "failover", "loadbalance"*
+
+Specified the method to use when managing multiple `"servers"`.
+
+`"failover"`: Connect to all servers, preferring the first server in the list
+that has not failed. If the preferred server fails, gracefully failover to the
+next available server. When a server recovers that is more preferred than the
+current server, failback gracefully.
+
+`"loadbalance"`: Connect to all servers, load balancing events between them.
+Faster servers will receive more events than slower servers. Equally fast
+servers will receive events in a round robin fashion.
+
 ### `"reconnect"`
 
 *Duration. Optional. Default: 1*
@@ -494,7 +510,7 @@ time period the connection will be closed and reset.
 ### `"transport"`
 
 *String. Optional. Default: "tls"  
-Available values: "tcp", "tls"
+Available values: "tcp", "tls"*
 
 <!-- *Depending on how log-courier was built, some transports may not be available.
 Run `log-courier -list-supported` to see the list of transports available in
