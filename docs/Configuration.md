@@ -202,24 +202,30 @@ current data stream. For stdin, this field is set to a hyphen, "-".
 Adds an automatic "timezone" field to generated events that contains the local
 machine's local timezone in the format, "-0700 MST".
 
-### `"codec"`
+### `"codecs"`
 
-*Codec configuration. Optional. Default: `{ "name": "plain" }`*  
+*Codec configuration. Optional. Default: `[ { "name": "plain" } ]`*  
 *Configuration reload will only affect new or resumed files*
 
 *Depending on how log-courier was built, some codecs may not be available. Run
 `log-courier -list-supported` to see the list of codecs available in a specific
 build of log-courier.*
 
-The specified codec will receive the lines read from the log stream and perform
+The specified codecs will receive the lines read from the log stream and perform
 any decoding necessary to generate events. The plain codec does nothing and
 simply ships the events unchanged.
 
-All configurations are a dictionary with at least a "name" key. Additional
-options can be provided if the specified codec allows.
+When multiple codecs are specified, the first codec will receive events, and the
+second codec will receive the output from the first codec. This allows versatile
+configurations, such as combining events into multiline events and then
+filtering those that aren't required.
 
-{ "name": "codec-name" }
-{ "name": "codec-name", "option1": "value", "option2": "42" }
+All configurations are an array of dictionaries with at least a "name" key.
+Additional options can be provided if the specified codec allows.
+
+* `[ { "name": "codec-name" } ]`
+* `[ { "name": "codec-name", "option1": "value", "option2": "42" } ]`
+* `[ { "name": "first-name" }, { "name": "second-name" } ]`
 
 Aside from "plain", the following codecs are available at this time.
 

@@ -132,12 +132,11 @@ type Stream struct {
 	AddOffsetField   bool                   `config:"add offset field"`
 	AddPathField     bool                   `config:"add path field"`
 	AddTimezoneField bool                   `config:"add timezone field"`
-	Codec            CodecStub              `config:"codec"`
+	Codecs           []CodecStub            `config:"codecs"`
 	DeadTime         time.Duration          `config:"dead time"`
 }
 
 func (sc *Stream) InitDefaults() {
-	sc.Codec.Name = default_StreamConfig_Codec
 	sc.DeadTime = default_StreamConfig_DeadTime
 	sc.AddHostField = default_StreamConfig_AddHostField
 	sc.AddOffsetField = default_StreamConfig_AddOffsetField
@@ -410,7 +409,7 @@ func (c *Config) Load(path string) (err error) {
 			return
 		}
 
-		if err = c.initStreamConfig(fmt.Sprintf("/files[%d]/codec/", k), &c.Files[k].Stream); err != nil {
+		if err = c.initStreamConfig(fmt.Sprintf("/files[%d]", k), &c.Files[k].Stream); err != nil {
 			return
 		}
 	}
@@ -423,12 +422,19 @@ func (c *Config) Load(path string) (err error) {
 }
 
 func (c *Config) initStreamConfig(path string, stream_config *Stream) (err error) {
-	if registrarFunc, ok := registeredCodecs[stream_config.Codec.Name]; ok {
-		if stream_config.Codec.Factory, err = registrarFunc(c, path, stream_config.Codec.Unused, stream_config.Codec.Name); err != nil {
-			return
+	if len(stream_config.Codecs) == 0 {
+		stream_config.Codecs = []CodecStub{CodecStub{Name: default_StreamConfig_Codec}}
+	}
+
+	for i := 0; i < len(stream_config.Codecs); i++ {
+		codec := &stream_config.Codecs[i]
+		if registrarFunc, ok := registeredCodecs[codec.Name]; ok {
+			if codec.Factory, err = registrarFunc(c, path, codec.Unused, codec.Name); err != nil {
+				return
+			}
+		} else {
+			return fmt.Errorf("Unrecognised codec '%s' for %s", codec.Name, path)
 		}
-	} else {
-		return fmt.Errorf("Unrecognised codec '%s' for %s", stream_config.Codec.Name, path)
 	}
 
 	// TODO: EDGE CASE: Event transmit length is uint32, if fields length is rediculous we will fail

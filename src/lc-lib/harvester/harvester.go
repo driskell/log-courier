@@ -51,6 +51,7 @@ type Harvester struct {
 	offset        int64
 	output        chan<- *core.EventDescriptor
 	codec         codecs.Codec
+	codecChain    []codecs.Codec
 	file          *os.File
 	split         bool
 	timezone      string
@@ -85,9 +86,20 @@ func NewHarvester(stream core.Stream, config *config.Config, stream_config *conf
 		offset:        offset,
 		timezone:      time.Now().Format("-0700 MST"),
 		last_eof:      nil,
+		codecChain:    make([]codecs.Codec, len(stream_config.Codecs)-1),
 	}
 
-	ret.codec = codecs.NewCodec(stream_config.Codec.Factory, ret.eventCallback, ret.offset)
+	// Build the codec chain
+	var entry codecs.Codec
+	callback := ret.eventCallback
+	for i := len(stream_config.Codecs)-1; i >= 0; i-- {
+		entry = codecs.NewCodec(stream_config.Codecs[i].Factory, callback, ret.offset)
+		callback = entry.Event
+		if i != 0 {
+			ret.codecChain[i-1] = entry
+		}
+	}
+	ret.codec = entry
 
 	return ret
 }
@@ -116,6 +128,14 @@ func (h *Harvester) Stop() {
 
 func (h *Harvester) OnFinish() <-chan *HarvesterFinish {
 	return h.return_chan
+}
+
+func (h *Harvester) codecTeardown() int64 {
+	for _, codec := range h.codecChain {
+		codec.Teardown()
+	}
+
+	return h.codec.Teardown()
 }
 
 func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) {
@@ -207,14 +227,14 @@ ReadLoop:
 			} else {
 				log.Error("Unexpected error reading from %s: %s", h.path, err)
 			}
-			return h.codec.Teardown(), err
+			return h.codecTeardown(), err
 		}
 
 		if h.path == "-" {
 			// Stdin has finished - stdin blocks permanently until the stream ends
 			// Once the stream ends, finish the harvester
 			log.Info("Stopping harvest of stdin; EOF reached")
-			return h.codec.Teardown(), nil
+			return h.codecTeardown(), nil
 		}
 
 		// Check shutdown
@@ -244,7 +264,7 @@ ReadLoop:
 		info, err := h.file.Stat()
 		if err != nil {
 			log.Error("Unexpected error checking status of %s: %s", h.path, err)
-			return h.codec.Teardown(), err
+			return h.codecTeardown(), err
 		}
 
 		if info.Size() < h.offset {
@@ -267,7 +287,7 @@ ReadLoop:
 		// didn't already update
 		if age := time.Since(last_read_time); age > h.stream_config.DeadTime && h.fileinfo.ModTime() == info.ModTime() {
 			log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
-			return h.codec.Teardown(), nil
+			return h.codecTeardown(), nil
 		}
 
 		// Store latest stat()
@@ -275,7 +295,7 @@ ReadLoop:
 	}
 
 	log.Info("Harvester for %s exiting", h.path)
-	return h.codec.Teardown(), nil
+	return h.codecTeardown(), nil
 }
 
 func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text string) {
