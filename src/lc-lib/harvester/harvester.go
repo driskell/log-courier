@@ -92,7 +92,7 @@ func NewHarvester(stream core.Stream, config *config.Config, stream_config *conf
 	// Build the codec chain
 	var entry codecs.Codec
 	callback := ret.eventCallback
-	for i := len(stream_config.Codecs)-1; i >= 0; i-- {
+	for i := len(stream_config.Codecs) - 1; i >= 0; i-- {
 		entry = codecs.NewCodec(stream_config.Codecs[i].Factory, callback, ret.offset)
 		callback = entry.Event
 		if i != 0 {
@@ -314,6 +314,10 @@ func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text str
 	}
 	if h.stream_config.AddTimezoneField {
 		event["timezone"] = h.timezone
+	}
+
+	for k := range h.config.General.GlobalFields {
+		event[k] = h.config.General.GlobalFields[k]
 	}
 
 	for k := range h.stream_config.Fields {

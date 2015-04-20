@@ -23,6 +23,7 @@
   - [`"admin enabled"`](#admin-enabled)
   - [`"admin listen address"`](#admin-listen-address)
   - [`"log file"`](#log-file)
+  - [`"global fields"`](#global-fields)
   - [`"host"`](#host)
   - [`"log level"`](#log-level)
   - [`"log stdout"`](#log-stdout)
@@ -248,7 +249,7 @@ ensure old log files are not kept open preventing deletion.
 *Dictionary. Optional*  
 *Configuration reload will only affect new or resumed files*
 
-Extra fields to attach the event prior to shipping. These can be simple strings,
+Extra fields to attach to events prior to shipping. These can be simple strings,
 numbers or even arrays and dictionaries.
 
 Examples:
@@ -294,6 +295,15 @@ Examples:
 *Requires restart*
 
 A log file to save Log Courier's internal log into. May be used in conjunction with `"log stdout"` and `"log syslog"`.
+
+### `"global fields"`
+
+*Dictionary. Optional*
+*Configuration reload will only affect new or resumed files*
+
+Extra fields to attach to events prior to shipping. This is identical in
+behaviour to the "`fields`" Stream Configuration and applies globally to the
+`"stdin"` section and to all files listed in the `"files"` section.
 
 ### `"host"`
 
