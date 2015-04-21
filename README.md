@@ -104,7 +104,7 @@ moment, no such repository exists.
 
 Requirements:
 
-1. Linux, Unix, OS X or Windows
+1. Linux, Unix, OS X or Windows with [Cygwin](https://cygwin.com)
 1. The [golang](http://golang.org/doc/install) compiler tools (1.2-1.4)
 1. [git](http://git-scm.com)
 1. GNU make
@@ -112,8 +112,7 @@ Requirements:
 *__Linux/Unix:__ Most requirements can usually be installed by your favourite
 package manager.*  
 *__OS X:__ Git and GNU make are provided automatically by XCode.*  
-*__Windows:__ GNU make for Windows can be found
-[here](http://gnuwin32.sourceforge.net/packages/make.htm).*
+*__Windows:__ Git and GNU make are available as Cygwin packages.*
 
 To build the binaries, simply run `make` as follows.
 
