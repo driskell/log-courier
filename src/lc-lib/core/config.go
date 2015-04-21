@@ -399,6 +399,11 @@ func (c *Config) Load(path string) (err error) {
 	}
 
 	for k := range c.Files {
+		if len(c.Files[k].Paths) == 0 {
+			err = fmt.Errorf("No paths specified for /files[%d]/", k)
+			return
+		}
+
 		if err = c.initStreamConfig(fmt.Sprintf("/files[%d]/codec/", k), &c.Files[k].StreamConfig); err != nil {
 			return
 		}
