@@ -555,7 +555,7 @@ ship. It is an array of file group configurations.
 ```
 
 In addition to the configuration parameters specified below, each file group may
-also have [Stream Configuration](#streamconfiguration) parameters specified.
+also have [Stream Configuration](#stream-configuration) parameters specified.
 
 ### `"paths"`
 
@@ -601,6 +601,6 @@ following.
 ## `"stdin"`
 
 The stdin configuration contains the
-[Stream Configuration](#stream-configuration) parameters that should be used when
-Log Courier is set to read log data from stdin using the
+[Stream Configuration](#stream-configuration) parameters that should be used
+when Log Courier is set to read log data from stdin using the
 [`-stdin`](CommandLineArguments.md#stdin) command line entry.
