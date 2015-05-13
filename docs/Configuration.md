@@ -572,6 +572,6 @@ following.
 ## `"stdin"`
 
 The stdin configuration contains the
-[Stream Configuration](#streamconfiguration) parameters that should be used when
+[Stream Configuration](#stream-configuration) parameters that should be used when
 Log Courier is set to read log data from stdin using the
 [`-stdin`](CommandLineArguments.md#stdin) command line entry.
