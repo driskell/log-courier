@@ -17,6 +17,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'cabin'
+require 'log-courier/cabin-copy' # Used by the plugin so must be required here
 require 'log-courier/event_queue'
 require 'multi_json'
 require 'thread'
@@ -104,7 +106,6 @@ module LogCourier
   class Client
     def initialize(options = {})
       @options = {
-        logger:       nil,
         transport:    'tls',
         spool_size:   1024,
         idle_timeout: 5,
@@ -112,7 +113,11 @@ module LogCourier
         addresses:    [],
       }.merge!(options)
 
-      @logger = @options[:logger]
+      if @options[:logger]
+        @logger = @options[:logger]
+      else
+        @logger = Cabin::Channel.new
+      end
 
       case @options[:transport]
       when 'tcp', 'tls'
@@ -188,7 +193,7 @@ module LogCourier
         # The spooler loop
         begin
           loop do
-            event = @event_queue.pop next_flush - Time.now.to_i
+            event = @event_queue.pop [0, next_flush - Time.now.to_i].max
 
             if event.nil?
               raise ShutdownSignal
@@ -340,6 +345,9 @@ module LogCourier
             end
 
             @logger.debug 'Delaying shutdown due to pending payloads', :payloads => @pending_payloads.length unless @logger.nil?
+            @pending_payloads.each_key do |nonce|
+              @logger.debug 'Pending payload', :nonce => nonce_str(nonce)
+            end
 
             io_stop = true
 
@@ -428,6 +436,8 @@ module LogCourier
         @last_payload = payload
       end
 
+      @logger.debug 'Sending payload', :nonce => nonce_str(nonce) if !@logger.nil? && @logger.debug?
+
       # Send it
       @client.send 'JDAT', payload.payload
       return
@@ -451,13 +461,7 @@ module LogCourier
       # Grab nonce
       nonce, sequence = message.unpack('a16N')
 
-      if !@logger.nil? && @logger.debug?
-        nonce_str = nonce.each_byte.map do |b|
-          b.to_s(16).rjust(2, '0')
-        end
-
-        @logger.debug 'ACKN message received', :nonce => nonce_str.join, :sequence => sequence
-      end
+      @logger.debug 'ACKN message received', :nonce => nonce_str(nonce), :sequence => sequence if !@logger.nil? && @logger.debug?
 
       # Find the payload - skip if we couldn't as it will just a duplicated ACK
       return unless @pending_payloads.key?(nonce)
@@ -470,6 +474,12 @@ module LogCourier
         @first_payload = payload.next
         @client.resume_send if @client.send_paused?
       end
+    end
+
+    def nonce_str(nonce)
+      nonce.each_byte.map do |b|
+        b.to_s(16).rjust(2, '0')
+      end.join
     end
   end
 end

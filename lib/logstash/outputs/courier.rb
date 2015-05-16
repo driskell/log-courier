@@ -58,10 +58,14 @@ module LogStash
       public
 
       def register
-        @logger.info 'Starting courier output'
-
+        # log-courier gem provides cabin-copy patch
         require 'log-courier/client'
-        @client = LogCourier::Client.new(options)
+        logger = @logger.copy
+        logger['plugin'] = 'output/courier'
+
+        logger.info 'Starting courier output'
+
+        @client = LogCourier::Client.new(options(logger))
       end
 
       def receive(event)
@@ -76,11 +80,13 @@ module LogStash
 
       private
 
-      def options
-        result = {}
+      def options(logger)
+        result = {
+          logger: logger,
+        }
 
         [
-          :logger, :addresses, :port, :ssl_ca, :ssl_certificate, :ssl_key,
+          :addresses, :port, :ssl_ca, :ssl_certificate, :ssl_key,
           :ssl_key_passphrase, :spool_size, :idle_timeout
         ].each do |k|
           result[k] = send(k)
