@@ -216,6 +216,8 @@ func (t *TransportTcp) Init() error {
 	t.send_chan = make(chan []byte, 1)
 	// Buffer of two for recv_chan since both routines may send an error to it
 	// First error we get back initiates disconnect, thus we must not block routines
+	// NOTE: This may not be necessary anymore - both recv_chan pushes also select
+	//       on the shutdown channel, which will close on the first error returned
 	t.recv_chan = make(chan interface{}, 2)
 	t.can_send = make(chan int, 1)
 
@@ -269,7 +271,10 @@ SendLoop:
 					break SendLoop
 				} else {
 					// Pass the error back and abort
-					t.recv_chan <- err
+					select {
+					case <-t.shutdown:
+					case t.recv_chan <- err:
+					}
 					break SendLoop
 				}
 			}
