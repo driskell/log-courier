@@ -74,7 +74,7 @@ shared_context 'Helpers' do
     id = args[:id]
 
     logger = Cabin::Channel.new
-    logger.subscribe STDOUT
+    logger.subscribe SHARED_LOGGER_OUTPUT
     logger['instance'] = id
     logger.level = :debug
 

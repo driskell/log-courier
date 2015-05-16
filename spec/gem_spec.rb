@@ -29,7 +29,7 @@ describe 'log-courier gem' do
 
   def startup
     logger = Cabin::Channel.new
-    logger.subscribe STDOUT
+    logger.subscribe SHARED_LOGGER_OUTPUT
     logger.level = :debug
 
     # Reset server for each test
