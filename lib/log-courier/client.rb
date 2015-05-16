@@ -440,7 +440,7 @@ module LogCourier
       fail ProtocolError, "ACKN message size invalid (#{message.length})" if message.length != 20
 
       # Grab nonce
-      nonce, sequence = message.unpack('A16N')
+      nonce, sequence = message.unpack('a16N')
 
       if !@logger.nil? && @logger.debug?
         nonce_str = nonce.each_byte.map do |b|
