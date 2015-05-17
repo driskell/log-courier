@@ -111,9 +111,8 @@ Requirements:
 
 ### Linux / Unix / OS X
 
-*Most requirements are usually available via your operating system
-distribution's package manager. On OS X, Git and GNU make are provided
-automatically by XCode.*
+*Most requirements are usually available via your distribution's package
+manager. On OS X, Git and GNU make are provided automatically by XCode.*
 
 Run the following commands to download and build Log Courier.
 
@@ -128,9 +127,9 @@ Run the following commands to download and build Log Courier.
 *Installing [msysGit](http://msysgit.github.io/) will provide you with Git and
 GNU make, and a Unix-like environment to build within.*
 
-Changing the path to Go if necessary (the default is `C:\Go`, which in msys
-terms is written as `/c/Go`), run the following commands to download and build
-Log Courier.
+Run the following commands to download and build Log Courier, changing the path
+to the Golang installation if necessary (the default is `C:\Go`, which in msys
+terms is `/c/Go`.)
 
     export GOROOT=/c/Go
     export PATH=$PATH:$GOROOT/bin
