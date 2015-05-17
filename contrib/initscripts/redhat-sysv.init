@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # log-courier Log Courier, a lightweight log shipper with Logstash integration.
 #
@@ -27,22 +27,28 @@ if [ -f /etc/sysconfig/log-courier ]; then
 fi
 
 # set default config file, if $CONFIG_FILE is not set
-if [ -z ${LOG_COURIER_ARGS} ]; then
+if [ -z "$LOG_COURIER_ARGS" ]; then
 	LOG_COURIER_ARGS='-config /etc/log-courier/log-courier.conf'
 fi
 
-do_start() {
+do_start()
+{
 	echo -n "Starting Log Courier: "
 	status -p $PID_FILE $DAEMON &>/dev/null
 	RC=$?
 	if [ $RC -eq 0 ]; then
 		success
 	else
-		cd $DATA_DIR
-		nohup ${DAEMON} ${LOG_COURIER_ARGS} </dev/null &>/dev/null &
+		cd "$DATA_DIR"
+		# shellcheck disable=SC2086
+		nohup "$DAEMON" $LOG_COURIER_ARGS </dev/null &>/dev/null &
 		RC=$?
-		echo $! > ${PID_FILE}
-		[ $RC -eq 0 ] && success || failure
+		echo "$!" > "$PID_FILE"
+		if [ $RC -eq 0 ]; then
+			success
+		else
+			failure
+		fi
 	fi
 	echo
 	return $?
