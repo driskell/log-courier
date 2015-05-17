@@ -1,6 +1,0 @@
-etc/log-courier
-etc/log-courier/examples
-usr/bin
-usr/share/doc/log-courier
-var/lib/log-courier
-var/run/log-courier
