@@ -1,0 +1,29 @@
+Packaging Instructions
+======================
+
+Install the required package building packages:
+
+    sudo yum install rpmbuild golang
+
+Setup a standard RPM build workspace with the required folders
+
+    mkdir rpmbuild
+    mkdir rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+Copy the .spec file into the SPECS folder.
+Download the .zip of Log Courier from GitHub or create your own containing the
+full repository, and copy this into SOURCES with the filename vXXX.zip where XXX
+is the version number in the .spec file (e.g. v1.6.zip).
+
+Enter the SPECS folder and then build
+
+    cd SPECS
+    rpmbuild -ba log-courier.spec
+
+Building a Source RPM
+=====================
+
+Follow the instructions for a binary package using the following rpmbuild
+parameters instead
+
+    rpmbuild -bs log-courier.spec
