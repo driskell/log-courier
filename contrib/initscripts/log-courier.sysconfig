@@ -1,3 +1,2 @@
-# log-courier config file location
-CONFIG_FILE="/etc/log-courier/log-courier.conf"
-
+# log-courier options
+LOG_COURIER_ARGS='-config /etc/log-courier/log-courier.conf'
