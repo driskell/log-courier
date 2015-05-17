@@ -105,15 +105,15 @@ moment, no such repository exists.
 Requirements:
 
 1. Linux, Unix, OS X or Windows
-1. The [Golang](http://golang.org/doc/install) compiler tools (1.2-1.4)
-1. git
 1. GNU make
+1. git
+1. The [Golang](http://golang.org/doc/install) compiler tools (1.2-1.4)
 
 ### Linux / Unix / OS X
 
-*__Linux / Unix:__ Most requirements can usually be installed by your favourite
-package manager.*  
-*__OS X:__ Git and GNU make are provided automatically by XCode.*  
+*Most requirements are usually available via your operating system
+distribution's package manager. On OS X, Git and GNU make are provided
+automatically by XCode.*
 
 Run the following commands to download and build Log Courier.
 
