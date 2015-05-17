@@ -1,5 +1,11 @@
 log-courier (1.6) UNRELEASED; urgency=low
 
+  * Package for PPA
+
+ -- Jason Woods <devel@jasonwoods.me.uk>  Sun, 17 May 2015 21:44:00 +0100
+
+log-courier (1.6) UNRELEASED; urgency=low
+
   * Update to release 1.6
 
  -- Matthew Newton <mcn4@leicester.ac.uk>  Mon, 13 Apr 2015 13:36:22 +0100

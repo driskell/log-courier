@@ -14,5 +14,4 @@ Add go to the PATH
 
 Build the packages
 
-    $ dpkg-buildpackage 
-
+    $ dpkg-buildpackage
