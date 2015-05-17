@@ -104,21 +104,41 @@ moment, no such repository exists.
 
 Requirements:
 
-1. Linux, Unix, OS X or Windows with [Cygwin](https://cygwin.com)
-1. The [golang](http://golang.org/doc/install) compiler tools (1.2-1.4)
-1. [git](http://git-scm.com)
+1. Linux, Unix, OS X or Windows
+1. The [Golang](http://golang.org/doc/install) compiler tools (1.2-1.4)
+1. git
 1. GNU make
 
-*__Linux/Unix:__ Most requirements can usually be installed by your favourite
+### Linux / Unix / OS X
+
+*__Linux / Unix:__ Most requirements can usually be installed by your favourite
 package manager.*  
 *__OS X:__ Git and GNU make are provided automatically by XCode.*  
-*__Windows:__ Git and GNU make are available as Cygwin packages.*
 
-To build the binaries, simply run `make` as follows.
+Run the following commands to download and build Log Courier.
 
     git clone https://github.com/driskell/log-courier
     cd log-courier
     make
+
+*Note: If you receive errors whilst running `make`, try `gmake` instead.*
+
+### Windows
+
+*Installing [msysGit](http://msysgit.github.io/) will provide you with Git and
+GNU make, and a Unix-like environment to build within.*
+
+Changing the path to Go if necessary (the default is `C:\Go`, which in msys
+terms is written as `/c/Go`), run the following commands to download and build
+Log Courier.
+
+    export GOROOT=/c/Go
+    export PATH=$PATH:$GOROOT/bin
+    git clone https://github.com/driskell/log-courier
+    cd log-courier
+    make
+
+### Results
 
 The log-courier program can then be found in the 'bin' folder. Service scripts
 for various platforms can be found in the
@@ -126,8 +146,6 @@ for various platforms can be found in the
 command line:
 
     bin/log-courier -config /path/to/config.conf
-
-*Note: If you receive errors whilst running `make`, try `gmake` instead.*
 
 ## Logstash Integration
 
