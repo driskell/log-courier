@@ -1,8 +1,8 @@
-log-courier (1.6) UNRELEASED; urgency=low
+log-courier (1.6) experimental; urgency=low
 
   * Package for PPA
 
- -- Jason Woods <devel@jasonwoods.me.uk>  Sun, 17 May 2015 21:44:00 +0100
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Sun, 17 May 2015 21:44:00 +0100
 
 log-courier (1.6) UNRELEASED; urgency=low
 

@@ -33,3 +33,7 @@ Follow the instructions for a regular package using the following command
 instead of dpkg-buildpackage
 
     debuild -S -uc
+
+To switch lintian profile during build:
+
+    debuild -S -uc --lintian-opts --profile debian
