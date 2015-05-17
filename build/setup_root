@@ -9,7 +9,8 @@ if [ "$OS" = "Windows_NT" ]; then
   # manually.
   rm -rf src/github.com/driskell/log-courier
   mkdir -p src/github.com/driskell/log-courier
-  cp -rf {.git,src} src/github.com/driskell/log-courier/
+  # 2>devnull to Hide 'cannot copy src into itself'
+  cp -rf {.git,src} src/github.com/driskell/log-courier/ 2>/dev/null
 else
   mkdir -p src/github.com/driskell
   ln -nsf ../../.. src/github.com/driskell/log-courier
