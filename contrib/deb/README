@@ -1,7 +1,7 @@
 Packaging Instructions
 ======================
 
-Install required package building packages
+Install required package building packages.
 
     sudo apt-get install devscripts debhelper golang-go
 
@@ -34,6 +34,6 @@ Building a Source DEB
 =====================
 
 Follow the instructions for a regular package using the following command
-instead of dpkg-buildpackage
+instead of dpkg-buildpackage.
 
-    debuild -S -uc
+    debuild -S -sa

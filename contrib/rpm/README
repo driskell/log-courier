@@ -1,11 +1,11 @@
 Packaging Instructions
 ======================
 
-Install the required package building packages:
+Install the required package building packages.
 
     sudo yum install rpmbuild golang
 
-Setup a standard RPM build workspace with the required folders
+Setup a standard RPM build workspace with the required folders.
 
     mkdir rpmbuild
     mkdir rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -23,6 +23,6 @@ Building a Source RPM
 =====================
 
 Follow the instructions for a binary package using the following rpmbuild
-parameters instead
+parameters instead.
 
-    rpmbuild -bs log-courier.spec
+    rpmbuild -bs --sign log-courier.spec
