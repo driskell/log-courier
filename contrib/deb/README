@@ -5,9 +5,13 @@ Install required package building packages
 
     sudo apt-get install devscripts debhelper golang-go
 
-Copy the contrib/deb folder to the project root.
-Then run the packaging command
+Run the following commands to get the source, create the required upstream
+archive, setup the source for debian building, and build the package.
 
+    git clone https://github.com/driskell/log-courier
+    tar -czf log-courier_VERSION.orig.tar.gz log-courier
+    cd log-courier
+    mv contrib/deb debian
     dpkg-buildpackage
 
 Packaging on Wheezy
@@ -33,7 +37,3 @@ Follow the instructions for a regular package using the following command
 instead of dpkg-buildpackage
 
     debuild -S -uc
-
-To switch lintian profile during build:
-
-    debuild -S -uc --lintian-opts --profile debian

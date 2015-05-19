@@ -10,14 +10,13 @@ Setup a standard RPM build workspace with the required folders
     mkdir rpmbuild
     mkdir rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
-Copy the .spec file into the SPECS folder.
-Download the .zip of Log Courier from GitHub or create your own containing the
-full repository, and copy this into SOURCES with the filename vXXX.zip where XXX
-is the version number in the .spec file (e.g. v1.6.zip).
+Run the following commands to download the required source archive, the RPM spec
+file and build the package.
 
-Enter the SPECS folder and then build
-
+    cd SOURCES
+    wget https://github.com/driskell/log-courier/archive/vVERSION.zip
     cd SPECS
+    wget https://raw.githubusercontent.com/driskell/log-courier/vVERSION/contrib/rpm/log-courier.spec
     rpmbuild -ba log-courier.spec
 
 Building a Source RPM
