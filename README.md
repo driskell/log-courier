@@ -110,6 +110,9 @@ Courier service to begin shipping.
 
     service log-courier start
 
+**NOTE:** The Ubuntu packages have had limited testing and you are welcome to give
+feedback and raise feature requests or bug reports to help improve them!
+
 ## Building from Source
 
 Requirements:
