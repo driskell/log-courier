@@ -1,8 +1,8 @@
 Gem::Specification.new do |gem|
-  gem.name              = 'logstash-output-log-courier'
+  gem.name              = 'logstash-input-courier'
   gem.version           = '<VERSION>'
-  gem.description       = 'Log Courier Output Logstash Plugin'
-  gem.summary           = 'Transmit events from one Logstash instance to another using the Log Courier protocol'
+  gem.description       = 'Log Courier Input Logstash Plugin'
+  gem.summary           = 'Receive events from Log Courier and Logstash using the Log Courier protocol'
   gem.homepage          = 'https://github.com/driskell/log-courier'
   gem.authors           = ['Jason Woods']
   gem.email             = ['devel@jasonwoods.me.uk']
@@ -10,7 +10,7 @@ Gem::Specification.new do |gem|
   gem.rubyforge_project = 'nowarning'
   gem.require_paths     = ['lib']
   gem.files             = %w(
-    lib/logstash/outputs/courier.rb
+    lib/logstash/inputs/courier.rb
   )
 
   gem.metadata = { 'logstash_plugin' => 'true', 'logstash_group' => 'input' }

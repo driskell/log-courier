@@ -167,7 +167,7 @@ You may install the plugin using the Logstash 1.5 Plugin manager. Run the
 following as the user Logstash was installed with.
 
     cd /path/to/logstash
-    bin/plugin install logstash-input-log-courier
+    bin/plugin install logstash-input-courier
 
 Detailed instructions, including integration with Logstash 1.4.x, can be found
 on the [Logstash Integration](docs/LogstashIntegration.md) page.
