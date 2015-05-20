@@ -22,7 +22,6 @@ module LogStash
     # Receive events over the Log Courier protocol
     class Courier < LogStash::Inputs::Base
       config_name 'courier'
-      milestone 1
 
       default :codec, 'plain'
 
