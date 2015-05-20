@@ -73,7 +73,7 @@ to distinguish events send from different instances
 
 ## Public Repositories
 
-### RPM
+### Redhat / CentOS
 
 *The Log Courier repository depends on the __EPEL__ repository which can be
 installed automatically on CentOS distributions by running
@@ -81,7 +81,7 @@ installed automatically on CentOS distributions by running
 installation instructions on the
 [EPEL homepage](https://fedoraproject.org/wiki/EPEL).*
 
-To install the Log Courier repository, download the corresponding `.repo`
+To install the Log Courier YUM repository, download the corresponding `.repo`
 configuration file below, and place it in `/etc/yum.repos.d`. Log Courier may
 then be installed using `yum install log-courier`.
 
@@ -89,16 +89,26 @@ then be installed using `yum install log-courier`.
 * **CentOS/RedHat 7.x**:
 [driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-7.repo)
 
-Once installed, modify the configuration file at
+Once installed, create a configuration file at
 `/etc/log-courier/log-courier.conf` to suit your needs, then start the Log
 Courier service to begin shipping.
 
     service log-courier start
 
-### DEB
+### Ubuntu
 
-A Debian/Ubuntu compatible **PPA** repository is under consideration. At the
-moment, no such repository exists.
+To install the Log Courier apt-get repository, run the following commands.
+
+    sudo add-apt-repository ppa:devel-k/log-courier
+    sudo apt-get update
+
+Log Courier may then be installed using `apt-get install log-courier`.
+
+Once installed, create a configuration file at
+`/etc/log-courier/log-courier.conf` to suit your needs, then start the Log
+Courier service to begin shipping.
+
+    service log-courier start
 
 ## Building from Source
 

@@ -93,7 +93,9 @@ vendor/bundle/.GemfileJRubyModT: Gemfile
 clean:
 	go clean -i ./...
 ifneq ($(implyclean),yes)
+ifneq ($(keepgoget),yes)
 	rm -rf src/github.com
+endif
 	rm -rf vendor/bundle
 	rm -f Gemfile.lock
 	rm -f *.gem

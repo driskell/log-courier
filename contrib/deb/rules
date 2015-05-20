@@ -3,10 +3,14 @@
 %:
 	dh $@
 
+override_dh_auto_clean:
+	$(MAKE) clean keepgoget=yes
+
 override_dh_auto_build:
-	make
+	$(MAKE)
 
 override_dh_auto_test:
+	# Maybe tests in future - we'd need to download the ffi gem
 
 override_dh_auto_install:
 	# Install binaries
