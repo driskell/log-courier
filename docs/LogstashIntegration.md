@@ -17,7 +17,7 @@ Log Courier is built to work seamlessly with [Logstash](http://logstash.net)
 
 ## Installation
 
-### Logstash 1.5 Plugin Manager
+### Logstash Plugin Manager
 
 Logstash 1.5 introduces a new plugin manager that makes installing additional
 plugins extremely easy.
@@ -27,8 +27,8 @@ Log Courier plugins. If you are only receiving events, you only need to install
 the input plugin.
 
 		cd /path/to/logstash
-		bin/logstash plugin install logstash-input-log-courier
-		bin/logstash plugin install logstash-output-log-courier
+		bin/logstash plugin install logstash-input-courier
+		bin/logstash plugin install logstash-output-courier
 
 Once the installation is complete, you can start using the plugins!
 
