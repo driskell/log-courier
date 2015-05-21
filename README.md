@@ -13,7 +13,8 @@ with many fixes and behavioural improvements.
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [Main Features](#main-features)
+- [Features](#features)
+- [Philosophy](#philosophy)
 - [Differences to Logstash Forwarder](#differences-to-logstash-forwarder)
 - [Public Repositories](#public-repositories)
   - [Redhat / CentOS](#redhat--centos)
@@ -28,26 +29,34 @@ with many fixes and behavioural improvements.
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## Main Features
+## Features
 
-* Read events from a file or over a Unix pipeline
+* [Logstash Integration](docs/LogstashIntegration.md) with an input and output
+plugin
+* Read events from a file or a Unix pipeline
 * Follow log file rotations and movements
-* Close files after inactivity, reopening if they change
+* Close files after inactivity, reopening on change, to keep resource usage low
 * Add [extra fields](docs/Configuration.md#fields) to events prior to shipping
 * [Reload configuration](docs/Configuration.md#reloading) without restarting
-* Ship events securely using TLS with server (and optionally client) certificate
-verification
-* Ship events securely to multiple Logstash instances using ZeroMQ with Curve
-security (requires ZeroMQ 4+)
-* Ship events in plaintext using TCP
-* Ship events in plaintext using ZeroMQ (requires ZeroMQ 3+)
 * Monitor shipping speed and status with the
 [Administration utility](docs/AdministrationUtility.md)
 * Pre-process events using codecs (e.g. [Multiline](docs/codecs/Multiline.md),
 [Filter](docs/codecs/Filter.md))
-* [Logstash Integration](docs/LogstashIntegration.md) with an input and output
-plugin
-* Very low resource usage
+* Ship events securely using TLS with server (and optionally client) certificate
+verification
+* Ship events in plaintext using TCP
+
+## Philosophy
+
+* Aim to guarantee at-least-once delivery of events to the Logstash pipeline - a
+Log Courier crash should never lose events [1]
+* Be efficient and reliable
+* Keep resource usage low
+
+[1] A *Logstash* crash or output failure will still lose some events until
+Logstash itself implements delivery guarantees or persistence - see
+elastic/logstash#2609 and elastic/logstash#2605. Log Courier aims to provide
+complete compatibility with theses features as they develop.
 
 ## Differences to Logstash Forwarder
 
