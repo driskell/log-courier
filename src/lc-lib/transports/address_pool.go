@@ -46,15 +46,18 @@ func NewAddressPool(servers []string) *AddressPool {
 		servers: servers,
 	}
 
-	// Randomise the initial host - after this it will round robin
-	// Round robin after initial attempt ensures we don't retry same host twice,
-	// and also ensures we try all hosts one by one
-	rnd := rand.Intn(len(servers))
-	if rnd != 0 {
-		ret.servers = append(append(make([]string, 0), servers[rnd:]...), servers[:rnd]...)
-	}
+	ret.shuffleServers()
 
 	return ret
+}
+
+func (p *AddressPool) shuffleServers() {
+	var newList []string
+	oldList := p.servers
+	for _, v := range rand.Perm(len(oldList)) {
+		newList = append(newList, oldList[v])
+	}
+	p.servers = newList
 }
 
 func (p *AddressPool) SetRfc2782(enabled bool, service string) {
@@ -119,8 +122,14 @@ func (p *AddressPool) Host() string {
 }
 
 func (p *AddressPool) populateAddresses() (error) {
+	// If we've iterated all servers, shuffle them again
+	if p.roundrobin >= len(p.servers) {
+		p.shuffleServers()
+		p.roundrobin = 0
+	}
+
 	// Round robin to the next server
-	selected := p.servers[p.roundrobin%len(p.servers)]
+	selected := p.servers[p.roundrobin]
 	p.roundrobin++
 
 	// @hostname means SRV record where the host and port are in the record
