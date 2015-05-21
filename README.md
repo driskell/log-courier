@@ -49,14 +49,16 @@ verification
 ## Philosophy
 
 * Aim to guarantee at-least-once delivery of events to the Logstash pipeline - a
-Log Courier crash should never lose events [1]
+Log Courier crash should never lose events *[1]*
 * Be efficient and reliable
 * Keep resource usage low
 
-[1] A *Logstash* crash or output failure will still lose some events until
+*[1] A __Logstash__ crash or output failure will still lose some events until
 Logstash itself implements delivery guarantees or persistence - see
-elastic/logstash#2609 and elastic/logstash#2605. Log Courier aims to provide
-complete compatibility with theses features as they develop.
+[elastic/logstash#2609](https://github.com/elastic/logstash/issues/2609) and
+[elastic/logstash#2605](https://github.com/elastic/logstash/issues/2605). Log
+Courier aims to provide complete compatibility with theses features as they
+develop.*
 
 ## Differences to Logstash Forwarder
 
