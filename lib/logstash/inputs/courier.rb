@@ -109,6 +109,7 @@ module LogStash
           decorate event
           output_queue << event
         end
+      rescue ShutdownSignal
       end
 
       private
