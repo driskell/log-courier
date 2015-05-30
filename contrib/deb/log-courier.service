@@ -1,0 +1,12 @@
+[Unit]
+Description=Log Courier
+After=syslog.target
+
+[Service]
+EnvironmentFile=/etc/default/log-courier
+ExecStart=/usr/bin/log-courier $LOG_COURIER_ARGS
+Restart=on-failure
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target

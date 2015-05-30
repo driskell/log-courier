@@ -1,3 +1,9 @@
+log-courier (1.6-5) UNRELEASED; urgency=medium
+
+  * Add systemd support.
+
+ -- Luka Blaskovic <lblasc@znode.net>  Sat, 30 May 2015 08:58:59 +0000
+
 log-courier (1.6-4) trusty; urgency=low
 
   * Fix unsupported symlink in deb source
