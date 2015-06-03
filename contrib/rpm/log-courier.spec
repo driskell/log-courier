@@ -4,7 +4,7 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 1.6
+Version: 1.7
 Release: 1%{dist}
 License: GPL
 Group: System Environment/Libraries
@@ -129,6 +129,9 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Wed Jun 3 2015 Jason Woods <devel@jasonwoods.me.uk> - 1.7-1
+- Upgrade to v1.7
+
 * Sat Feb 28 2015 Jason Woods <devel@jasonwoods.me.uk> - 1.5-1
 - Upgrade to v1.5
 

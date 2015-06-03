@@ -28,7 +28,7 @@ Add go to the PATH
 
     export PATH=/usr/local/go/bin:$PATH
 
-Build the packages as normal
+Build the packages as normal.
 
 Building a Source DEB
 =====================
@@ -37,3 +37,9 @@ Follow the instructions for a regular package using the following command
 instead of dpkg-buildpackage.
 
     debuild -S -sa
+
+If you need to set the target distribution for the source package, such as for
+upload to PPA, you can run the following command before debuild to set it,
+replacing trusty with the desired distribution name.
+
+    dch -r -D trusty
