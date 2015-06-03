@@ -1,4 +1,4 @@
-og-courier (1.7-1) UNRELEASED; urgency=low
+log-courier (1.7-1) UNRELEASED; urgency=low
 
   * Upgrade to v1.7
   * Add systemd support
