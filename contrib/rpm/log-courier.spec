@@ -63,14 +63,14 @@ touch %{buildroot}%{_var}/run/log-courier/admin.socket
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
 # No systemd script in log-courier release yet
-install -m 0644 contrib/initscripts/systemd.service %{buildroot}%{_unitdir}/log-courier.service
+install -m 0644 contrib/initscripts/redhat-systemd.service %{buildroot}%{_unitdir}/log-courier.service
 %else
 mkdir -p %{buildroot}%{_sysconfdir}/init.d
 install -m 0755 contrib/initscripts/redhat-sysv.init %{buildroot}%{_sysconfdir}/init.d/log-courier
 touch %{buildroot}%{_var}/run/log-courier.pid
 %endif
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
-install -m 0644 contrib/initscripts/log-courier.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/log-courier
+install -m 0644 contrib/initscripts/log-courier.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
 
 # Make the state dir
 mkdir -p %{buildroot}%{_var}/lib/log-courier

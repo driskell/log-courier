@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 
 %:
-	dh $@
+	dh $@ --with=systemd
 
 override_dh_auto_clean:
 	$(MAKE) clean keepgoget=yes
@@ -22,6 +22,10 @@ override_dh_auto_install:
 	# Install example configuration
 	mkdir -p debian/log-courier/etc/log-courier/examples
 	cp -av docs/examples/* debian/log-courier/etc/log-courier/examples/
+
+	# Install upstart and systemd scripts
+	install -m 0755 contrib/initscripts/debian-upstart.init /etc/init.d/log-courier
+	install -m 0644 contrib/initscripts/debian-systemd.service /lib/systemd/system/log-courier.service
 
 	# Make the run dir
 	mkdir -p debian/log-courier/var/run/log-courier
