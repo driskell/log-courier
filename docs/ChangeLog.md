@@ -24,7 +24,7 @@
 
 ## 1.7
 
-*21st May 2015*
+*3rd June 2015*
 
 ***Important notice regarding the Logstash Plugins***
 
@@ -66,6 +66,10 @@ in Logstash 1.5 (#164)
 * Remove deprecated milestone declaration to fix a Logstash 1.5 warning (#164)
 * Fix a crash in the output plugin that can sometimes occur if a connection
 fails (#143)
+* Fix a crash on Windows caused by a Logstash patch to Ruby stdlib
+(elastic/logstash#3364) (#169)
+* Fix confusing log messages that appear to come from Log Courier plugin but
+in fact come from another plugin or Logstash itself (#176)
 * Fix rare transport failures caused by payload identifiers ending in NUL bytes
 
 ## 1.6
