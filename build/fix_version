@@ -11,7 +11,7 @@ elif [ ! -d '.git' ]; then
 else
 	# Describe version from Git, and ensure the only "-xxx" is the git revision
 	# This ensures that gem builds only add one ".pre" tag automatically
-	VERSION="$(git describe | sed 's/-\([0-9][0-9]*\)-\([0-9a-z][0-9a-z]*\)$/.\1.\2/g')"
+	VERSION="$(git describe | sed 's/-\([0-9][0-9]*\)-\([0-9a-z][0-9a-z]*\)$/-\1.\2/g')"
 	VERSION="${VERSION#v}"
 	VERSION_SHORT=$(git describe --abbrev=0)
 	VERSION_SHORT="${VERSION_SHORT#v}"
@@ -21,7 +21,7 @@ fi
 sed "s/<VERSION>/${VERSION}/g" src/lc-lib/core/version.go.tmpl > src/lc-lib/core/version.go
 
 # Patch the gemspecs
-for GEM in log-courier logstash-input-log-courier logstash-output-log-courier; do
+for GEM in log-courier logstash-input-courier logstash-output-courier; do
 	sed "s/<VERSION>/${VERSION}/g" ${GEM}.gemspec.tmpl > ${GEM}.gemspec
 done
 

@@ -1,5 +1,23 @@
 #!/bin/bash
 
-# Allow the source code to refer to github.com/driskell/log-courier paths
-mkdir -p src/github.com/driskell
-ln -nsf ../../.. src/github.com/driskell/log-courier
+# Allow 'go get' to see we already have the log-courier packages by setting
+# up a rough Go workspace.
+
+rm -rf src/github.com/driskell/log-courier
+
+if [ "$OS" = "Windows_NT" ]; then
+  # Windows lacks symlinks and MinGW 'ln' fails with 'Permission denied' as it
+  # tries to copy a folder into a subfolder of itself, copying nothing, so 'cp'
+  # manually.
+  mkdir -p src/github.com/driskell/log-courier
+  # 2>devnull to Hide 'cannot copy src into itself'
+  cp -rf {.git,src} src/github.com/driskell/log-courier/ 2>/dev/null
+else
+  mkdir -p src/github.com/driskell
+  ln -nsf ../../.. src/github.com/driskell/log-courier
+fi
+
+# Fake a .git folder for downloaded archives to avoid 'go get' 'Stale checkout'
+if [ ! -d src/github.com/driskell/log-courier/.git ]; then
+  mkdir src/github.com/driskell/log-courier/.git
+fi

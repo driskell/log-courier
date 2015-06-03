@@ -4,7 +4,7 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 1.5
+Version: 1.6
 Release: 1%{dist}
 License: GPL
 Group: System Environment/Libraries

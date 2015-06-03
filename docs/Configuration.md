@@ -63,16 +63,16 @@ to be ignored until an asterisk followed by a forwarder slash is encountered.
 
 ```
 {
-	"general": {
-		# General configuration here
-	},
-	"network": {
-		# Network configuration here
-	}, # (these are end-of-line comments)
-	"files": {
-		/* File configuration here
-		(this is a block comment) */
-	}
+    "general": {
+        # General configuration here
+    },
+    "network": {
+        # Network configuration here
+    }, # (these are end-of-line comments)
+    "files": {
+        /* File configuration here
+        (this is a block comment) */
+    }
 }
 ```
 
@@ -82,7 +82,7 @@ Log Courier can reload its configuration without the need for a restart. It will
 do this upon receiving the SIGHUP signal. To send this signal, run the following
 command replacing 1234 with the Process ID of Log Courier.
 
-	kill -HUP 1234
+    kill -HUP 1234
 
 Log Courier will reopen its own log file if one has been configured, allowing
 native log rotation to take place.
@@ -141,17 +141,17 @@ http://golang.org/pkg/path/filepath/#Match and is shown below for reference:
 
 ```
 term:
-	'*'         matches any sequence of non-Separator characters
-	'?'         matches any single non-Separator character
-	'[' [ '^' ] { character-range } ']'
-							character class (must be non-empty)
-	c           matches character c (c != '*', '?', '\\', '[')
-	'\\' c      matches character c
+    '*'         matches any sequence of non-Separator characters
+    '?'         matches any single non-Separator character
+    '[' [ '^' ] { character-range } ']'
+                            character class (must be non-empty)
+    c           matches character c (c != '*', '?', '\\', '[')
+    '\\' c      matches character c
 
 character-range:
-	c           matches character c (c != '\\', '-', ']')
-	'\\' c      matches character c
-	lo '-' hi   matches character c for lo <= c <= hi
+    c           matches character c (c != '\\', '-', ']')
+    '\\' c      matches character c
+    lo '-' hi   matches character c for lo <= c <= hi
 ```
 
 * `"/var/log/*.log"`
@@ -244,9 +244,9 @@ unix domain socket. If no transport name is specified, "tcp" is assumed.
 
 Examples:
 
-	127.0.0.1:1234
-	tcp:127.0.0.1:1234
-	unix:/var/run/log-courier/admin.socket
+    127.0.0.1:1234
+    tcp:127.0.0.1:1234
+    unix:/var/run/log-courier/admin.socket
 
 ### `"log file"`
 
@@ -515,14 +515,14 @@ The files configuration lists the file groups that contain the logs you wish to
 ship. It is an array of file group configurations.
 
 ```
-	[
-		{
-			# First file group
-		},
-		{
-			# Second file group
-		}
-	]
+    [
+        {
+            # First file group
+        },
+        {
+            # Second file group
+        }
+    ]
 ```
 
 In addition to the configuration parameters specified below, each file group may
@@ -559,19 +559,19 @@ Examples:
 Includes should be an array of additional file group configuration files to
 read. Each configuration file should follow the format of the `"files"` section.
 
-	"includes": [ "/etc/log-courier/conf.d/*.conf" ]
+    "includes": [ "/etc/log-courier/conf.d/*.conf" ]
 
 A file at `/etc/log-courier/conf.d/apache.conf` could then contain the
 following.
 
-	[ {
-		"paths": [ "/var/log/httpd/access.log" ],
-		"fields": { "type": "access_log" }
-	} ]
+    [ {
+        "paths": [ "/var/log/httpd/access.log" ],
+        "fields": { "type": "access_log" }
+    } ]
 
 ## `"stdin"`
 
 The stdin configuration contains the
-[Stream Configuration](#streamconfiguration) parameters that should be used when
+[Stream Configuration](#stream-configuration) parameters that should be used when
 Log Courier is set to read log data from stdin using the
 [`-stdin`](CommandLineArguments.md#stdin) command line entry.

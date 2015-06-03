@@ -40,8 +40,8 @@ gem: | fix_version
 	gem build log-courier.gemspec
 
 gem_plugins: | fix_version
-	gem build logstash-input-log-courier.gemspec
-	gem build logstash-output-log-courier.gemspec
+	gem build logstash-input-courier.gemspec
+	gem build logstash-output-courier.gemspec
 
 push_gems: | gem gem_plugins
 	build/push_gems
@@ -93,7 +93,9 @@ vendor/bundle/.GemfileJRubyModT: Gemfile
 clean:
 	go clean -i ./...
 ifneq ($(implyclean),yes)
+ifneq ($(keepgoget),yes)
 	rm -rf src/github.com
+endif
 	rm -rf vendor/bundle
 	rm -f Gemfile.lock
 	rm -f *.gem

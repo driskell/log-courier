@@ -152,6 +152,7 @@ func (p *Publisher) Run() {
 	var retry_payload *pendingPayload
 	var err error
 	var reload int
+	var hold bool
 
 	timer := time.NewTimer(keepalive_timeout)
 	stats_timer := time.NewTimer(time.Second)
@@ -230,6 +231,7 @@ PublishLoop:
 
 		p.pending_ping = false
 		input_toggle = nil
+		hold = false
 		p.can_send = p.transport.CanSend()
 
 	SelectLoop:
@@ -288,8 +290,12 @@ PublishLoop:
 
 				log.Debug("Send now open: Awaiting events for new payload")
 
-				// Enable event wait
-				input_toggle = p.input
+				// Too many pending payloads, hold sending more until some are ACK
+				if p.num_payloads >= p.config.MaxPendingPayloads {
+					hold = true
+				} else {
+					input_toggle = p.input
+				}
 			case events := <-input_toggle:
 				log.Debug("Sending new payload of %d events", len(events))
 
@@ -302,8 +308,6 @@ PublishLoop:
 				input_toggle = nil
 
 				if p.num_payloads >= p.config.MaxPendingPayloads {
-					// Too many pending payloads, disable send temporarily
-					p.can_send = nil
 					log.Debug("Pending payload limit of %d reached", p.config.MaxPendingPayloads)
 				} else {
 					log.Debug("%d/%d pending payloads now in transit", p.num_payloads, p.config.MaxPendingPayloads)
@@ -354,6 +358,11 @@ PublishLoop:
 				} else {
 					log.Debug("%d payloads still pending, resetting timeout", p.num_payloads)
 					timer.Reset(p.config.Timeout)
+
+					// Release any send hold if we're no longer at the max pending payloads
+					if hold && p.num_payloads < p.config.MaxPendingPayloads {
+						input_toggle = p.input
+					}
 				}
 			case <-timer.C:
 				// If we have pending payloads, we should've received something by now

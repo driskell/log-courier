@@ -6,8 +6,8 @@
 /Gemfile.lock
 /bin
 /log-courier.gemspec
-/logstash-input-log-courier.gemspec
-/logstash-output-log-courier.gemspec
+/logstash-input-courier.gemspec
+/logstash-output-courier.gemspec
 /node_modules
 /pkg
 /spec/tmp

@@ -136,6 +136,10 @@ func (c *Config) loadFile(path string) (stripped *bytes.Buffer, err error) {
 		err = fmt.Errorf("Stat failed for config file: %s", err)
 		return
 	}
+	if stat.Size() == 0 {
+		err = fmt.Errorf("Empty configuration file")
+		return
+	}
 	if stat.Size() > (10 << 20) {
 		err = fmt.Errorf("Config file too large (%s)", stat.Size())
 		return
@@ -218,6 +222,11 @@ func (c *Config) loadFile(path string) (stripped *bytes.Buffer, err error) {
 		stripped.Write(buffer[s:p])
 	}
 
+	if stripped.Len() == 0 {
+		err = fmt.Errorf("Empty configuration file")
+		return
+	}
+
 	return
 }
 
@@ -238,7 +247,14 @@ func (c *Config) parseSyntaxError(js []byte, err error) error {
 
 	line, pos := bytes.Count(js[:start], []byte("\n")), int(json_err.Offset) - start - 1
 
-	return fmt.Errorf("%s on line %d\n%s\n%s^", err, line, js[start:end], strings.Repeat(" ", pos))
+	var posStr string
+	if pos > 0 {
+		posStr = strings.Repeat(" ", pos)
+	} else {
+		posStr = ""
+	}
+
+	return fmt.Errorf("%s on line %d\n%s\n%s^", err, line, js[start:end], posStr)
 }
 
 // TODO: Config from a TOML? Maybe a custom one
@@ -351,6 +367,11 @@ func (c *Config) Load(path string) (err error) {
 		}
 	}
 
+	if len(c.Network.Servers) == 0 {
+		err = fmt.Errorf("No network servers were specified (/network/servers)")
+		return
+	}
+
 	if c.Network.Transport == "" {
 		c.Network.Transport = default_NetworkConfig_Transport
 	}
@@ -378,6 +399,11 @@ func (c *Config) Load(path string) (err error) {
 	}
 
 	for k := range c.Files {
+		if len(c.Files[k].Paths) == 0 {
+			err = fmt.Errorf("No paths specified for /files[%d]/", k)
+			return
+		}
+
 		if err = c.initStreamConfig(fmt.Sprintf("/files[%d]/codec/", k), &c.Files[k].StreamConfig); err != nil {
 			return
 		}

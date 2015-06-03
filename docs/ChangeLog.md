@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [1.7](#17)
 - [1.6](#16)
 - [1.5](#15)
 - [1.3](#13)
@@ -20,6 +21,56 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## 1.7
+
+*3rd June 2015*
+
+***Important notice regarding the Logstash Plugins***
+
+The Logstash plugin installation identifier has been changed from
+"logstash-xxxxx-log-courier" to "logstash-xxxxx-courier" in order to meet the
+specification set by the GA release of Logstash 1.5, which is for the identifier
+to match the format "logstash-<type>-<configname>". The configuration name is
+unchanged and remains "courier" - configurations do not need to be changed.
+
+If you are using Logstash 1.5 and would like to update the plugin you will need
+to uninstall the previous plugin using the previous name before installing the
+new version using the new name.
+
+    ./bin/plugin uninstall logstash-input-log-courier
+    ./bin/plugin uninstall logstash-output-log-courier
+    ./bin/plugin install logstash-input-courier
+    ./bin/plugin install logstash-output-courier
+
+*Log Courier*
+
+* Report a configuration error if no servers are specified instead of continuing
+and crashing during startup (#149)
+* Report a configuration error if the configuration file is empty or contains
+only whitespace instead of crashing during startup (#148)
+* Report a configuration error when a files entry is specified without any paths
+instead of continuing and ignoring it (#153)
+* Implement server shuffling when multiple servers are specified to prevent
+site-wide convergence of Log Courier instances towards a single server (#161)
+* Fix pending payload limit being exceeded if a disconnect and reconnect occurs
+* Fix a rare race condition in the tcp and tls transport that could cause Log
+Courier to stop sending events after a connection failure
+* Improve build process to work seamlessly with msysGit on Windows
+
+*Logstash Plugins*
+
+* Rename to logstash-input-courier and logstash-output-courier to meet the
+latest plugin specified and fix the "This plugin isn't well supported" warnings
+in Logstash 1.5 (#164)
+* Remove deprecated milestone declaration to fix a Logstash 1.5 warning (#164)
+* Fix a crash in the output plugin that can sometimes occur if a connection
+fails (#143)
+* Fix a crash on Windows caused by a Logstash patch to Ruby stdlib
+(elastic/logstash#3364) (#169)
+* Fix confusing log messages that appear to come from Log Courier plugin but
+in fact come from another plugin or Logstash itself (#176)
+* Fix rare transport failures caused by payload identifiers ending in NUL bytes
 
 ## 1.6
 

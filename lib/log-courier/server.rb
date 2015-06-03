@@ -40,7 +40,6 @@ module LogCourier
       }.merge!(options)
 
       @logger = @options[:logger]
-      @logger['plugin'] = 'input/courier' unless @logger.nil?
 
       case @options[:transport]
       when 'tcp', 'tls'
@@ -55,7 +54,6 @@ module LogCourier
 
       # Grab the port back and update the logger context
       @port = @server.port
-      @logger['port'] = @port unless @logger.nil?
 
       # Load the json adapter
       @json_adapter = MultiJson.adapter.instance
@@ -191,7 +189,7 @@ module LogCourier
           # Full pipeline, partial ack
           # NOTE: comm.send can raise a Timeout::Error of its own
           @logger.debug 'Partially acknowledging message', :nonce => nonce_str.join, :sequence => sequence if !@logger.nil? && @logger.debug?
-          comm.send 'ACKN', [nonce, sequence].pack('A*N')
+          comm.send 'ACKN', [nonce, sequence].pack('a*N')
           ack_timeout = Time.now.to_i + 5
           retry
         end
