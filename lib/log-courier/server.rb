@@ -40,7 +40,6 @@ module LogCourier
       }.merge!(options)
 
       @logger = @options[:logger]
-      @logger['plugin'] = 'input/courier' unless @logger.nil?
 
       case @options[:transport]
       when 'tcp', 'tls'
@@ -55,7 +54,6 @@ module LogCourier
 
       # Grab the port back and update the logger context
       @port = @server.port
-      @logger['port'] = @port unless @logger.nil?
 
       # Load the json adapter
       @json_adapter = MultiJson.adapter.instance
