@@ -31,7 +31,7 @@
 The Logstash plugin installation identifier has been changed from
 "logstash-xxxxx-log-courier" to "logstash-xxxxx-courier" in order to meet the
 specification set by the GA release of Logstash 1.5, which is for the identifier
-to match the format "logstash-<type>-<configname>". The configuration name is
+to match the format "logstash-\<type>-\<configname>". The configuration name is
 unchanged and remains "courier" - configurations do not need to be changed.
 
 If you are using Logstash 1.5 and would like to update the plugin you will need
