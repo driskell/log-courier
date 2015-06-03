@@ -43,7 +43,7 @@ new version using the new name.
     ./bin/plugin install logstash-input-courier
     ./bin/plugin install logstash-output-courier
 
-*Log Courier*
+***Log Courier***
 
 * Report a configuration error if no servers are specified instead of continuing
 and crashing during startup (#149)
@@ -58,7 +58,7 @@ site-wide convergence of Log Courier instances towards a single server (#161)
 Courier to stop sending events after a connection failure
 * Improve build process to work seamlessly with msysGit on Windows
 
-*Logstash Plugins*
+***Logstash Plugins***
 
 * Rename to logstash-input-courier and logstash-output-courier to meet the
 latest plugin specified and fix the "This plugin isn't well supported" warnings
