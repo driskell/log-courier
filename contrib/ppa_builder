@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# This script is used by the maintainer to push to Log Courier PPA
+# Usage:
+#   git clone https://github.com/driskell/log-courier log-courier
+#   ./log-courier/contrib/ppa_builder.sh
+
+# Grab the release if specified
+RELEASE="$1"
+if [ -z "$RELEASE" ]; then
+  RELEASE=1
+fi
+
+# Calculate prefix
+PREFIX=log-courier_$(cat log-courier/version_short.txt)
+
+# Archive up the code
+tar -czf "${PREFIX}.orig.tar.gz" log-courier
+
+# Copy deb folder into place
+command cp -rf log-courier/contrib/deb log-courier/debian
+
+# Build each distribution and dput to PPA
+for D in precise trusty utopic vivid wily; do
+
+  # Reset the change log
+  command cp -f log-courier/contrib/deb/changelog log-courier/debian/changelog
+
+  (
+    cd log-courier
+
+    # Update the change log
+    dch \
+      --no-force-save-on-release \
+      --controlmaint \
+      --distribution "$D" \
+      --newversion "$(cat log-courier/version_short.txt)-${RELEASE}~${D}" \
+      "Package for ${D}"
+
+    # Build
+    debuild -S -sa
+  )
+
+  # Dput
+  dput log-courier-ppa "${PREFIX}-${RELEASE}~${D}_source.changes"
+
+done
