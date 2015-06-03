@@ -99,7 +99,8 @@ case "$1" in
 	;;
 	configtest)
 		echo -n "Configuration test: "
-		TESTRESULT=$( ${DAEMON} -config="${CONFIG_FILE}" -config-test )
+		# shellcheck disable=SC2086
+		TESTRESULT=$( ${DAEMON} $LOG_COURIER_ARGS -config-test )
 		RC=$?
 		if [ $RC -ne 0 ]; then
 			failure
