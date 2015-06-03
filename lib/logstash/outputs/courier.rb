@@ -22,7 +22,6 @@ module LogStash
     # Send events using the Log Courier protocol
     class Courier < LogStash::Outputs::Base
       config_name 'courier'
-      milestone 1
 
       # The list of addresses Log Courier should send to
       config :hosts, :validate => :array, :required => true

@@ -34,7 +34,13 @@ module LogCourier
     # Save the peer
     def accept
       sock = super
-      peer = sock.peeraddr(:numeric)
+      # Prevent reverse lookup by passing false
+      begin
+        peer = sock.peeraddr(false)
+      rescue ArgumentError
+        # Logstash <= 1.5.0 has a patch that blocks parameters (elastic/logstash#3364)
+        peer = sock.peeraddr
+      end
       @peer = "#{peer[2]}:#{peer[1]}"
       return sock
     end

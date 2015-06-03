@@ -135,14 +135,18 @@ module LogCourier
     # Returns +true+ if the queue is empty.
     #
     def empty?
-      @que.empty?
+      @mutex.synchronize do
+        return @que.empty?
+      end
     end
 
     #
     # Removes all objects from the queue.
     #
     def clear
-      @que.clear
+      @mutex.synchronize do
+        @que.clear
+      end
       self
     end
 
@@ -150,7 +154,9 @@ module LogCourier
     # Returns the length of the queue.
     #
     def length
-      @que.length
+      @mutex.synchronize do
+        return @que.length
+      end
     end
 
     #
@@ -162,7 +168,9 @@ module LogCourier
     # Returns the number of threads waiting on the queue.
     #
     def num_waiting
-      @num_waiting + @num_enqueue_waiting
+      @mutex.synchronize do
+        return @num_waiting + @num_enqueue_waiting
+      end
     end
 
     private
