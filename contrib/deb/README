@@ -42,4 +42,4 @@ If you need to set the target distribution for the source package, such as for
 upload to PPA, you can run the following command before debuild to set it,
 replacing trusty with the desired distribution name.
 
-    dch -r -D trusty
+    dch -r -M -D trusty
