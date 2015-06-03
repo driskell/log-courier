@@ -120,7 +120,7 @@ be used at the moment)
 * ssl_key_passphrase - Password for ssl_key (optional)
 * spool_size - Maximum number of events to spool before a flush is forced
 (default 1024)
-* idle_timeout - Maxmimum time in seconds to wait for a full spool before
+* idle_timeout - Maximum time in seconds to wait for a full spool before
 flushing anyway (default 5)
 
 NOTE: The tcp, plainzmq and zmq transports are not implemented in the output
