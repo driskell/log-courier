@@ -188,19 +188,25 @@ module LogCourier
     private
 
     def run_thread(client, peer, &block)
-      # Perform the handshake inside the new thread so we don't block TCP accept
-      if @options[:transport] == 'tls'
-        begin
-          client.accept
-        rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
-          # Handshake failure or other issue
-          @logger.warn 'Connection failed to initialise', :error => e.message, :peer => peer unless @logger.nil?
-          client.close
-          return
+      begin
+        # Perform the handshake inside the new thread so we don't block TCP accept
+        if @options[:transport] == 'tls'
+          begin
+            client.accept
+          rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
+            # Handshake failure or other issue
+            @logger.warn 'Connection failed to initialise', :error => e.message, :peer => peer unless @logger.nil?
+            client.close
+            return
+          end
         end
-      end
 
-      ConnectionTcp.new(@logger, client, peer, @options).run(&block)
+        ConnectionTcp.new(@logger, client, peer, @options).run(&block)
+      rescue ShutdownSignal
+        # Shutting down
+        @logger.info 'Server shutting down, connection closed', :peer => peer unless @logger.nil?
+        return
+      end
     end
   end
 
@@ -229,16 +235,6 @@ module LogCourier
     end
 
     def run
-      loop do
-        process_message
-      end
-    rescue ShutdownSignal
-      # Shutting down
-      @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
-      return
-    end
-
-    def process_message
       # Read messages
       # Each message begins with a header
       # 4 byte signature
