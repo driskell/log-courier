@@ -1,0 +1,60 @@
+log-courier (1.7-2) UNRELEASED; urgency=low
+
+  * Separate systemd and upstart packaging
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Wed, 3 Jun 2015 18:00:00 +0100
+
+log-courier (1.7-1) UNRELEASED; urgency=low
+
+  * Upgrade to v1.7
+  * Add systemd support
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Wed, 3 Jun 2015 18:00:00 +0100
+
+log-courier (1.6-4) trusty; urgency=low
+
+  * Fix unsupported symlink in deb source
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Wed, 20 May 2015 08:47:00 +0100
+
+log-courier (1.6-3) trusty; urgency=low
+
+  * Fix make clean removing bundled go-logging
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Sun, 17 May 2015 22:11:00 +0100
+
+log-courier (1.6-2) trusty; urgency=low
+
+  * Bundle go-logging and other golang dependencies
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Sun, 17 May 2015 21:57:00 +0100
+
+log-courier (1.6-1) trusty; urgency=low
+
+  * Package for PPA
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Sun, 17 May 2015 21:44:00 +0100
+
+log-courier (1.6) UNRELEASED; urgency=low
+
+  * Update to release 1.6
+
+ -- Matthew Newton <mcn4@leicester.ac.uk>  Mon, 13 Apr 2015 13:36:22 +0100
+
+log-courier (1.3.9.g32f6cc4) UNRELEASED; urgency=low
+
+  * Update to release 1.3.9.g32f6cc4
+
+ -- Matthew Newton <mcn4@leicester.ac.uk>  Wed, 11 Feb 2015 14:00:00 +0000
+
+log-courier (1.3) UNRELEASED; urgency=low
+
+  * Update to release 1.3
+
+ -- Matthew Newton <mcn4@leicester.ac.uk>  Mon, 12 Jan 2015 11:55:20 +0000
+
+log-courier (0.15) UNRELEASED; urgency=low
+
+  * Initial release
+
+ -- Matthew Newton <mcn4@leicester.ac.uk>  Fri, 26 Sep 2014 14:48:48 +0100

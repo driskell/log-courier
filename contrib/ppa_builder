@@ -11,20 +11,27 @@ if [ -z "$RELEASE" ]; then
   RELEASE=1
 fi
 
+# Grab the ubuntu release if specified
+DRELEASE="$2"
+if [ -z "$DRELEASE" ]; then
+  DRELEASE=1
+fi
+
 # Calculate prefix
 PREFIX=log-courier_$(cat log-courier/version_short.txt)
 
 # Archive up the code
-tar -czf "${PREFIX}.orig.tar.gz" log-courier
+#tar -czf "${PREFIX}.orig.tar.gz" log-courier
 
-# Copy deb folder into place
-command cp -rf log-courier/contrib/deb log-courier/debian
+# Build a distribution and dput to PPA
+build_package()
+{
+  local TYPE=$1
+  local D=$2
 
-# Build each distribution and dput to PPA
-for D in precise trusty utopic vivid wily; do
-
-  # Reset the change log
-  command cp -f log-courier/contrib/deb/changelog log-courier/debian/changelog
+  # Copy deb folder into place
+  command rm -rf log-courier/debian
+  command cp -rf "log-courier/contrib/deb-$TYPE" log-courier/debian
 
   (
     cd log-courier
@@ -34,7 +41,8 @@ for D in precise trusty utopic vivid wily; do
       --no-force-save-on-release \
       --controlmaint \
       --distribution "$D" \
-      --newversion "$(cat log-courier/version_short.txt)-${RELEASE}~${D}" \
+      -b \
+      --newversion "$(cat version_short.txt)-${RELEASE}~${D}${DRELEASE}" \
       "Package for ${D}"
 
     # Build
@@ -42,6 +50,12 @@ for D in precise trusty utopic vivid wily; do
   )
 
   # Dput
-  dput log-courier-ppa "${PREFIX}-${RELEASE}~${D}_source.changes"
+  dput log-courier-ppa "${PREFIX}-${RELEASE}~${D}${DRELEASE}_source.changes"
+}
 
+for D in precise trusty utopic; do
+  build_package upstart "$D"
+done
+for D in vivid wily; do
+  build_package systemd "$D"
 done
