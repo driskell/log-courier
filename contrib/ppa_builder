@@ -20,14 +20,23 @@ fi
 # Calculate prefix
 PREFIX=log-courier_$(cat log-courier/version_short.txt)
 
-# Archive up the code
-#tar -czf "${PREFIX}.orig.tar.gz" log-courier
+# Archive up the original code if necessary
+if [ ! -f "${PREFIX}.orig.tar.gz" ]; then
+  tar -czf "${PREFIX}.orig.tar.gz" log-courier
+fi
 
 # Build a distribution and dput to PPA
 build_package()
 {
   local TYPE=$1
   local D=$2
+
+  # Ensure on latest in case we pushed up packaging fixes
+  (
+    cd log-courier
+    git reset --hard
+    git pull
+  )
 
   # Copy deb folder into place
   command rm -rf log-courier/debian
@@ -44,6 +53,9 @@ build_package()
       -b \
       --newversion "$(cat version_short.txt)-${RELEASE}~${D}${DRELEASE}" \
       "Package for ${D}"
+
+    # Commit any packaging fixes
+    dpkg-source --commit
 
     # Build
     debuild -S -sa
