@@ -115,6 +115,12 @@ module LogCourier
     private
 
     def run_send(io_control)
+      enter_send_loop io_control
+    rescue ShutdownSignal
+      raise
+    end
+
+    def enter_send_loop(io_control)
       # Ask for something to send
       io_control << ['S']
 
@@ -151,8 +157,6 @@ module LogCourier
       @logger.warn 'Write error', :error => e.message unless @logger.nil?
       io_control << ['F']
       return
-    rescue ShutdownSignal
-      raise
     rescue StandardError, NativeException => e
       @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
       io_control << ['F']
@@ -160,6 +164,12 @@ module LogCourier
     end
 
     def run_recv(io_control)
+      enter_recv_loop io_control
+    rescue ShutdownSignal
+      raise
+    end
+
+    def enter_recv_loop(io_control)
       loop do
         # Grab a header
         header = @ssl_client.read(8)
@@ -194,8 +204,6 @@ module LogCourier
       @logger.warn 'Connection closed by server' unless @logger.nil?
       io_control << ['F']
       return
-    rescue ShutdownSignal
-      raise
     rescue StandardError, NativeException => e
       @logger.warn e, :hint => 'Unknown read error' unless @logger.nil?
       io_control << ['F']

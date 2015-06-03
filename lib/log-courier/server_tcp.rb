@@ -230,34 +230,42 @@ module LogCourier
 
     def run
       loop do
-        # Read messages
-        # Each message begins with a header
-        # 4 byte signature
-        # 4 byte length
-        # Normally we would not parse this inside transport, but for TLS we have to in order to locate frame boundaries
-        signature, length = recv(8).unpack('A4N')
-
-        # Sanity
-        if length > @options[:max_packet_size]
-          fail ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
-        end
-
-        # While we're processing, EOF is bad as it may occur during send
-        @in_progress = true
-
-        # Read the message
-        if length == 0
-          data = ''
-        else
-          data = recv(length)
-        end
-
-        # Send for processing
-        yield signature, data, self
-
-        # If we EOF next it's a graceful close
-        @in_progress = false
+        process_message
       end
+    rescue ShutdownSignal
+      # Shutting down
+      @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
+      return
+    end
+
+    def process_message
+      # Read messages
+      # Each message begins with a header
+      # 4 byte signature
+      # 4 byte length
+      # Normally we would not parse this inside transport, but for TLS we have to in order to locate frame boundaries
+      signature, length = recv(8).unpack('A4N')
+
+      # Sanity
+      if length > @options[:max_packet_size]
+        fail ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
+      end
+
+      # While we're processing, EOF is bad as it may occur during send
+      @in_progress = true
+
+      # Read the message
+      if length == 0
+        data = ''
+      else
+        data = recv(length)
+      end
+
+      # Send for processing
+      yield signature, data, self
+
+      # If we EOF next it's a graceful close
+      @in_progress = false
       return
     rescue TimeoutError
       # Timeout of the connection, we were idle too long without a ping/pong
@@ -281,10 +289,6 @@ module LogCourier
     rescue ProtocolError => e
       # Connection abort request due to a protocol error
       @logger.warn 'Protocol error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
-      return
-    rescue ShutdownSignal
-      # Shutting down
-      @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
       return
     rescue StandardError, NativeException => e
       # Some other unknown problem
