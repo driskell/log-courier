@@ -234,9 +234,9 @@ module LogCourier
       event.merge! @peer_fields if @peer_fields.length != 0
     end
 
-    def run
+    def run(&block)
       loop do
-        process_message
+        process_message &block
       end
     rescue ShutdownSignal
       # Shutting down
