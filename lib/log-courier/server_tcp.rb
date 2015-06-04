@@ -236,6 +236,10 @@ module LogCourier
       # Shutting down
       @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
       return
+    rescue StandardError, NativeException => e
+      # Some other unknown problem
+      @logger.warn e, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
+      return
     end
 
     def process_message
@@ -289,10 +293,6 @@ module LogCourier
     rescue ProtocolError => e
       # Connection abort request due to a protocol error
       @logger.warn 'Protocol error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
-      return
-    rescue StandardError, NativeException => e
-      # Some other unknown problem
-      @logger.warn e, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
       return
     ensure
       @fd.close rescue nil

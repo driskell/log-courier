@@ -68,12 +68,20 @@ module LogCourier
         begin
           run_send io_control
         rescue ShutdownSignal
+        rescue StandardError, NativeException => e
+          @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
+          io_control << ['F']
+          return
         end
       end
       @recv_thread = Thread.new do
         begin
           run_recv io_control
         rescue ShutdownSignal
+        rescue StandardError, NativeException => e
+          @logger.warn e, :hint => 'Unknown read error' unless @logger.nil?
+          io_control << ['F']
+          return
         end
       end
       return
@@ -151,10 +159,6 @@ module LogCourier
       @logger.warn 'Write error', :error => e.message unless @logger.nil?
       io_control << ['F']
       return
-    rescue StandardError, NativeException => e
-      @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
-      io_control << ['F']
-      return
     end
 
     def run_recv(io_control)
@@ -190,10 +194,6 @@ module LogCourier
       return
     rescue EOFError
       @logger.warn 'Connection closed by server' unless @logger.nil?
-      io_control << ['F']
-      return
-    rescue StandardError, NativeException => e
-      @logger.warn e, :hint => 'Unknown read error' unless @logger.nil?
       io_control << ['F']
       return
     end
