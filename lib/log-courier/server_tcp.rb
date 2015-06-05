@@ -235,9 +235,7 @@ module LogCourier
     end
 
     def run(&block)
-      loop do
-        process_message &block
-      end
+      process_messages &block
     rescue ShutdownSignal
       # Shutting down
       @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
@@ -248,35 +246,36 @@ module LogCourier
       return
     end
 
-    def process_message
-      # Read messages
-      # Each message begins with a header
-      # 4 byte signature
-      # 4 byte length
-      # Normally we would not parse this inside transport, but for TLS we have to in order to locate frame boundaries
-      signature, length = recv(8).unpack('A4N')
+    def process_messages
+      loop do
+        # Read messages
+        # Each message begins with a header
+        # 4 byte signature
+        # 4 byte length
+        # Normally we would not parse this inside transport, but for TLS we have to in order to locate frame boundaries
+        signature, length = recv(8).unpack('A4N')
 
-      # Sanity
-      if length > @options[:max_packet_size]
-        fail ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
+        # Sanity
+        if length > @options[:max_packet_size]
+          fail ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
+        end
+
+        # While we're processing, EOF is bad as it may occur during send
+        @in_progress = true
+
+        # Read the message
+        if length == 0
+          data = ''
+        else
+          data = recv(length)
+        end
+
+        # Send for processing
+        yield signature, data, self
+
+        # If we EOF next it's a graceful close
+        @in_progress = false
       end
-
-      # While we're processing, EOF is bad as it may occur during send
-      @in_progress = true
-
-      # Read the message
-      if length == 0
-        data = ''
-      else
-        data = recv(length)
-      end
-
-      # Send for processing
-      yield signature, data, self
-
-      # If we EOF next it's a graceful close
-      @in_progress = false
-      return
     rescue TimeoutError
       # Timeout of the connection, we were idle too long without a ping/pong
       @logger.warn 'Connection timed out', :peer => @peer unless @logger.nil?
