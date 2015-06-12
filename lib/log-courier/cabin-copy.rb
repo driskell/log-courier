@@ -23,6 +23,9 @@ class Cabin::Channel
 
   @old_channels = @channels
   @channels = Hash.new { |h,k| h[k] = Cabin::Channel.new(@level_config[k]) }
+  @old_channels.each_key do |k|
+    @channels[k] = @old_channels[k]
+  end
 
   class << self
     # Sets the default logging level for all new Cabin::Channel instances
@@ -47,6 +50,24 @@ class Cabin::Channel
         @level_config[identifier] = value[identifier].to_sym
       end
     end
+
+    # Get a channel for a given identifier. If this identifier has never been
+    # used, a new channel is created for it.
+    # The default identifier is the application executable name.
+    #
+    # This is useful for using the same Cabin::Channel across your
+    # entire application.
+    #
+    # If a block is given and a new channel is created, the block is called with
+    # the new channel so it may be configured thread-safe.
+    def get(identifier=$0, &block)
+      return @channel_lock.synchronize do
+        if block_given? and !@channels.has_key?(identifier)
+          block.call @channels[identifier]
+        end
+        @channels[identifier]
+      end
+    end # def Cabin::Channel.get
   end # class << self
 
   # Create a new logging channel.
@@ -76,20 +97,25 @@ class Cabin::Channel
   # level will be used as the initial logging level instead.
   def fork(identifier=nil)
     if identifier.nil?
-      copy = Cabin::Channel.new
-    else
-      copy = Cabin::Channel.get(identifier)
+      forked = Cabin::Channel.new
+      copy forked
+      return forked
     end
 
+    Cabin::Channel.get(identifier) do |created|
+      copy created
+    end
+  end
+
+  # Copy our data and subscriptions to another channel
+  def copy(target)
     @data.each_key do |k|
-      copy[k] = @data[k]
+      target[k] = @data[k]
     end
 
     @subscribers.each_key do |k|
-      copy.subscribe @subscribers[k]
+      target.subscribe @subscribers[k]
     end
-
-    copy
   end
 
   public :fork
