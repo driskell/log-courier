@@ -164,6 +164,7 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 		// Append the remaining data to the buffer
 		start_offset += cut
 		text = text[cut:]
+		text_len -= cut
 	}
 
 	if len(c.buffer) == 0 {
@@ -184,7 +185,6 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 	} else if c.config.what == codecMultiline_What_Next && match_failed {
 		c.flush()
 	}
-	// TODO: Split the line if its too big
 }
 
 func (c *CodecMultiline) flush() {
