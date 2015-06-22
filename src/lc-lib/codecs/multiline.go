@@ -149,7 +149,8 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 	var text_len int64 = int64(len(text))
 
 	// Check we don't exceed the max multiline bytes
-	if check_len := c.buffer_len + text_len + c.buffer_lines; check_len > c.config.MaxMultilineBytes {
+	check_len := c.buffer_len + text_len + c.buffer_lines
+	for check_len > c.config.MaxMultilineBytes {
 		// Store partial and flush
 		overflow := check_len - c.config.MaxMultilineBytes
 		cut := text_len - overflow
@@ -165,6 +166,9 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 		start_offset += cut
 		text = text[cut:]
 		text_len -= cut
+
+		// Reset check length in case we're still over the max
+		check_len = text_len
 	}
 
 	if len(c.buffer) == 0 {

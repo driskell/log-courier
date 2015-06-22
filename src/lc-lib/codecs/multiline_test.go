@@ -261,51 +261,54 @@ func TestMultilineMaxBytes(t *testing.T) {
 	}
 }
 
-func checkMultilineMaxBytesCrash188(start_offset int64, end_offset int64, text string) {
+func checkMultilineMaxBytesOverflow(start_offset int64, end_offset int64, text string) {
 	multiline_lines++
 
 	if multiline_lines == 1 {
-		if text != "DEBUG First line second line thi" {
-			multiline_t.Logf("Event data incorrect [% X]", text)
-			multiline_t.FailNow()
+		if text != "START67890" {
+			multiline_t.Errorf("Event data incorrect [% X]", text)
 		}
-
+		return
+	} else if multiline_lines == 2 {
+		if text != "abcdefg\n12" {
+			multiline_t.Errorf("Second event data incorrect [% X]", text)
+		}
+		return
+	} else if multiline_lines == 3 {
+		if text != "34567890ab" {
+			multiline_t.Errorf("Third event data incorrect [% X]", text)
+		}
 		return
 	}
 
-	if text != "rd line\nlast line" {
-		multiline_t.Logf("Third event data incorrect [% X]", text)
-		multiline_t.FailNow()
+	if text != "c\n1234567" {
+		multiline_t.Errorf("Fourth event data incorrect [% X]", text)
 	}
 }
 
-func TestMultilineMaxBytesCrash188(t *testing.T) {
+func TestMultilineMaxBytesOverflow(t *testing.T) {
 	multiline_t = t
 	multiline_lines = 0
 
 	codec := createMultilineCodec(map[string]interface{}{
-		"max multiline bytes": int64(32),
-		"pattern":             "^DEBUG ",
+		"max multiline bytes": int64(10),
+		"pattern":             "^START",
 		"negate":              true,
-	}, checkMultilineMaxBytesCrash188, t)
+	}, checkMultilineMaxBytesOverflow, t)
 
-	// Issue 188 was due to the state not reset properly after first split
-	// causing the second split to crash if the length of the previous event
-	// (BEFORE multiline) was longer than max multiline bytes
-	// (Meaning this didn't crash if previous event was itself within limit but
-	// when accumulated took it over)
-	// Here, the length of first event is 39 which is higher than 32
-	codec.Event(0, 1, "DEBUG First line second line third line")
-	codec.Event(2, 3, "last line")
-	codec.Event(4, 5, "DEBUG Next line")
+	// Ensure we reset state after each split (issue #188)
+	// And also ensure we can split a single long line multiple times (also issue #188)
+	codec.Event(0, 1, "START67890abcdefg")
+	codec.Event(2, 3, "1234567890abc")
+	codec.Event(4, 5, "1234567")
+	codec.Event(6, 7, "START")
 
-	if multiline_lines != 2 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
+	if multiline_lines != 4 {
+		t.Errorf("Wrong line count received")
 	}
 
 	offset := codec.Teardown()
-	if offset != 3 {
+	if offset != 5 {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
