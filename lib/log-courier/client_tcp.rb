@@ -230,7 +230,7 @@ module LogCourier
           ssl.cert_store = cert_store
           ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
 
-          @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
+          @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket, ssl)
 
           socket = @ssl_client.connect
 
