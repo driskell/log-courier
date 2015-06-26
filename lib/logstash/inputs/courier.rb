@@ -17,11 +17,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'logstash/version'
+require 'rubygems/version'
+
 module LogStash
   module Inputs
     # Receive events over the Log Courier protocol
     class Courier < LogStash::Inputs::Base
       config_name 'courier'
+
+      # Compatibility with Logstash 1.4 requires milestone
+      if Gem::Version.new(LOGSTASH_VERSION) < Gem::Version.new('1.5.0')
+        milestone 2
+      end
 
       default :codec, 'plain'
 
