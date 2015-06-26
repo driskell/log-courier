@@ -13,7 +13,7 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="log-courier"
 NAME=log-courier
 DAEMON=/usr/bin/log-courier
-LOG_COURIER_ARGS="-config=/etc/log-courier/log-courier.conf -from-beginning=true"
+LOG_COURIER_ARGS="-config=/etc/log-courier/log-courier.conf"
 PIDFILE=/var/run/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
 

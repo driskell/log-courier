@@ -100,7 +100,7 @@ case "$1" in
 	configtest)
 		echo -n "Configuration test: "
 		# shellcheck disable=SC2086
-		TESTRESULT=$( ${DAEMON} $LOG_COURIER_ARGS -config-test )
+		TESTRESULT=$( "${DAEMON}" $LOG_COURIER_ARGS -config-test )
 		RC=$?
 		if [ $RC -ne 0 ]; then
 			failure
