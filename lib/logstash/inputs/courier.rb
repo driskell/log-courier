@@ -34,37 +34,38 @@ module LogStash
       default :codec, 'plain'
 
       # The IP address to listen on
-      config :host, :validate => :string, :default => '0.0.0.0'
+      config :host, validate: :string, default: '0.0.0.0'
 
       # The port to listen on
-      config :port, :validate => :number, :required => true
+      config :port, validate: :number, required: true
 
       # The transport type to use
-      config :transport, :validate => :string, :default => 'tls'
+      config :transport, validate: :string, default: 'tls'
 
       # SSL certificate to use
-      config :ssl_certificate, :validate => :path
+      config :ssl_certificate, validate: :path
 
       # SSL key to use
-      config :ssl_key, :validate => :path
+      config :ssl_key, validate: :path
 
       # SSL key passphrase to use
-      config :ssl_key_passphrase, :validate => :password
+      config :ssl_key_passphrase, validate: :password
 
       # Whether or not to verify client certificates
-      config :ssl_verify, :validate => :boolean, :default => false
+      config :ssl_verify, validate: :boolean, default: false
 
-      # When verifying client certificates, also trust those signed by the system's default CA bundle
-      config :ssl_verify_default_ca, :validate => :boolean, :default => false
+      # When verifying client certificates, also trust those signed by the
+      # system's default CA bundle
+      config :ssl_verify_default_ca, validate: :boolean, default: false
 
       # CA certificate to use when verifying client certificates
-      config :ssl_verify_ca, :validate => :path
+      config :ssl_verify_ca, validate: :path
 
       # Curve secret key
-      config :curve_secret_key, :validate => :string
+      config :curve_secret_key, validate: :string
 
       # Max packet size
-      config :max_packet_size, :validate => :number
+      config :max_packet_size, validate: :number
 
       # The size of the internal queue for each peer
       #
@@ -72,7 +73,7 @@ module LogStash
       #
       # This setting should max the max_pending_payloads Log Courier
       # configuration
-      config :peer_recv_queue, :validate => :number
+      config :peer_recv_queue, validate: :number
 
       # Add additional fields to events that identity the peer
       #
@@ -81,45 +82,58 @@ module LogStash
       # "peer" identifies the source host and port
       # "peer_ssl_cn" contains the client certificate hostname for TLS peers
       # using client certificates
-      config :add_peer_fields, :validate => :boolean
+      config :add_peer_fields, validate: :boolean
 
       public
 
       def register
-        @logger.info 'Starting courier input listener', :address => "#{@host}:#{@port}"
-
-        options = {
-          logger:                @logger,
-          address:               @host,
-          port:                  @port,
-          transport:             @transport,
-          ssl_certificate:       @ssl_certificate,
-          ssl_key:               @ssl_key,
-          ssl_key_passphrase:    @ssl_key_passphrase,
-          ssl_verify:            @ssl_verify,
-          ssl_verify_default_ca: @ssl_verify_default_ca,
-          ssl_verify_ca:         @ssl_verify_ca,
-          curve_secret_key:      @curve_secret_key,
-        }
-
-        # Honour the defaults in the LogCourier gem
-        options[:max_packet_size] = @max_packet_size unless @max_packet_size.nil?
-        options[:peer_recv_queue] = @peer_recv_queue unless @peer_recv_queue.nil?
-        options[:add_peer_fields] = @add_peer_fields unless @add_peer_fields.nil?
+        @logger.info(
+          'Starting courier input listener',
+          address: "#{@host}:#{@port}"
+        )
 
         require 'log-courier/server'
         @log_courier = LogCourier::Server.new options
       end
 
-      public
-
       def run(output_queue)
         @log_courier.run do |event|
-          event['tags'] = [event['tags']] if event.has_key?('tags') && !event['tags'].is_a?(Array)
+          if event.key?('tags') && !event['tags'].is_a?(Array)
+            event['tags'] = [event['tags']]
+          end
           event = LogStash::Event.new(event)
           decorate event
           output_queue << event
         end
+      end
+
+      private
+
+      def options
+        result = {}
+
+        [
+          :logger, :address, :port, :transport, :ssl_certificate, :ssl_key,
+          :ssl_key_passphrase, :ssl_verify, :ssl_verify_default_ca,
+          :curve_secret_key
+        ].each do |k|
+          result[k] = send(k)
+        end
+
+        add_override_options result
+      end
+
+      def add_override_options(result)
+        # Honour the defaults in the LogCourier gem
+        [:max_packet_size, :peer_recv_queue, :add_peer_fields].each do |k|
+          result[k] = send(k) unless send(k).nil?
+        end
+        result
+      end
+
+      def address
+        # TODO: Fix this naming inconsistency
+        @host
       end
     end
   end
