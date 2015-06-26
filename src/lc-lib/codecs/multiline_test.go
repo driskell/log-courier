@@ -312,3 +312,39 @@ func TestMultilineMaxBytesOverflow(t *testing.T) {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
+
+func checkMultilineReset(start_offset int64, end_offset int64, text string) {
+	multiline_lines++
+
+	if text != "DEBUG Next line\nANOTHER line" {
+		multiline_t.Errorf("Event data incorrect [% X]", text)
+	}
+}
+
+func TestMultilineReset(t *testing.T) {
+	multiline_t = t
+	multiline_lines = 0
+
+	codec := createMultilineCodec(map[string]interface{}{
+		"pattern": "^(ANOTHER|NEXT) ",
+		"what":    "previous",
+		"negate":  false,
+	}, checkMultilineReset, t)
+
+	// Send some data
+	codec.Event(0, 1, "DEBUG First line")
+	codec.Event(2, 3, "NEXT line")
+	codec.Reset()
+	codec.Event(4, 5, "DEBUG Next line")
+	codec.Event(6, 7, "ANOTHER line")
+	codec.Event(8, 9, "DEBUG Last line")
+
+	if multiline_lines != 1 {
+		t.Errorf("Wrong line count received")
+	}
+
+	offset := codec.Teardown()
+	if offset != 7 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}

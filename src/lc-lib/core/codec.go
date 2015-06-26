@@ -18,6 +18,7 @@ package core
 
 type Codec interface {
 	Teardown() int64
+	Reset()
 	Event(int64, int64, string)
 	Meter()
 	Snapshot() *Snapshot

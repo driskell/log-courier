@@ -73,6 +73,9 @@ func (c *CodecFilter) Teardown() int64 {
 	return c.last_offset
 }
 
+func (c *CodecFilter) Reset() {
+}
+
 func (c *CodecFilter) Event(start_offset int64, end_offset int64, text string) {
 	// Only flush the event if it matches a filter
 	var match bool

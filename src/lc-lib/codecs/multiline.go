@@ -126,6 +126,13 @@ func (c *CodecMultiline) Teardown() int64 {
 	return c.last_offset
 }
 
+func (c *CodecMultiline) Reset() {
+	c.last_offset = 0
+	c.buffer = nil
+	c.buffer_len = 0
+	c.buffer_lines = 0
+}
+
 func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string) {
 	// TODO(driskell): If we are using previous and we match on the very first line read,
 	// then this is because we've started in the middle of a multiline event (the first line

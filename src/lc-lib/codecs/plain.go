@@ -46,6 +46,9 @@ func (c *CodecPlain) Teardown() int64 {
 	return c.last_offset
 }
 
+func (c *CodecPlain) Reset() {
+}
+
 func (c *CodecPlain) Event(start_offset int64, end_offset int64, text string) {
 	c.last_offset = end_offset
 
