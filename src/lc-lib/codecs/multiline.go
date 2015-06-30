@@ -155,12 +155,17 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 
 	var text_len int64 = int64(len(text))
 
+	if len(c.buffer) == 0 {
+		c.start_offset = start_offset
+	}
+
 	// Check we don't exceed the max multiline bytes
 	check_len := c.buffer_len + text_len + c.buffer_lines
-	for check_len > c.config.MaxMultilineBytes {
+	for check_len >= c.config.MaxMultilineBytes {
 		// Store partial and flush
 		overflow := check_len - c.config.MaxMultilineBytes
 		cut := text_len - overflow
+
 		c.end_offset = end_offset - overflow
 
 		c.buffer = append(c.buffer, text[:cut])
@@ -170,7 +175,7 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 		c.flush()
 
 		// Append the remaining data to the buffer
-		start_offset += cut
+		c.start_offset = c.end_offset
 		text = text[cut:]
 		text_len -= cut
 
@@ -178,9 +183,6 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 		check_len = text_len
 	}
 
-	if len(c.buffer) == 0 {
-		c.start_offset = start_offset
-	}
 	c.end_offset = end_offset
 
 	c.buffer = append(c.buffer, text)
