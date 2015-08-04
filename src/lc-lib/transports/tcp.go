@@ -344,9 +344,6 @@ RecvLoop:
 
 			length, err := t.socket.Read(data[received:])
 			received += length
-			log.Debug("socket.Read err: %v", err)
-			// #208 - Golang TLS Read can return nil err even if it didn't fill the
-			// given buffer, so do not treat err == nil as full read.
 			if received >= len(data) {
 				// Success
 				return nil, false

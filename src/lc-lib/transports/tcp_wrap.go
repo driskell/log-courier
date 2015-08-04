@@ -45,9 +45,6 @@ RetrySend:
 
 		n, err = w.tcpsocket.Write(b[length:])
 		length += n
-		// #208 - Golang TLS Read can return nil err even if it didn't fill the
-		// given buffer, so we do not treat err == nil as full read. Let's do the
-		// same for Writes to ensure we don't hit any similar issues.
 		if length >= len(b) {
 			return length, err
 		} else if err == nil {
