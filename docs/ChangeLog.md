@@ -33,6 +33,8 @@
 * Improve handling of file truncation when using codecs (derived from #194)
 * Fix "Unknown message received" errors caused by partial reads which occur
 frequently with Logstash 1.5.3 due to OpenSSL cipher hardening (#208)
+* Fix systemd service configuration providing incorrect arguments to log-courier
+(#204)
 * Implement options to enable/disable automatic fields such as "host", "offset"
 and "path"
 * Implement an option to add a "timezone" field to events containing the local
