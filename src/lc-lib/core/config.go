@@ -54,6 +54,10 @@ const (
 	default_NetworkConfig_MaxPendingPayloads int64         = 10
 	default_StreamConfig_Codec               string        = "plain"
 	default_StreamConfig_DeadTime            time.Duration = 24 * time.Hour
+	default_StreamConfig_AddHostField        bool          = true
+	default_StreamConfig_AddOffsetField      bool          = true
+	default_StreamConfig_AddPathField        bool          = true
+	default_StreamConfig_AddTimezoneField    bool          = false
 )
 
 var (
@@ -131,6 +135,10 @@ type CodecConfigStub struct {
 
 type StreamConfig struct {
 	Fields           map[string]interface{} `config:"fields"`
+	AddHostField     bool                   `config:"add host field"`
+	AddOffsetField   bool                   `config:"add offset field"`
+	AddPathField     bool                   `config:"add path field"`
+	AddTimezoneField bool                   `config:"add timezone field"`
 	Codec            CodecConfigStub        `config:"codec"`
 	DeadTime         time.Duration          `config:"dead time"`
 
@@ -140,6 +148,10 @@ type StreamConfig struct {
 func (sc *StreamConfig) InitDefaults() {
 	sc.Codec.Name = default_StreamConfig_Codec
 	sc.DeadTime = default_StreamConfig_DeadTime
+	sc.AddHostField = default_StreamConfig_AddHostField
+	sc.AddOffsetField = default_StreamConfig_AddOffsetField
+	sc.AddPathField = default_StreamConfig_AddPathField
+	sc.AddTimezoneField = default_StreamConfig_AddTimezoneField
 }
 
 type FileConfig struct {

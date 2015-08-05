@@ -12,6 +12,10 @@
   - [Duration](#duration)
   - [Fileglob](#fileglob)
 - [Stream Configuration](#stream-configuration)
+  - [`"add host field"`](#add-host-field)
+  - [`"add offset field"`](#add-offset-field)
+  - [`"add path field"`](#add-path-field)
+  - [`"add timezone field"`](#add-timezone-field)
   - [`"codec"`](#codec)
   - [`"dead time"`](#dead-time)
   - [`"fields"`](#fields)
@@ -165,6 +169,39 @@ Stream Configuration parameters can be specified for file groups within
 [`"files"`](#files) and also for [`"stdin"`](#stdin). They customise the log
 entries produced by passing, for example, by passing them through a codec and
 adding extra fields.
+
+### `"add host field"`
+
+*Boolean. Optional. Default: true*
+
+Adds an automatic "host" field to generated events that contains the `"host"`
+value from the general configuration section.
+
+### `"add offset field"`
+
+*Boolean. Optional. Default: true*
+
+Adds an automatic "offset" field to generated events that contains the current
+offset in the current data stream.
+
+*Beware that this value will reset when a file rotates or is truncated and is
+generally not useful. It will be kept configurable to allow full compatibility
+with Logstash Forwarder's traditional behaviour, and from version 2 the default
+will be changed to false.*
+
+### `"add path field"`
+
+*Boolean. Optional. Default: true*
+
+Adds an automatic "path" field to generated events that contains the path to the
+current data stream. For stdin, this field is set to a hyphen, "-".
+
+### `"add timezone field"`
+
+*Boolean. Optional. Default: false*
+
+Adds an automatic "timezone" field to generated events that contains the local
+machine's local timezone in the format, "-0700 MST".
 
 ### `"codec"`
 
