@@ -17,23 +17,21 @@
 # source function library
 . /etc/rc.d/init.d/functions
 
-DAEMON='/usr/sbin/log-courier'
-DATA_DIR='/var/lib/log-courier'
-PID_FILE='/var/run/log-courier.pid'
+NAME=log-courier
+DESC="Log Courier"
+DAEMON=/usr/sbin/log-courier
+DATA_DIR=/var/lib/${NAME}
+PID_FILE=/var/run/${NAME}.pid
 
-# check if file exists
-if [ -f /etc/sysconfig/log-courier ]; then
-	. /etc/sysconfig/log-courier
-fi
+# Defaults
+LOG_COURIER_ARGS="-config /etc/${NAME}/log-courier.conf"
 
-# set default config file, if $CONFIG_FILE is not set
-if [ -z "$LOG_COURIER_ARGS" ]; then
-	LOG_COURIER_ARGS='-config /etc/log-courier/log-courier.conf'
-fi
+# Override defaults from sysconfig
+[ -f "/etc/sysconfig/${NAME}" ] &&	. "/etc/sysconfig/${NAME}"
 
 do_start()
 {
-	echo -n "Starting Log Courier: "
+	echo -n "Starting ${DESC}: "
 	status -p $PID_FILE $DAEMON &>/dev/null
 	RC=$?
 	if [ $RC -eq 0 ]; then
@@ -55,7 +53,7 @@ do_start()
 }
 
 do_reload() {
-	echo -n "Reloading Log Courier: "
+	echo -n "Reloading ${DESC}: "
 	killproc -p $PID_FILE $DAEMON -HUP
 	RC=$?
 	echo
@@ -67,13 +65,13 @@ case "$1" in
 		RC=$?
 	;;
 	stop)
-		echo -n "Stopping Log Courier: "
+		echo -n "Stopping ${DESC}: "
 		killproc -p $PID_FILE -d 30 $DAEMON
 		RC=$?
 		echo
 	;;
 	status)
-		echo "Log Courier status:"
+		echo "${DESC} status:"
 		status -p $PID_FILE $DAEMON
 		RC=$?
 	;;

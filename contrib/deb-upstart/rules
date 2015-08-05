@@ -14,8 +14,9 @@ override_dh_auto_test:
 
 override_dh_auto_install:
 	# Install binaries
+	mkdir -p debian/log-courier/usr/sbin
+	install -m 0755 bin/log-courier debian/log-courier/usr/sbin/log-courier
 	mkdir -p debian/log-courier/usr/bin
-	install -m 0755 bin/log-courier debian/log-courier/usr/bin/log-courier
 	install -m 0755 bin/lc-admin debian/log-courier/usr/bin/lc-admin
 	install -m 0755 bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
 
