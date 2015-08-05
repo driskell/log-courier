@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 ### BEGIN INIT INFO
 # Provides:          log-courier
@@ -27,9 +27,20 @@ LOG_COURIER_ARGS="-config /etc/${NAME}/log-courier.conf"
 # Override defaults from default
 [ -f "/etc/default/${NAME}" ] && . "/etc/default/${NAME}"
 
-do_start() {
+do_start_daemon() {
   start-stop-daemon --start --quiet --pidfile "$PIDFILE" --exec /bin/sh --test > /dev/null || return 1
   start-stop-daemon --start --quiet --make-pidfile --background --pidfile "$PIDFILE" --exec "$DAEMON" -- $LOG_COURIER_ARGS || return 2
+}
+
+do_start() {
+  [ "$VERBOSE" != no ] && log_daemon_msg "Starting ${DESC}" "$NAME"
+  do_start_daemon
+  RC=$?
+  case "$RC" in
+    0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+    2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+  esac
+  return $RC
 }
 
 do_stop()
@@ -45,13 +56,8 @@ do_stop()
 
 case "$1" in
   start)
-    [ "$VERBOSE" != no ] && log_daemon_msg "Starting ${DESC}" "$NAME"
-    do_start
+    $0 configtest && do_start
     RC=$?
-    case "$RC" in
-      0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
-      2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
-    esac
     ;;
   stop)
     [ "$VERBOSE" != no ] && log_daemon_msg "Stopping ${DESC}" "$NAME"
@@ -67,27 +73,42 @@ case "$1" in
     RC=$?
     ;;
   restart|force-reload)
-    log_daemon_msg "Restarting ${DESC}" "$NAME"
-    do_stop
+    $0 configtest
     RC=$?
-    case "$RC" in
-      0|1)
-        do_start
-        RC=$?
-        case "$RC" in
-          0) log_end_msg 0 ;;
-          1) log_end_msg 1 ;; # Old process is still running
-          *) log_end_msg 1 ;; # Failed to start
-        esac
-      ;;
-      *)
-        # Failed to stop
-        log_end_msg 1
-      ;;
-    esac
+    if [ $RC -eq 0 ]; then
+      $0 stop
+      RC=$?
+      case "$RC" in
+        0|1)
+          do_start
+          RC=$?
+          case "$RC" in
+            0) log_end_msg 0 ;;
+            1) log_end_msg 1 ;; # Old process is still running
+            *) log_end_msg 1 ;; # Failed to start
+          esac
+        ;;
+        *)
+          # Failed to stop
+          log_end_msg 1
+        ;;
+      esac
+    fi
     ;;
+  configtest)
+    log_daemon_msg "Configuration testing ${DESC}" "$NAME"
+    # shellcheck disable=SC2086
+    TESTRESULT=$( "${DAEMON}" $LOG_COURIER_ARGS -config-test )
+    RC=$?
+    if [ $RC -ne 0 ]; then
+      echo
+      echo "${TESTRESULT}"
+      log_end_msg 1
+    else
+      log_end_msg 0
+    fi
   *)
-    echo "Usage: $0 {start|stop|status|restart|force-reload}" >&2
+    echo "Usage: $0 {start|stop|status|restart|force-reload|configtest}" >&2
     exit 3
     ;;
 esac
