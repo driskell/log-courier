@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [1.8](#18)
 - [1.7](#17)
 - [1.6](#16)
 - [1.5](#15)
@@ -21,6 +22,27 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## 1.8
+
+*???*
+
+***Log Courier***
+
+* Fix various causes of multiline codec causing Log Courier to crash (#188)
+* Improve handling of file truncation when using codecs (derived from #194)
+* Fix "Unknown message received" errors caused by partial reads which occur
+frequently with Logstash 1.5.3 due to OpenSSL cipher hardening (#208)
+* Implement options to enable/disable automatic fields such as "host", "offset"
+and "path"
+* Implement an option to add a "timezone" field to events containing the local
+machine's timezone in the format "-0700 MST" (#203)
+
+***Logstash Plugins***
+
+* Fix Logstash shutdown not working with the input plugin
+* Fix broken client certificate verification in the output plugin
+* Fix compatibility with Logstash 1.4 due to missing milestone in both plugins
 
 ## 1.7
 
