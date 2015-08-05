@@ -205,7 +205,7 @@ machine's local timezone in the format, "-0700 MST".
 
 ### `"codec"`
 
-*Codec configuration. Optional. Default: `{ "name": "plain" }`*
+*Codec configuration. Optional. Default: `{ "name": "plain" }`*  
 *Configuration reload will only affect new or resumed files*
 
 *Depending on how log-courier was built, some codecs may not be available. Run
@@ -229,7 +229,7 @@ Aside from "plain", the following codecs are available at this time.
 
 ### `"dead time"`
 
-*Duration. Optional. Default: "24h"*
+*Duration. Optional. Default: "24h"*  
 *Configuration reload will only affect new or resumed files*
 
 If a log file has not been modified in this time period, it will be closed and
@@ -242,7 +242,7 @@ ensure old log files are not kept open preventing deletion.
 
 ### `"fields"`
 
-*Dictionary. Optional*
+*Dictionary. Optional*  
 *Configuration reload will only affect new or resumed files*
 
 Extra fields to attach the event prior to shipping. These can be simple strings,
@@ -294,7 +294,7 @@ A log file to save Log Courier's internal log into. May be used in conjunction w
 
 ### `"host"`
 
-*String. Optional. Default: System FQDN.*
+*String. Optional. Default: System FQDN.*  
 *Configuration reload will only affect new or resumed files*
 
 Every event has an automatic field, "host", that contains the current system
