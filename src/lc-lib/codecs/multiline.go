@@ -126,6 +126,13 @@ func (c *CodecMultiline) Teardown() int64 {
 	return c.last_offset
 }
 
+func (c *CodecMultiline) Reset() {
+	c.last_offset = 0
+	c.buffer = nil
+	c.buffer_len = 0
+	c.buffer_lines = 0
+}
+
 func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string) {
 	// TODO(driskell): If we are using previous and we match on the very first line read,
 	// then this is because we've started in the middle of a multiline event (the first line
@@ -148,11 +155,17 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 
 	var text_len int64 = int64(len(text))
 
+	if len(c.buffer) == 0 {
+		c.start_offset = start_offset
+	}
+
 	// Check we don't exceed the max multiline bytes
-	if check_len := c.buffer_len + text_len + c.buffer_lines; check_len > c.config.MaxMultilineBytes {
+	check_len := c.buffer_len + text_len + c.buffer_lines
+	for check_len >= c.config.MaxMultilineBytes {
 		// Store partial and flush
 		overflow := check_len - c.config.MaxMultilineBytes
 		cut := text_len - overflow
+
 		c.end_offset = end_offset - overflow
 
 		c.buffer = append(c.buffer, text[:cut])
@@ -162,13 +175,14 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 		c.flush()
 
 		// Append the remaining data to the buffer
-		start_offset += cut
+		c.start_offset = c.end_offset
 		text = text[cut:]
+		text_len -= cut
+
+		// Reset check length in case we're still over the max
+		check_len = text_len
 	}
 
-	if len(c.buffer) == 0 {
-		c.start_offset = start_offset
-	}
 	c.end_offset = end_offset
 
 	c.buffer = append(c.buffer, text)
@@ -184,7 +198,6 @@ func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string
 	} else if c.config.what == codecMultiline_What_Next && match_failed {
 		c.flush()
 	}
-	// TODO: Split the line if its too big
 }
 
 func (c *CodecMultiline) flush() {

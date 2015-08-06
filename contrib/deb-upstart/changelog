@@ -1,3 +1,16 @@
+log-courier (1.7-2) UNRELEASED; urgency=low
+
+  * Fix upstart packaging problem
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Wed, 3 Jun 2015 18:00:00 +0100
+
+log-courier (1.7-1) UNRELEASED; urgency=low
+
+  * Upgrade to v1.7
+  * Add systemd support
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Wed, 3 Jun 2015 18:00:00 +0100
+
 log-courier (1.6-4) trusty; urgency=low
 
   * Fix unsupported symlink in deb source

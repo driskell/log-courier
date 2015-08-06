@@ -5,11 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode"
 )
-
-var multiline_t *testing.T
-var multiline_lines int
-var multiline_lock sync.Mutex
 
 func createMultilineCodec(unused map[string]interface{}, callback core.CodecCallbackFunc, t *testing.T) core.Codec {
 	config := core.NewConfig()
@@ -18,62 +15,106 @@ func createMultilineCodec(unused map[string]interface{}, callback core.CodecCall
 
 	factory, err := NewMultilineCodecFactory(config, "", unused, "multiline")
 	if err != nil {
-		t.Logf("Failed to create multiline codec: %s", err)
+		t.Errorf("Failed to create multiline codec: %s", err)
 		t.FailNow()
 	}
 
 	return factory.NewCodec(callback, 0)
 }
 
-func checkMultiline(start_offset int64, end_offset int64, text string) {
-	multiline_lock.Lock()
-	defer multiline_lock.Unlock()
-	multiline_lines++
+type checkMultilineExpect struct {
+	start, end int64
+	text string
+}
 
-	if multiline_lines == 1 {
-		if text != "DEBUG First line\nNEXT line\nANOTHER line" {
-			multiline_t.Logf("Event data incorrect [% X]", text)
-			multiline_t.FailNow()
+type checkMultiline struct {
+	expect []checkMultilineExpect
+	t *testing.T
+
+	mutex sync.Mutex
+	lines int
+}
+
+func (c *checkMultiline) formatPrintable(text string) []rune {
+	runes := []rune(text)
+	for i, char := range runes {
+		if unicode.IsPrint(char) {
+			runes[i] = char
+		} else {
+			runes[i] = '.'
 		}
+	}
+	return runes
+}
 
-		if start_offset != 0 {
-			multiline_t.Logf("Event start offset is incorrect [%d]", start_offset)
-			multiline_t.FailNow()
-		}
+func (c *checkMultiline) incorrectLineCount(lines int, message string) {
+	c.t.Error(message)
+	c.t.Errorf("Got:      %d", lines)
+	c.t.Errorf("Expected: %d", len(c.expect))
+}
 
-		if end_offset != 5 {
-			multiline_t.Logf("Event end offset is incorrect [%d]", end_offset)
-			multiline_t.FailNow()
-		}
+func (c *checkMultiline) EventCallback(start_offset int64, end_offset int64, text string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
-		return
+	line := c.lines + 1
+
+	if line > len(c.expect) {
+		c.incorrectLineCount(line, "Too many lines received")
+		c.t.FailNow()
 	}
 
-	if text != "DEBUG Next line" {
-		multiline_t.Logf("Event data incorrect [% X]", text)
-		multiline_t.FailNow()
+	if start_offset != c.expect[c.lines].start {
+		c.t.Error("Start offset incorrect for line: ", line)
+		c.t.Errorf("Got:      %d", start_offset)
+		c.t.Errorf("Expected: %d", c.expect[c.lines].start)
 	}
 
-	if start_offset != 6 {
-		multiline_t.Logf("Event start offset is incorrect [%d]", start_offset)
-		multiline_t.FailNow()
+	if end_offset != c.expect[c.lines].end {
+		c.t.Error("End offset incorrect for line: ", line)
+		c.t.Errorf("Got:      %d", end_offset)
+		c.t.Errorf("Expected: %d", c.expect[c.lines].end)
 	}
 
-	if end_offset != 7 {
-		multiline_t.Logf("Event end offset is incorrect [%d]", end_offset)
-		multiline_t.FailNow()
+	if text != c.expect[c.lines].text {
+		c.t.Error("Text incorrect for line: ", line)
+		c.t.Errorf("Got:      [%s]", c.formatPrintable(text))
+		c.t.Errorf("Expected: [%s]", c.formatPrintable(c.expect[c.lines].text))
+	}
+
+	c.lines = line
+}
+
+func (c *checkMultiline) CheckCurrentCount(count int, message string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if c.lines != count {
+		c.incorrectLineCount(c.lines, message)
 	}
 }
 
-func TestMultilinePrevious(t *testing.T) {
-	multiline_t = t
-	multiline_lines = 0
+func (c *checkMultiline) CheckFinalCount() {
+	c.CheckCurrentCount(len(c.expect), "Incorrect line count received")
+}
 
-	codec := createMultilineCodec(map[string]interface{}{
-		"pattern": "^(ANOTHER|NEXT) ",
-		"what":    "previous",
-		"negate":  false,
-	}, checkMultiline, t)
+func TestMultilinePrevious(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 5, "DEBUG First line\nNEXT line\nANOTHER line"},
+		},
+		t: t,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"pattern": "^(ANOTHER|NEXT) ",
+			"what":    "previous",
+			"negate":  false,
+		},
+		check.EventCallback,
+		t,
+	)
 
 	// Send some data
 	codec.Event(0, 1, "DEBUG First line")
@@ -81,26 +122,30 @@ func TestMultilinePrevious(t *testing.T) {
 	codec.Event(4, 5, "ANOTHER line")
 	codec.Event(6, 7, "DEBUG Next line")
 
-	if multiline_lines != 1 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
-	}
+	check.CheckFinalCount()
 
-	offset := codec.Teardown()
-	if offset != 5 {
+	if offset := codec.Teardown(); offset != 5 {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
 
 func TestMultilinePreviousNegate(t *testing.T) {
-	multiline_t = t
-	multiline_lines = 0
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 5, "DEBUG First line\nNEXT line\nANOTHER line"},
+		},
+		t: t,
+	}
 
-	codec := createMultilineCodec(map[string]interface{}{
-		"pattern": "^DEBUG ",
-		"what":    "previous",
-		"negate":  true,
-	}, checkMultiline, t)
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"pattern": "^DEBUG ",
+			"what":    "previous",
+			"negate":  true,
+		},
+		check.EventCallback,
+		t,
+	)
 
 	// Send some data
 	codec.Event(0, 1, "DEBUG First line")
@@ -108,27 +153,32 @@ func TestMultilinePreviousNegate(t *testing.T) {
 	codec.Event(4, 5, "ANOTHER line")
 	codec.Event(6, 7, "DEBUG Next line")
 
-	if multiline_lines != 1 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
-	}
+	check.CheckFinalCount()
 
-	offset := codec.Teardown()
-	if offset != 5 {
+	if offset := codec.Teardown(); offset != 5 {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
 
 func TestMultilinePreviousTimeout(t *testing.T) {
-	multiline_t = t
-	multiline_lines = 0
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 5, "DEBUG First line\nNEXT line\nANOTHER line"},
+			{6, 7, "DEBUG Next line"},
+		},
+		t: t,
+	}
 
-	codec := createMultilineCodec(map[string]interface{}{
-		"pattern":          "^(ANOTHER|NEXT) ",
-		"what":             "previous",
-		"negate":           false,
-		"previous timeout": "3s",
-	}, checkMultiline, t)
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"pattern":          "^(ANOTHER|NEXT) ",
+			"what":             "previous",
+			"negate":           false,
+			"previous timeout": "3s",
+		},
+		check.EventCallback,
+		t,
+	)
 
 	// Send some data
 	codec.Event(0, 1, "DEBUG First line")
@@ -139,22 +189,12 @@ func TestMultilinePreviousTimeout(t *testing.T) {
 	// Allow a second
 	time.Sleep(time.Second)
 
-	multiline_lock.Lock()
-	if multiline_lines != 1 {
-		t.Logf("Timeout triggered too early")
-		t.FailNow()
-	}
-	multiline_lock.Unlock()
+	check.CheckCurrentCount(1, "Timeout triggered too early")
 
 	// Allow 5 seconds
 	time.Sleep(5 * time.Second)
 
-	multiline_lock.Lock()
-	if multiline_lines != 2 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
-	}
-	multiline_lock.Unlock()
+	check.CheckFinalCount()
 
 	offset := codec.Teardown()
 	if offset != 7 {
@@ -163,14 +203,22 @@ func TestMultilinePreviousTimeout(t *testing.T) {
 }
 
 func TestMultilineNext(t *testing.T) {
-	multiline_t = t
-	multiline_lines = 0
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 5, "DEBUG First line\nNEXT line\nANOTHER line"},
+		},
+		t: t,
+	}
 
-	codec := createMultilineCodec(map[string]interface{}{
-		"pattern": "^(DEBUG|NEXT) ",
-		"what":    "next",
-		"negate":  false,
-	}, checkMultiline, t)
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"pattern": "^(DEBUG|NEXT) ",
+			"what":    "next",
+			"negate":  false,
+		},
+		check.EventCallback,
+		t,
+	)
 
 	// Send some data
 	codec.Event(0, 1, "DEBUG First line")
@@ -178,10 +226,7 @@ func TestMultilineNext(t *testing.T) {
 	codec.Event(4, 5, "ANOTHER line")
 	codec.Event(6, 7, "DEBUG Next line")
 
-	if multiline_lines != 1 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
-	}
+	check.CheckFinalCount()
 
 	offset := codec.Teardown()
 	if offset != 5 {
@@ -190,14 +235,22 @@ func TestMultilineNext(t *testing.T) {
 }
 
 func TestMultilineNextNegate(t *testing.T) {
-	multiline_t = t
-	multiline_lines = 0
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 5, "DEBUG First line\nNEXT line\nANOTHER line"},
+		},
+		t: t,
+	}
 
-	codec := createMultilineCodec(map[string]interface{}{
-		"pattern": "^ANOTHER ",
-		"what":    "next",
-		"negate":  true,
-	}, checkMultiline, t)
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"pattern": "^ANOTHER ",
+			"what":    "next",
+			"negate":  true,
+		},
+		check.EventCallback,
+		t,
+	)
 
 	// Send some data
 	codec.Event(0, 1, "DEBUG First line")
@@ -205,10 +258,7 @@ func TestMultilineNextNegate(t *testing.T) {
 	codec.Event(4, 5, "ANOTHER line")
 	codec.Event(6, 7, "DEBUG Next line")
 
-	if multiline_lines != 1 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
-	}
+	check.CheckFinalCount()
 
 	offset := codec.Teardown()
 	if offset != 5 {
@@ -216,47 +266,107 @@ func TestMultilineNextNegate(t *testing.T) {
 	}
 }
 
-func checkMultilineMaxBytes(start_offset int64, end_offset int64, text string) {
-	multiline_lines++
-
-	if multiline_lines == 1 {
-		if text != "DEBUG First line\nsecond line\nthi" {
-			multiline_t.Logf("Event data incorrect [% X]", text)
-			multiline_t.FailNow()
-		}
-
-		return
+func TestMultilineMaxBytes(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0,  32, "DEBUG First line\nsecond line\nthi"},
+			{32, 39, "rd line"},
+		},
+		t: t,
 	}
 
-	if text != "rd line" {
-		multiline_t.Logf("Second event data incorrect [% X]", text)
-		multiline_t.FailNow()
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"max multiline bytes": int64(32),
+			"pattern":             "^DEBUG ",
+			"negate":              true,
+		},
+		check.EventCallback,
+		t,
+	)
+
+	// Send some data
+	codec.Event(0,  16, "DEBUG First line")
+	codec.Event(17, 28, "second line")
+	codec.Event(29, 39, "third line")
+	codec.Event(40, 55, "DEBUG Next line")
+
+	check.CheckFinalCount()
+
+	offset := codec.Teardown()
+	if offset != 39 {
+		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
 
-func TestMultilineMaxBytes(t *testing.T) {
-	multiline_t = t
-	multiline_lines = 0
+func TestMultilineMaxBytesOverflow(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0,  10, "START67890"},
+			{10, 20, "abcdefg\n12"},
+			{20, 30, "34567890ab"},
+			{30, 39, "\nc1234567"},
+		},
+		t: t,
+	}
 
-	codec := createMultilineCodec(map[string]interface{}{
-		"max multiline bytes": int64(32),
-		"pattern":             "^DEBUG ",
-		"negate":              true,
-	}, checkMultilineMaxBytes, t)
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"max multiline bytes": int64(10),
+			"pattern":             "^START",
+			"negate":              true,
+		},
+		check.EventCallback,
+		t,
+	)
+
+	// Ensure we reset state after each split (issue #188)
+	// Also ensure we can split a single long line multiple times (issue #188)
+	// Lastly, ensure we flush immediately if we receive max multiline bytes
+	// rather than carrying over a full buffer and then crashing (issue #118)
+	codec.Event(0,  17, "START67890abcdefg")
+	codec.Event(18, 30, "1234567890ab")
+	codec.Event(31, 39, "c1234567")
+	codec.Event(40, 45, "START")
+
+	check.CheckFinalCount()
+
+	offset := codec.Teardown()
+	if offset != 39 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
+func TestMultilineReset(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{4, 7, "DEBUG Next line\nANOTHER line"},
+		},
+		t: t,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"pattern": "^(ANOTHER|NEXT) ",
+			"what":    "previous",
+			"negate":  false,
+		},
+		check.EventCallback,
+		t,
+	)
 
 	// Send some data
 	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "second line")
-	codec.Event(4, 5, "third line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codec.Event(2, 3, "NEXT line")
+	codec.Reset()
+	codec.Event(4, 5, "DEBUG Next line")
+	codec.Event(6, 7, "ANOTHER line")
+	codec.Event(8, 9, "DEBUG Last line")
 
-	if multiline_lines != 2 {
-		t.Logf("Wrong line count received")
-		t.FailNow()
-	}
+	check.CheckFinalCount()
 
 	offset := codec.Teardown()
-	if offset != 5 {
+	if offset != 7 {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }

@@ -12,6 +12,10 @@
   - [Duration](#duration)
   - [Fileglob](#fileglob)
 - [Stream Configuration](#stream-configuration)
+  - [`"add host field"`](#add-host-field)
+  - [`"add offset field"`](#add-offset-field)
+  - [`"add path field"`](#add-path-field)
+  - [`"add timezone field"`](#add-timezone-field)
   - [`"codec"`](#codec)
   - [`"dead time"`](#dead-time)
   - [`"fields"`](#fields)
@@ -166,9 +170,42 @@ Stream Configuration parameters can be specified for file groups within
 entries produced by passing, for example, by passing them through a codec and
 adding extra fields.
 
+### `"add host field"`
+
+*Boolean. Optional. Default: true*
+
+Adds an automatic "host" field to generated events that contains the `"host"`
+value from the general configuration section.
+
+### `"add offset field"`
+
+*Boolean. Optional. Default: true*
+
+Adds an automatic "offset" field to generated events that contains the current
+offset in the current data stream.
+
+*Beware that this value will reset when a file rotates or is truncated and is
+generally not useful. It will be kept configurable to allow full compatibility
+with Logstash Forwarder's traditional behaviour, and from version 2 the default
+will be changed to false.*
+
+### `"add path field"`
+
+*Boolean. Optional. Default: true*
+
+Adds an automatic "path" field to generated events that contains the path to the
+current data stream. For stdin, this field is set to a hyphen, "-".
+
+### `"add timezone field"`
+
+*Boolean. Optional. Default: false*
+
+Adds an automatic "timezone" field to generated events that contains the local
+machine's local timezone in the format, "-0700 MST".
+
 ### `"codec"`
 
-*Codec configuration. Optional. Default: `{ "name": "plain" }`*
+*Codec configuration. Optional. Default: `{ "name": "plain" }`*  
 *Configuration reload will only affect new or resumed files*
 
 *Depending on how log-courier was built, some codecs may not be available. Run
@@ -192,7 +229,7 @@ Aside from "plain", the following codecs are available at this time.
 
 ### `"dead time"`
 
-*Duration. Optional. Default: "24h"*
+*Duration. Optional. Default: "24h"*  
 *Configuration reload will only affect new or resumed files*
 
 If a log file has not been modified in this time period, it will be closed and
@@ -205,7 +242,7 @@ ensure old log files are not kept open preventing deletion.
 
 ### `"fields"`
 
-*Dictionary. Optional*
+*Dictionary. Optional*  
 *Configuration reload will only affect new or resumed files*
 
 Extra fields to attach the event prior to shipping. These can be simple strings,
@@ -257,7 +294,7 @@ A log file to save Log Courier's internal log into. May be used in conjunction w
 
 ### `"host"`
 
-*String. Optional. Default: System FQDN.*
+*String. Optional. Default: System FQDN.*  
 *Configuration reload will only affect new or resumed files*
 
 Every event has an automatic field, "host", that contains the current system

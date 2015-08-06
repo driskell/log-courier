@@ -344,9 +344,12 @@ RecvLoop:
 
 			length, err := t.socket.Read(data[received:])
 			received += length
-			if err == nil || received >= len(data) {
+			if received >= len(data) {
 				// Success
 				return nil, false
+			} else if err == nil {
+				// Keep trying
+				continue
 			} else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
 				// Keep trying
 				continue

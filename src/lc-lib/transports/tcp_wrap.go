@@ -45,8 +45,11 @@ RetrySend:
 
 		n, err = w.tcpsocket.Write(b[length:])
 		length += n
-		if err == nil {
+		if length >= len(b) {
 			return length, err
+		} else if err == nil {
+			// Keep trying
+			continue
 		} else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
 			// Check for shutdown, then try again
 			select {

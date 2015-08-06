@@ -21,11 +21,12 @@ package harvester
 
 import (
 	"fmt"
-	"github.com/driskell/log-courier/src/lc-lib/core"
 	"io"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/driskell/log-courier/src/lc-lib/core"
 )
 
 type HarvesterFinish struct {
@@ -50,6 +51,7 @@ type Harvester struct {
 	codec         core.Codec
 	file          *os.File
 	split         bool
+	timezone      string
 
 	line_speed   float64
 	byte_speed   float64
@@ -79,6 +81,7 @@ func NewHarvester(stream core.Stream, config *core.Config, stream_config *core.S
 		config:        config,
 		stream_config: stream_config,
 		offset:        offset,
+		timezone:      time.Now().Format("-0700 MST"),
 		last_eof:      nil,
 	}
 
@@ -246,8 +249,12 @@ ReadLoop:
 			log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
 			h.file.Seek(0, os.SEEK_SET)
 			h.offset = 0
-			// TODO: How does this impact a partial line reader buffer?
-			// TODO: How does this impact multiline?
+
+			// TODO: Should we be allowing truncation to lose buffer data? Or should
+			//       we be flushing what we have?
+			// Reset line buffer and codec buffers
+			reader.Reset()
+			h.codec.Reset()
 			continue
 		}
 
@@ -271,11 +278,22 @@ ReadLoop:
 
 func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text string) {
 	event := core.Event{
-		"host":    h.config.General.Host,
-		"path":    h.path,
-		"offset":  start_offset,
 		"message": text,
 	}
+
+	if h.stream_config.AddHostField {
+		event["host"] = h.config.General.Host
+	}
+	if h.stream_config.AddPathField {
+		event["path"] = h.path
+	}
+	if h.stream_config.AddOffsetField {
+		event["offset"] = start_offset
+	}
+	if h.stream_config.AddTimezoneField {
+		event["timezone"] = h.timezone
+	}
+
 	for k := range h.stream_config.Fields {
 		event[k] = h.stream_config.Fields[k]
 	}

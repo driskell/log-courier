@@ -33,6 +33,24 @@ module LogCourier
   class Server
     attr_reader :port
 
+    # TODO(driskell): Consolidate singleton into another file
+    class << self
+      @json_adapter
+      @json_parseerror
+
+      def get_json_adapter
+        @json_adapter = MultiJson.adapter.instance if @json_adapter.nil?
+        @json_adapter
+      end
+
+      def get_json_parseerror
+        if @json_parseerror.nil?
+          @json_parseerror = get_json_adapter.class::ParseError
+        end
+        @json_parseerror
+      end
+    end
+
     def initialize(options = {})
       @options = {
         logger:    nil,
@@ -54,10 +72,6 @@ module LogCourier
 
       # Grab the port back and update the logger context
       @port = @server.port
-
-      # Load the json adapter
-      @json_adapter = MultiJson.adapter.instance
-      @json_options = { raw: true }
     end
 
     def run(&block)
@@ -165,17 +179,23 @@ module LogCourier
         data_buf.force_encoding('utf-8')
 
         # Ensure valid encoding
+        invalid_encodings = 0
         unless data_buf.valid_encoding?
           data_buf.chars.map do |c|
-            c.valid_encoding? ? c : "\xEF\xBF\xBD"
+            if c.valid_encoding?
+              c
+            else
+              invalid_encodings += 1
+              "\xEF\xBF\xBD"
+            end
           end
         end
 
         # Decode the JSON
         begin
-          event = @json_adapter.load(data_buf, @json_options)
-        rescue MultiJson::ParseError => e
-          @logger.warn e, :hint => 'JSON parse failure, falling back to plain-text' unless @logger.nil?
+          event = self.class.get_json_adapter.load(data_buf, :raw => true)
+        rescue self.class.get_json_parseerror => e
+          @logger.warn e, :invalid_encodings => invalid_encodings, :hint => 'JSON parse failure, falling back to plain-text' unless @logger.nil?
           event = { 'message' => data_buf }
         end
 

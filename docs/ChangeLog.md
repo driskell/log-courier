@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [1.8](#18)
 - [1.7](#17)
 - [1.6](#16)
 - [1.5](#15)
@@ -22,6 +23,32 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## 1.8
+
+*6th August 2015*
+
+***Log Courier***
+
+* Fix various causes of multiline codec causing Log Courier to crash (#188)
+* Improve handling of file truncation when using codecs (derived from #194)
+* Fix "Unknown message received" errors caused by partial reads which occur
+frequently with Logstash 1.5.3 due to OpenSSL cipher hardening (#208)
+* Fix systemd service configuration providing incorrect arguments to log-courier
+(#204)
+* Implement configuration test before start and restart for Debian upstart init
+script (#189)
+* Implement options to enable/disable automatic fields such as "host", "offset"
+and "path"
+* Implement an option to add a "timezone" field to events containing the local
+machine's timezone in the format "-0700 MST" (#203)
+
+***Logstash Plugins***
+
+* Fix broken JSON parser error handling in input plugin (#200)
+* Fix Logstash shutdown not working with the input plugin
+* Fix broken client certificate verification in the output plugin
+* Fix compatibility with Logstash 1.4 due to missing milestone in both plugins
+
 ## 1.7
 
 *3rd June 2015*
@@ -31,7 +58,7 @@
 The Logstash plugin installation identifier has been changed from
 "logstash-xxxxx-log-courier" to "logstash-xxxxx-courier" in order to meet the
 specification set by the GA release of Logstash 1.5, which is for the identifier
-to match the format "logstash-<type>-<configname>". The configuration name is
+to match the format "logstash-\<type>-\<configname>". The configuration name is
 unchanged and remains "courier" - configurations do not need to be changed.
 
 If you are using Logstash 1.5 and would like to update the plugin you will need
@@ -43,7 +70,7 @@ new version using the new name.
     ./bin/plugin install logstash-input-courier
     ./bin/plugin install logstash-output-courier
 
-*Log Courier*
+***Log Courier***
 
 * Report a configuration error if no servers are specified instead of continuing
 and crashing during startup (#149)
@@ -58,7 +85,7 @@ site-wide convergence of Log Courier instances towards a single server (#161)
 Courier to stop sending events after a connection failure
 * Improve build process to work seamlessly with msysGit on Windows
 
-*Logstash Plugins*
+***Logstash Plugins***
 
 * Rename to logstash-input-courier and logstash-output-courier to meet the
 latest plugin specified and fix the "This plugin isn't well supported" warnings

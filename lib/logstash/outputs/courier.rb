@@ -17,58 +17,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'logstash/version'
+require 'rubygems/version'
+
 module LogStash
   module Outputs
     # Send events using the Log Courier protocol
     class Courier < LogStash::Outputs::Base
       config_name 'courier'
 
+      # Compatibility with Logstash 1.4 requires milestone
+      if Gem::Version.new(LOGSTASH_VERSION) < Gem::Version.new('1.5.0')
+        milestone 2
+      end
+
       # The list of addresses Log Courier should send to
-      config :hosts, :validate => :array, :required => true
+      config :hosts, validate: :array, required: true
 
       # The port to connect to
-      config :port, :validate => :number, :required => true
+      config :port, validate: :number, required: true
 
       # CA certificate for validation of the server
-      config :ssl_ca, :validate => :path, :required => true
+      config :ssl_ca, validate: :path, required: true
 
       # Client SSL certificate to use
-      config :ssl_certificate, :validate => :path
+      config :ssl_certificate, validate: :path
 
       # Client SSL key to use
-      config :ssl_key, :validate => :path
+      config :ssl_key, validate: :path
 
       # SSL key passphrase to use
-      config :ssl_key_passphrase, :validate => :password
+      config :ssl_key_passphrase, validate: :password
 
       # Maximum number of events to spool before forcing a flush
-      config :spool_size, :validate => :number, :default => 1024
+      config :spool_size, validate: :number, default: 1024
 
       # Maximum time to wait for a full spool before forcing a flush
-      config :idle_timeout, :validate => :number, :default => 5
+      config :idle_timeout, validate: :number, default: 5
 
       public
 
       def register
         @logger.info 'Starting courier output'
 
-        options = {
-          logger:             @logger,
-          addresses:          @hosts,
-          port:               @port,
-          ssl_ca:             @ssl_ca,
-          ssl_certificate:    @ssl_certificate,
-          ssl_key:            @ssl_key,
-          ssl_key_passphrase: @ssl_key_passphrase,
-          spool_size:         @spool_size,
-          idle_timeout:       @idle_timeout,
-        }
-
         require 'log-courier/client'
         @client = LogCourier::Client.new(options)
       end
-
-      public
 
       def receive(event)
         return unless output?(event)
@@ -78,6 +72,21 @@ module LogStash
           return
         end
         @client.publish event.to_hash
+      end
+
+      private
+
+      def options
+        result = {}
+
+        [
+          :logger, :addresses, :port, :ssl_ca, :ssl_certificate, :ssl_key,
+          :ssl_key_passphrase, :spool_size, :idle_timeout
+        ].each do |k|
+          result[k] = send(k)
+        end
+
+        result
       end
     end
   end

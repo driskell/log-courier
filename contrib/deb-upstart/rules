@@ -1,0 +1,40 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	$(MAKE) clean keepgoget=yes
+
+override_dh_auto_build:
+	$(MAKE)
+
+override_dh_auto_test:
+	# Maybe tests in future - we'd need to download the ffi gem
+
+override_dh_auto_install:
+	# Install binaries
+	mkdir -p debian/log-courier/usr/sbin
+	install -m 0755 bin/log-courier debian/log-courier/usr/sbin/log-courier
+	mkdir -p debian/log-courier/usr/bin
+	install -m 0755 bin/lc-admin debian/log-courier/usr/bin/lc-admin
+	install -m 0755 bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
+
+	# Install example configuration
+	mkdir -p debian/log-courier/etc/log-courier/examples
+	cp -av docs/examples/* debian/log-courier/etc/log-courier/examples/
+
+	# Install upstart script
+	mkdir -p debian/log-courier/etc/init.d
+	install -m 0755 contrib/initscripts/debian-upstart.init debian/log-courier/etc/init.d/log-courier
+
+	# Make the run dir
+	mkdir -p debian/log-courier/var/run/log-courier
+
+	# Make the state dir
+	mkdir -p debian/log-courier/var/lib/log-courier
+
+	# Install copyright and docs
+	mkdir -p debian/log-courier/usr/share/doc/log-courier
+	install -m 0644 debian/copyright debian/log-courier/usr/share/doc/log-courier/copyright
+	cp -av docs/* debian/log-courier/usr/share/doc/log-courier/

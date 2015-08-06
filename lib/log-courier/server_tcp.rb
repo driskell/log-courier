@@ -188,19 +188,25 @@ module LogCourier
     private
 
     def run_thread(client, peer, &block)
-      # Perform the handshake inside the new thread so we don't block TCP accept
-      if @options[:transport] == 'tls'
-        begin
-          client.accept
-        rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
-          # Handshake failure or other issue
-          @logger.warn 'Connection failed to initialise', :error => e.message, :peer => peer unless @logger.nil?
-          client.close
-          return
+      begin
+        # Perform the handshake inside the new thread so we don't block TCP accept
+        if @options[:transport] == 'tls'
+          begin
+            client.accept
+          rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
+            # Handshake failure or other issue
+            @logger.warn 'Connection failed to initialise', :error => e.message, :peer => peer unless @logger.nil?
+            client.close
+            return
+          end
         end
-      end
 
-      ConnectionTcp.new(@logger, client, peer, @options).run(&block)
+        ConnectionTcp.new(@logger, client, peer, @options).run(&block)
+      rescue ShutdownSignal
+        # Shutting down
+        @logger.info 'Server shutting down, connection closed', :peer => peer unless @logger.nil?
+        return
+      end
     end
   end
 
@@ -228,7 +234,19 @@ module LogCourier
       event.merge! @peer_fields if @peer_fields.length != 0
     end
 
-    def run
+    def run(&block)
+      process_messages &block
+    rescue ShutdownSignal
+      # Shutting down
+      @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
+      return
+    rescue StandardError, NativeException => e
+      # Some other unknown problem
+      @logger.warn e, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
+      return
+    end
+
+    def process_messages
       loop do
         # Read messages
         # Each message begins with a header
@@ -258,7 +276,6 @@ module LogCourier
         # If we EOF next it's a graceful close
         @in_progress = false
       end
-      return
     rescue TimeoutError
       # Timeout of the connection, we were idle too long without a ping/pong
       @logger.warn 'Connection timed out', :peer => @peer unless @logger.nil?
@@ -281,14 +298,6 @@ module LogCourier
     rescue ProtocolError => e
       # Connection abort request due to a protocol error
       @logger.warn 'Protocol error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
-      return
-    rescue ShutdownSignal
-      # Shutting down
-      @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
-      return
-    rescue StandardError, NativeException => e
-      # Some other unknown problem
-      @logger.warn e, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
       return
     ensure
       @fd.close rescue nil

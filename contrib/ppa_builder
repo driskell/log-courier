@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# This script is used by the maintainer to push to Log Courier PPA
+# Usage:
+#   git clone https://github.com/driskell/log-courier log-courier
+#   ./log-courier/contrib/ppa_builder.sh
+
+# Grab the release if specified
+RELEASE="$1"
+if [ -z "$RELEASE" ]; then
+  RELEASE=1
+fi
+
+# Grab the ubuntu release if specified
+DRELEASE="$2"
+if [ -z "$DRELEASE" ]; then
+  DRELEASE=1
+fi
+
+# Calculate prefix
+PREFIX=log-courier_$(cat log-courier/version_short.txt)
+
+# Archive up the original code if necessary
+if [ ! -f "${PREFIX}.orig.tar.gz" ]; then
+  tar -czf "${PREFIX}.orig.tar.gz" log-courier
+fi
+
+# Build a distribution and dput to PPA
+build_package()
+{
+  local TYPE=$1
+  local D=$2
+
+  # Ensure on latest in case we pushed up packaging fixes
+  (
+    cd log-courier
+    git reset --hard
+    git pull
+  )
+
+  # Copy deb folder into place
+  command rm -rf log-courier/debian
+  command cp -rf "log-courier/contrib/deb-$TYPE" log-courier/debian
+
+  (
+    cd log-courier
+
+    # Update the change log
+    dch \
+      --no-force-save-on-release \
+      --controlmaint \
+      --distribution "$D" \
+      -b \
+      --newversion "$(cat version_short.txt)-${RELEASE}~${D}${DRELEASE}" \
+      "Package for ${D}"
+
+    # Commit any packaging fixes
+    dpkg-source --commit
+
+    # Build
+    debuild -S -sa
+  )
+
+  # Dput
+  dput log-courier-ppa "${PREFIX}-${RELEASE}~${D}${DRELEASE}_source.changes"
+}
+
+for D in precise trusty utopic; do
+  build_package upstart "$D"
+done
+for D in vivid wily; do
+  build_package systemd "$D"
+done

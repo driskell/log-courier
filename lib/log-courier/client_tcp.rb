@@ -68,12 +68,20 @@ module LogCourier
         begin
           run_send io_control
         rescue ShutdownSignal
+        rescue StandardError, NativeException => e
+          @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
+          io_control << ['F']
+          return
         end
       end
       @recv_thread = Thread.new do
         begin
           run_recv io_control
         rescue ShutdownSignal
+        rescue StandardError, NativeException => e
+          @logger.warn e, :hint => 'Unknown read error' unless @logger.nil?
+          io_control << ['F']
+          return
         end
       end
       return
@@ -151,12 +159,6 @@ module LogCourier
       @logger.warn 'Write error', :error => e.message unless @logger.nil?
       io_control << ['F']
       return
-    rescue ShutdownSignal
-      raise
-    rescue StandardError, NativeException => e
-      @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
-      io_control << ['F']
-      return
     end
 
     def run_recv(io_control)
@@ -194,12 +196,6 @@ module LogCourier
       @logger.warn 'Connection closed by server' unless @logger.nil?
       io_control << ['F']
       return
-    rescue ShutdownSignal
-      raise
-    rescue StandardError, NativeException => e
-      @logger.warn e, :hint => 'Unknown read error' unless @logger.nil?
-      io_control << ['F']
-      return
     end
 
     def tls_connect
@@ -234,7 +230,7 @@ module LogCourier
           ssl.cert_store = cert_store
           ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
 
-          @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket)
+          @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket, ssl)
 
           socket = @ssl_client.connect
 

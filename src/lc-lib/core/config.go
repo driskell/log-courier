@@ -23,13 +23,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/op/go-logging"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
+
+	logging "github.com/op/go-logging"
 )
 
 const (
@@ -52,7 +53,11 @@ const (
 	default_NetworkConfig_Reconnect          time.Duration = 1 * time.Second
 	default_NetworkConfig_MaxPendingPayloads int64         = 10
 	default_StreamConfig_Codec               string        = "plain"
-	default_StreamConfig_DeadTime            int64         = 86400
+	default_StreamConfig_DeadTime            time.Duration = 24 * time.Hour
+	default_StreamConfig_AddHostField        bool          = true
+	default_StreamConfig_AddOffsetField      bool          = true
+	default_StreamConfig_AddPathField        bool          = true
+	default_StreamConfig_AddTimezoneField    bool          = false
 )
 
 var (
@@ -84,6 +89,22 @@ type GeneralConfig struct {
 	Host             string        `config:"host"`
 }
 
+func (gc *GeneralConfig) InitDefaults() {
+	gc.AdminEnabled = default_GeneralConfig_AdminEnabled
+	gc.AdminBind = default_GeneralConfig_AdminBind
+	gc.PersistDir = default_GeneralConfig_PersistDir
+	gc.ProspectInterval = default_GeneralConfig_ProspectInterval
+	gc.SpoolSize = default_GeneralConfig_SpoolSize
+	gc.SpoolMaxBytes = default_GeneralConfig_SpoolMaxBytes
+	gc.SpoolTimeout = default_GeneralConfig_SpoolTimeout
+	gc.LineBufferBytes = default_GeneralConfig_LineBufferBytes
+	gc.MaxLineBytes = default_GeneralConfig_MaxLineBytes
+	gc.LogLevel = default_GeneralConfig_LogLevel
+	gc.LogStdout = default_GeneralConfig_LogStdout
+	gc.LogSyslog = default_GeneralConfig_LogSyslog
+	// NOTE: Empty string for Host means calculate it automatically, so leave it
+}
+
 type NetworkConfig struct {
 	Transport          string        `config:"transport"`
 	Servers            []string      `config:"servers"`
@@ -97,6 +118,15 @@ type NetworkConfig struct {
 	TransportFactory TransportFactory
 }
 
+func (nc *NetworkConfig) InitDefaults() {
+	nc.Rfc2782Srv = default_NetworkConfig_Rfc2782Srv
+	nc.Transport = default_NetworkConfig_Transport
+	nc.Rfc2782Service = default_NetworkConfig_Rfc2782Service
+	nc.Timeout = default_NetworkConfig_Timeout
+	nc.Reconnect = default_NetworkConfig_Reconnect
+	nc.MaxPendingPayloads = default_NetworkConfig_MaxPendingPayloads
+}
+
 type CodecConfigStub struct {
 	Name string `config:"name"`
 
@@ -104,11 +134,24 @@ type CodecConfigStub struct {
 }
 
 type StreamConfig struct {
-	Fields   map[string]interface{} `config:"fields"`
-	Codec    CodecConfigStub        `config:"codec"`
-	DeadTime time.Duration          `config:"dead time"`
+	Fields           map[string]interface{} `config:"fields"`
+	AddHostField     bool                   `config:"add host field"`
+	AddOffsetField   bool                   `config:"add offset field"`
+	AddPathField     bool                   `config:"add path field"`
+	AddTimezoneField bool                   `config:"add timezone field"`
+	Codec            CodecConfigStub        `config:"codec"`
+	DeadTime         time.Duration          `config:"dead time"`
 
 	CodecFactory CodecFactory
+}
+
+func (sc *StreamConfig) InitDefaults() {
+	sc.Codec.Name = default_StreamConfig_Codec
+	sc.DeadTime = default_StreamConfig_DeadTime
+	sc.AddHostField = default_StreamConfig_AddHostField
+	sc.AddOffsetField = default_StreamConfig_AddOffsetField
+	sc.AddPathField = default_StreamConfig_AddPathField
+	sc.AddTimezoneField = default_StreamConfig_AddTimezoneField
 }
 
 type FileConfig struct {
@@ -237,7 +280,7 @@ func (c *Config) parseSyntaxError(js []byte, err error) error {
 		return err
 	}
 
-	start := bytes.LastIndex(js[:json_err.Offset], []byte("\n"))+1
+	start := bytes.LastIndex(js[:json_err.Offset], []byte("\n")) + 1
 	end := bytes.Index(js[start:], []byte("\n"))
 	if end >= 0 {
 		end += start
@@ -245,7 +288,7 @@ func (c *Config) parseSyntaxError(js []byte, err error) error {
 		end = len(js)
 	}
 
-	line, pos := bytes.Count(js[:start], []byte("\n")), int(json_err.Offset) - start - 1
+	line, pos := bytes.Count(js[:start], []byte("\n")), int(json_err.Offset)-start-1
 
 	var posStr string
 	if pos > 0 {
@@ -271,13 +314,6 @@ func (c *Config) Load(path string) (err error) {
 	if err = json.Unmarshal(data.Bytes(), &raw_config); err != nil {
 		return c.parseSyntaxError(data.Bytes(), err)
 	}
-
-	// Fill in defaults where the zero-value is a valid setting
-	c.General.AdminEnabled = default_GeneralConfig_AdminEnabled
-	c.General.LogLevel = default_GeneralConfig_LogLevel
-	c.General.LogStdout = default_GeneralConfig_LogStdout
-	c.General.LogSyslog = default_GeneralConfig_LogSyslog
-	c.Network.Rfc2782Srv = default_NetworkConfig_Rfc2782Srv
 
 	// Populate configuration - reporting errors on spelling mistakes etc.
 	if err = c.PopulateConfig(c, "/", raw_config); err != nil {
@@ -311,47 +347,18 @@ func (c *Config) Load(path string) (err error) {
 		}
 	}
 
-	if c.General.AdminBind == "" {
-		c.General.AdminBind = default_GeneralConfig_AdminBind
-	}
-
-	if c.General.PersistDir == "" {
-		c.General.PersistDir = default_GeneralConfig_PersistDir
-	}
-
-	if c.General.ProspectInterval == time.Duration(0) {
-		c.General.ProspectInterval = default_GeneralConfig_ProspectInterval
-	}
-
-	if c.General.SpoolSize == 0 {
-		c.General.SpoolSize = default_GeneralConfig_SpoolSize
-	}
-
 	// Enforce maximum of 2 GB since event transmit length is uint32
-	if c.General.SpoolMaxBytes == 0 {
-		c.General.SpoolMaxBytes = default_GeneralConfig_SpoolMaxBytes
-	}
 	if c.General.SpoolMaxBytes > 2*1024*1024*1024 {
 		err = fmt.Errorf("/general/spool max bytes can not be greater than 2 GiB")
 		return
 	}
 
-	if c.General.SpoolTimeout == time.Duration(0) {
-		c.General.SpoolTimeout = default_GeneralConfig_SpoolTimeout
-	}
-
-	if c.General.LineBufferBytes == 0 {
-		c.General.LineBufferBytes = default_GeneralConfig_LineBufferBytes
-	}
 	if c.General.LineBufferBytes < 1 {
 		err = fmt.Errorf("/general/line buffer bytes must be greater than 1")
 		return
 	}
 
 	// Max line bytes can not be larger than spool max bytes
-	if c.General.MaxLineBytes == 0 {
-		c.General.MaxLineBytes = default_GeneralConfig_MaxLineBytes
-	}
 	if c.General.MaxLineBytes > c.General.SpoolMaxBytes {
 		err = fmt.Errorf("/general/max line bytes can not be greater than /general/spool max bytes")
 		return
@@ -372,10 +379,6 @@ func (c *Config) Load(path string) (err error) {
 		return
 	}
 
-	if c.Network.Transport == "" {
-		c.Network.Transport = default_NetworkConfig_Transport
-	}
-
 	if registrar_func, ok := registered_Transports[c.Network.Transport]; ok {
 		if c.Network.TransportFactory, err = registrar_func(c, "/network/", c.Network.Unused, c.Network.Transport); err != nil {
 			return
@@ -383,19 +386,6 @@ func (c *Config) Load(path string) (err error) {
 	} else {
 		err = fmt.Errorf("Unrecognised transport '%s'", c.Network.Transport)
 		return
-	}
-
-	if c.Network.Rfc2782Service == "" {
-		c.Network.Rfc2782Service = default_NetworkConfig_Rfc2782Service
-	}
-	if c.Network.Timeout == time.Duration(0) {
-		c.Network.Timeout = default_NetworkConfig_Timeout
-	}
-	if c.Network.Reconnect == time.Duration(0) {
-		c.Network.Reconnect = default_NetworkConfig_Reconnect
-	}
-	if c.Network.MaxPendingPayloads == 0 {
-		c.Network.MaxPendingPayloads = default_NetworkConfig_MaxPendingPayloads
 	}
 
 	for k := range c.Files {
@@ -417,20 +407,12 @@ func (c *Config) Load(path string) (err error) {
 }
 
 func (c *Config) initStreamConfig(path string, stream_config *StreamConfig) (err error) {
-	if stream_config.Codec.Name == "" {
-		stream_config.Codec.Name = default_StreamConfig_Codec
-	}
-
 	if registrar_func, ok := registered_Codecs[stream_config.Codec.Name]; ok {
 		if stream_config.CodecFactory, err = registrar_func(c, path, stream_config.Codec.Unused, stream_config.Codec.Name); err != nil {
 			return
 		}
 	} else {
 		return fmt.Errorf("Unrecognised codec '%s' for %s", stream_config.Codec.Name, path)
-	}
-
-	if stream_config.DeadTime == time.Duration(0) {
-		stream_config.DeadTime = time.Duration(default_StreamConfig_DeadTime) * time.Second
 	}
 
 	// TODO: EDGE CASE: Event transmit length is uint32, if fields length is rediculous we will fail
@@ -444,7 +426,11 @@ func (c *Config) initStreamConfig(path string, stream_config *StreamConfig) (err
 //       or an error is reported if "Unused" is not available
 //       We can then take the unused configuration dynamically at runtime based on another value
 func (c *Config) PopulateConfig(config interface{}, config_path string, raw_config map[string]interface{}) (err error) {
-	vconfig := reflect.ValueOf(config).Elem()
+	vconfig := reflect.ValueOf(config)
+	if initDefaults := vconfig.MethodByName("InitDefaults"); initDefaults.IsValid() {
+		initDefaults.Call([]reflect.Value{})
+	}
+	vconfig = vconfig.Elem()
 FieldLoop:
 	for i := 0; i < vconfig.NumField(); i++ {
 		field := vconfig.Field(i)
@@ -467,19 +453,20 @@ FieldLoop:
 		if tag == "" {
 			continue
 		}
-		if _, ok := raw_config[tag]; ok {
-			if field.Kind() == reflect.Struct {
-				if reflect.TypeOf(raw_config[tag]).Kind() == reflect.Map {
-					if err = c.PopulateConfig(field.Addr().Interface(), fmt.Sprintf("%s%s/", config_path, tag), raw_config[tag].(map[string]interface{})); err != nil {
-						return
-					}
-					delete(raw_config, tag)
-					continue
-				} else {
+		if field.Kind() == reflect.Struct {
+			if _, ok := raw_config[tag]; ok {
+				if reflect.TypeOf(raw_config[tag]).Kind() != reflect.Map {
 					err = fmt.Errorf("Option %s%s must be a hash", config_path, tag)
 					return
 				}
+			} else {
+				raw_config[tag] = map[string]interface{}{}
 			}
+			if err = c.PopulateConfig(field.Addr().Interface(), fmt.Sprintf("%s%s/", config_path, tag), raw_config[tag].(map[string]interface{})); err != nil {
+				return
+			}
+			delete(raw_config, tag)
+		} else if _, ok := raw_config[tag]; ok {
 			value := reflect.ValueOf(raw_config[tag])
 			if value.Type().AssignableTo(field.Type()) {
 				field.Set(value)
