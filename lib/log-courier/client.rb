@@ -31,11 +31,21 @@ module LogCourier
 
   # Describes a pending payload
   class PendingPayload
+    # TODO(driskell): Consolidate singleton into another file
     class << self
       @json_adapter
+      @json_parseerror
+
       def get_json_adapter
         @json_adapter = MultiJson.adapter.instance if @json_adapter.nil?
-        return @json_adapter
+        @json_adapter
+      end
+
+      def get_json_parseerror
+        if @json_parseerror.nil?
+          @json_parseerror = get_json_adapter.class::ParseError
+        end
+        @json_parseerror
       end
     end
 
@@ -66,7 +76,7 @@ module LogCourier
       end
 
       # Generate and store the payload
-      @payload = nonce + buffer.flush(Zlib::FINISH)
+      @payload = nonce + buffer.finish()
       @last_sequence = 0
       @sequence_len = @events.length
     end
