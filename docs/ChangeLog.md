@@ -44,6 +44,7 @@ machine's timezone in the format "-0700 MST" (#203)
 
 ***Logstash Plugins***
 
+* Fix broken JSON parser error handling in input plugin (#200)
 * Fix Logstash shutdown not working with the input plugin
 * Fix broken client certificate verification in the output plugin
 * Fix compatibility with Logstash 1.4 due to missing milestone in both plugins
