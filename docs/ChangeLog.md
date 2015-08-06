@@ -25,7 +25,7 @@
 
 ## 1.8
 
-*???*
+*6th August 2015*
 
 ***Log Courier***
 
