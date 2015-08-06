@@ -219,8 +219,8 @@ simply ships the events unchanged.
 All configurations are a dictionary with at least a "name" key. Additional
 options can be provided if the specified codec allows.
 
-{ "name": "codec-name" }
-{ "name": "codec-name", "option1": "value", "option2": "42" }
+* `{ "name": "codec-name" }`
+* `{ "name": "codec-name", "option1": "value", "option2": "42" }`
 
 Aside from "plain", the following codecs are available at this time.
 
