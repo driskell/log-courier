@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [1.8.1](#181)
 - [1.8](#18)
 - [1.7](#17)
 - [1.6](#16)
@@ -22,6 +23,24 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## 1.8.1
+
+*7th August 2015*
+
+***Log Courier***
+
+No Changes
+
+***DEB Packaging***
+
+* Fix a regression in the upstart script due to the addition of a configtest
+(#217 - Thanks to @eliecharra)
+
+***Logstash Plugins***
+
+* Fix a regression with `ssl_verify_ca` (#214)
+* Fix a regression with the output plugin `hosts` setting (#215)
 
 ## 1.8
 
