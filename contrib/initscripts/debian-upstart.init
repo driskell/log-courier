@@ -107,6 +107,7 @@ case "$1" in
     else
       log_end_msg 0
     fi
+    ;;
   *)
     echo "Usage: $0 {start|stop|status|restart|force-reload|configtest}" >&2
     exit 3
