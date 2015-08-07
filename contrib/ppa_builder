@@ -65,7 +65,7 @@ build_package()
   dput log-courier-ppa "${PREFIX}-${RELEASE}~${D}${DRELEASE}_source.changes"
 }
 
-for D in precise trusty utopic; do
+for D in precise trusty; do
   build_package upstart "$D"
 done
 for D in vivid wily; do

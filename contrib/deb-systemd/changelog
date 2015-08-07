@@ -1,3 +1,9 @@
+log-courier (1.8-1) UNRELEASED; urgency=low
+
+  * Upgrade to v1.8
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Thu, 6 Aug 2015 14:45:00 +0100
+
 log-courier (1.7-2) UNRELEASED; urgency=low
 
   * Separate systemd and upstart packaging
