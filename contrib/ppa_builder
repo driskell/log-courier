@@ -65,9 +65,7 @@ build_package()
   dput log-courier-ppa "${PREFIX}-${RELEASE}~${D}${DRELEASE}_source.changes"
 }
 
-# TODO(driskell): precise requires a dependency on another PPA in order to pull
-#                 in Golang 1.2 minimum requirement
-for D in trusty; do
+for D in precise trusty; do
   build_package upstart "$D"
 done
 for D in vivid wily; do

@@ -89,6 +89,11 @@ module LogStash
 
         result
       end
+
+      def addresses
+        # TODO: Fix this naming inconsistency
+        @hosts
+      end
     end
   end
 end

@@ -121,7 +121,7 @@ module LogStash
         [
           :address, :port, :transport, :ssl_certificate, :ssl_key,
           :ssl_key_passphrase, :ssl_verify, :ssl_verify_default_ca,
-          :curve_secret_key
+          :ssl_verify_ca, :curve_secret_key
         ].each do |k|
           result[k] = send(k)
         end
