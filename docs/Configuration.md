@@ -364,12 +364,10 @@ This setting can not be greater than the `spool max bytes` setting.
 
 ### `"persist directory"`
 
-*String. Optional. Default: "."*  
+*String. Required*  
 *Requires restart*
 
-The directory that Log Courier should store its persistence data in. The default
-is the current working directory of Log Courier which is specified using the
-path, `"."`.
+The directory that Log Courier should store its persistence data in.
 
 At the time of writing, the only file saved here is `.log-courier` that
 contains the offset in the file that Log Courier needs to resume from after a

@@ -36,7 +36,6 @@ import (
 const (
 	default_GeneralConfig_AdminEnabled       bool          = false
 	default_GeneralConfig_AdminBind          string        = "tcp:127.0.0.1:1234"
-	default_GeneralConfig_PersistDir         string        = "."
 	default_GeneralConfig_ProspectInterval   time.Duration = 10 * time.Second
 	default_GeneralConfig_SpoolSize          int64         = 1024
 	default_GeneralConfig_SpoolMaxBytes      int64         = 10485760
@@ -66,27 +65,26 @@ var (
 )
 
 type General struct {
-	AdminEnabled     bool          `config:"admin enabled"`
-	AdminBind        string        `config:"admin listen address"`
-	PersistDir       string        `config:"persist directory"`
-	ProspectInterval time.Duration `config:"prospect interval"`
-	SpoolSize        int64         `config:"spool size"`
-	SpoolMaxBytes    int64         `config:"spool max bytes"`
-	SpoolTimeout     time.Duration `config:"spool timeout"`
-	LineBufferBytes  int64         `config:"line buffer bytes"`
-	MaxLineBytes     int64         `config:"max line bytes"`
-	LogLevel         logging.Level `config:"log level"`
-	LogStdout        bool          `config:"log stdout"`
-	LogSyslog        bool          `config:"log syslog"`
-	LogFile          string        `config:"log file"`
-	Host             string        `config:"host"`
+	AdminEnabled     bool                   `config:"admin enabled"`
+	AdminBind        string                 `config:"admin listen address"`
+	PersistDir       string                 `config:"persist directory"`
+	ProspectInterval time.Duration          `config:"prospect interval"`
+	SpoolSize        int64                  `config:"spool size"`
+	SpoolMaxBytes    int64                  `config:"spool max bytes"`
+	SpoolTimeout     time.Duration          `config:"spool timeout"`
+	LineBufferBytes  int64                  `config:"line buffer bytes"`
+	MaxLineBytes     int64                  `config:"max line bytes"`
+	LogLevel         logging.Level          `config:"log level"`
+	LogStdout        bool                   `config:"log stdout"`
+	LogSyslog        bool                   `config:"log syslog"`
+	LogFile          string                 `config:"log file"`
+	Host             string                 `config:"host"`
 	GlobalFields     map[string]interface{} `config:"global fields"`
 }
 
 func (gc *General) InitDefaults() {
 	gc.AdminEnabled = default_GeneralConfig_AdminEnabled
 	gc.AdminBind = default_GeneralConfig_AdminBind
-	gc.PersistDir = default_GeneralConfig_PersistDir
 	gc.ProspectInterval = default_GeneralConfig_ProspectInterval
 	gc.SpoolSize = default_GeneralConfig_SpoolSize
 	gc.SpoolMaxBytes = default_GeneralConfig_SpoolMaxBytes
@@ -343,6 +341,11 @@ func (c *Config) Load(path string) (err error) {
 				return
 			}
 		}
+	}
+
+	if c.General.PersistDir == "" {
+		err = fmt.Errorf("/general/persist directory must be specified")
+		return
 	}
 
 	// Enforce maximum of 2 GB since event transmit length is uint32
