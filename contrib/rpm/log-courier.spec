@@ -6,7 +6,7 @@ Summary: Log Courier
 Name: log-courier
 Version: 1.8
 Release: 1%{dist}
-License: GPL
+License: Apache
 Group: System Environment/Libraries
 Packager: Jason Woods <packages@jasonwoods.me.uk>
 URL: https://github.com/driskell/log-courier
