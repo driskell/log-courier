@@ -107,6 +107,10 @@ module LogStash
         end
       end
 
+      def stop
+        @log_courier.stop
+      end
+
       private
 
       def options
