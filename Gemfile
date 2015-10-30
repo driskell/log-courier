@@ -10,7 +10,7 @@ gem 'oj', '~> 2.11', :platforms => :mri
 gem 'jrjackson', '~> 0.2',  :platforms => :jruby
 
 # Profiler for MRI
-gem 'ruby-prof', '~> 0.15', :platforms => :mri, :group => 'development'
+gem 'ruby-prof', '~> 0.15', :platforms => :mri, :group => 'test'
 
 # Tests
 gem 'rspec', '~> 3.1', :group => 'test'
