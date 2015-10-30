@@ -1,0 +1,42 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    cabin (0.7.2)
+    diff-lcs (1.2.5)
+    ffi (1.9.10)
+    ffi-rzmq (2.0.4)
+      ffi-rzmq-core (>= 1.0.1)
+    ffi-rzmq-core (1.0.4)
+      ffi (~> 1.9)
+    multi_json (1.11.2)
+    oj (2.13.0)
+    rspec (3.3.0)
+      rspec-core (~> 3.3.0)
+      rspec-expectations (~> 3.3.0)
+      rspec-mocks (~> 3.3.0)
+    rspec-core (3.3.2)
+      rspec-support (~> 3.3.0)
+    rspec-expectations (3.3.1)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.3.0)
+    rspec-mocks (3.3.2)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.3.0)
+    rspec-support (3.3.0)
+    ruby-prof (0.15.8)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  cabin (~> 0.6)
+  ffi-rzmq (~> 2.0)
+  jrjackson (~> 0.2)
+  multi_json (~> 1.10)
+  oj (~> 2.11)
+  rspec (~> 3.1)
+  rspec-core (~> 3.1)
+  ruby-prof (~> 0.15)
+
+BUNDLED WITH
+   1.10.6

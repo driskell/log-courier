@@ -16,8 +16,10 @@
 
 $LOAD_PATH << File.join(File.dirname(File.dirname(File.dirname(__FILE__))), 'lib')
 
+require 'fileutils'
 require 'lib/helpers/common'
 require 'lib/logfile'
+require 'socket'
 
 TEMP_PATH = File.join(File.dirname(File.dirname(__FILE__)), 'tmp')
 STARTUP_WAIT_TIME = 2
