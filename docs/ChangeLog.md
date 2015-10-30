@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [1.8.2](#182)
 - [1.8.1](#181)
 - [1.8](#18)
 - [1.7](#17)
@@ -23,6 +24,23 @@
 - [Pre-0.10](#pre-010)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## 1.8.2
+
+*30th October 2015*
+
+***Log Courier***
+
+No Changes
+
+***RPM Packaging***
+
+* Fixed incorrect license specification - the spec file specified GPL which was
+incorrect - the license is Apache. The spec file has been updated.
+
+***Logstash Plugins***
+
+* Introduce compatibility with Logstash 2.0.0 (#245)
 
 ## 1.8.1
 

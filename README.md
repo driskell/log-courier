@@ -101,7 +101,7 @@ then be installed using `yum install log-courier`.
 
 * **CentOS/RedHat 6.x**: [driskell-log-courier-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-6.repo)
 * **CentOS/RedHat 7.x**:
-[driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-7.repo)
+[driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-7/driskell-log-courier-epel-7.repo)
 
 Once installed, create a configuration file at
 `/etc/log-courier/log-courier.conf` to suit your needs, then start the Log
