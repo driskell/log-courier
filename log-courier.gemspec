@@ -1,8 +1,25 @@
+# Pull version from git if we're cloned (git command sure to exist)
+# Otherwise, if in an archive, use version.txt, which is the last stable version
+if File.directory? '.git'
+  version = \
+    `git describe | sed 's/-\([0-9][0-9]*\)-\([0-9a-z][0-9a-z]*\)$/-\1.\2/g'`
+  version.sub!(/^v/, '')
+else
+  version = IO.read 'version.txt'
+end
+
+version.chomp!
+
+# Write the version.rb file
+version_rb = IO.read 'lib/log-courier/version.rb.tmpl'
+version_rb.gsub!('<VERSION>', version)
+IO.write 'lib/log-courier/version.rb', version_rb
+
 Gem::Specification.new do |gem|
   gem.name              = 'log-courier'
-  gem.version           = '<VERSION>'
+  gem.version           = version
   gem.description       = 'Log Courier library'
-  gem.summary           = 'Receive events from Log Courier and transmit between LogStash instances'
+  gem.summary           = 'Ruby implementation of the Log Courier protocol'
   gem.homepage          = 'https://github.com/driskell/log-courier'
   gem.authors           = ['Jason Woods']
   gem.email             = ['devel@jasonwoods.me.uk']

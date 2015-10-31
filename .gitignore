@@ -1,0 +1,9 @@
+/.bundle
+/.vagrant
+/*.gem
+/Gemfile.lock
+/lib/log-courier/version.rb
+/node_modules
+/pkg
+/spec/tmp
+/vendor

@@ -76,7 +76,7 @@ module LogCourier
 
     def run(&block)
       # TODO: Make queue size configurable
-      event_queue = EventQueue.new 1
+      @event_queue = EventQueue.new 1
       server_thread = nil
 
       begin
@@ -87,7 +87,7 @@ module LogCourier
             when 'PING'
               process_ping message, comm
             when 'JDAT'
-              process_jdat message, comm, event_queue
+              process_jdat message, comm, @event_queue
             else
               if comm.peer.nil?
                 @logger.warn 'Unknown message received', :from => 'unknown' unless @logger.nil?
@@ -102,7 +102,9 @@ module LogCourier
         end
 
         loop do
-          block.call event_queue.pop
+          event = @event_queue.pop
+          break if event.nil?
+          block.call event
         end
       ensure
         # Signal the server thread to stop
@@ -112,6 +114,10 @@ module LogCourier
         end
       end
       return
+    end
+
+    def stop
+      @event_queue << nil
     end
 
     private
