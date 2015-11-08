@@ -23,7 +23,7 @@ task :update do
 end
 
 task :release => [:package] do
-  sh "gem push Xlog-courier-#{gemspec.version}.gem"
+  sh "gem push pkg/log-courier-#{gemspec.version}.gem"
 end
 
 task :clean do
