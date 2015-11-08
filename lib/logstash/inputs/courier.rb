@@ -124,7 +124,7 @@ module LogStash
           raw_events: RAW_EVENTS
         }
 
-        add_logstash_options result
+        add_plugin_options result
         add_override_options result
       end
 
