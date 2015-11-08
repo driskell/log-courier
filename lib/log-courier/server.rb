@@ -53,8 +53,9 @@ module LogCourier
 
     def initialize(options = {})
       @options = {
-        logger:    nil,
-        transport: 'tls',
+        logger:     nil,
+        transport:  'tls',
+        raw_events: true,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -199,7 +200,7 @@ module LogCourier
 
         # Decode the JSON
         begin
-          event = self.class.get_json_adapter.load(data_buf, :raw => true)
+          event = self.class.get_json_adapter.load(data_buf, :raw => @options[:raw_events])
         rescue self.class.get_json_parseerror => e
           @logger.warn e, :invalid_encodings => invalid_encodings, :hint => 'JSON parse failure, falling back to plain-text' unless @logger.nil?
           event = { 'message' => data_buf }
