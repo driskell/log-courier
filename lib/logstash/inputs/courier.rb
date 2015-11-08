@@ -121,7 +121,7 @@ module LogStash
 
       def options
         result = {
-          raw_events: self.RAW_EVENTS
+          raw_events: RAW_EVENTS
         }
 
         add_logstash_options result
