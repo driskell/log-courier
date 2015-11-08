@@ -1,0 +1,5 @@
+/.bundle
+/.vagrant
+/pkg
+/spec/tmp
+/vendor
