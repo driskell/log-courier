@@ -20,7 +20,7 @@ Gem::Specification.new do |gem|
   gem.version           = version
   gem.description       = 'Log Courier library'
   gem.summary           = 'Ruby implementation of the Log Courier protocol'
-  gem.homepage          = 'https://github.com/driskell/log-courier'
+  gem.homepage          = 'https://github.com/driskell/ruby-log-courier'
   gem.authors           = ['Jason Woods']
   gem.email             = ['devel@jasonwoods.me.uk']
   gem.licenses          = ['Apache']
