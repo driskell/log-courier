@@ -18,7 +18,7 @@ end
 
 task :update do
   Bundler.with_clean_env do
-    sh 'bundle install --path vendor/bundle'
+    sh 'bundle install --no-deployment --path vendor/bundle'
   end
 end
 

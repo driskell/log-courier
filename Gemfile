@@ -2,7 +2,7 @@ source 'https://rubygems.org'
 
 gemspec
 
-# Rubocop
+gem 'rake', :group => 'test'
 gem 'rubocop', :group => 'test'
 
 # Profiler for MRI
