@@ -18,7 +18,7 @@ end
 
 task :update do
   Bundler.with_clean_env do
-    sh 'bundle install --no-deployment'
+    sh 'bundle install --path vendor/bundle'
   end
 end
 
@@ -30,5 +30,4 @@ task :clean do
   sh 'rm -rf .bundle'
   sh 'rm -rf pkg'
   sh 'rm -rf vendor'
-  sh 'rm -rf *.gem'
 end
