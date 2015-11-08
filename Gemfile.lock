@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    logstash-output-courier (1.8.1)
+    logstash-output-courier (1.8.4)
       log-courier (= 1.8.3)
       logstash-core (>= 1.4, < 3)
 
