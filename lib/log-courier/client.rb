@@ -72,7 +72,7 @@ module LogCourier
       events.each do |event|
         json_data = self.class.get_json_adapter.dump(event)
         # Add length and then the data
-        buffer << [json_data.length].pack('N') << json_data
+        buffer << [json_data.bytesize].pack('N') << json_data
       end
 
       # Generate and store the payload
@@ -435,7 +435,7 @@ module LogCourier
 
     def process_pong(message)
       # Sanity
-      fail ProtocolError, "Unexpected data attached to pong message (#{message.length})" if message.length != 0
+      fail ProtocolError, "Unexpected data attached to pong message (#{message.bytesize})" if message.bytesize != 0
 
       @logger.debug 'PONG message received' unless @logger.nil? || !@logger.debug?
 
@@ -446,7 +446,7 @@ module LogCourier
 
     def process_ackn(message)
       # Sanity
-      fail ProtocolError, "ACKN message size invalid (#{message.length})" if message.length != 20
+      fail ProtocolError, "ACKN message size invalid (#{message.bytesize})" if message.bytesize != 20
 
       # Grab nonce
       nonce, sequence = message.unpack('a16N')

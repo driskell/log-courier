@@ -18,12 +18,12 @@ end
 
 task :update do
   Bundler.with_clean_env do
-    sh 'bundle install --path vendor/bundle'
+    sh 'bundle install --no-deployment --path vendor/bundle'
   end
 end
 
 task :release => [:package] do
-  sh "gem push Xlog-courier-#{gemspec.version}.gem"
+  sh "gem push pkg/log-courier-#{gemspec.version}.gem"
 end
 
 task :clean do

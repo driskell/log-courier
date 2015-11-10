@@ -125,8 +125,8 @@ module LogCourier
 
     def process_ping(message, comm)
       # Size of message should be 0
-      if message.length != 0
-        fail ProtocolError, "unexpected data attached to ping message (#{message.length})"
+      if message.bytesize != 0
+        fail ProtocolError, "unexpected data attached to ping message (#{message.bytesize})"
       end
 
       # PONG!
@@ -142,8 +142,8 @@ module LogCourier
       # OK - first is a nonce - we send this back with sequence acks
       # This allows the client to know what is being acknowledged
       # Nonce is 16 so check we have enough
-      if message.length < 17
-        fail ProtocolError, "JDAT message too small (#{message.length})"
+      if message.bytesize < 17
+        fail ProtocolError, "JDAT message too small (#{message.bytesize})"
       end
 
       nonce = message[0...16]
@@ -155,7 +155,7 @@ module LogCourier
       end
 
       # The remainder of the message is the compressed data block
-      message = StringIO.new Zlib::Inflate.inflate(message[16...message.length])
+      message = StringIO.new Zlib::Inflate.inflate(message.byteslice(16, message.bytesize))
 
       # Message now contains JSON encoded events
       # They are aligned as [length][event]... so on
@@ -170,17 +170,17 @@ module LogCourier
         if ret.nil?
           # Finished!
           break
-        elsif length_buf.length < 4
-          fail ProtocolError, "JDAT length extraction failed (#{ret} #{length_buf.length})"
+        elsif length_buf.bytesize < 4
+          fail ProtocolError, "JDAT length extraction failed (#{ret} #{length_buf.bytesize})"
         end
 
         length = length_buf.unpack('N').first
 
         # Extract message
         ret = message.read length, data_buf
-        if ret.nil? or data_buf.length < length
+        if ret.nil? or data_buf.bytesize < length
           @logger.warn()
-          fail ProtocolError, "JDAT message extraction failed #{ret} #{data_buf.length}"
+          fail ProtocolError, "JDAT message extraction failed #{ret} #{data_buf.bytesize}"
         end
 
         data_buf.force_encoding('utf-8')
