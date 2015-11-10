@@ -66,12 +66,19 @@ module LogStash
 
       def receive(event)
         return unless output?(event)
-        if event == LogStash::SHUTDOWN
-          @client.shutdown
-          finished
-          return
-        end
         @client.publish event.to_hash
+      end
+
+      # Logstash < 2.0.0 shutdown
+      def teardown
+        close
+      end
+
+      # Logstash >= 2.0.0 shutdown
+      def close
+        @client.shutdown
+        finished
+        nil
       end
 
       private
