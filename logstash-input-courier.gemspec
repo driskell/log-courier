@@ -28,5 +28,5 @@ Gem::Specification.new do |gem|
   gem.metadata = { 'logstash_plugin' => 'true', 'logstash_group' => 'input' }
 
   gem.add_runtime_dependency 'logstash-core', '>= 1.4', '< 3'
-  gem.add_runtime_dependency 'log-courier', '= 1.8.3'
+  gem.add_runtime_dependency 'log-courier', '~> 1.9'
 end
