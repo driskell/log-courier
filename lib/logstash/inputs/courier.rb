@@ -106,6 +106,9 @@ module LogStash
         @log_courier = LogCourier::Server.new options
       end
 
+      # Logstash < 2.0.0 shutdown raises LogStash::ShutdownSignal in this thread
+      # The exception implicitly stops the log-courier gem using an ensure block
+      # and is then caught by the pipeline worker - so we needn't do anything here
       def run(output_queue)
         @log_courier.run do |event|
           if event.key?('tags') && !event['tags'].is_a?(Array)
@@ -115,6 +118,11 @@ module LogStash
           decorate event
           output_queue << event
         end
+      end
+
+      # Logstash >= 2.0.0 shutdown
+      def stop
+        @log_courier.stop
       end
 
       private
