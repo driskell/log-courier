@@ -40,8 +40,8 @@ gem: | fix_version
 	gem build log-courier.gemspec
 
 gem_plugins: | fix_version
-	gem build logstash-input-courier.gemspec
-	gem build logstash-output-courier.gemspec
+	gem build logstash-input-log-courier.gemspec
+	gem build logstash-output-log-courier.gemspec
 
 push_gems: | gem gem_plugins
 	build/push_gems
@@ -93,9 +93,7 @@ vendor/bundle/.GemfileJRubyModT: Gemfile
 clean:
 	go clean -i ./...
 ifneq ($(implyclean),yes)
-ifneq ($(keepgoget),yes)
 	rm -rf src/github.com
-endif
 	rm -rf vendor/bundle
 	rm -f Gemfile.lock
 	rm -f *.gem
@@ -108,8 +106,8 @@ setup_root:
 	build/setup_root
 
 prepare: | fix_version setup_root
-	@go version >/dev/null || (echo "Go not found. You need to install Go version 1.2-1.4: http://golang.org/doc/install"; false)
-	@go version | grep -q 'go version go1.[234]' || (echo "Go version 1.2-1.4, you have a version of Go that is not supported."; false)
+	@go version >/dev/null || (echo "Go not found. You need to install Go version 1.2-1.5: http://golang.org/doc/install"; false)
+	@go version | grep -q 'go version go1.[2345]' || (echo "Go version 1.2-1.5, you have a version of Go that is not supported."; false)
 	@echo "GOPATH: $${GOPATH}"
 
 bin/%: prepare
