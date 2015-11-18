@@ -319,6 +319,13 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
 			} else if info.identity.Stat().ModTime() != fileinfo.ModTime() {
 				// Resume harvesting of an old file we've stopped harvesting from
 				log.Info("Resuming harvester on an old file that was just modified: %s", file)
+
+				// If reset on resume is set to true, we should look at the whole file
+				if config.ResetOnResume {
+					log.Info("Seeking to start on file that was just modified: %s", file)
+					info.finish_offset = 0
+				}
+
 			} else {
 				resume = false
 			}
