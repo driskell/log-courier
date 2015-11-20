@@ -1,17 +1,7 @@
-/.Makefile.tags
 /.bundle
-/.log-courier
 /.vagrant
 /*.gem
-/Gemfile.lock
 /bin
-/log-courier.gemspec
-/logstash-input-courier.gemspec
-/logstash-output-courier.gemspec
 /node_modules
-/pkg
 /spec/tmp
-/src/github.com
-/src/lc-lib/core/version.go
 /vendor
-/version.txt

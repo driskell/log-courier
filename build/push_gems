@@ -1,8 +1,0 @@
-#!/bin/bash
-
-for GEM in *-$(cat version_short.txt)*.gem; do
-	echo "- ${GEM}"
-	gem push $GEM
-done
-
-:
