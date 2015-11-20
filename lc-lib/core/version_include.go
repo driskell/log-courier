@@ -1,8 +1,5 @@
-// THIS IS A GENERATED FILE
-// See: version_generate.go / version_include.go
-
 /*
- * Copyright 2014-2015 Jason Woods.
+ * Copyright 2015 Jason Woods.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,5 +16,5 @@
 
 package core
 
-// Log Courier Version
-const LogCourierVersion string = "<VERSION>"
+// Generate the version number
+//go:generate go run version_generate.go
