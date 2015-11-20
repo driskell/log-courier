@@ -16,6 +16,7 @@
 
 $LOAD_PATH << File.join(File.dirname(File.dirname(File.dirname(__FILE__))), 'lib')
 
+require 'cabin'
 require 'lib/helpers/common'
 require 'lib/logfile'
 
@@ -23,6 +24,7 @@ TEMP_PATH = File.join(File.dirname(File.dirname(__FILE__)), 'tmp')
 STARTUP_WAIT_TIME = 2
 EVENT_WAIT_COUNT = 50
 EVENT_WAIT_TIME = 0.5
+SHARED_LOGGER_OUTPUT = Cabin::Outputs::IO.new(STDOUT)
 
 RSpec.configure do |config|
   config.before :all do

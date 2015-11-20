@@ -23,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/driskell/log-courier/src/lc-lib/admin"
+	"github.com/driskell/log-courier/src/lc-lib/config"
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"github.com/driskell/log-courier/src/lc-lib/harvester"
 	"github.com/driskell/log-courier/src/lc-lib/prospector"
@@ -32,6 +33,7 @@ import (
 	"github.com/op/go-logging"
 	stdlog "log"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"time"
 )
@@ -46,7 +48,7 @@ func main() {
 
 type LogCourier struct {
 	pipeline       *core.Pipeline
-	config         *core.Config
+	config         *config.Config
 	shutdown_chan  chan os.Signal
 	reload_chan    chan os.Signal
 	config_file    string
@@ -93,10 +95,7 @@ func (lc *LogCourier) Run() {
 		registrar_imp = registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
 	}
 
-	publisher_imp, err := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar_imp)
-	if err != nil {
-		log.Fatalf("Failed to initialise: %s", err)
-	}
+	publisher_imp := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrar_imp)
 
 	spooler_imp := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisher_imp)
 
@@ -180,12 +179,12 @@ func (lc *LogCourier) startUp() {
 
 	if list_supported {
 		fmt.Printf("Available transports:\n")
-		for _, transport := range core.AvailableTransports() {
+		for _, transport := range config.AvailableTransports() {
 			fmt.Printf("  %s\n", transport)
 		}
 
 		fmt.Printf("Available codecs:\n")
-		for _, codec := range core.AvailableCodecs() {
+		for _, codec := range config.AvailableCodecs() {
 			fmt.Printf("  %s\n", codec)
 		}
 		os.Exit(0)
@@ -231,6 +230,8 @@ func (lc *LogCourier) startUp() {
 			log.Panic("CPU profile completed")
 		}()
 	}
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
 func (lc *LogCourier) configureLogging() (err error) {
@@ -265,7 +266,7 @@ func (lc *LogCourier) configureLogging() (err error) {
 }
 
 func (lc *LogCourier) loadConfig() error {
-	lc.config = core.NewConfig()
+	lc.config = config.NewConfig()
 	if err := lc.config.Load(lc.config_file); err != nil {
 		return err
 	}

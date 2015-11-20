@@ -10,16 +10,15 @@ Gem::Specification.new do |gem|
   gem.rubyforge_project = 'nowarning'
   gem.require_paths     = ['lib']
   gem.files             = %w(
+    lib/log-courier/cabin-copy.rb
     lib/log-courier/client.rb
     lib/log-courier/client_tcp.rb
     lib/log-courier/event_queue.rb
     lib/log-courier/server.rb
     lib/log-courier/server_tcp.rb
-    lib/log-courier/server_zmq.rb
-    lib/log-courier/zmq_qpoll.rb
   )
 
-  gem.add_runtime_dependency 'cabin',      '~> 0.6'
-  gem.add_runtime_dependency 'ffi-rzmq',   '~> 2.0'
-  gem.add_runtime_dependency 'multi_json', '~> 1.10'
+  gem.add_runtime_dependency 'cabin',       '~> 0.6'
+  gem.add_runtime_dependency 'iomultiplex', '~> 0.1'
+  gem.add_runtime_dependency 'multi_json',  '~> 1.10'
 end

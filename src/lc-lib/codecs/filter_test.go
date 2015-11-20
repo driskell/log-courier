@@ -1,14 +1,15 @@
 package codecs
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/core"
 	"testing"
+
+	"github.com/driskell/log-courier/src/lc-lib/config"
 )
 
-var filter_lines []string
+var filterLines []string
 
-func createFilterCodec(unused map[string]interface{}, callback core.CodecCallbackFunc, t *testing.T) core.Codec {
-	config := core.NewConfig()
+func createFilterCodec(unused map[string]interface{}, callback CallbackFunc, t *testing.T) Codec {
+	config := config.NewConfig()
 
 	factory, err := NewFilterCodecFactory(config, "", unused, "filter")
 	if err != nil {
@@ -16,15 +17,15 @@ func createFilterCodec(unused map[string]interface{}, callback core.CodecCallbac
 		t.FailNow()
 	}
 
-	return factory.NewCodec(callback, 0)
+	return NewCodec(factory, callback, 0)
 }
 
-func checkFilter(start_offset int64, end_offset int64, text string) {
-	filter_lines = append(filter_lines, text)
+func checkFilter(startOffset int64, endOffset int64, text string) {
+	filterLines = append(filterLines, text)
 }
 
 func TestFilter(t *testing.T) {
-	filter_lines = make([]string, 0, 1)
+	filterLines = make([]string, 0, 1)
 
 	codec := createFilterCodec(map[string]interface{}{
 		"patterns": []string{"^NEXT line$"},
@@ -37,10 +38,10 @@ func TestFilter(t *testing.T) {
 	codec.Event(4, 5, "ANOTHER line")
 	codec.Event(6, 7, "DEBUG Next line")
 
-	if len(filter_lines) != 1 {
+	if len(filterLines) != 1 {
 		t.Error("Wrong line count received")
-	} else if filter_lines[0] != "NEXT line" {
-		t.Error("Wrong line[0] received: %s", filter_lines[0])
+	} else if filterLines[0] != "NEXT line" {
+		t.Error("Wrong line[0] received: %s", filterLines[0])
 	}
 
 	offset := codec.Teardown()
@@ -50,7 +51,7 @@ func TestFilter(t *testing.T) {
 }
 
 func TestFilterNegate(t *testing.T) {
-	filter_lines = make([]string, 0, 1)
+	filterLines = make([]string, 0, 1)
 
 	codec := createFilterCodec(map[string]interface{}{
 		"patterns": []string{"^NEXT line$"},
@@ -63,14 +64,14 @@ func TestFilterNegate(t *testing.T) {
 	codec.Event(4, 5, "ANOTHER line")
 	codec.Event(6, 7, "DEBUG Next line")
 
-	if len(filter_lines) != 3 {
+	if len(filterLines) != 3 {
 		t.Error("Wrong line count received")
-	} else if filter_lines[0] != "DEBUG First line" {
-		t.Error("Wrong line[0] received: %s", filter_lines[0])
-	} else if filter_lines[1] != "ANOTHER line" {
-		t.Error("Wrong line[1] received: %s", filter_lines[1])
-	} else if filter_lines[2] != "DEBUG Next line" {
-		t.Error("Wrong line[2] received: %s", filter_lines[2])
+	} else if filterLines[0] != "DEBUG First line" {
+		t.Error("Wrong line[0] received: %s", filterLines[0])
+	} else if filterLines[1] != "ANOTHER line" {
+		t.Error("Wrong line[1] received: %s", filterLines[1])
+	} else if filterLines[2] != "DEBUG Next line" {
+		t.Error("Wrong line[2] received: %s", filterLines[2])
 	}
 
 	offset := codec.Teardown()
@@ -80,7 +81,7 @@ func TestFilterNegate(t *testing.T) {
 }
 
 func TestFilterMultiple(t *testing.T) {
-	filter_lines = make([]string, 0, 1)
+	filterLines = make([]string, 0, 1)
 
 	codec := createFilterCodec(map[string]interface{}{
 		"patterns": []string{"^NEXT line$", "^DEBUG First line$"},
@@ -93,12 +94,12 @@ func TestFilterMultiple(t *testing.T) {
 	codec.Event(4, 5, "ANOTHER line")
 	codec.Event(6, 7, "DEBUG Next line")
 
-	if len(filter_lines) != 2 {
+	if len(filterLines) != 2 {
 		t.Error("Wrong line count received")
-	} else if filter_lines[0] != "DEBUG First line" {
-		t.Error("Wrong line[0] received: %s", filter_lines[0])
-	} else if filter_lines[1] != "NEXT line" {
-		t.Error("Wrong line[1] received: %s", filter_lines[1])
+	} else if filterLines[0] != "DEBUG First line" {
+		t.Error("Wrong line[0] received: %s", filterLines[0])
+	} else if filterLines[1] != "NEXT line" {
+		t.Error("Wrong line[1] received: %s", filterLines[1])
 	}
 
 	offset := codec.Teardown()
@@ -106,3 +107,5 @@ func TestFilterMultiple(t *testing.T) {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
+
+// TODO(driskell): Test for Reset()

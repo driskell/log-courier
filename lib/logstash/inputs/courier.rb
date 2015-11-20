@@ -87,13 +87,16 @@ module LogStash
       public
 
       def register
-        @logger.info(
+        require 'log-courier/server'
+        logger = @logger.copy
+        logger['plugin'] = 'input/courier'
+
+        logger.info(
           'Starting courier input listener',
           address: "#{@host}:#{@port}"
         )
 
-        require 'log-courier/server'
-        @log_courier = LogCourier::Server.new options
+        @log_courier = LogCourier::Server.new options(logger)
       end
 
       def run(output_queue)
@@ -105,6 +108,7 @@ module LogStash
           decorate event
           output_queue << event
         end
+      rescue ShutdownSignal
       end
 
       def stop
@@ -113,11 +117,13 @@ module LogStash
 
       private
 
-      def options
-        result = {}
+      def options(logger)
+        result = {
+          logger: logger,
+        }
 
         [
-          :logger, :address, :port, :transport, :ssl_certificate, :ssl_key,
+          :address, :port, :transport, :ssl_certificate, :ssl_key,
           :ssl_key_passphrase, :ssl_verify, :ssl_verify_default_ca,
           :ssl_verify_ca, :curve_secret_key
         ].each do |k|

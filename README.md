@@ -38,6 +38,9 @@ plugin
 * Close files after inactivity, reopening on change, to keep resource usage low
 * Add [extra fields](docs/Configuration.md#fields) to events prior to shipping
 * [Reload configuration](docs/Configuration.md#reloading) without restarting
+* Ship events securely using TLS with server (and optionally client) certificate
+verification
+* Ship events in plaintext using TCP
 * Monitor shipping speed and status with the
 [Administration utility](docs/AdministrationUtility.md)
 * Pre-process events using codecs (e.g. [Multiline](docs/codecs/Multiline.md),
@@ -206,5 +209,4 @@ for the 'tls' transport.
 * [Command Line Arguments](docs/CommandLineArguments.md)
 * [Configuration](docs/Configuration.md)
 * [Logstash Integration](docs/LogstashIntegration.md)
-* [ZeroMQ Support](docs/ZeroMQSupport.md)
 * [Change Log](docs/ChangeLog.md)

@@ -24,67 +24,72 @@ import (
 // If tls.Conn.Write ever times out it will permanently break, so we cannot use SetWriteDeadline with it directly
 // So we wrap the given tcpsocket and handle the SetWriteDeadline there and check shutdown signal and loop
 // Inside tls.Conn the Write blocks until it finishes and everyone is happy
-type transportTcpWrap struct {
-	transport *TransportTcp
+type transportTCPWrap struct {
+	transport *TransportTCP
 	tcpsocket net.Conn
 
 	net.Conn
 }
 
-func (w *transportTcpWrap) Read(b []byte) (int, error) {
+func (w *transportTCPWrap) Read(b []byte) (int, error) {
 	return w.tcpsocket.Read(b)
 }
 
-func (w *transportTcpWrap) Write(b []byte) (n int, err error) {
+func (w *transportTCPWrap) Write(b []byte) (n int, err error) {
 	length := 0
 
 RetrySend:
 	for {
 		// Timeout after socket_interval_seconds, check for shutdown, and try again
-		w.tcpsocket.SetWriteDeadline(time.Now().Add(socket_interval_seconds * time.Second))
+		w.tcpsocket.SetWriteDeadline(time.Now().Add(socketIntervalSeconds * time.Second))
 
 		n, err = w.tcpsocket.Write(b[length:])
 		length += n
+
 		if length >= len(b) {
 			return length, err
-		} else if err == nil {
+		}
+
+		if err == nil {
 			// Keep trying
 			continue
-		} else if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
+		}
+
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			// Check for shutdown, then try again
 			select {
-			case <-w.transport.shutdown:
+			case <-w.transport.sendControl:
 				// Shutdown
 				return length, err
 			default:
 				goto RetrySend
 			}
-		} else {
-			return length, err
 		}
+
+		return length, err
 	} /* loop forever */
 }
 
-func (w *transportTcpWrap) Close() error {
+func (w *transportTCPWrap) Close() error {
 	return w.tcpsocket.Close()
 }
 
-func (w *transportTcpWrap) LocalAddr() net.Addr {
+func (w *transportTCPWrap) LocalAddr() net.Addr {
 	return w.tcpsocket.LocalAddr()
 }
 
-func (w *transportTcpWrap) RemoteAddr() net.Addr {
+func (w *transportTCPWrap) RemoteAddr() net.Addr {
 	return w.tcpsocket.RemoteAddr()
 }
 
-func (w *transportTcpWrap) SetDeadline(t time.Time) error {
+func (w *transportTCPWrap) SetDeadline(t time.Time) error {
 	return w.tcpsocket.SetDeadline(t)
 }
 
-func (w *transportTcpWrap) SetReadDeadline(t time.Time) error {
+func (w *transportTCPWrap) SetReadDeadline(t time.Time) error {
 	return w.tcpsocket.SetReadDeadline(t)
 }
 
-func (w *transportTcpWrap) SetWriteDeadline(t time.Time) error {
+func (w *transportTCPWrap) SetWriteDeadline(t time.Time) error {
 	return w.tcpsocket.SetWriteDeadline(t)
 }
