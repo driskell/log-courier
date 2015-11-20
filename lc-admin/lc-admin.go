@@ -20,13 +20,14 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/driskell/log-courier/lc-lib/admin"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"os"
 	"os/signal"
 	"strings"
 	"text/scanner"
 	"time"
+
+	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 type CommandError struct {
@@ -369,12 +370,12 @@ func main() {
 	flag.Parse()
 
 	if version {
-		fmt.Printf("Log Courier version %s\n", core.Log_Courier_Version)
+		fmt.Printf("Log Courier version %s\n", core.LogCourierVersion)
 		os.Exit(0)
 	}
 
 	if !quiet {
-		fmt.Printf("Log Courier version %s client\n\n", core.Log_Courier_Version)
+		fmt.Printf("Log Courier version %s client\n\n", core.LogCourierVersion)
 	}
 
 	args := flag.Args()

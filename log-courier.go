@@ -76,7 +76,7 @@ func (lc *LogCourier) Run() {
 
 	lc.startUp()
 
-	log.Info("Log Courier version %s pipeline starting", core.Log_Courier_Version)
+	log.Info("Log Courier version %s pipeline starting", core.LogCourierVersion)
 
 	// If reading from stdin, skip admin, and set up a null registrar
 	if lc.stdin {
@@ -174,7 +174,7 @@ func (lc *LogCourier) startUp() {
 	flag.Parse()
 
 	if version {
-		fmt.Printf("Log Courier version %s\n", core.Log_Courier_Version)
+		fmt.Printf("Log Courier version %s\n", core.LogCourierVersion)
 		os.Exit(0)
 	}
 
