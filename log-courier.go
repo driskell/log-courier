@@ -22,24 +22,25 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/driskell/log-courier/src/lc-lib/admin"
-	"github.com/driskell/log-courier/src/lc-lib/config"
-	"github.com/driskell/log-courier/src/lc-lib/core"
-	"github.com/driskell/log-courier/src/lc-lib/harvester"
-	"github.com/driskell/log-courier/src/lc-lib/prospector"
-	"github.com/driskell/log-courier/src/lc-lib/publisher"
-	"github.com/driskell/log-courier/src/lc-lib/registrar"
-	"github.com/driskell/log-courier/src/lc-lib/spooler"
-	"github.com/op/go-logging"
 	stdlog "log"
 	"os"
 	"runtime"
 	"runtime/pprof"
 	"time"
+
+	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
+	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/harvester"
+	"github.com/driskell/log-courier/lc-lib/prospector"
+	"github.com/driskell/log-courier/lc-lib/publisher"
+	"github.com/driskell/log-courier/lc-lib/registrar"
+	"github.com/driskell/log-courier/lc-lib/spooler"
 )
 
-import _ "github.com/driskell/log-courier/src/lc-lib/codecs"
-import _ "github.com/driskell/log-courier/src/lc-lib/transports"
+import _ "github.com/driskell/log-courier/lc-lib/codecs"
+import _ "github.com/driskell/log-courier/lc-lib/transports"
 
 func main() {
 	logcourier := NewLogCourier()

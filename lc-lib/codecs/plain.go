@@ -17,8 +17,8 @@
 package codecs
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/config"
-	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 type CodecPlainFactory struct {

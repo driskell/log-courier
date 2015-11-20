@@ -17,7 +17,7 @@
 package payload
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"testing"
 )
 

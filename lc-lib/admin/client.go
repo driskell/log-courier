@@ -19,7 +19,7 @@ package admin
 import (
 	"encoding/gob"
 	"fmt"
-	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"net"
 	"strings"
 	"time"

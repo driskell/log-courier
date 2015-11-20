@@ -19,7 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	zmq "github.com/alecthomas/gozmq"
+	zmq "github.com/driskell/log-courier/Godeps/_workspace/src/github.com/alecthomas/gozmq"
 	"syscall"
 )
 

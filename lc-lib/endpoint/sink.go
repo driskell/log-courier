@@ -17,10 +17,10 @@
 package endpoint
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/addresspool"
-	"github.com/driskell/log-courier/src/lc-lib/config"
-	"github.com/driskell/log-courier/src/lc-lib/internallist"
-	"github.com/driskell/log-courier/src/lc-lib/transports"
+	"github.com/driskell/log-courier/lc-lib/addresspool"
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/internallist"
+	"github.com/driskell/log-courier/lc-lib/transports"
 	"time"
 )
 

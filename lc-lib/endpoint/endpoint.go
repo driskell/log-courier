@@ -18,11 +18,11 @@ package endpoint
 
 import (
 	"errors"
-	"github.com/driskell/log-courier/src/lc-lib/addresspool"
-	"github.com/driskell/log-courier/src/lc-lib/config"
-	"github.com/driskell/log-courier/src/lc-lib/internallist"
-	"github.com/driskell/log-courier/src/lc-lib/payload"
-	"github.com/driskell/log-courier/src/lc-lib/transports"
+	"github.com/driskell/log-courier/lc-lib/addresspool"
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/internallist"
+	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/transports"
 	"math/rand"
 	"sync"
 	"time"

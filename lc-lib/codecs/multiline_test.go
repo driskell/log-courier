@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/driskell/log-courier/src/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/config"
 )
 
 func createMultilineCodec(unused map[string]interface{}, callback CallbackFunc, t *testing.T) Codec {

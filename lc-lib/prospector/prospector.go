@@ -21,11 +21,11 @@ package prospector
 
 import (
 	"fmt"
-	"github.com/driskell/log-courier/src/lc-lib/config"
-	"github.com/driskell/log-courier/src/lc-lib/core"
-	"github.com/driskell/log-courier/src/lc-lib/harvester"
-	"github.com/driskell/log-courier/src/lc-lib/registrar"
-	"github.com/driskell/log-courier/src/lc-lib/spooler"
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/harvester"
+	"github.com/driskell/log-courier/lc-lib/registrar"
+	"github.com/driskell/log-courier/lc-lib/spooler"
 	"os"
 	"path/filepath"
 	"time"

@@ -1,0 +1,17 @@
+{
+	"ImportPath": "github.com/driskell/log-courier",
+	"GoVersion": "go1.5.1",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/alecthomas/gozmq",
+			"Rev": "d1b01a2df6b2c64f03fecaeabea541963fc4749f"
+		},
+		{
+			"ImportPath": "github.com/op/go-logging",
+			"Rev": "e8d5414f0947014548c2334044a0fac13187dfee"
+		}
+	]
+}

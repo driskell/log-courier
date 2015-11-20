@@ -17,7 +17,7 @@
 package codecs
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 // Codec is the generic interface that all codecs implement

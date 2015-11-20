@@ -17,9 +17,9 @@
 package prospector
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/core"
-	"github.com/driskell/log-courier/src/lc-lib/harvester"
-	"github.com/driskell/log-courier/src/lc-lib/registrar"
+	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/harvester"
+	"github.com/driskell/log-courier/lc-lib/registrar"
 	"os"
 )
 

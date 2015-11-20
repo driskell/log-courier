@@ -18,7 +18,7 @@ package admin
 
 import (
 	"encoding/gob"
-	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"time"
 )
 

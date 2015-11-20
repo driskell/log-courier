@@ -17,8 +17,8 @@
 package payload
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/core"
-	"github.com/driskell/log-courier/src/lc-lib/internallist"
+	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/internallist"
 )
 
 // Payload holds the data and acknowledged status of a spool of events

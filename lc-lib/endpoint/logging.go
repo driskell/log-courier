@@ -16,7 +16,7 @@
 
 package endpoint
 
-import "github.com/op/go-logging"
+import "github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
 
 var log *logging.Logger
 

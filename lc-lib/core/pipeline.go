@@ -17,7 +17,7 @@
 package core
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/config"
 	"sync"
 )
 

@@ -17,9 +17,9 @@
 package transports
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/addresspool"
-	"github.com/driskell/log-courier/src/lc-lib/core"
-	"github.com/driskell/log-courier/src/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/addresspool"
+	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/config"
 )
 
 // Transport is the generic interface that all transports implement

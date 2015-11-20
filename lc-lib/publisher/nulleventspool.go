@@ -17,7 +17,7 @@
 package publisher
 
 import (
-	"github.com/driskell/log-courier/src/lc-lib/registrar"
+	"github.com/driskell/log-courier/lc-lib/registrar"
 )
 
 // NullEventSpool is a dummy registrar used by publisher when there is no

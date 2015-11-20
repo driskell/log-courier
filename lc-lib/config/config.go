@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	logging "github.com/op/go-logging"
+	logging "github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
 )
 
 const (

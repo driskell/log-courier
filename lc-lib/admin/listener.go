@@ -18,8 +18,8 @@ package admin
 
 import (
 	"fmt"
-	"github.com/driskell/log-courier/src/lc-lib/config"
-	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"net"
 	"strings"
 	"time"

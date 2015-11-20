@@ -20,7 +20,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/op/go-logging"
+	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
 	"os"
 	"os/signal"
 	"syscall"

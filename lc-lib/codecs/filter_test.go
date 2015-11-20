@@ -3,7 +3,7 @@ package codecs
 import (
 	"testing"
 
-	"github.com/driskell/log-courier/src/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/config"
 )
 
 var filterLines []string
