@@ -209,4 +209,4 @@ for the 'tls' transport.
 * [Command Line Arguments](docs/CommandLineArguments.md)
 * [Configuration](docs/Configuration.md)
 * [Logstash Integration](docs/LogstashIntegration.md)
-* [Change Log](docs/ChangeLog.md)
+* [Change Log](CHANGELOG.md)

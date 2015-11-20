@@ -1,70 +1,12 @@
 # Change Log
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+## 2.0.0-beta
 
-- [1.8.2](#182)
-- [1.8.1](#181)
-- [1.8](#18)
-- [1.7](#17)
-- [1.6](#16)
-- [1.5](#15)
-- [1.3](#13)
-- [1.2](#12)
-- [1.1](#11)
-- [1.0](#10)
-- [0.15](#015)
-- [0.14](#014)
-- [0.13](#013)
-- [0.12](#012)
-- [0.11](#011)
-- [0.10](#010)
-- [0.9](#09)
-- [Pre-0.10](#pre-010)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
-## 1.8.2
-
-*30th October 2015*
-
-***Log Courier***
-
-No Changes
-
-***RPM Packaging***
-
-* Fixed incorrect license specification - the spec file specified GPL which was
-incorrect - the license is Apache. The spec file has been updated.
-
-***Logstash Plugins***
-
-* Introduce compatibility with Logstash 2.0.0 (#245)
-
-## 1.8.1
-
-*7th August 2015*
-
-***Log Courier***
-
-No Changes
-
-***DEB Packaging***
-
-* Fix a regression in the upstart script due to the addition of a configtest
-(#217 - Thanks to @eliecharra)
-
-***Logstash Plugins***
-
-* Fix a regression with `ssl_verify_ca` (#214)
-* Fix a regression with the output plugin `hosts` setting (#215)
+*???*
 
 ## 1.8
 
 *6th August 2015*
-
-***Log Courier***
 
 * Fix various causes of multiline codec causing Log Courier to crash (#188)
 * Improve handling of file truncation when using codecs (derived from #194)
@@ -79,35 +21,9 @@ and "path"
 * Implement an option to add a "timezone" field to events containing the local
 machine's timezone in the format "-0700 MST" (#203)
 
-***Logstash Plugins***
-
-* Fix broken JSON parser error handling in input plugin (#200)
-* Fix Logstash shutdown not working with the input plugin
-* Fix broken client certificate verification in the output plugin
-* Fix compatibility with Logstash 1.4 due to missing milestone in both plugins
-
 ## 1.7
 
 *3rd June 2015*
-
-***Important notice regarding the Logstash Plugins***
-
-The Logstash plugin installation identifier has been changed from
-"logstash-xxxxx-log-courier" to "logstash-xxxxx-courier" in order to meet the
-specification set by the GA release of Logstash 1.5, which is for the identifier
-to match the format "logstash-\<type>-\<configname>". The configuration name is
-unchanged and remains "courier" - configurations do not need to be changed.
-
-If you are using Logstash 1.5 and would like to update the plugin you will need
-to uninstall the previous plugin using the previous name before installing the
-new version using the new name.
-
-    ./bin/plugin uninstall logstash-input-log-courier
-    ./bin/plugin uninstall logstash-output-log-courier
-    ./bin/plugin install logstash-input-courier
-    ./bin/plugin install logstash-output-courier
-
-***Log Courier***
 
 * Report a configuration error if no servers are specified instead of continuing
 and crashing during startup (#149)
@@ -121,33 +37,6 @@ site-wide convergence of Log Courier instances towards a single server (#161)
 * Fix a rare race condition in the tcp and tls transport that could cause Log
 Courier to stop sending events after a connection failure
 * Improve build process to work seamlessly with msysGit on Windows
-
-***Logstash Plugins***
-
-* Rename to logstash-input-courier and logstash-output-courier to meet the
-latest plugin specified and fix the "This plugin isn't well supported" warnings
-in Logstash 1.5 (#164)
-* Remove deprecated milestone declaration to fix a Logstash 1.5 warning (#164)
-* Fix a crash in the output plugin that can sometimes occur if a connection
-fails (#143)
-* Fix a crash on Windows caused by a Logstash patch to Ruby stdlib
-(elastic/logstash#3364) (#169)
-* Fix confusing log messages that appear to come from Log Courier plugin but
-in fact come from another plugin or Logstash itself (#176)
-* Fix rare transport failures caused by payload identifiers ending in NUL bytes
-
-## 1.6
-
-*22nd March 2015*
-
-***Plugin-only release***
-
-* The output plugin would fail if the connection to the remote Logstash was lost
-and events had to be resent (#136)
-* The input and output plugins were incompatible with Logstash RC1 and RC2 due
-to breaking changes that occurred after the release of Beta1 (#121)
-
-No changes were made to Log Courier.
 
 ## 1.5
 
