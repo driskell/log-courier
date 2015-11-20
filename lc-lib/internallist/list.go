@@ -4,6 +4,7 @@
 
 // A modified fork of Golang's container/list that implements internal Elements
 // in order to reduce allocations that may impact performance
+// Could be a micro-optimisation but it was fun to do
 // Copyright 2015 Jason Woods All Rights Reserved
 
 // Package internallist implements an internal doubly linked list.

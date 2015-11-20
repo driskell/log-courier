@@ -1,7 +1,7 @@
 // +build !windows
 
 /*
- * Copyright 2014 Jason Woods.
+ * Copyright 2014-2015 Jason Woods.
  *
  * This file is a modification of code from Logstash Forwarder.
  * Copyright 2012-2013 Jordan Sissel and contributors.
