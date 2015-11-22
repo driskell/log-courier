@@ -17,18 +17,19 @@
 package endpoint
 
 import (
+	"time"
+
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/transports"
-	"time"
 )
 
 // Sink structure contains the control channels that each endpoint
 // will utilise. The newEndpoint method attaches new endpoints to this
 type Sink struct {
-	endpoints    map[string]*Endpoint
-	config       *config.Network
+	endpoints map[string]*Endpoint
+	config    *config.Network
 
 	statusChan   chan *Status
 	responseChan chan transports.Response
@@ -48,8 +49,8 @@ type Sink struct {
 func NewSink(config *config.Network) *Sink {
 	// TODO: Make channel sizes configurable?
 	ret := &Sink{
-		endpoints:    make(map[string]*Endpoint),
-		config:       config,
+		endpoints: make(map[string]*Endpoint),
+		config:    config,
 
 		statusChan:   make(chan *Status, 10),
 		responseChan: make(chan transports.Response, 10),
@@ -104,7 +105,7 @@ func (f *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
 	f.priorityList.MoveAfter(&endpoint.priorityElement, &after.priorityElement)
 }
 
-// RemoveEndpoint requests th endpoint associated with the given server to be
+// RemoveEndpoint requests the endpoint associated with the given server to be
 // removed from the sink
 func (f *Sink) RemoveEndpoint(server string) {
 	endpoint, ok := f.endpoints[server]

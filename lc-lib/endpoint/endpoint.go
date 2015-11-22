@@ -18,14 +18,15 @@ package endpoint
 
 import (
 	"errors"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 // status holds an Endpoint status
@@ -49,24 +50,6 @@ const (
 	endpointStatusClosing
 )
 
-// StatusChange holds a value that represents a change in endpoint status that
-// is sent over the status channel of the Sink
-type StatusChange int
-
-// Endpoint status signals
-const (
-	Ready     = iota
-	Recovered
-	Failed
-	Finished
-)
-
-// Status structure contains the reason for failure, or nil if recovered
-type Status struct {
-	Endpoint *Endpoint
-	Status   StatusChange
-}
-
 // Endpoint structure represents a single remote endpoint
 type Endpoint struct {
 	sync.Mutex
@@ -83,6 +66,7 @@ type Endpoint struct {
 	priorityElement internallist.Element
 
 	// Timeout callback and when it should trigger
+	// The Sink manages these
 	timeoutFunc interface{}
 	timeoutDue  time.Time
 
@@ -286,7 +270,7 @@ func (e *Endpoint) resetPayloads() {
 // Pool returns the associated address pool
 // This implements part of the transports.Endpoint interface for callbacks
 func (e *Endpoint) Pool() *addresspool.Pool {
-  return e.addressPool
+	return e.addressPool
 }
 
 // Ready is called by a transport to signal it is ready for events.

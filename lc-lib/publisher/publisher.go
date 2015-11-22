@@ -22,6 +22,9 @@ package publisher
 import (
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
@@ -30,8 +33,6 @@ import (
 	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/registrar"
 	"github.com/driskell/log-courier/lc-lib/transports"
-	"sync"
-	"time"
 )
 
 var (
@@ -46,8 +47,18 @@ const (
 
 type timeoutFunc func(*Publisher, *endpoint.Endpoint)
 
-// Publisher handles payload and is responsible for passing ordered
+// Publisher handles payloads and is responsible for passing ordered
 // acknowledgements to the Registrar
+// It makes all the load balancing and distribution decisions, leaving
+// transport state management to the EndpointSink
+// We have always used a Push mechanism for load balancing, in the sense that
+// the Publisher will push out events to transports and potentially pull them
+// back if it deems there's a problem, rather than letting transports pull the
+// events from the Publisher and then the transport making decisions on whether
+// there is a problem. This pattern continues that tradition but with there now
+// potentially being multiple transports rather than just one
+// TODO: Extrapolate the load balance / failover logic to other interfaces?
+//       I'm thinking not, as the difference is very little
 type Publisher struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
@@ -55,33 +66,33 @@ type Publisher struct {
 
 	sync.RWMutex
 
-	config           *config.Network
-	endpointSink     *endpoint.Sink
+	config       *config.Network
+	endpointSink *endpoint.Sink
 
-	payloadList      internallist.List
-	numPayloads      int64
-	outOfSync        int
-	spoolChan        chan []*core.EventDescriptor
-	registrarSpool   registrar.EventSpooler
-	shuttingDown     bool
+	payloadList    internallist.List
+	numPayloads    int64
+	outOfSync      int
+	spoolChan      chan []*core.EventDescriptor
+	registrarSpool registrar.EventSpooler
+	shuttingDown   bool
 
 	lineCount       int64
 	lineSpeed       float64
-	lastLineCount  int64
+	lastLineCount   int64
 	lastMeasurement time.Time
-	secondsNoAck   int
+	secondsNoAck    int
 
-	ifSpoolChan  <-chan []*core.EventDescriptor
-	nextSpool    []*core.EventDescriptor
-	resendList   internallist.List
+	ifSpoolChan <-chan []*core.EventDescriptor
+	nextSpool   []*core.EventDescriptor
+	resendList  internallist.List
 }
 
 // NewPublisher creates a new publisher instance on the given pipeline
 func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar registrar.Registrator) *Publisher {
 	ret := &Publisher{
-		config: config,
+		config:       config,
 		endpointSink: endpoint.NewSink(config),
-		spoolChan: make(chan []*core.EventDescriptor, 1),
+		spoolChan:    make(chan []*core.EventDescriptor, 1),
 	}
 
 	if registrar == nil {

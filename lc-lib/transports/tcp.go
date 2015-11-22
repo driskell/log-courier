@@ -298,7 +298,7 @@ func (t *TransportTCP) connect() error {
 	//       on the shutdown channel, which will close on the first error returned
 	t.failChan = make(chan error, 2)
 
-	// Send a recovery single - this implicitly means we're also ready
+	// Send a recovery signal - this implicitly means we're also ready
 	t.endpoint.Recover()
 
 	t.wait.Add(2)
