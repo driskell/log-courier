@@ -82,6 +82,8 @@ type Publisher struct {
 	lastMeasurement time.Time
 	secondsNoAck    int
 
+	statsTimer  *time.Timer
+	onShutdown  <-chan interface{}
 	ifSpoolChan <-chan []*core.EventDescriptor
 	nextSpool   []*core.EventDescriptor
 	resendList  internallist.List
@@ -112,103 +114,16 @@ func (p *Publisher) Connect() chan<- []*core.EventDescriptor {
 	return p.spoolChan
 }
 
-// Run starts the publisher, this is usually started by the pipeline in its own
-// routine
+// Run starts the publisher, it handles endpoint status changes send from the
+// EndpointSink so it can make payload distribution decisions
 func (p *Publisher) Run() {
-	statsTimer := time.NewTimer(time.Second)
-	onShutdown := p.OnShutdown()
-
+	p.statsTimer = time.NewTimer(time.Second)
+	p.onShutdown = p.OnShutdown()
 	p.ifSpoolChan = p.spoolChan
 
-PublishLoop:
 	for {
-		select {
-		case status := <-p.endpointSink.StatusChan():
-			switch status.Status {
-			case endpoint.Ready:
-				// Ignore late messages from a closing endpoint
-				if !status.Endpoint.IsClosing() {
-					p.readyEndpoint(status.Endpoint)
-				}
-			case endpoint.Recovered:
-				if !status.Endpoint.IsClosing() {
-					p.recoverEndpoint(status.Endpoint)
-					p.readyEndpoint(status.Endpoint)
-				}
-			case endpoint.Finished:
-				if p.finishEndpoint(status.Endpoint) {
-					break PublishLoop
-				}
-			default:
-				p.failEndpoint(status.Endpoint)
-			}
-		case spool := <-p.ifSpoolChan:
-			for p.endpointSink.HasReady() {
-				// We have ready endpoints, send the spool
-				endpoint := p.endpointSink.NextReady()
-
-				log.Debug("[%s] %d new events, sending to endpoint", endpoint.Server(), len(spool))
-				err := p.sendEvents(endpoint, spool)
-
-				if err == nil {
-					continue PublishLoop
-				}
-			}
-
-			log.Debug("%d new events queued awaiting endpoint readiness", len(spool))
-			// No ready endpoint, wait for one
-			p.nextSpool = spool
-			p.ifSpoolChan = nil
-		case msg := <-p.endpointSink.ResponseChan():
-			var err error
-
-			endpoint := msg.Endpoint().(*endpoint.Endpoint)
-
-			switch msg := msg.(type) {
-			case *transports.AckResponse:
-				err = p.processAck(endpoint, msg)
-				if err == nil && p.shuttingDown && p.numPayloads == 0 {
-					log.Debug("Final ACK received, shutting down")
-					p.endpointSink.Shutdown()
-				}
-			case *transports.PongResponse:
-				err = p.processPong(endpoint, msg)
-			default:
-				err = fmt.Errorf("[%s] BUG ASSERTION: Unknown message type \"%T\"", endpoint.Server(), msg)
-			}
-
-			if err != nil {
-				p.forceEndpointFailure(endpoint, err)
-			}
-		case <-p.endpointSink.TimeoutChan():
-			// Process triggered timers
-			for {
-				endpoint, callback, more := p.endpointSink.NextTimeout()
-				if endpoint != nil {
-					break
-				}
-
-				log.Debug("[%s] Processing timeout", endpoint.Server())
-				callback.(timeoutFunc)(p, endpoint)
-
-				if !more {
-					break
-				}
-			}
-
-			p.endpointSink.ResetTimeoutTimer()
-		case <-statsTimer.C:
-			p.updateStatistics()
-			statsTimer.Reset(time.Second)
-		case config := <-p.OnConfig():
-			p.reloadConfig(config)
-		case <-onShutdown:
-			onShutdown = nil
-			p.ifSpoolChan = nil
-			p.nextSpool = nil
-			p.shuttingDown = true
-
-			p.endpointSink.Shutdown()
+		if p.runOnce() {
+			break
 		}
 	}
 
@@ -217,6 +132,106 @@ PublishLoop:
 	log.Info("Publisher exiting")
 
 	p.Done()
+}
+
+// runOnce runs a single iteration of the Publisher loop
+// Called continuously by Run until shutdown is completed, at which point the
+// return value changed from false to true to signal completion
+func (p *Publisher) runOnce() bool {
+	select {
+	case status := <-p.endpointSink.StatusChan():
+		switch status.Status {
+		case endpoint.Ready:
+			// Ignore late messages from a closing endpoint
+			if status.Endpoint.IsClosing() {
+				break
+			}
+
+			p.readyEndpoint(status.Endpoint)
+		case endpoint.Recovered:
+			if status.Endpoint.IsClosing() {
+				break
+			}
+
+			p.recoverEndpoint(status.Endpoint)
+			p.readyEndpoint(status.Endpoint)
+		case endpoint.Finished:
+			if p.finishEndpoint(status.Endpoint) {
+				return true
+			}
+		default:
+			p.failEndpoint(status.Endpoint)
+		}
+	case spool := <-p.ifSpoolChan:
+		for p.endpointSink.HasReady() {
+			// We have ready endpoints, send the spool
+			endpoint := p.endpointSink.NextReady()
+
+			log.Debug("[%s] %d new events, sending to endpoint", endpoint.Server(), len(spool))
+			err := p.sendEvents(endpoint, spool)
+
+			if err == nil {
+				return false
+			}
+		}
+
+		log.Debug("%d new events queued awaiting endpoint readiness", len(spool))
+		// No ready endpoint, wait for one
+		p.nextSpool = spool
+		p.ifSpoolChan = nil
+	case msg := <-p.endpointSink.ResponseChan():
+		var err error
+
+		endpoint := msg.Endpoint().(*endpoint.Endpoint)
+
+		switch msg := msg.(type) {
+		case *transports.AckResponse:
+			err = p.processAck(endpoint, msg)
+			if err == nil && p.shuttingDown && p.numPayloads == 0 {
+				log.Debug("Final ACK received, shutting down")
+				p.endpointSink.Shutdown()
+			}
+		case *transports.PongResponse:
+			err = p.processPong(endpoint, msg)
+		default:
+			err = fmt.Errorf("[%s] BUG ASSERTION: Unknown message type \"%T\"", endpoint.Server(), msg)
+		}
+
+		if err != nil {
+			p.forceEndpointFailure(endpoint, err)
+		}
+	case <-p.endpointSink.TimeoutChan():
+		// Process triggered timers
+		for {
+			endpoint, callback, more := p.endpointSink.NextTimeout()
+			if endpoint != nil {
+				break
+			}
+
+			log.Debug("[%s] Processing timeout", endpoint.Server())
+			callback.(timeoutFunc)(p, endpoint)
+
+			if !more {
+				break
+			}
+		}
+
+		p.endpointSink.ResetTimeoutTimer()
+	case <-p.statsTimer.C:
+		p.updateStatistics()
+		p.statsTimer.Reset(time.Second)
+	case config := <-p.OnConfig():
+		p.reloadConfig(config)
+	case <-p.onShutdown:
+		p.onShutdown = nil
+		p.ifSpoolChan = nil
+		p.nextSpool = nil
+		p.shuttingDown = true
+
+		p.endpointSink.Shutdown()
+	}
+
+	return false
 }
 
 func (p *Publisher) reloadConfig(config *config.Config) {
