@@ -50,6 +50,9 @@ shared_context 'Helpers_Log_Courier' do
     if config.nil?
       config = <<-config
       {
+        "general": {
+          "persist directory": "."
+        },
         "network": {
           "ssl ca": "#{@ssl_cert.path}",
           "servers": [ "127.0.0.1:#{server_port}" ],
@@ -82,7 +85,7 @@ shared_context 'Helpers_Log_Courier' do
     end
 
     # Start LSF
-    @log_courier = IO.popen("bin/log-courier -config #{@config.path}" + (args[:args].empty? ? '' : ' ' + args[:args]), @log_courier_mode)
+    @log_courier = IO.popen("log-courier -config #{@config.path}" + (args[:args].empty? ? '' : ' ' + args[:args]), @log_courier_mode)
 
     # Start a thread to flush the STDOUT from the pipe
     log_courier = @log_courier
