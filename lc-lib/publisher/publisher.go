@@ -426,6 +426,7 @@ func (p *Publisher) failEndpoint(endpoint *endpoint.Endpoint) {
 // the failed status. It reports the error and then processes the failure.
 func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
 	log.Error("[%s] An error occurred: %s", endpoint.Server(), err)
+	endpoint.ForceFailure()
 	p.failEndpoint(endpoint)
 }
 

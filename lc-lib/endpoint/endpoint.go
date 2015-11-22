@@ -301,6 +301,10 @@ func (e *Endpoint) ResponseChan() chan<- transports.Response {
 // is called
 // This implements part of the transports.Endpoint interface for callbacks
 func (e *Endpoint) Fail() {
+	if e.IsFailed() {
+		return
+	}
+
 	e.sink.statusChan <- &Status{e, Failed}
 }
 
@@ -310,4 +314,11 @@ func (e *Endpoint) Fail() {
 // This implements part of the transports.Endpoint interface for callbacks
 func (e *Endpoint) Recover() {
 	e.sink.statusChan <- &Status{e, Recovered}
+}
+
+// ForceFailure requests that the transport force itself to fail and reset
+// This is normally called as a response to a timeout or other bad behaviour
+// that the Transport is likely unaware of
+func (e *Endpoint) ForceFailure() {
+	e.transport.Fail()
 }
