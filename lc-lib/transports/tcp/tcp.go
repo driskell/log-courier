@@ -23,18 +23,15 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/binary"
-	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"net"
-	"regexp"
 	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 import _ "crypto/sha256" // Support for newer SSL signature algorithms
@@ -45,20 +42,6 @@ const (
 	socketIntervalSeconds = 1
 )
 
-// TransportTCPFactory holds the configuration from the configuration file
-// It allows creation of TransportTCP instances that use this configuration
-type TransportTCPFactory struct {
-	transport string
-
-	SSLCertificate string `config:"ssl certificate"`
-	SSLKey         string `config:"ssl key"`
-	SSLCA          string `config:"ssl ca"`
-
-	hostportRegexp *regexp.Regexp
-	tlsConfig      tls.Config
-	netConfig      *config.Network
-}
-
 // TransportTCP implements a transport that sends over TCP
 // It also can optionally introduce a TLS layer for security
 type TransportTCP struct {
@@ -67,7 +50,7 @@ type TransportTCP struct {
 	tlssocket *tls.Conn
 
 	controllerChan chan int
-	endpoint       EndpointCallback
+	endpoint       transports.Endpoint
 	failChan       chan error
 
 	wait        sync.WaitGroup
@@ -79,81 +62,6 @@ type TransportTCP struct {
 	// Use in receiver routine only
 	pongPending bool
 	pongTimer   *time.Timer
-}
-
-// NewTransportTCPFactory create a new TransportTCPFactory from the provided
-// configuration data, reporting back any configuration errors it discovers.
-func NewTransportTCPFactory(config *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
-	var err error
-
-	ret := &TransportTCPFactory{
-		transport:      name,
-		hostportRegexp: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
-		netConfig:      &config.Network,
-	}
-
-	// Only allow SSL configurations if this is "tls"
-	if name == "tls" {
-		if err = config.PopulateConfig(ret, configPath, unused); err != nil {
-			return nil, err
-		}
-
-		if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
-			cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
-			if err != nil {
-				return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
-			}
-
-			ret.tlsConfig.Certificates = []tls.Certificate{cert}
-		}
-
-		if len(ret.SSLCA) > 0 {
-			ret.tlsConfig.RootCAs = x509.NewCertPool()
-			pemdata, err := ioutil.ReadFile(ret.SSLCA)
-			if err != nil {
-				return nil, fmt.Errorf("Failure reading CA certificate: %s\n", err)
-			}
-			rest := pemdata
-			var block *pem.Block
-			var pemBlockNum = 1
-			for {
-				block, rest = pem.Decode(rest)
-				if block != nil {
-					if block.Type != "CERTIFICATE" {
-						return nil, fmt.Errorf("Block %d does not contain a certificate: %s\n", pemBlockNum, ret.SSLCA)
-					}
-					cert, err := x509.ParseCertificate(block.Bytes)
-					if err != nil {
-						return nil, fmt.Errorf("Failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
-					}
-					ret.tlsConfig.RootCAs.AddCert(cert)
-					pemBlockNum++
-				} else {
-					break
-				}
-			}
-		}
-	} else {
-		if err := config.ReportUnusedConfig(configPath, unused); err != nil {
-			return nil, err
-		}
-	}
-
-	return ret, nil
-}
-
-// NewTransport returns a new Transport interface using the settings from the
-// TransportTCPFactory.
-func (f *TransportTCPFactory) NewTransport(endpoint EndpointCallback) Transport {
-	ret := &TransportTCP{
-		config:         f,
-		endpoint:       endpoint,
-		controllerChan: make(chan int),
-	}
-
-	go ret.controller()
-
-	return ret
 }
 
 // ReloadConfig returns true if the transport needs to be restarted in order
@@ -404,7 +312,8 @@ ReceiverLoop:
 
 		switch {
 		case bytes.Compare(header[0:4], []byte("PONG")) == 0:
-			if shutdown = t.sendResponse(&PongResponse{t.endpoint}); shutdown {
+			response := transports.NewPongResponse(t.endpoint)
+			if shutdown = t.sendResponse(response); shutdown {
 				break ReceiverLoop
 			}
 		case bytes.Compare(header[0:4], []byte("ACKN")) == 0:
@@ -413,7 +322,8 @@ ReceiverLoop:
 				break ReceiverLoop
 			}
 
-			if shutdown = t.sendResponse(&AckResponse{t.endpoint, string(message[0:16]), binary.BigEndian.Uint32(message[16:20])}); shutdown {
+			response := transports.NewAckResponseFromBytes(t.endpoint, message[0:16], message[16:20])
+			if shutdown = t.sendResponse(response); shutdown {
 				break ReceiverLoop
 			}
 		default:
@@ -481,7 +391,7 @@ ReceiverReadLoop:
 
 // sendResponse ships a response to the Publisher whilst also monitoring for any
 // shutdown signal. Returns true if shutdown was signalled
-func (t *TransportTCP) sendResponse(response Response) bool {
+func (t *TransportTCP) sendResponse(response transports.Response) bool {
 	select {
 	case <-t.recvControl:
 		return true
@@ -558,10 +468,4 @@ func (t *TransportTCP) Fail() {
 // Shutdown the transport
 func (t *TransportTCP) Shutdown() {
 	close(t.controllerChan)
-}
-
-// Register the transports
-func init() {
-	config.RegisterTransport("tcp", NewTransportTCPFactory)
-	config.RegisterTransport("tls", NewTransportTCPFactory)
 }

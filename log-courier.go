@@ -40,7 +40,7 @@ import (
 )
 
 import _ "github.com/driskell/log-courier/lc-lib/codecs"
-import _ "github.com/driskell/log-courier/lc-lib/transports"
+import _ "github.com/driskell/log-courier/lc-lib/transports/tcp"
 
 func main() {
 	logcourier := NewLogCourier()

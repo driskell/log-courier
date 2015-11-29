@@ -18,9 +18,26 @@ package transports
 
 import (
 	"github.com/driskell/log-courier/lc-lib/addresspool"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
 )
+
+// Response is the generic interface implemented by all response structures
+// Endpoints create responses with the necessary metadata for sending
+type Response interface {
+	Endpoint() Endpoint
+}
+
+// Endpoint is the interface implemented by the consumer of a transport,
+// to allow the transport to communicate back
+type Endpoint interface {
+	Pool() *addresspool.Pool
+	Ready()
+	Fail()
+	Recover()
+	Finished()
+	ResponseChan() chan<- Response
+}
 
 // Transport is the generic interface that all transports implement
 type Transport interface {
@@ -31,26 +48,15 @@ type Transport interface {
 	Shutdown()
 }
 
-// EndpointCallback is the interface implemented by the consumer of a transport,
-// to allow the transport to communicate back
-type EndpointCallback interface {
-	Pool() *addresspool.Pool
-	Ready()
-	ResponseChan() chan<- Response
-	Fail()
-	Recover()
-	Finished()
-}
-
 // transportFactory is the interface that all transport factories implement. The
 // transport factory should store the transport's configuration and, when
 // NewTransport is called, return an instance of the transport that obeys that
 // configuration
 type transportFactory interface {
-	NewTransport(EndpointCallback) Transport
+	NewTransport(Endpoint) Transport
 }
 
 // NewTransport returns a Transport interface initialised from the given Factory
-func NewTransport(factory interface{}, endpoint EndpointCallback) Transport {
+func NewTransport(factory interface{}, endpoint Endpoint) Transport {
 	return factory.(transportFactory).NewTransport(endpoint)
 }

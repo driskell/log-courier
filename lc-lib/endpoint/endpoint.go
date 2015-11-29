@@ -80,6 +80,8 @@ type Endpoint struct {
 	shuttingDown    bool
 
 	lineCount int64
+
+	Health Health
 }
 
 // Init prepares the internal Element structures for InternalList and prepares
@@ -179,7 +181,7 @@ func (e *Endpoint) ProcessAck(a *transports.AckResponse) (*payload.Payload, bool
 	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), a.Nonce, a.Sequence)
 
 	// Grab the payload the ACK corresponds to by using nonce
-	payload, found := e.pendingPayloads[a.Nonce]
+	payload, found := e.pendingPayloads[a.Nonce()]
 	if !found {
 		// Don't fail here in case we had temporary issues and resend a payload, only for us to receive duplicate ACKN
 		log.Debug("[%s] Duplicate/corrupt ACK received for message %x", e.Server(), a.Nonce)
@@ -189,12 +191,12 @@ func (e *Endpoint) ProcessAck(a *transports.AckResponse) (*payload.Payload, bool
 	firstAck := !payload.HasAck()
 
 	// Process ACK
-	lines, complete := payload.Ack(int(a.Sequence))
+	lines, complete := payload.Ack(int(a.Sequence()))
 	e.lineCount += int64(lines)
 
 	if complete {
 		// No more events left for this payload, remove from pending list
-		delete(e.pendingPayloads, a.Nonce)
+		delete(e.pendingPayloads, a.Nonce())
 		e.numPayloads--
 	}
 
@@ -268,7 +270,7 @@ func (e *Endpoint) resetPayloads() {
 }
 
 // Pool returns the associated address pool
-// This implements part of the transports.Endpoint interface for callbacks
+// This implements part of the transports.Proxy interface for callbacks
 func (e *Endpoint) Pool() *addresspool.Pool {
 	return e.addressPool
 }
@@ -276,7 +278,7 @@ func (e *Endpoint) Pool() *addresspool.Pool {
 // Ready is called by a transport to signal it is ready for events.
 // This should be triggered once connection is successful and the transport is
 // ready to send data.
-// This implements part of the transports.Endpoint interface for callbacks
+// This implements part of the transports.Proxy interface for callbacks
 func (e *Endpoint) Ready() {
 	e.sink.statusChan <- &Status{e, Ready}
 }
@@ -290,7 +292,7 @@ func (e *Endpoint) Finished() {
 }
 
 // ResponseChan returns the channel that responses should be sent on
-// This implements part of the transports.Endpoint interface for callbacks
+// This implements part of the transports.Proxy interface for callbacks
 func (e *Endpoint) ResponseChan() chan<- transports.Response {
 	return e.sink.responseChan
 }
@@ -299,7 +301,7 @@ func (e *Endpoint) ResponseChan() chan<- transports.Response {
 // pending payloads should be returned to the publisher for retransmission
 // elsewhere. All subsequent Ready signals will also be ignored until Recover()
 // is called
-// This implements part of the transports.Endpoint interface for callbacks
+// This implements part of the transports.Proxy interface for callbacks
 func (e *Endpoint) Fail() {
 	if e.IsFailed() {
 		return
@@ -311,7 +313,7 @@ func (e *Endpoint) Fail() {
 // Recover is called by a transport to signal a failure has recovered
 // Sending of payloads will begin immediately as if a ready signal was sent to
 // an idle endpoint
-// This implements part of the transports.Endpoint interface for callbacks
+// This implements part of the transports.Proxy interface for callbacks
 func (e *Endpoint) Recover() {
 	e.sink.statusChan <- &Status{e, Recovered}
 }

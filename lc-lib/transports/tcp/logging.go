@@ -21,5 +21,5 @@ import "github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-l
 var log *logging.Logger
 
 func init() {
-	log = logging.MustGetLogger("transports")
+	log = logging.MustGetLogger("transports/tcp")
 }

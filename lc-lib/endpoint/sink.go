@@ -67,62 +67,6 @@ func NewSink(config *config.Network) *Sink {
 	return ret
 }
 
-// AddEndpoint initialises a new endpoint for a given server entry
-func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool) *Endpoint {
-	endpoint := &Endpoint{
-		sink:        f,
-		server:      server,
-		addressPool: addressPool,
-	}
-
-	endpoint.transport = transports.NewTransport(f.config.Factory, endpoint)
-	endpoint.Init()
-
-	f.endpoints[server] = endpoint
-
-	if f.priorityList.Len() == 0 {
-		f.priorityEndpoint = endpoint
-	}
-
-	f.priorityList.PushBack(&endpoint.priorityElement)
-
-	return endpoint
-}
-
-// findEndpoint returns the endpoint associated with the given server entry, or
-// nil if no endpoint is associated
-func (f *Sink) findEndpoint(server string) *Endpoint {
-	endpoint, ok := f.endpoints[server]
-	if !ok {
-		return nil
-	}
-	return endpoint
-}
-
-// MoveEndpointAfter ensures the endpoint specified appears directly after the
-// requested endpoint, or at the beginning if nil
-func (f *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
-	f.priorityList.MoveAfter(&endpoint.priorityElement, &after.priorityElement)
-}
-
-// RemoveEndpoint requests the endpoint associated with the given server to be
-// removed from the sink
-func (f *Sink) RemoveEndpoint(server string) {
-	endpoint, ok := f.endpoints[server]
-	if !ok {
-		return
-	}
-
-	// Ensure shutdown was called at the minimum (probably by our own Shutdown)
-	if !endpoint.isShuttingDown() {
-		return
-	}
-
-	f.priorityList.Remove(&endpoint.priorityElement)
-
-	delete(f.endpoints, server)
-}
-
 // ShutdownEndpoint requests the endpoint associated with the given server
 // entry to shutdown
 func (f *Sink) ShutdownEndpoint(server string) {
@@ -130,36 +74,6 @@ func (f *Sink) ShutdownEndpoint(server string) {
 		// Update priority endpoint if we succeeded
 		f.updatePriorityEndpoint()
 	}
-}
-
-// shutdownEndpoint requests the endpoint associated with the given server
-// entry to shutdown, returning false if the endpoint could not be shutdown
-func (f *Sink) shutdownEndpoint(server string) bool {
-	endpoint := f.findEndpoint(server)
-	if endpoint == nil || endpoint.IsClosing() {
-		return false
-	}
-
-	if endpoint.status == endpointStatusReady {
-		f.readyList.Remove(&endpoint.readyElement)
-	} else if endpoint.status == endpointStatusFailed {
-		f.failedList.Remove(&endpoint.failedElement)
-	}
-
-	endpoint.status = endpointStatusClosing
-
-	// If we still have pending payloads wait for them to finish
-	if endpoint.NumPending() != 0 {
-		return true
-	}
-
-	if endpoint.timeoutFunc != nil {
-		f.timeoutList.Remove(&endpoint.timeoutElement)
-	}
-
-	endpoint.shutdown()
-
-	return true
 }
 
 // ReloadConfig updates the configuration held by the sink for new endpoint
@@ -176,7 +90,7 @@ func (f *Sink) ReloadConfig(config *config.Network) {
 			last = f.AddEndpoint(server, addresspool.NewPool(server))
 		} else {
 			// Ensure ordering
-			f.MoveEndpointAfter(endpoint, last)
+			f.moveEndpointAfter(endpoint, last)
 			endpoint.ReloadConfig(config)
 			last = endpoint
 		}
@@ -407,22 +321,6 @@ func (f *Sink) RecoverFailed(endpoint *Endpoint) {
 	endpoint.status = endpointStatusIdle
 
 	f.failedList.Remove(&endpoint.failedElement)
-}
-
-// updatePriorityEndpoint finds the first non-failed endpoint and marks at as
-// the priority endpoint. This endpoint is used when the network method is
-// "failover"
-func (f *Sink) updatePriorityEndpoint() {
-	var element *internallist.Element
-	for element = f.priorityList.Front(); element != nil; element = element.Next() {
-		endpoint := element.Value.(*Endpoint)
-		if !endpoint.IsFailed() && !endpoint.IsClosing() {
-			f.priorityEndpoint = endpoint
-			return
-		}
-	}
-
-	f.priorityEndpoint = nil
 }
 
 // IsPriorityEndpoint returns true if the given endpoint is the current priority
