@@ -178,7 +178,7 @@ func (e *Endpoint) IsPinging() bool {
 // acknoweldgement or a later one, so the publisher may track out of sync
 // payload processing accordingly.
 func (e *Endpoint) ProcessAck(a *transports.AckResponse) (*payload.Payload, bool) {
-	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), a.Nonce, a.Sequence)
+	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), a.Nonce(), a.Sequence())
 
 	// Grab the payload the ACK corresponds to by using nonce
 	payload, found := e.pendingPayloads[a.Nonce()]
