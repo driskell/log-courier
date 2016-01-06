@@ -19,7 +19,7 @@ file and build the package.
 ```
 export VERSION=<your version here> # set to the version you wish to download and build
 wget -P rpmbuild/SOURCES https://github.com/driskell/log-courier/archive/v${VERSION}.zip
-wget -P rpmbuild/SOURCES https://raw.githubusercontent.com/driskell/log-courier/v${VERSION}/contrib/rpm/log-courier.spec
+wget -P rpmbuild/SPECS https://raw.githubusercontent.com/driskell/log-courier/v${VERSION}/contrib/rpm/log-courier.spec
 sed -i "s/^Version: .*$/Version: ${VERSION}/" rpmbuild/SOURCES/log-courier.spec
 rpmbuild -ba rpmbuild/SPECS/log-courier.spec
 ```
