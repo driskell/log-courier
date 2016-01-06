@@ -3,7 +3,7 @@ Packaging Instructions
 
 Install the required package building packages.
 
-    sudo yum install rpmbuild golang
+    sudo yum install rpm-build golang
 
 Setup a standard RPM build workspace with the required folders.
 
