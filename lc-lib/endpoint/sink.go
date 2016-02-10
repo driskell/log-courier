@@ -28,20 +28,15 @@ import (
 // Sink structure contains the control channels that each endpoint
 // will utilise. The newEndpoint method attaches new endpoints to this
 type Sink struct {
-	endpoints map[string]*Endpoint
-	config    *config.Network
-
-	statusChan   chan *Status
-	responseChan chan transports.Response
-
-	timeoutTimer *time.Timer
-
-	timeoutList  internallist.List
-	readyList    internallist.List
-	fullList     internallist.List
-	failedList   internallist.List
-	priorityList internallist.List
-
+	endpoints        map[string]*Endpoint
+	config           *config.Network
+	eventChan        chan transports.Event
+	timeoutTimer     *time.Timer
+	timeoutList      internallist.List
+	readyList        internallist.List
+	fullList         internallist.List
+	failedList       internallist.List
+	priorityList     internallist.List
 	priorityEndpoint *Endpoint
 }
 
@@ -49,19 +44,16 @@ type Sink struct {
 func NewSink(config *config.Network) *Sink {
 	// TODO: Make channel sizes configurable?
 	ret := &Sink{
-		endpoints: make(map[string]*Endpoint),
-		config:    config,
-
-		statusChan:   make(chan *Status, 10),
-		responseChan: make(chan transports.Response, 10),
-
+		endpoints:    make(map[string]*Endpoint),
+		config:       config,
+		eventChan:    make(chan transports.Event, 10),
 		timeoutTimer: time.NewTimer(1 * time.Second),
 	}
 
 	ret.timeoutTimer.Stop()
 
 	for _, server := range config.Servers {
-		ret.AddEndpoint(server, addresspool.NewPool(server))
+		ret.addEndpoint(server, addresspool.NewPool(server))
 	}
 
 	return ret
@@ -87,7 +79,7 @@ func (f *Sink) ReloadConfig(config *config.Network) {
 	for _, server := range config.Servers {
 		if endpoint := f.findEndpoint(server); endpoint == nil {
 			// Add a new endpoint
-			last = f.AddEndpoint(server, addresspool.NewPool(server))
+			last = f.addEndpoint(server, addresspool.NewPool(server))
 		} else {
 			// Ensure ordering
 			f.moveEndpointAfter(endpoint, last)
@@ -124,19 +116,10 @@ func (f *Sink) Count() int {
 	return len(f.endpoints)
 }
 
-// ResponseChan returns the response channel
-// All responses received from endpoints are sent through here
-func (f *Sink) ResponseChan() <-chan transports.Response {
-	return f.responseChan
-}
-
-// StatusChan returns the status channel
-// Failed endpoints will send themselves through this channel along with the
-// reason for failure
-// Recovered endpoints will send themselves with a nil failure reason
-// TODO: Document handling of this
-func (f *Sink) StatusChan() <-chan *Status {
-	return f.statusChan
+// EventChan returns the event channel
+// Status events and messages from endpoints pass through here for processing
+func (f *Sink) EventChan() <-chan transports.Event {
+	return f.eventChan
 }
 
 // TimeoutChan returns a channel which will receive the current time when
@@ -231,8 +214,8 @@ func (f *Sink) NextReady() *Endpoint {
 	return endpoint
 }
 
-// RegisterFull marks an endpoint as full
-func (f *Sink) RegisterFull(endpoint *Endpoint) {
+// moveFull marks an endpoint as full
+func (f *Sink) moveFull(endpoint *Endpoint) {
 	// Ignore if we are already marked as full or were marked as failed/closing
 	if endpoint.status >= endpointStatusFull {
 		return
@@ -247,8 +230,9 @@ func (f *Sink) RegisterFull(endpoint *Endpoint) {
 	f.fullList.PushFront(&endpoint.fullElement)
 }
 
-// RegisterReady marks an endpoint as ready to receive events
-func (f *Sink) RegisterReady(endpoint *Endpoint) {
+// markReady marks an endpoint as ready to receive events
+// but it does not move it to the ready list
+func (f *Sink) markReady(endpoint *Endpoint) {
 	// Ignore if already ready or if we were marked as failed/closing
 	if endpoint.status == endpointStatusReady || endpoint.status >= endpointStatusFailed {
 		return
@@ -259,6 +243,13 @@ func (f *Sink) RegisterReady(endpoint *Endpoint) {
 	}
 
 	endpoint.status = endpointStatusReady
+}
+
+// moveReady moves a ready endpoint to the ready list
+func (f *Sink) moveReady(endpoint *Endpoint) {
+	if endpoint.status != endpointStatusReady {
+		panic("Attempt to call moveReady on endpoint that is not ready")
+	}
 
 	// Least pending payloads takes preference
 	var existing *internallist.Element
@@ -275,11 +266,11 @@ func (f *Sink) RegisterReady(endpoint *Endpoint) {
 	}
 }
 
-// RegisterFailed stores the endpoint on the failed list, removing it from the
+// moveFailed stores the endpoint on the failed list, removing it from the
 // ready or full lists so no more events are sent to it
-func (f *Sink) RegisterFailed(endpoint *Endpoint) {
+func (f *Sink) moveFailed(endpoint *Endpoint) {
 	// Should never get here if we're closing, caller should check IsClosing()
-	if endpoint.status == endpointStatusClosing {
+	if endpoint.status == endpointStatusClosing || endpoint.status == endpointStatusFailed {
 		return
 	}
 
@@ -301,10 +292,14 @@ func (f *Sink) RegisterFailed(endpoint *Endpoint) {
 	f.failedList.PushFront(&endpoint.failedElement)
 }
 
-// RecoverFailed removes an endpoint from the failed list and returns it to the
-// idle status, as soon as the next Ready signal is received, events will flow
-// again
-func (f *Sink) RecoverFailed(endpoint *Endpoint) {
+// ForceFailure forces an endpoint to fail
+func (f *Sink) ForceFailure(endpoint *Endpoint) {
+	f.moveFailed(endpoint)
+	endpoint.forceFailure()
+}
+
+// recoverFailed removes an endpoint from the failed list and marks it ready
+func (f *Sink) recoverFailed(endpoint *Endpoint) {
 	// Should never get here if we're closing, caller should check IsClosing()
 	if endpoint.status == endpointStatusClosing {
 		return
@@ -321,6 +316,8 @@ func (f *Sink) RecoverFailed(endpoint *Endpoint) {
 	endpoint.status = endpointStatusIdle
 
 	f.failedList.Remove(&endpoint.failedElement)
+
+	f.markReady(endpoint)
 }
 
 // IsPriorityEndpoint returns true if the given endpoint is the current priority

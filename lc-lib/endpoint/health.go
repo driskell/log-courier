@@ -16,26 +16,17 @@
 
 package endpoint
 
-// status holds an Endpoint status
-type status int
+// Health describes the health of an Endpoint
+type Health struct {
+	MaxSpoolSize int
+}
 
-// Endpoint statuses
-const (
-	// Not yet ready
-	endpointStatusIdle status = iota
+// HealthierThan returns true if this Endpoint is healther than the given one
+func (h *Health) HealthierThan(other *Health) bool {
+	// Prioritise endpoints accepting larger spool sizes
+	if h.MaxSpoolSize > other.MaxSpoolSize {
+		return true
+	}
 
-	// Ready to receive events
-	endpointStatusReady
-
-	// Busy
-	endpointStatusBusy
-
-	// Could receive events but too many are oustanding
-	endpointStatusFull
-
-	// Do not use this endpoint, it has failed
-	endpointStatusFailed
-
-	// The endpoint is about to shutdown once pending payloads are complete
-	endpointStatusClosing
-)
+	return false
+}

@@ -21,18 +21,15 @@ package publisher
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/registrar"
-	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 var (
@@ -93,8 +90,8 @@ type Publisher struct {
 func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar registrar.Registrator) *Publisher {
 	ret := &Publisher{
 		config:       config,
-		endpointSink: endpoint.NewSink(config),
 		spoolChan:    make(chan []*core.EventDescriptor, 1),
+		endpointSink: endpoint.NewSink(config),
 	}
 
 	if registrar == nil {
@@ -139,38 +136,27 @@ func (p *Publisher) Run() {
 // return value changed from false to true to signal completion
 func (p *Publisher) runOnce() bool {
 	select {
-	case status := <-p.endpointSink.StatusChan():
-		switch status.Status {
-		case endpoint.Ready:
-			// Ignore late messages from a closing endpoint
-			if status.Endpoint.IsClosing() {
-				break
-			}
-
-			p.readyEndpoint(status.Endpoint)
-		case endpoint.Recovered:
-			if status.Endpoint.IsClosing() {
-				break
-			}
-
-			p.recoverEndpoint(status.Endpoint)
-			p.readyEndpoint(status.Endpoint)
-		case endpoint.Finished:
-			if p.finishEndpoint(status.Endpoint) {
-				return true
-			}
-		default:
-			p.failEndpoint(status.Endpoint)
-		}
+	case event := <-p.endpointSink.EventChan():
+		// Endpoint Sink processes the events, and feeds back relevant changes
+		p.endpointSink.ProcessEvent(event, p)
 	case spool := <-p.ifSpoolChan:
 		for p.endpointSink.HasReady() {
 			// We have ready endpoints, send the spool
 			endpoint := p.endpointSink.NextReady()
 
+			// Do we need to reduce spool size?
+			// TODO: Health related splitting of spools
+			/*var sendSpool []*core.EventDescriptor
+			if endpoint.Health.MaxSpoolSize >= len(spool) {
+				sendSpool, spool = spool, nil
+			} else {
+				sendSpool, spool := p.splitSpool(spool, endpoint.Health.MaxSpoolSize)
+			}*/
+
 			log.Debug("[%s] %d new events, sending to endpoint", endpoint.Server(), len(spool))
 			err := p.sendEvents(endpoint, spool)
 
-			if err == nil {
+			if err == nil && spool == nil {
 				return false
 			}
 		}
@@ -179,27 +165,6 @@ func (p *Publisher) runOnce() bool {
 		// No ready endpoint, wait for one
 		p.nextSpool = spool
 		p.ifSpoolChan = nil
-	case msg := <-p.endpointSink.ResponseChan():
-		var err error
-
-		endpoint := msg.Endpoint().(*endpoint.Endpoint)
-
-		switch msg := msg.(type) {
-		case *transports.AckResponse:
-			err = p.processAck(endpoint, msg)
-			if err == nil && p.shuttingDown && p.numPayloads == 0 {
-				log.Debug("Final ACK received, shutting down")
-				p.endpointSink.Shutdown()
-			}
-		case *transports.PongResponse:
-			err = p.processPong(endpoint, msg)
-		default:
-			err = fmt.Errorf("[%s] BUG ASSERTION: Unknown message type \"%T\"", endpoint.Server(), msg)
-		}
-
-		if err != nil {
-			p.forceEndpointFailure(endpoint, err)
-		}
 	case <-p.endpointSink.TimeoutChan():
 		// Process triggered timers
 		for {
@@ -278,9 +243,12 @@ func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, pendingPayload *pay
 	return nil
 }
 
-func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckResponse) error {
-	pendingPayload, firstAck := endpoint.ProcessAck(msg)
-
+// OnAck handles acknowledgements from endpoints
+// It keeps track of how many out of sync acknowldgements have been made so
+// shutdown can be postponed if we've received Acks for newer events before
+// older events. It also serialises the Ack offsets for correct registrar
+// storage to ensure the registrar offsets are always sequential
+func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool) {
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.NumPending() != 0 {
 		log.Debug("[%s] Resetting pending timeout", endpoint.Server())
@@ -288,17 +256,6 @@ func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckR
 	} else {
 		log.Debug("[%s] Last payload acknowledged, starting keepalive timeout", endpoint.Server())
 		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
-	}
-
-	// If we're no longer full, move to ready queue
-	if endpoint.IsFull() && endpoint.NumPending() < int(p.config.MaxPendingPayloads) {
-		log.Debug("[%s] Endpoint is no longer full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
-		p.readyEndpoint(endpoint)
-	}
-
-	// Did the endpoint actually process the ACK?
-	if pendingPayload == nil {
-		return nil
 	}
 
 	// If we're on the resend queue and just completed, remove it
@@ -353,64 +310,27 @@ func (p *Publisher) processAck(endpoint *endpoint.Endpoint, msg *transports.AckR
 		// for this payload, then increase out of sync payload count
 		p.outOfSync++
 	}
-
-	return nil
 }
 
-func (p *Publisher) processPong(endpoint *endpoint.Endpoint, msg *transports.PongResponse) error {
-	if err := endpoint.ProcessPong(); err != nil {
-		return err
-	}
-
+// OnPong handles when endpoints receive a pong message
+func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 	// If we haven't started sending anything, return to keepalive timeout
 	if endpoint.NumPending() == 0 {
 		log.Debug("[%s] Resetting keepalive timeout", endpoint.Server())
 		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutKeepalive)
 	}
-
-	return nil
 }
 
-// recoverEndpoint moves an endpoint back into the idle status
-func (p *Publisher) recoverEndpoint(endpoint *endpoint.Endpoint) {
-	if endpoint.IsFailed() {
-		log.Info("[%s] Endpoint recovered", endpoint.Server())
-		p.endpointSink.RecoverFailed(endpoint)
-	}
-}
-
-// finishEndpoint removes a finished endpoint, recreating it if it is still in
-// in the active configuration. Returns true if shutdown is completed
-func (p *Publisher) finishEndpoint(endpoint *endpoint.Endpoint) bool {
-	log.Debug("[%s] Endpoint has finished", endpoint.Server())
-	server := endpoint.Server()
-	p.endpointSink.RemoveEndpoint(server)
-
+// OnFinish handles when endpoints are finished
+// Should return false if the endpoint is not to be reinitialised, such as when
+// shutting down
+func (p *Publisher) OnFinish(endpoint *endpoint.Endpoint) bool {
 	// Don't recreate anything if shutting down
-	if p.shuttingDown {
-		if p.endpointSink.Count() == 0 {
-			// Finished shutting down!
-			return true
-		}
-		return false
-	}
-
-	// Recreate the endpoint if it's still in the config
-	for _, item := range p.config.Servers {
-		if item == server {
-			p.endpointSink.AddEndpoint(server, addresspool.NewPool(server))
-			break
-		}
-	}
-
-	return false
+	return !p.shuttingDown
 }
 
-// failEndpoint marks an endpoint as failed
-func (p *Publisher) failEndpoint(endpoint *endpoint.Endpoint) {
-	log.Info("[%s] Marking endpoint as failed", endpoint.Server())
-	p.endpointSink.RegisterFailed(endpoint)
-
+// OnFail handles a failed endpoint
+func (p *Publisher) OnFail(endpoint *endpoint.Endpoint) {
 	// Pull back pending payloads so we can requeue them onto other endpoints
 	for _, pendingPayload := range endpoint.PullBackPending() {
 		pendingPayload.Resending = true
@@ -437,22 +357,10 @@ func (p *Publisher) failEndpoint(endpoint *endpoint.Endpoint) {
 	log.Debug("%d payloads held for resend", p.resendList.Len())
 }
 
-// forceEndpointFailure is called by Publisher to force an endpoint to enter
-// the failed status. It reports the error and then processes the failure.
-func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
-	log.Error("[%s] An error occurred: %s", endpoint.Server(), err)
-	endpoint.ForceFailure()
-	p.failEndpoint(endpoint)
-}
-
-func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
-	if endpoint.NumPending() >= int(p.config.MaxPendingPayloads) {
-		log.Debug("[%s] Endpoint is full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
-		p.endpointSink.RegisterFull(endpoint)
-		return
-	}
-
+// OnReady handles an endpoint that is now ready for events
+func (p *Publisher) OnReady(endpoint *endpoint.Endpoint) {
 	// If we're in failover mode, only send if this is the priority endpoint
+	// TODO: Endpoint priority to be determined by publisher, along with load balancing
 	if p.config.Method == "failover" && !p.endpointSink.IsPriorityEndpoint(endpoint) {
 		return
 	}
@@ -463,13 +371,17 @@ func (p *Publisher) readyEndpoint(endpoint *endpoint.Endpoint) {
 
 	log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
 
-	// No events, save on the ready list and start the keepalive timer if none set
-	p.endpointSink.RegisterReady(endpoint)
-
 	if !endpoint.HasTimeout() {
 		log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
 		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
 	}
+}
+
+// forceEndpointFailure is called by Publisher to force an endpoint to enter
+// the failed status. It reports the error and then processes the failure.
+func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
+	log.Error("[%s] Failing endpoint: %s", endpoint.Server(), err)
+	p.endpointSink.ForceFailure(endpoint)
 }
 
 func (p *Publisher) eventsAvailable() bool {

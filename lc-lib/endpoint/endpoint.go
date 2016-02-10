@@ -17,7 +17,6 @@
 package endpoint
 
 import (
-	"errors"
 	"math/rand"
 	"sync"
 	"time"
@@ -27,27 +26,6 @@ import (
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
-)
-
-// status holds an Endpoint status
-type status int
-
-// Endpoint statuses
-const (
-	// Not yet ready
-	endpointStatusIdle status = iota
-
-	// Ready to receive events
-	endpointStatusReady
-
-	// Could receive events but too many are oustanding
-	endpointStatusFull
-
-	// Do not use this endpoint, it has failed
-	endpointStatusFailed
-
-	// The endpoint is about to shutdown once pending payloads are complete
-	endpointStatusClosing
 )
 
 // Endpoint structure represents a single remote endpoint
@@ -77,7 +55,6 @@ type Endpoint struct {
 	pendingPayloads map[string]*payload.Payload
 	numPayloads     int
 	pongPending     bool
-	shuttingDown    bool
 
 	lineCount int64
 
@@ -98,17 +75,12 @@ func (e *Endpoint) Init() {
 
 // shutdown signals the transport to start shutting down
 func (e *Endpoint) shutdown() {
-	if e.shuttingDown {
+	if e.status == endpointStatusClosing {
 		return
 	}
 
+	e.status = endpointStatusClosing
 	e.transport.Shutdown()
-	e.shuttingDown = true
-}
-
-// isShuttingDown returns true if shutdown has been called
-func (e *Endpoint) isShuttingDown() bool {
-	return e.shuttingDown
 }
 
 // Server returns the server string from the configuration file that this
@@ -117,12 +89,14 @@ func (e *Endpoint) Server() string {
 	return e.server
 }
 
-// SendPayload adds an event spool to the queue, sending it to the transport.
-// Always called from Publisher routine to ensure concurrent pending payload
-// access.
-//
-// Should return the payload so the publisher can track it accordingly.
+// SendPayload registers a payload with the endpoint and sends it to the
+// transport
 func (e *Endpoint) SendPayload(payload *payload.Payload) error {
+	// Must be in a ready state
+	if e.status != endpointStatusReady {
+		panic("Endpoint is not ready")
+	}
+
 	// Calculate a nonce
 	nonce := e.generateNonce()
 	for {
@@ -139,7 +113,12 @@ func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 
 	log.Debug("[%s] Sending payload %x", e.Server(), nonce)
 
-	return e.transport.Write(payload.Nonce, payload.Events())
+	if err := e.transport.Write(payload.Nonce, payload.Events()); err != nil {
+		return err
+	}
+
+	e.status = endpointStatusBusy
+	return nil
 }
 
 // generateNonce creates a random string for payload identification
@@ -166,53 +145,49 @@ func (e *Endpoint) IsPinging() bool {
 	return e.pongPending
 }
 
-// ProcessAck processes a received acknowledgement message.
-//
-// When Ack() is called by the transport we feed a channel through to the
-// publisher, which calls the message processor. This message processer passes
-// control here to allow us to clear pending payloads.
-// The reason for this is to ensure all payload allocation and manipulation
-// happens on the publisher main routine.
-//
-// We should return the payload that was acked, and whether this is the first
-// acknoweldgement or a later one, so the publisher may track out of sync
-// payload processing accordingly.
-func (e *Endpoint) ProcessAck(a *transports.AckResponse) (*payload.Payload, bool) {
-	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), a.Nonce(), a.Sequence())
+// processAck processes a received acknowledgement message.
+// This will pass the payload that was acked, and whether this is the first
+// acknoweldgement or a later one, to the observer
+// It should return whether or not the payload was completed so full status
+// can be updated
+func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool {
+	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), ack.Nonce(), ack.Sequence())
 
 	// Grab the payload the ACK corresponds to by using nonce
-	payload, found := e.pendingPayloads[a.Nonce()]
+	payload, found := e.pendingPayloads[ack.Nonce()]
 	if !found {
 		// Don't fail here in case we had temporary issues and resend a payload, only for us to receive duplicate ACKN
-		log.Debug("[%s] Duplicate/corrupt ACK received for message %x", e.Server(), a.Nonce)
-		return nil, false
+		log.Debug("[%s] Duplicate/corrupt ACK received for message %x", e.Server(), ack.Nonce())
+		return false
 	}
 
 	firstAck := !payload.HasAck()
 
 	// Process ACK
-	lines, complete := payload.Ack(int(a.Sequence()))
+	lines, complete := payload.Ack(int(ack.Sequence()))
 	e.lineCount += int64(lines)
 
 	if complete {
 		// No more events left for this payload, remove from pending list
-		delete(e.pendingPayloads, a.Nonce())
+		delete(e.pendingPayloads, ack.Nonce())
 		e.numPayloads--
 	}
 
-	return payload, firstAck
+	observer.OnAck(e, payload, firstAck)
+
+	return complete
 }
 
 // ProcessPong processes a received PONG message
-func (e *Endpoint) ProcessPong() error {
+func (e *Endpoint) processPong(observer Observer) {
 	if !e.pongPending {
-		return errors.New("Unexpected PONG received")
+		return
 	}
 
 	log.Debug("[%s] Received PONG message", e.Server())
 	e.pongPending = false
 
-	return nil
+	observer.OnPong(e)
 }
 
 // NumPending returns the number of pending payloads on this endpoint
@@ -275,52 +250,14 @@ func (e *Endpoint) Pool() *addresspool.Pool {
 	return e.addressPool
 }
 
-// Ready is called by a transport to signal it is ready for events.
-// This should be triggered once connection is successful and the transport is
-// ready to send data.
-// This implements part of the transports.Proxy interface for callbacks
-func (e *Endpoint) Ready() {
-	e.sink.statusChan <- &Status{e, Ready}
-}
-
-// Finished is called by a transport to signal it has shutdown.
-// This should be triggered only after Shutdown has been called and the
-// transport has disconnected and completely cleaned up, as during shutdown the
-// application will exit imminently
-func (e *Endpoint) Finished() {
-	e.sink.statusChan <- &Status{e, Finished}
-}
-
-// ResponseChan returns the channel that responses should be sent on
-// This implements part of the transports.Proxy interface for callbacks
-func (e *Endpoint) ResponseChan() chan<- transports.Response {
-	return e.sink.responseChan
-}
-
-// Fail is called by a transport to signal an error has occurred, and that all
-// pending payloads should be returned to the publisher for retransmission
-// elsewhere. All subsequent Ready signals will also be ignored until Recover()
-// is called
-// This implements part of the transports.Proxy interface for callbacks
-func (e *Endpoint) Fail() {
-	if e.IsFailed() {
-		return
-	}
-
-	e.sink.statusChan <- &Status{e, Failed}
-}
-
-// Recover is called by a transport to signal a failure has recovered
-// Sending of payloads will begin immediately as if a ready signal was sent to
-// an idle endpoint
-// This implements part of the transports.Proxy interface for callbacks
-func (e *Endpoint) Recover() {
-	e.sink.statusChan <- &Status{e, Recovered}
+// EventChan returns the event channel transports should send events through
+func (e *Endpoint) EventChan() chan<- transports.Event {
+	return e.sink.eventChan
 }
 
 // ForceFailure requests that the transport force itself to fail and reset
 // This is normally called as a response to a timeout or other bad behaviour
 // that the Transport is likely unaware of
-func (e *Endpoint) ForceFailure() {
+func (e *Endpoint) forceFailure() {
 	e.transport.Fail()
 }

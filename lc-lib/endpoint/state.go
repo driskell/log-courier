@@ -23,7 +23,7 @@ import (
 )
 
 // AddEndpoint initialises a new endpoint for a given server entry
-func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool) *Endpoint {
+func (f *Sink) addEndpoint(server string, addressPool *addresspool.Pool) *Endpoint {
 	endpoint := &Endpoint{
 		sink:        f,
 		server:      server,
@@ -62,14 +62,14 @@ func (f *Sink) moveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
 
 // RemoveEndpoint requests the endpoint associated with the given server to be
 // removed from the sink
-func (f *Sink) RemoveEndpoint(server string) {
+func (f *Sink) removeEndpoint(server string) {
 	endpoint, ok := f.endpoints[server]
 	if !ok {
 		return
 	}
 
 	// Ensure shutdown was called at the minimum (probably by our own Shutdown)
-	if !endpoint.isShuttingDown() {
+	if endpoint.status != endpointStatusClosing {
 		return
 	}
 

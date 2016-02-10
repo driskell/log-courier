@@ -22,21 +22,12 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
-// Response is the generic interface implemented by all response structures
-// Endpoints create responses with the necessary metadata for sending
-type Response interface {
-	Endpoint() Endpoint
-}
-
-// Endpoint is the interface implemented by the consumer of a transport,
-// to allow the transport to communicate back
-type Endpoint interface {
+// Observer is the interface implemented by the consumer of a transport, to
+// allow the transport to communicate back
+// To all intents and purposes this is the Endpoint
+type Observer interface {
 	Pool() *addresspool.Pool
-	Ready()
-	Fail()
-	Recover()
-	Finished()
-	ResponseChan() chan<- Response
+	EventChan() chan<- Event
 }
 
 // Transport is the generic interface that all transports implement
@@ -53,10 +44,10 @@ type Transport interface {
 // NewTransport is called, return an instance of the transport that obeys that
 // configuration
 type transportFactory interface {
-	NewTransport(Endpoint) Transport
+	NewTransport(Observer) Transport
 }
 
 // NewTransport returns a Transport interface initialised from the given Factory
-func NewTransport(factory interface{}, endpoint Endpoint) Transport {
-	return factory.(transportFactory).NewTransport(endpoint)
+func NewTransport(factory interface{}, observer Observer) Transport {
+	return factory.(transportFactory).NewTransport(observer)
 }

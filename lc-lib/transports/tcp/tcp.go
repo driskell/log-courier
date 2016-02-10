@@ -50,7 +50,7 @@ type TransportTCP struct {
 	tlssocket *tls.Conn
 
 	controllerChan chan int
-	endpoint       transports.Endpoint
+	observer       transports.Observer
 	failChan       chan error
 
 	wait        sync.WaitGroup
@@ -84,14 +84,19 @@ func (t *TransportTCP) ReloadConfig(newNetConfig *config.Network) bool {
 // It also
 func (t *TransportTCP) controller() {
 	defer func() {
-		t.endpoint.Finished()
+		t.sendEvent(nil, transports.NewStatusEvent(t.observer, transports.Finished))
 	}()
 
 	// Main connect loop
 	for {
 		var err error
+		var shutdown bool
 
-		err = t.connect()
+		err, shutdown = t.connect()
+		if shutdown {
+			t.disconnect()
+			return
+		}
 		if err == nil {
 			// Connected - sit and wait for shutdown or error
 			select {
@@ -101,19 +106,19 @@ func (t *TransportTCP) controller() {
 				t.disconnect()
 				return
 			case err = <-t.failChan:
-				// Error occurred
-				if err != nil {
-					// If err is nil, it's a forced failure by publisher so we need not
-					// call endpoint fail to let it know about it
-					t.endpoint.Fail()
+				// If err is nil, it's a forced failure by publisher so we need not
+				// call observer fail to let it know about it
+				if err != nil && t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Finished)) {
+					t.disconnect()
+					return
 				}
 			}
 		}
 
 		if err != nil {
-			log.Error("[%s] Transport error, reconnecting: %s", t.endpoint.Pool().Server(), err)
+			log.Error("[%s] Transport error, reconnecting: %s", t.observer.Pool().Server(), err)
 		} else {
-			log.Info("[%s] Transport reconnecting", t.endpoint.Pool().Server())
+			log.Info("[%s] Transport reconnecting", t.observer.Pool().Server())
 		}
 
 		t.disconnect()
@@ -152,23 +157,24 @@ ReconnectWaitLoop:
 }
 
 // connect connects the socket and starts the sender and receiver routines
-func (t *TransportTCP) connect() error {
+// Returns an error and also true if shutdown was detected
+func (t *TransportTCP) connect() (error, bool) {
 	if t.sendControl != nil {
 		t.disconnect()
 	}
 
-	addr, err := t.endpoint.Pool().Next()
+	addr, err := t.observer.Pool().Next()
 	if err != nil {
-		return fmt.Errorf("Failed to select next address: %s", err)
+		return fmt.Errorf("Failed to select next address: %s", err), false
 	}
 
-	desc := t.endpoint.Pool().Desc()
+	desc := t.observer.Pool().Desc()
 
-	log.Info("[%s] Attempting to connect to %s", t.endpoint.Pool().Server(), desc)
+	log.Info("[%s] Attempting to connect to %s", t.observer.Pool().Server(), desc)
 
 	tcpsocket, err := net.DialTimeout("tcp", addr.String(), t.config.netConfig.Timeout)
 	if err != nil {
-		return fmt.Errorf("Failed to connect to %s: %s", desc, err)
+		return fmt.Errorf("Failed to connect to %s: %s", desc, err), false
 	}
 
 	// Now wrap in TLS if this is the "tls" transport
@@ -177,7 +183,7 @@ func (t *TransportTCP) connect() error {
 		t.config.tlsConfig.MinVersion = tls.VersionTLS10
 
 		// Set the tlsconfig server name for server validation (required since Go 1.3)
-		t.config.tlsConfig.ServerName = t.endpoint.Pool().Host()
+		t.config.tlsConfig.ServerName = t.observer.Pool().Host()
 
 		t.tlssocket = tls.Client(&transportTCPWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tlsConfig)
 		t.tlssocket.SetDeadline(time.Now().Add(t.config.netConfig.Timeout))
@@ -185,7 +191,7 @@ func (t *TransportTCP) connect() error {
 		if err != nil {
 			t.tlssocket.Close()
 			tcpsocket.Close()
-			return fmt.Errorf("TLS Handshake failure with %s: %s", desc, err)
+			return fmt.Errorf("TLS Handshake failure with %s: %s", desc, err), false
 		}
 
 		t.socket = t.tlssocket
@@ -193,7 +199,7 @@ func (t *TransportTCP) connect() error {
 		t.socket = tcpsocket
 	}
 
-	log.Notice("[%s] Connected to %s", t.endpoint.Pool().Server(), desc)
+	log.Notice("[%s] Connected to %s", t.observer.Pool().Server(), desc)
 
 	// Signal channels
 	t.sendControl = make(chan int, 1)
@@ -207,7 +213,9 @@ func (t *TransportTCP) connect() error {
 	t.failChan = make(chan error, 2)
 
 	// Send a recovery signal - this implicitly means we're also ready
-	t.endpoint.Recover()
+	if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Recovered)) {
+		return nil, true
+	}
 
 	t.wait.Add(2)
 
@@ -218,7 +226,7 @@ func (t *TransportTCP) connect() error {
 	go t.sender()
 	go t.receiver()
 
-	return nil
+	return nil, false
 }
 
 // disconnect shuts down the sender and receiver routines and disconnects the
@@ -242,7 +250,7 @@ func (t *TransportTCP) disconnect() {
 
 	t.socket.Close()
 
-	log.Notice("[%s] Disconnected from %s", t.endpoint.Pool().Server(), t.endpoint.Pool().Desc())
+	log.Notice("[%s] Disconnected from %s", t.observer.Pool().Server(), t.observer.Pool().Desc())
 }
 
 // sender handles socket writes
@@ -255,7 +263,9 @@ SenderLoop:
 			break SenderLoop
 		case msg := <-t.sendChan:
 			// Ask for more while we send this
-			t.endpoint.Ready()
+			if t.sendEvent(t.sendControl, transports.NewStatusEvent(t.observer, transports.Ready)) {
+				break SenderLoop
+			}
 
 			// Write deadline is managed by our net.Conn wrapper that tls will call into
 			_, err := t.socket.Write(msg)
@@ -312,8 +322,7 @@ ReceiverLoop:
 
 		switch {
 		case bytes.Compare(header[0:4], []byte("PONG")) == 0:
-			response := transports.NewPongResponse(t.endpoint)
-			if shutdown = t.sendResponse(response); shutdown {
+			if t.sendEvent(t.recvControl, transports.NewPongEvent(t.observer)) {
 				break ReceiverLoop
 			}
 		case bytes.Compare(header[0:4], []byte("ACKN")) == 0:
@@ -322,8 +331,7 @@ ReceiverLoop:
 				break ReceiverLoop
 			}
 
-			response := transports.NewAckResponseFromBytes(t.endpoint, message[0:16], message[16:20])
-			if shutdown = t.sendResponse(response); shutdown {
+			if t.sendEvent(t.recvControl, transports.NewAckEventWithBytes(t.observer, message[0:16], message[16:20])) {
 				break ReceiverLoop
 			}
 		default:
@@ -389,13 +397,13 @@ ReceiverReadLoop:
 	return true, nil
 }
 
-// sendResponse ships a response to the Publisher whilst also monitoring for any
-// shutdown signal. Returns true if shutdown was signalled
-func (t *TransportTCP) sendResponse(response transports.Response) bool {
+// sendEvent ships an event structure to the observer whilst also monitoring for
+// any shutdown signal. Returns true if shutdown was signalled
+func (t *TransportTCP) sendEvent(controlChan <-chan int, event transports.Event) bool {
 	select {
-	case <-t.recvControl:
+	case <-controlChan:
 		return true
-	case t.endpoint.ResponseChan() <- response:
+	case t.observer.EventChan() <- event:
 	}
 	return false
 }
