@@ -73,13 +73,13 @@ func (e *Endpoint) Init() {
 	e.resetPayloads()
 }
 
-// shutdown signals the transport to start shutting down
-func (e *Endpoint) shutdown() {
-	if e.status == endpointStatusClosing {
+// shutdownTransport signals the transport to start shutting down
+func (e *Endpoint) shutdownTransport() {
+	if e.status != endpointStatusClosing {
 		return
 	}
 
-	e.status = endpointStatusClosing
+	log.Debug("[%s] Endpoint is now shutting down", e.Server())
 	e.transport.Shutdown()
 }
 
@@ -193,6 +193,11 @@ func (e *Endpoint) processPong(observer Observer) {
 // NumPending returns the number of pending payloads on this endpoint
 func (e *Endpoint) NumPending() int {
 	return e.numPayloads
+}
+
+// IsIdle returns true if this Endpoint is idle (newly created and unused)
+func (e *Endpoint) IsIdle() bool {
+	return e.status == endpointStatusIdle
 }
 
 // IsClosing returns true if this Endpoint is closing down

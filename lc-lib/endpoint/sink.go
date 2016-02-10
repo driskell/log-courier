@@ -311,12 +311,10 @@ func (f *Sink) recoverFailed(endpoint *Endpoint) {
 	}
 
 	// Update the priority endpoint in case this recovered one is higher priority
+	endpoint.status = endpointStatusIdle
 	f.updatePriorityEndpoint()
 
-	endpoint.status = endpointStatusIdle
-
 	f.failedList.Remove(&endpoint.failedElement)
-
 	f.markReady(endpoint)
 }
 

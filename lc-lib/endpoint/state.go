@@ -88,6 +88,8 @@ func (f *Sink) shutdownEndpoint(server string) bool {
 
 	if endpoint.status == endpointStatusReady {
 		f.readyList.Remove(&endpoint.readyElement)
+	} else if endpoint.status == endpointStatusFull {
+		f.fullList.Remove(&endpoint.fullElement)
 	} else if endpoint.status == endpointStatusFailed {
 		f.failedList.Remove(&endpoint.failedElement)
 	}
@@ -103,7 +105,7 @@ func (f *Sink) shutdownEndpoint(server string) bool {
 		f.timeoutList.Remove(&endpoint.timeoutElement)
 	}
 
-	endpoint.shutdown()
+	endpoint.shutdownTransport()
 
 	return true
 }
@@ -115,7 +117,7 @@ func (f *Sink) updatePriorityEndpoint() {
 	var element *internallist.Element
 	for element = f.priorityList.Front(); element != nil; element = element.Next() {
 		endpoint := element.Value.(*Endpoint)
-		if !endpoint.IsFailed() && !endpoint.IsClosing() {
+		if endpoint.status <= endpointStatusFull {
 			f.priorityEndpoint = endpoint
 			return
 		}

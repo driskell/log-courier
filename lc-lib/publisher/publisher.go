@@ -135,10 +135,18 @@ func (p *Publisher) Run() {
 // Called continuously by Run until shutdown is completed, at which point the
 // return value changed from false to true to signal completion
 func (p *Publisher) runOnce() bool {
+PublisherSelect:
 	select {
 	case event := <-p.endpointSink.EventChan():
 		// Endpoint Sink processes the events, and feeds back relevant changes
 		p.endpointSink.ProcessEvent(event, p)
+
+		// TODO: Pass shutdown back through sink?
+		// If all finished, we're done
+		if p.shuttingDown && p.endpointSink.Count() == 0 {
+			// TODO: What about out of sync ACK?
+			return true
+		}
 	case spool := <-p.ifSpoolChan:
 		for p.endpointSink.HasReady() {
 			// We have ready endpoints, send the spool
@@ -154,10 +162,9 @@ func (p *Publisher) runOnce() bool {
 			}*/
 
 			log.Debug("[%s] %d new events, sending to endpoint", endpoint.Server(), len(spool))
-			err := p.sendEvents(endpoint, spool)
 
-			if err == nil && spool == nil {
-				return false
+			if err := p.sendEvents(endpoint, spool); err == nil {
+				break PublisherSelect
 			}
 		}
 
@@ -362,6 +369,7 @@ func (p *Publisher) OnReady(endpoint *endpoint.Endpoint) {
 	// If we're in failover mode, only send if this is the priority endpoint
 	// TODO: Endpoint priority to be determined by publisher, along with load balancing
 	if p.config.Method == "failover" && !p.endpointSink.IsPriorityEndpoint(endpoint) {
+		log.Debug("[%s] Endpoint is standing by", endpoint.Server())
 		return
 	}
 

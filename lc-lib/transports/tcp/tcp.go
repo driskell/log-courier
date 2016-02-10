@@ -92,7 +92,7 @@ func (t *TransportTCP) controller() {
 		var err error
 		var shutdown bool
 
-		err, shutdown = t.connect()
+		shutdown, err = t.connect()
 		if shutdown {
 			t.disconnect()
 			return
@@ -108,7 +108,7 @@ func (t *TransportTCP) controller() {
 			case err = <-t.failChan:
 				// If err is nil, it's a forced failure by publisher so we need not
 				// call observer fail to let it know about it
-				if err != nil && t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Finished)) {
+				if err != nil && t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Failed)) {
 					t.disconnect()
 					return
 				}
@@ -158,14 +158,14 @@ ReconnectWaitLoop:
 
 // connect connects the socket and starts the sender and receiver routines
 // Returns an error and also true if shutdown was detected
-func (t *TransportTCP) connect() (error, bool) {
+func (t *TransportTCP) connect() (bool, error) {
 	if t.sendControl != nil {
 		t.disconnect()
 	}
 
 	addr, err := t.observer.Pool().Next()
 	if err != nil {
-		return fmt.Errorf("Failed to select next address: %s", err), false
+		return false, fmt.Errorf("Failed to select next address: %s", err)
 	}
 
 	desc := t.observer.Pool().Desc()
@@ -174,7 +174,7 @@ func (t *TransportTCP) connect() (error, bool) {
 
 	tcpsocket, err := net.DialTimeout("tcp", addr.String(), t.config.netConfig.Timeout)
 	if err != nil {
-		return fmt.Errorf("Failed to connect to %s: %s", desc, err), false
+		return false, fmt.Errorf("Failed to connect to %s: %s", desc, err)
 	}
 
 	// Now wrap in TLS if this is the "tls" transport
@@ -191,7 +191,7 @@ func (t *TransportTCP) connect() (error, bool) {
 		if err != nil {
 			t.tlssocket.Close()
 			tcpsocket.Close()
-			return fmt.Errorf("TLS Handshake failure with %s: %s", desc, err), false
+			return false, fmt.Errorf("TLS Handshake failure with %s: %s", desc, err)
 		}
 
 		t.socket = t.tlssocket
@@ -214,7 +214,7 @@ func (t *TransportTCP) connect() (error, bool) {
 
 	// Send a recovery signal - this implicitly means we're also ready
 	if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Recovered)) {
-		return nil, true
+		return true, nil
 	}
 
 	t.wait.Add(2)
@@ -226,7 +226,7 @@ func (t *TransportTCP) connect() (error, bool) {
 	go t.sender()
 	go t.receiver()
 
-	return nil, false
+	return false, nil
 }
 
 // disconnect shuts down the sender and receiver routines and disconnects the

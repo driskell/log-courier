@@ -43,23 +43,23 @@ type Observer interface {
 
 // ProcessEvent performs the necessary processing of events
 func (s *Sink) ProcessEvent(event transports.Event, observer Observer) {
+	endpoint := event.Observer().(*Endpoint)
+
 	switch msg := event.(type) {
 	case *transports.StatusEvent:
-		s.processStatusChange(msg, observer)
+		s.processStatusChange(msg, endpoint, observer)
 	case *transports.AckEvent:
-		s.processAck(msg, observer)
+		s.processAck(msg, endpoint, observer)
 	case *transports.PongEvent:
 		// TODO: Is there a better way to encapsulate this?
-		event.Observer().(*Endpoint).processPong(observer)
+		endpoint.processPong(observer)
 	default:
-		observer.OnFail(event.Observer().(*Endpoint))
+		panic("Invalid transport event received")
 	}
 }
 
 // processStatusChange handles status change events
-func (s *Sink) processStatusChange(status *transports.StatusEvent, observer Observer) {
-	endpoint := status.Observer().(*Endpoint)
-
+func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *Endpoint, observer Observer) {
 	switch status.StatusChange() {
 	case transports.Ready:
 		// Ignore late messages from a closing endpoint
@@ -83,24 +83,33 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, observer Obse
 			s.moveReady(endpoint)
 		}
 	case transports.Failed:
-		if endpoint.IsClosing() || endpoint.IsFailed() {
+		if endpoint.IsFailed() {
 			break
 		}
+
+		shutdown := endpoint.IsClosing()
 
 		log.Info("[%s] Marking endpoint as failed", endpoint.Server())
 		s.moveFailed(endpoint)
 		observer.OnFail(endpoint)
+
+		// If we're shutting down, give up and complete transport shutdown
+		if shutdown {
+			endpoint.shutdownTransport()
+		}
 	case transports.Recovered:
-		// Only mark recovered and signal ready if we were originally failed
-		// This simplifies logic in transports - they can simply say recovered
-		// upon initialisation instead of havin to check if it was recovering
-		if !endpoint.IsFailed() {
+		// Allow idle state to also use Recovered, as idle transports always have
+		// zero pending payloads as they've only just been created
+		if endpoint.IsFailed() {
+			log.Info("[%s] Endpoint recovered", endpoint.Server())
+			s.recoverFailed(endpoint)
+		} else if endpoint.IsIdle() {
+			// Mark as ready
+			s.markReady(endpoint)
+		} else {
 			break
 		}
 
-		// Mark as ready
-		log.Info("[%s] Endpoint recovered", endpoint.Server())
-		s.recoverFailed(endpoint)
 		observer.OnReady(endpoint)
 
 		// If the endpoint is still ready, nothing was sent, add to ready list
@@ -124,15 +133,26 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, observer Obse
 			}
 		}
 	default:
-		observer.OnFail(endpoint)
+		panic("Invalid transport status code received")
 	}
 }
 
-func (s *Sink) processAck(ack *transports.AckEvent, observer Observer) {
-	endpoint := ack.Observer().(*Endpoint)
+func (s *Sink) processAck(ack *transports.AckEvent, endpoint *Endpoint, observer Observer) {
 	complete := endpoint.processAck(ack, observer)
 
-	if complete && endpoint.IsFull() && endpoint.NumPending() < int(s.config.MaxPendingPayloads) {
+	// Everything after here runs when a payload is fully completed
+	if !complete {
+		return
+	}
+
+	// Do we need to finish shutting down?
+	if endpoint.IsClosing() && endpoint.NumPending() == 0 {
+		endpoint.shutdownTransport()
+		return
+	}
+
+	// Were we full? Are we ready again?
+	if endpoint.IsFull() && endpoint.NumPending() < int(s.config.MaxPendingPayloads) {
 		s.markReady(endpoint)
 		observer.OnReady(endpoint)
 
