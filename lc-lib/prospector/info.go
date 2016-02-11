@@ -17,43 +17,44 @@
 package prospector
 
 import (
+	"os"
+
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/harvester"
 	"github.com/driskell/log-courier/lc-lib/registrar"
-	"os"
 )
 
 const (
-	Status_Ok = iota
-	Status_Resume
-	Status_Failed
-	Status_Invalid
+	statusOk = iota
+	statusResume
+	statusFailed
+	statusInvalid
 )
 
 const (
-	Orphaned_No = iota
-	Orphaned_Maybe
-	Orphaned_Yes
+	orphanedNo = iota
+	orphanedMaybe
+	orphanedYes
 )
 
 type prospectorInfo struct {
-	file          string
-	identity      registrar.FileIdentity
-	last_seen     uint32
-	status        int
-	running       bool
-	orphaned      int
-	finish_offset int64
-	harvester     *harvester.Harvester
-	err           error
+	file         string
+	identity     registrar.FileIdentity
+	lastSeen     uint32
+	status       int
+	running      bool
+	orphaned     int
+	finishOffset int64
+	harvester    *harvester.Harvester
+	err          error
 }
 
 func newProspectorInfoFromFileState(file string, filestate *registrar.FileState) *prospectorInfo {
 	return &prospectorInfo{
-		file:          file,
-		identity:      filestate,
-		status:        Status_Resume,
-		finish_offset: filestate.Offset,
+		file:         file,
+		identity:     filestate,
+		status:       statusResume,
+		finishOffset: filestate.Offset,
 	}
 }
 
@@ -68,7 +69,7 @@ func newProspectorInfoInvalid(file string, err error) *prospectorInfo {
 	return &prospectorInfo{
 		file:   file,
 		err:    err,
-		status: Status_Invalid,
+		status: statusInvalid,
 	}
 }
 
@@ -109,18 +110,18 @@ func (pi *prospectorInfo) getSnapshot() *core.Snapshot {
 	return pi.harvester.Snapshot()
 }
 
-func (pi *prospectorInfo) setHarvesterStopped(status *harvester.HarvesterFinish) {
+func (pi *prospectorInfo) setHarvesterStopped(status *harvester.FinishStatus) {
 	pi.running = false
 	// Resume harvesting from the last event offset, not the last read, to allow codec to read from the last event
 	// This ensures multiline codec populates correctly on resume
-	pi.finish_offset = status.Last_Event_Offset
+	pi.finishOffset = status.LastEventOffset
 	if status.Error != nil {
-		pi.status = Status_Failed
+		pi.status = statusFailed
 		pi.err = status.Error
 	}
-	if status.Last_Stat != nil {
+	if status.LastStat != nil {
 		// Keep the last stat the harvester ran so we compare timestamps for potential resume
-		pi.identity.Update(status.Last_Stat, &pi.identity)
+		pi.identity.Update(status.LastStat, &pi.identity)
 	}
 	pi.harvester = nil
 }
@@ -131,5 +132,5 @@ func (pi *prospectorInfo) update(fileinfo os.FileInfo, iteration uint32) {
 		pi.identity.Update(fileinfo, &pi.identity)
 	}
 
-	pi.last_seen = iteration
+	pi.lastSeen = iteration
 }

@@ -19,18 +19,23 @@
 package main
 
 import (
-	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
 	"os"
 	"os/signal"
+
+	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
 )
 
+// registerSignals registers platform specific shutdown signals with the shutdown
+// channel and reload signals with the reload channel
 func (lc *LogCourier) registerSignals() {
-	// Windows onyl supports os.Interrupt
-	signal.Notify(lc.shutdown_chan, os.Interrupt)
+	// Windows only supports os.Interrupt
+	signal.Notify(lc.shutdownChan, os.Interrupt)
 
 	// No reload signal for Windows - implementation will have to wait
 }
 
+// configureLoggingPlatform enables platform specific logging backends in the
+// logging configuration
 func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
 	return nil
 }

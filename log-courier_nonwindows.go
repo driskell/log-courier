@@ -20,21 +20,26 @@ package main
 
 import (
 	"fmt"
-	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
 	"os"
 	"os/signal"
 	"syscall"
 	"unsafe"
+
+	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
 )
 
+// registerSignals registers platform specific shutdown signals with the shutdown
+// channel and reload signals with the reload channel
 func (lc *LogCourier) registerSignals() {
 	// *nix systems support SIGTERM so handle shutdown on that too
-	signal.Notify(lc.shutdown_chan, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(lc.shutdownChan, os.Interrupt, syscall.SIGTERM)
 
 	// *nix has SIGHUP for reload
-	signal.Notify(lc.reload_chan, syscall.SIGHUP)
+	signal.Notify(lc.reloadChan, syscall.SIGHUP)
 }
 
+// configureLoggingPlatform enables platform specific logging backends in the
+// logging configuration
 func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
 	// Make it color if it's a TTY
 	// TODO: This could be prone to problems when updating logging in future
@@ -43,20 +48,22 @@ func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) erro
 	}
 
 	if lc.config.General.LogSyslog {
-		syslog_backend, err := logging.NewSyslogBackend("log-courier")
+		syslogBackend, err := logging.NewSyslogBackend("log-courier")
 		if err != nil {
 			return fmt.Errorf("Failed to open syslog: %s", err)
 		}
-		new_backends := append(*backends, syslog_backend)
-		*backends = new_backends
+		newBackends := append(*backends, syslogBackend)
+		*backends = newBackends
 	}
 
 	return nil
 }
 
+// isatty is used to detect a console terminal so that coloured logging can be
+// enabled
 func (lc *LogCourier) isatty(f *os.File) bool {
 	var pgrp int64
-	// Most real isatty implementations use TIOCGETA
+	// NOTE(Driskell): Most real isatty implementations use TIOCGETA
 	// However, TIOCGPRGP is easier than TIOCGETA as it only requires an int and not a termios struct
 	// There is a possibility it may not have the exact same effect - but seems fine to me
 	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), syscall.TIOCGPGRP, uintptr(unsafe.Pointer(&pgrp)))

@@ -300,8 +300,8 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 			p.Unlock()
 
 			// TODO: Resume sending if we stopped due to excessive pending payload count
-			//if !p.shutdown && p.can_send == nil {
-			//	p.can_send = p.transport.CanSend()
+			//if !p.shutdown && p.canSend == nil {
+			//	p.canSend = p.transport.CanSend()
 			//}
 
 			if p.payloadList.Len() == 0 {

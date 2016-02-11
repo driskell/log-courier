@@ -31,40 +31,45 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
-type HarvesterFinish struct {
-	Last_Event_Offset int64
-	Last_Read_Offset  int64
-	Error             error
-	Last_Stat         os.FileInfo
+// FinishStatus contains the final file state, and any errors, from the point the
+// harvester finished
+type FinishStatus struct {
+	LastEventOffset int64
+	LastReadOffset  int64
+	Error           error
+	LastStat        os.FileInfo
 }
 
+// Harvester reads from a file, passes lines through a codec, and sends them
+// for spooling
 type Harvester struct {
 	sync.RWMutex
 
-	stop_chan     chan interface{}
-	return_chan   chan *HarvesterFinish
-	stream        core.Stream
-	fileinfo      os.FileInfo
-	path          string
-	config        *config.Config
-	stream_config *config.Stream
-	offset        int64
-	output        chan<- *core.EventDescriptor
-	codec         codecs.Codec
-	codecChain    []codecs.Codec
-	file          *os.File
-	split         bool
-	timezone      string
+	stopChan     chan interface{}
+	returnChan   chan *FinishStatus
+	stream       core.Stream
+	fileinfo     os.FileInfo
+	path         string
+	config       *config.Config
+	streamConfig *config.Stream
+	offset       int64
+	output       chan<- *core.EventDescriptor
+	codec        codecs.Codec
+	codecChain   []codecs.Codec
+	file         *os.File
+	split        bool
+	timezone     string
 
-	line_speed   float64
-	byte_speed   float64
-	line_count   uint64
-	byte_count   uint64
-	last_eof_off *int64
-	last_eof     *time.Time
+	lineSpeed  float64
+	byteSpeed  float64
+	lineCount  uint64
+	byteCount  uint64
+	lastEOFOff *int64
+	lastEOF    *time.Time
 }
 
-func NewHarvester(stream core.Stream, config *config.Config, stream_config *config.Stream, offset int64) *Harvester {
+// NewHarvester creates a new harvester with the given configuration for the given stream identifier
+func NewHarvester(stream core.Stream, config *config.Config, streamConfig *config.Stream, offset int64) *Harvester {
 	var fileinfo os.FileInfo
 	var path string
 
@@ -77,23 +82,23 @@ func NewHarvester(stream core.Stream, config *config.Config, stream_config *conf
 	}
 
 	ret := &Harvester{
-		stop_chan:     make(chan interface{}),
-		stream:        stream,
-		fileinfo:      fileinfo,
-		path:          path,
-		config:        config,
-		stream_config: stream_config,
-		offset:        offset,
-		timezone:      time.Now().Format("-0700 MST"),
-		last_eof:      nil,
-		codecChain:    make([]codecs.Codec, len(stream_config.Codecs)-1),
+		stopChan:     make(chan interface{}),
+		stream:       stream,
+		fileinfo:     fileinfo,
+		path:         path,
+		config:       config,
+		streamConfig: streamConfig,
+		offset:       offset,
+		timezone:     time.Now().Format("-0700 MST"),
+		lastEOF:      nil,
+		codecChain:   make([]codecs.Codec, len(streamConfig.Codecs)-1),
 	}
 
 	// Build the codec chain
 	var entry codecs.Codec
 	callback := ret.eventCallback
-	for i := len(stream_config.Codecs) - 1; i >= 0; i-- {
-		entry = codecs.NewCodec(stream_config.Codecs[i].Factory, callback, ret.offset)
+	for i := len(streamConfig.Codecs) - 1; i >= 0; i-- {
+		entry = codecs.NewCodec(streamConfig.Codecs[i].Factory, callback, ret.offset)
 		callback = entry.Event
 		if i != 0 {
 			ret.codecChain[i-1] = entry
@@ -104,32 +109,38 @@ func NewHarvester(stream core.Stream, config *config.Config, stream_config *conf
 	return ret
 }
 
+// Start runs the harvester, sending events to the output given, and returns
+// immediately
 func (h *Harvester) Start(output chan<- *core.EventDescriptor) {
-	if h.return_chan != nil {
+	if h.returnChan != nil {
 		h.Stop()
-		<-h.return_chan
+		<-h.returnChan
 	}
 
-	h.return_chan = make(chan *HarvesterFinish, 1)
+	h.returnChan = make(chan *FinishStatus, 1)
 
 	go func() {
-		status := &HarvesterFinish{}
-		status.Last_Event_Offset, status.Error = h.harvest(output)
-		status.Last_Read_Offset = h.offset
-		status.Last_Stat = h.fileinfo
-		h.return_chan <- status
-		close(h.return_chan)
+		status := &FinishStatus{}
+		status.LastEventOffset, status.Error = h.harvest(output)
+		status.LastReadOffset = h.offset
+		status.LastStat = h.fileinfo
+		h.returnChan <- status
+		close(h.returnChan)
 	}()
 }
 
+// Stop requests the harvester to stop
 func (h *Harvester) Stop() {
-	close(h.stop_chan)
+	close(h.stopChan)
 }
 
-func (h *Harvester) OnFinish() <-chan *HarvesterFinish {
-	return h.return_chan
+// OnFinish returns a channel which will receive a FinishStatus structure when
+// the harvester stops
+func (h *Harvester) OnFinish() <-chan *FinishStatus {
+	return h.returnChan
 }
 
+// codecTeardown shuts down all codecs in the order they are used
 func (h *Harvester) codecTeardown() int64 {
 	for _, codec := range h.codecChain {
 		codec.Teardown()
@@ -138,6 +149,7 @@ func (h *Harvester) codecTeardown() int64 {
 	return h.codec.Teardown()
 }
 
+// harvest runs in its own routine, opening the file and starting the read loop
 func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) {
 	if err := h.prepareHarvester(); err != nil {
 		return h.offset, err
@@ -171,52 +183,52 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) 
 	reader := NewLineReader(h.file, int(h.config.General.LineBufferBytes), int(h.config.General.MaxLineBytes))
 
 	// TODO: Make configurable?
-	read_timeout := 10 * time.Second
+	readTimeout := 10 * time.Second
 
-	last_read_time := time.Now()
-	last_line_count := uint64(0)
-	last_byte_count := uint64(0)
-	last_measurement := last_read_time
-	seconds_without_events := 0
+	lastReadTime := time.Now()
+	lastLineCount := uint64(0)
+	lastByteCount := uint64(0)
+	lastMeasurement := lastReadTime
+	secondsWithoutEvents := 0
 
 ReadLoop:
 	for {
 		text, bytesread, err := h.readline(reader)
 
-		if duration := time.Since(last_measurement); duration >= time.Second {
+		if duration := time.Since(lastMeasurement); duration >= time.Second {
 			h.Lock()
 
-			h.line_speed = core.CalculateSpeed(duration, h.line_speed, float64(h.line_count-last_line_count), &seconds_without_events)
-			h.byte_speed = core.CalculateSpeed(duration, h.byte_speed, float64(h.byte_count-last_byte_count), &seconds_without_events)
+			h.lineSpeed = core.CalculateSpeed(duration, h.lineSpeed, float64(h.lineCount-lastLineCount), &secondsWithoutEvents)
+			h.byteSpeed = core.CalculateSpeed(duration, h.byteSpeed, float64(h.byteCount-lastByteCount), &secondsWithoutEvents)
 
-			last_byte_count = h.byte_count
-			last_line_count = h.line_count
-			last_measurement = time.Now()
+			lastByteCount = h.byteCount
+			lastLineCount = h.lineCount
+			lastMeasurement = time.Now()
 
 			h.codec.Meter()
 
-			h.last_eof = nil
+			h.lastEOF = nil
 
 			h.Unlock()
 
 			// Check shutdown
 			select {
-			case <-h.stop_chan:
+			case <-h.stopChan:
 				break ReadLoop
 			default:
 			}
 		}
 
 		if err == nil {
-			line_offset := h.offset
+			lineOffset := h.offset
 			h.offset += int64(bytesread)
 
 			// Codec is last - it forwards harvester state for us such as offset for resume
-			h.codec.Event(line_offset, h.offset, text)
+			h.codec.Event(lineOffset, h.offset, text)
 
-			last_read_time = time.Now()
-			h.line_count++
-			h.byte_count += uint64(bytesread)
+			lastReadTime = time.Now()
+			h.lineCount++
+			h.byteCount += uint64(bytesread)
 
 			continue
 		}
@@ -239,25 +251,25 @@ ReadLoop:
 
 		// Check shutdown
 		select {
-		case <-h.stop_chan:
+		case <-h.stopChan:
 			break ReadLoop
 		default:
 		}
 
 		h.Lock()
-		if h.last_eof_off == nil {
-			h.last_eof_off = new(int64)
+		if h.lastEOFOff == nil {
+			h.lastEOFOff = new(int64)
 		}
-		*h.last_eof_off = h.offset
+		*h.lastEOFOff = h.offset
 
-		if h.last_eof == nil {
-			h.last_eof = new(time.Time)
+		if h.lastEOF == nil {
+			h.lastEOF = new(time.Time)
 		}
-		*h.last_eof = last_read_time
+		*h.lastEOF = lastReadTime
 		h.Unlock()
 
-		// Don't check for truncation until we hit the full read_timeout
-		if time.Since(last_read_time) < read_timeout {
+		// Don't check for truncation until we hit the full readTimeout
+		if time.Since(lastReadTime) < readTimeout {
 			continue
 		}
 
@@ -280,12 +292,12 @@ ReadLoop:
 			continue
 		}
 
-		// If last_read_time was more than dead time, this file is probably dead.
+		// If lastReadTime was more than dead time, this file is probably dead.
 		// Stop only if the mtime did not change since last check - this stops a
 		// race where we hit EOF but as we Stat() the mtime is updated - this mtime
 		// is the one we monitor in order to resume checking, so we need to check it
 		// didn't already update
-		if age := time.Since(last_read_time); age > h.stream_config.DeadTime && h.fileinfo.ModTime() == info.ModTime() {
+		if age := time.Since(lastReadTime); age > h.streamConfig.DeadTime && h.fileinfo.ModTime() == info.ModTime() {
 			log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
 			return h.codecTeardown(), nil
 		}
@@ -298,21 +310,22 @@ ReadLoop:
 	return h.codecTeardown(), nil
 }
 
-func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text string) {
+// eventCallback receives events from the final codec and ships them to the output
+func (h *Harvester) eventCallback(startOffset int64, endOffset int64, text string) {
 	event := core.Event{
 		"message": text,
 	}
 
-	if h.stream_config.AddHostField {
+	if h.streamConfig.AddHostField {
 		event["host"] = h.config.General.Host
 	}
-	if h.stream_config.AddPathField {
+	if h.streamConfig.AddPathField {
 		event["path"] = h.path
 	}
-	if h.stream_config.AddOffsetField {
-		event["offset"] = start_offset
+	if h.streamConfig.AddOffsetField {
+		event["offset"] = startOffset
 	}
-	if h.stream_config.AddTimezoneField {
+	if h.streamConfig.AddTimezoneField {
 		event["timezone"] = h.timezone
 	}
 
@@ -320,8 +333,8 @@ func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text str
 		event[k] = h.config.General.GlobalFields[k]
 	}
 
-	for k := range h.stream_config.Fields {
-		event[k] = h.stream_config.Fields[k]
+	for k := range h.streamConfig.Fields {
+		event[k] = h.streamConfig.Fields[k]
 	}
 
 	// If we split any of the line data, tag it
@@ -339,20 +352,20 @@ func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text str
 	encoded, err := event.Encode()
 	if err != nil {
 		// This should never happen - log and skip if it does
-		log.Warning("Skipping line in %s at offset %d due to encoding failure: %s", h.path, start_offset, err)
+		log.Warning("Skipping line in %s at offset %d due to encoding failure: %s", h.path, startOffset, err)
 		return
 	}
 
 	desc := &core.EventDescriptor{
 		Stream: h.stream,
-		Offset: end_offset,
+		Offset: endOffset,
 		Event:  encoded,
 	}
 
 EventLoop:
 	for {
 		select {
-		case <-h.stop_chan:
+		case <-h.stopChan:
 			break EventLoop
 		case h.output <- desc:
 			break EventLoop
@@ -395,6 +408,8 @@ func (h *Harvester) prepareHarvester() error {
 	return nil
 }
 
+// readline reads a single line from the file, handling mixed line endings
+// and detecting where lines were split due to being too big for the buffer
 func (h *Harvester) readline(reader *LineReader) (string, int, error) {
 	var newline int
 
@@ -427,7 +442,7 @@ func (h *Harvester) readline(reader *LineReader) (string, int, error) {
 
 		// Backoff
 		select {
-		case <-h.stop_chan:
+		case <-h.stopChan:
 		case <-time.After(1 * time.Second):
 		}
 	}
@@ -435,32 +450,34 @@ func (h *Harvester) readline(reader *LineReader) (string, int, error) {
 	return "", 0, io.EOF
 }
 
+// Snapshot returns a snapshot structure containing information about the status
+// of this harvester
 func (h *Harvester) Snapshot() *core.Snapshot {
 	h.RLock()
 
 	ret := core.NewSnapshot("Harvester")
-	ret.AddEntry("Speed (Lps)", h.line_speed)
-	ret.AddEntry("Speed (Bps)", h.byte_speed)
-	ret.AddEntry("Processed lines", h.line_count)
+	ret.AddEntry("Speed (Lps)", h.lineSpeed)
+	ret.AddEntry("Speed (Bps)", h.byteSpeed)
+	ret.AddEntry("Processed lines", h.lineCount)
 	ret.AddEntry("Current offset", h.offset)
-	if h.last_eof_off == nil {
+	if h.lastEOFOff == nil {
 		ret.AddEntry("Last EOF Offset", "Never")
 	} else {
-		ret.AddEntry("Last EOF Offset", h.last_eof_off)
+		ret.AddEntry("Last EOF Offset", h.lastEOFOff)
 	}
-	if h.last_eof == nil {
+	if h.lastEOF == nil {
 		ret.AddEntry("Status", "Alive")
 	} else {
 		ret.AddEntry("Status", "Idle")
-		if age := time.Since(*h.last_eof); age < h.stream_config.DeadTime {
-			ret.AddEntry("Dead timer", h.stream_config.DeadTime-age)
+		if age := time.Since(*h.lastEOF); age < h.streamConfig.DeadTime {
+			ret.AddEntry("Dead timer", h.streamConfig.DeadTime-age)
 		} else {
 			ret.AddEntry("Dead timer", "0s")
 		}
 	}
 
-	if sub_snap := h.codec.Snapshot(); sub_snap != nil {
-		ret.AddSub(sub_snap)
+	if subSnap := h.codec.Snapshot(); subSnap != nil {
+		ret.AddSub(subSnap)
 	}
 
 	h.RUnlock()

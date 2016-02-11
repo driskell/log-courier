@@ -52,7 +52,7 @@ func (h *prospectorSnapshot) Entry(n int) (string, string) {
 	entry := h.files[n]
 
 	var status string
-	if entry.status == Status_Failed {
+	if entry.status == statusFailed {
 		status = "Failed"
 	} else {
 		if entry.running {

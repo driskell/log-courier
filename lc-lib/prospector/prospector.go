@@ -21,14 +21,15 @@ package prospector
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/harvester"
 	"github.com/driskell/log-courier/lc-lib/registrar"
 	"github.com/driskell/log-courier/lc-lib/spooler"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 type Prospector struct {
@@ -39,28 +40,28 @@ type Prospector struct {
 	config          *config.Config
 	prospectorindex map[string]*prospectorInfo
 	prospectors     map[*prospectorInfo]*prospectorInfo
-	from_beginning  bool
+	fromBeginning   bool
 	iteration       uint32
 	lastscan        time.Time
 	registrar       registrar.Registrator
-	registrar_spool registrar.EventSpooler
-	snapshot_chan   chan interface{}
-	snapshot_sink   chan []*core.Snapshot
+	registrarSpool  registrar.EventSpooler
+	snapshotChan    chan interface{}
+	snapshotSink    chan []*core.Snapshot
 
 	output chan<- *core.EventDescriptor
 }
 
-func NewProspector(pipeline *core.Pipeline, config *config.Config, from_beginning bool, registrar_imp registrar.Registrator, spooler_imp *spooler.Spooler) (*Prospector, error) {
+func NewProspector(pipeline *core.Pipeline, config *config.Config, fromBeginning bool, registrarImp registrar.Registrator, spoolerImp *spooler.Spooler) (*Prospector, error) {
 	ret := &Prospector{
 		config:          config,
 		prospectorindex: make(map[string]*prospectorInfo),
 		prospectors:     make(map[*prospectorInfo]*prospectorInfo),
-		from_beginning:  from_beginning,
-		registrar:       registrar_imp,
-		registrar_spool: registrar_imp.Connect(),
-		snapshot_chan:   make(chan interface{}),
-		snapshot_sink:   make(chan []*core.Snapshot),
-		output:          spooler_imp.Connect(),
+		fromBeginning:   fromBeginning,
+		registrar:       registrarImp,
+		registrarSpool:  registrarImp.Connect(),
+		snapshotChan:    make(chan interface{}),
+		snapshotSink:    make(chan []*core.Snapshot),
+		output:          spoolerImp.Connect(),
 	}
 
 	if err := ret.init(); err != nil {
@@ -73,14 +74,14 @@ func NewProspector(pipeline *core.Pipeline, config *config.Config, from_beginnin
 }
 
 func (p *Prospector) init() (err error) {
-	var have_previous bool
-	if have_previous, err = p.registrar.LoadPrevious(p.loadCallback); err != nil {
+	var havePrevious bool
+	if havePrevious, err = p.registrar.LoadPrevious(p.loadCallback); err != nil {
 		return
 	}
 
-	if have_previous {
+	if havePrevious {
 		// -from-beginning=false flag should only affect the very first run (no previous state)
-		p.from_beginning = true
+		p.fromBeginning = true
 
 		// Pre-populate prospectors with what we had previously
 		for _, v := range p.prospectorindex {
@@ -106,60 +107,60 @@ ProspectLoop:
 		newlastscan := time.Now()
 		p.iteration++ // Overflow is allowed
 
-		for config_k, config := range p.config.Files {
+		for configKey, config := range p.config.Files {
 			for _, path := range config.Paths {
 				// Scan - flag false so new files always start at beginning
-				p.scan(path, &p.config.Files[config_k])
+				p.scan(path, &p.config.Files[configKey])
 			}
 		}
 
-		// We only obey *from_beginning (which is stored in this) on startup,
+		// We only obey *fromBeginning (which is stored in this) on startup,
 		// afterwards we force from beginning
-		p.from_beginning = true
+		p.fromBeginning = true
 
 		// Clean up the prospector collections
 		for _, info := range p.prospectors {
-			if info.orphaned >= Orphaned_Maybe {
+			if info.orphaned >= orphanedMaybe {
 				if !info.isRunning() {
 					delete(p.prospectors, info)
 				}
 			} else {
-				if info.last_seen >= p.iteration {
+				if info.lastSeen >= p.iteration {
 					continue
 				}
 				delete(p.prospectorindex, info.file)
-				info.orphaned = Orphaned_Maybe
+				info.orphaned = orphanedMaybe
 			}
-			if info.orphaned == Orphaned_Maybe {
-				info.orphaned = Orphaned_Yes
-				p.registrar_spool.Add(registrar.NewDeletedEvent(info))
+			if info.orphaned == orphanedMaybe {
+				info.orphaned = orphanedYes
+				p.registrarSpool.Add(registrar.NewDeletedEvent(info))
 			}
 		}
 
 		// Flush the accumulated registrar events
-		p.registrar_spool.Send()
+		p.registrarSpool.Send()
 
 		p.lastscan = newlastscan
 
 		// Defer next scan for a bit
 		now := time.Now()
-		scan_deadline := now.Add(p.config.General.ProspectInterval)
+		scanDeadline := now.Add(p.config.General.ProspectInterval)
 
 	DelayLoop:
 		for {
 			select {
-			case <-time.After(scan_deadline.Sub(now)):
+			case <-time.After(scanDeadline.Sub(now)):
 				break DelayLoop
 			case <-p.OnShutdown():
 				break ProspectLoop
-			case <-p.snapshot_chan:
+			case <-p.snapshotChan:
 				p.handleSnapshot()
 			case config := <-p.OnConfig():
 				p.config = config
 			}
 
 			now = time.Now()
-			if now.After(scan_deadline) {
+			if now.After(scanDeadline) {
 				break
 			}
 		}
@@ -174,7 +175,7 @@ ProspectLoop:
 	}
 
 	// Disconnect from the registrar
-	p.registrar_spool.Close()
+	p.registrarSpool.Close()
 
 	log.Info("Prospector exiting")
 }
@@ -190,7 +191,7 @@ func (p *Prospector) scan(path string, config *config.File) {
 	// Check any matched files to see if we need to start a harvester
 	for _, file := range matches {
 		// Check the current info against our index
-		info, is_known := p.prospectorindex[file]
+		info, isKnown := p.prospectorindex[file]
 
 		// Stat the file, following any symlinks
 		// TODO: Low priority. Trigger loadFileId here for Windows instead of
@@ -204,10 +205,10 @@ func (p *Prospector) scan(path string, config *config.File) {
 
 		if err != nil {
 			// Do we know this entry?
-			if is_known {
-				if info.status != Status_Invalid {
+			if isKnown {
+				if info.status != statusInvalid {
 					// The current entry is not an error, orphan it so we can log one
-					info.orphaned = Orphaned_Maybe
+					info.orphaned = orphanedMaybe
 				} else if info.err.Error() == err.Error() {
 					// The same error occurred - don't log it again
 					info.update(nil, p.iteration)
@@ -229,18 +230,17 @@ func (p *Prospector) scan(path string, config *config.File) {
 			p.prospectors[info] = info
 			p.prospectorindex[file] = info
 			continue
-		} else if is_known && info.status == Status_Invalid {
+		} else if isKnown && info.status == statusInvalid {
 			// We have an error stub and we've just successfully got fileinfo
-			// Mark is_known so we treat as a new file still
-			is_known = false
+			// Mark isKnown so we treat as a new file still
+			isKnown = false
 		}
 
 		// Conditions for starting a new harvester:
 		// - file path hasn't been seen before
 		// - the file's inode or device changed
-		if !is_known {
-			// Check for dead time, but only if the file modification time is before the last scan started
-			// This ensures we don't skip genuine creations with dead times less than 10s
+		if !isKnown {
+			// Is this a rename/move?
 			if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
 				// Symlinks could mean we see the same file twice - skip if we have
 				if previousinfo == nil {
@@ -253,18 +253,20 @@ func (p *Prospector) scan(path string, config *config.File) {
 				info = previousinfo
 				info.file = file
 
-				p.registrar_spool.Add(registrar.NewRenamedEvent(info, file))
+				p.registrarSpool.Add(registrar.NewRenamedEvent(info, file))
 			} else {
 				// This is a new entry
 				info = newProspectorInfoFromFileInfo(file, fileinfo)
 
+				// Check for dead time, but only if the file modification time is before the last scan started
+				// This ensures we don't skip genuine creations with dead times less than 10s
 				if fileinfo.ModTime().Before(p.lastscan) && time.Since(fileinfo.ModTime()) > config.DeadTime {
 					// Old file, skip it, but push offset of file size so we start from the end if this file changes and needs picking up
 					log.Info("Skipping file (older than dead time of %v): %s", config.DeadTime, file)
 
 					// Store the offset that we should resume from if we notice a modification
-					info.finish_offset = fileinfo.Size()
-					p.registrar_spool.Add(registrar.NewDiscoverEvent(info, file, fileinfo.Size(), fileinfo))
+					info.finishOffset = fileinfo.Size()
+					p.registrarSpool.Add(registrar.NewDiscoverEvent(info, file, fileinfo.Size(), fileinfo))
 				} else {
 					// Process new file
 					log.Info("Launching harvester on new file: %s", file)
@@ -277,7 +279,7 @@ func (p *Prospector) scan(path string, config *config.File) {
 		} else {
 			if !info.identity.SameAs(fileinfo) {
 				// Keep the old file in case we find it again shortly
-				info.orphaned = Orphaned_Maybe
+				info.orphaned = orphanedMaybe
 
 				if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
 					// Symlinks could mean we see the same file twice - skip if we have
@@ -291,7 +293,7 @@ func (p *Prospector) scan(path string, config *config.File) {
 					info = previousinfo
 					info.file = file
 
-					p.registrar_spool.Add(registrar.NewRenamedEvent(info, file))
+					p.registrarSpool.Add(registrar.NewRenamedEvent(info, file))
 				} else {
 					// File is not the same file we saw previously, it must have rotated and is a new file
 					log.Info("Launching harvester on rotated file: %s", file)
@@ -311,10 +313,10 @@ func (p *Prospector) scan(path string, config *config.File) {
 		// Resume stopped harvesters
 		resume := !info.isRunning()
 		if resume {
-			if info.status == Status_Resume {
+			if info.status == statusResume {
 				// This is a filestate that was saved, resume the harvester
 				log.Info("Resuming harvester on a previously harvested file: %s", file)
-			} else if info.status == Status_Failed {
+			} else if info.status == statusFailed {
 				// Last attempt we failed to start, try again
 				log.Info("Attempting to restart failed harvester: %s", file)
 			} else if info.identity.Stat().ModTime() != fileinfo.ModTime() {
@@ -328,7 +330,7 @@ func (p *Prospector) scan(path string, config *config.File) {
 		info.update(fileinfo, p.iteration)
 
 		if resume {
-			p.startHarvesterWithOffset(info, config, info.finish_offset)
+			p.startHarvesterWithOffset(info, config, info.finishOffset)
 		}
 
 		p.prospectorindex[file] = info
@@ -338,8 +340,8 @@ func (p *Prospector) scan(path string, config *config.File) {
 func (p *Prospector) flagDuplicateError(file string, info *prospectorInfo) {
 	// Have we already logged this error?
 	if info != nil {
-		if info.status == Status_Invalid {
-			if skip_err, ok := info.err.(*ProspectorSkipError); ok && skip_err.message == "Duplicate" {
+		if info.status == statusInvalid {
+			if skipErr, ok := info.err.(*ProspectorSkipError); ok && skipErr.message == "Duplicate" {
 				return
 			}
 		}
@@ -355,14 +357,14 @@ func (p *Prospector) flagDuplicateError(file string, info *prospectorInfo) {
 func (p *Prospector) startHarvester(info *prospectorInfo, fileconfig *config.File) {
 	var offset int64
 
-	if p.from_beginning {
+	if p.fromBeginning {
 		offset = 0
 	} else {
 		offset = info.identity.Stat().Size()
 	}
 
 	// Send a new file event to allow registrar to begin persisting for this harvester
-	p.registrar_spool.Add(registrar.NewDiscoverEvent(info, info.file, offset, info.identity.Stat()))
+	p.registrarSpool.Add(registrar.NewDiscoverEvent(info, info.file, offset, info.identity.Stat()))
 
 	p.startHarvesterWithOffset(info, fileconfig, offset)
 }
@@ -371,32 +373,32 @@ func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileconfig *
 	// TODO - hook in a shutdown channel
 	info.harvester = harvester.NewHarvester(info, p.config, &fileconfig.Stream, offset)
 	info.running = true
-	info.status = Status_Ok
+	info.status = statusOk
 	info.harvester.Start(p.output)
 }
 
 func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *prospectorInfo) {
 	for _, ki := range p.prospectors {
-		if ki.status == Status_Invalid {
+		if ki.status == statusInvalid {
 			// Don't consider error placeholders
 			continue
 		}
-		if ki.orphaned == Orphaned_No && ki.file == file {
+		if ki.orphaned == orphanedNo && ki.file == file {
 			// We already know the prospector info for this file doesn't match, so don't check again
 			continue
 		}
 		if ki.identity.SameAs(info) {
 			// Already seen?
-			if ki.last_seen == p.iteration {
+			if ki.lastSeen == p.iteration {
 				return ki.file, nil
 			}
 
 			// Found previous information, remove it and return it (it will be added again)
 			delete(p.prospectors, ki)
-			if ki.orphaned == Orphaned_No {
+			if ki.orphaned == orphanedNo {
 				delete(p.prospectorindex, ki.file)
 			} else {
-				ki.orphaned = Orphaned_No
+				ki.orphaned = orphanedNo
 			}
 			return ki.file, ki
 		}
@@ -405,9 +407,13 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *pros
 	return "", nil
 }
 
+// Snapshot returns a snapshot structure containing information about all
+// monitored and open files
 func (p *Prospector) Snapshot() []*core.Snapshot {
+	// TODO: Use Lock/Unlock and RLock/RUnlock instead of a channel - snapshots
+	// will be slightly faster and code simpler and no need for timeout
 	select {
-	case p.snapshot_chan <- 1:
+	case p.snapshotChan <- 1:
 	// Timeout after 5 seconds
 	case <-time.After(5 * time.Second):
 		ret := core.NewSnapshot("Prospector")
@@ -415,9 +421,11 @@ func (p *Prospector) Snapshot() []*core.Snapshot {
 		return []*core.Snapshot{ret}
 	}
 
-	return <-p.snapshot_sink
+	return <-p.snapshotSink
 }
 
+// handleSnapshot is called by the prospector routine when it receives a signal
+// that a snapshot is required. It creates the snapshot and sends it to the requester
 func (p *Prospector) handleSnapshot() {
 	snapshots := make([]*core.Snapshot, 1)
 
@@ -430,15 +438,16 @@ func (p *Prospector) handleSnapshot() {
 	}
 
 	for _, info := range p.prospectors {
-		if info.orphaned == Orphaned_No {
+		if info.orphaned == orphanedNo {
 			continue
 		}
 		snapshots = append(snapshots, p.snapshotInfo(info))
 	}
 
-	p.snapshot_sink <- snapshots
+	p.snapshotSink <- snapshots
 }
 
+// snapshotInfo generates the snapshot information for a single watched file
 func (p *Prospector) snapshotInfo(info *prospectorInfo) *core.Snapshot {
 	var extra string
 	var status string
@@ -447,9 +456,9 @@ func (p *Prospector) snapshotInfo(info *prospectorInfo) *core.Snapshot {
 		extra = "Stdin / "
 	} else {
 		switch info.orphaned {
-		case Orphaned_Maybe:
+		case orphanedMaybe:
 			extra = "Orphan? / "
-		case Orphaned_Yes:
+		case orphanedYes:
 			extra = "Orphan / "
 		}
 	}
@@ -461,11 +470,11 @@ func (p *Prospector) snapshotInfo(info *prospectorInfo) *core.Snapshot {
 		} else {
 			status = "Dead"
 		}
-	case Status_Resume:
+	case statusResume:
 		status = "Resuming"
-	case Status_Failed:
+	case statusFailed:
 		status = fmt.Sprintf("Failed: %s", info.err)
-	case Status_Invalid:
+	case statusInvalid:
 		if _, ok := info.err.(*ProspectorSkipError); ok {
 			status = fmt.Sprintf("Skipped (%s)", info.err)
 		} else {
@@ -477,8 +486,8 @@ func (p *Prospector) snapshotInfo(info *prospectorInfo) *core.Snapshot {
 	snap.AddEntry("Status", status)
 
 	if info.running {
-		if sub_snap := info.getSnapshot(); sub_snap != nil {
-			snap.AddSub(sub_snap)
+		if subSnap := info.getSnapshot(); subSnap != nil {
+			snap.AddSub(subSnap)
 		}
 	}
 
