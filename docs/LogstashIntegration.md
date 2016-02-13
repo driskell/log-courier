@@ -1,15 +1,10 @@
 # Logstash Integration
 
-Log Courier is built to work seamlessly with [Logstash](http://logstash.net). It
-communicates via an input plugin called "courier".
-
-An output plugin is also available to allow Logstash instances to communicate
-with each other using the same reliable and efficient protocol as Log Courier.
-
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [Overview](#overview)
 - [Installation](#installation)
   - [Logstash Plugin Manager](#logstash-plugin-manager)
   - [Manual installation](#manual-installation)
@@ -17,6 +12,14 @@ with each other using the same reliable and efficient protocol as Log Courier.
 - [Configuration](#configuration)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Overview
+
+Log Courier is built to work seamlessly with [Logstash](http://logstash.net). It
+communicates via an input plugin called "courier".
+
+An output plugin is also available to allow Logstash instances to communicate
+with each other using the same reliable and efficient protocol as Log Courier.
 
 ## Installation
 
