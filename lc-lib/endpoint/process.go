@@ -51,7 +51,6 @@ func (s *Sink) ProcessEvent(event transports.Event, observer Observer) {
 	case *transports.AckEvent:
 		s.processAck(msg, endpoint, observer)
 	case *transports.PongEvent:
-		// TODO: Is there a better way to encapsulate this?
 		endpoint.processPong(observer)
 	default:
 		panic("Invalid transport event received")
