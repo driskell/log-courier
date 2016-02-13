@@ -24,11 +24,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/driskell/log-courier/src/lc-lib/core"
-	"github.com/driskell/log-courier/src/lc-lib/registrar"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/driskell/log-courier/src/lc-lib/core"
+	"github.com/driskell/log-courier/src/lc-lib/registrar"
 )
 
 var (
@@ -198,7 +199,9 @@ PublishLoop:
 					break ReconnectTimeLoop
 				case <-control_signal:
 					// TODO: Persist pending payloads and resume? Quicker shutdown
-					if p.num_payloads == 0 {
+					// If no payloads, shutdown now, otherwise if we're not out of sync we
+					// can also just shutdown as we'd be resending payloads anyway
+					if p.num_payloads == 0 || p.out_of_sync == 0 {
 						break PublishLoop
 					}
 
