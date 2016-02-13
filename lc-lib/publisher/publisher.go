@@ -243,7 +243,6 @@ func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, pendingPayload *pay
 
 	// If this is the first payload, start the network timeout
 	if endpoint.NumPending() == 1 {
-		log.Debug("[%s] First payload, starting pending timeout", endpoint.Server())
 		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 	}
 
@@ -258,10 +257,8 @@ func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, pendingPayload *pay
 func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool) {
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.NumPending() != 0 {
-		log.Debug("[%s] Resetting pending timeout", endpoint.Server())
 		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
 	} else {
-		log.Debug("[%s] Last payload acknowledged, starting keepalive timeout", endpoint.Server())
 		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
 	}
 
@@ -341,9 +338,7 @@ func (p *Publisher) OnFail(endpoint *endpoint.Endpoint) {
 	// Pull back pending payloads so we can requeue them onto other endpoints
 	for _, pendingPayload := range endpoint.PullBackPending() {
 		pendingPayload.Resending = true
-		log.Debug("PushBack %v - %v", pendingPayload.ResendElement, p.resendList)
 		p.resendList.PushBack(&pendingPayload.ResendElement)
-		log.Debug("PushBack done")
 	}
 
 	// If any ready now, requeue immediately

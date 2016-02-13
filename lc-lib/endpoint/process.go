@@ -62,8 +62,10 @@ func (s *Sink) ProcessEvent(event transports.Event, observer Observer) {
 func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *Endpoint, observer Observer) {
 	switch status.StatusChange() {
 	case transports.Ready:
-		// Ignore late messages from a closing endpoint
-		if endpoint.IsClosing() {
+		// Ignore late messages from a closing or failing transport
+		// A transport may have multiple routines that are still shutting down after
+		// a failure and one of those may still be sending ready events
+		if endpoint.IsClosing() || endpoint.IsFailed() {
 			break
 		}
 
@@ -100,6 +102,7 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 	case transports.Recovered:
 		// Allow idle state to also use Recovered, as idle transports always have
 		// zero pending payloads as they've only just been created
+		// This simplifies the transport logic a little
 		if endpoint.IsFailed() {
 			log.Info("[%s] Endpoint recovered", endpoint.Server())
 			s.recoverFailed(endpoint)

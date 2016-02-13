@@ -410,17 +410,30 @@ func (t *TransportTCP) sendEvent(controlChan <-chan int, event transports.Event)
 
 // Write a message to the transport
 func (t *TransportTCP) Write(nonce string, events []*core.EventDescriptor) error {
-	var dataBuffer bytes.Buffer
+	var messageBuffer bytes.Buffer
+
+	// Encapsulate the data into the message
+	// 4-byte message header (JDAT = JSON Data, Compressed)
+	// 4-byte uint32 data length
+	// Then the data
+	if _, err := messageBuffer.Write([]byte("JDAT")); err != nil {
+		return err
+	}
+
+	// False length as we don't know it yet
+	if _, err := messageBuffer.Write([]byte("----")); err != nil {
+		return err
+	}
 
 	// Create the compressed data payload
 	// 16-byte Nonce, followed by the compressed event data
 	// The event data is each event, prefixed with a 4-byte uint32 length, one
 	// after the other
-	if _, err := dataBuffer.Write([]byte(nonce)); err != nil {
+	if _, err := messageBuffer.Write([]byte(nonce)); err != nil {
 		return err
 	}
 
-	compressor, err := zlib.NewWriterLevel(&dataBuffer, 3)
+	compressor, err := zlib.NewWriterLevel(&messageBuffer, 3)
 	if err != nil {
 		return err
 	}
@@ -437,25 +450,13 @@ func (t *TransportTCP) Write(nonce string, events []*core.EventDescriptor) error
 
 	compressor.Close()
 
-	// Encapsulate the data into the message
-	// 4-byte message header (JDAT = JSON Data, Compressed)
-	// 4-byte uint32 data length
-	// Then the data
-	messageBuffer := bytes.NewBuffer(make([]byte, 0, 4+4+dataBuffer.Len()))
+	// Fill in the size
+	// TODO: This prevents us bypassing buffer and just sending...
+	//       New JDA2? With FFFF size? Means stream message?
+	messageBytes := messageBuffer.Bytes()
+	binary.BigEndian.PutUint32(messageBytes[4:8], uint32(messageBuffer.Len()-8))
 
-	if _, err := messageBuffer.Write([]byte("JDAT")); err != nil {
-		return err
-	}
-
-	if err := binary.Write(messageBuffer, binary.BigEndian, uint32(dataBuffer.Len())); err != nil {
-		return err
-	}
-
-	if _, err := messageBuffer.ReadFrom(&dataBuffer); err != nil {
-		return err
-	}
-
-	t.sendChan <- messageBuffer.Bytes()
+	t.sendChan <- messageBytes
 	return nil
 }
 

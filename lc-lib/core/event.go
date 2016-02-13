@@ -16,18 +16,20 @@
 
 package core
 
-import (
-	"encoding/json"
-)
+import "encoding/json"
 
+// Event holds a key-value map that represents a single log event
 type Event map[string]interface{}
 
+// EventDescriptor describes an Event, such as it's source and offset, which can
+// be used in order to resume log files
 type EventDescriptor struct {
 	Stream Stream
 	Offset int64
 	Event  []byte
 }
 
-func (e *Event) Encode() ([]byte, error) {
+// Encode returns the Event in JSON format
+func (e Event) Encode() ([]byte, error) {
 	return json.Marshal(e)
 }

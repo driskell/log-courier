@@ -57,6 +57,7 @@ type Harvester struct {
 	codec        codecs.Codec
 	codecChain   []codecs.Codec
 	file         *os.File
+	backOffTimer *time.Timer
 	split        bool
 	timezone     string
 
@@ -92,7 +93,10 @@ func NewHarvester(stream core.Stream, config *config.Config, streamConfig *confi
 		timezone:     time.Now().Format("-0700 MST"),
 		lastEOF:      nil,
 		codecChain:   make([]codecs.Codec, len(streamConfig.Codecs)-1),
+		backOffTimer: time.NewTimer(0),
 	}
+
+	ret.backOffTimer.Stop()
 
 	// Build the codec chain
 	var entry codecs.Codec
@@ -441,9 +445,10 @@ func (h *Harvester) readline(reader *LineReader) (string, int, error) {
 		}
 
 		// Backoff
+		h.backOffTimer.Reset(1 * time.Second)
 		select {
 		case <-h.stopChan:
-		case <-time.After(1 * time.Second):
+		case <-h.backOffTimer.C:
 		}
 	}
 
