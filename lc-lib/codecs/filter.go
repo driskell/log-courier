@@ -19,9 +19,10 @@ package codecs
 import (
 	"errors"
 	"fmt"
+	"regexp"
+
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"regexp"
 )
 
 type CodecFilterFactory struct {
@@ -43,7 +44,7 @@ func NewFilterCodecFactory(config *config.Config, config_path string, unused map
 	var err error
 
 	result := &CodecFilterFactory{}
-	if err = config.PopulateConfig(result, config_path, unused); err != nil {
+	if err = config.PopulateConfig(result, unused, config_path); err != nil {
 		return nil, err
 	}
 

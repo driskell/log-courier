@@ -47,7 +47,7 @@ type TransportTCPFactory struct {
 
 // NewTransportTCPFactory create a new TransportTCPFactory from the provided
 // configuration data, reporting back any configuration errors it discovers.
-func NewTransportTCPFactory(config *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
+func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	ret := &TransportTCPFactory{
@@ -58,7 +58,7 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unused map
 
 	// Only allow SSL configurations if this is "tls"
 	if name == "tls" {
-		if err = config.PopulateConfig(ret, configPath, unused); err != nil {
+		if err = config.PopulateConfig(ret, unUsed, configPath); err != nil {
 			return nil, err
 		}
 
@@ -98,7 +98,7 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unused map
 			}
 		}
 	} else {
-		if err := config.ReportUnusedConfig(configPath, unused); err != nil {
+		if err := config.ReportUnusedConfig(unUsed, configPath); err != nil {
 			return nil, err
 		}
 	}

@@ -19,12 +19,13 @@ package codecs
 import (
 	"errors"
 	"fmt"
-	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 const (
@@ -66,7 +67,7 @@ func NewMultilineCodecFactory(config *config.Config, config_path string, unused 
 	var err error
 
 	result := &CodecMultilineFactory{}
-	if err = config.PopulateConfig(result, config_path, unused); err != nil {
+	if err = config.PopulateConfig(result, unused, config_path); err != nil {
 		return nil, err
 	}
 
