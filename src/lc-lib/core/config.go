@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	logging "github.com/op/go-logging"
+	logging "gopkg.in/op/go-logging.v1"
 )
 
 const (
