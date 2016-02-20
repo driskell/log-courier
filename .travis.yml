@@ -5,6 +5,9 @@ go:
   - 1.5
   - 1.6
 
+# Skip install step
+install: true
+
 # Generate and test
 script:
   - GO15VENDOREXPERIMENT=1 go generate ./lc-lib/config ./lc-lib/core
