@@ -8,7 +8,6 @@ The filter codec strips out unwanted events, shipping only those desired.
 
 - [Example](#example)
 - [Options](#options)
-  - [`"negate"`](#negate)
   - [`"patterns"`](#patterns)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -22,13 +21,6 @@ The filter codec strips out unwanted events, shipping only those desired.
 
 ## Options
 
-### `"negate"`
-
-*Boolean. Optional. Default: false*
-
-Negates `patterns` so that an event is only shipped if none of the patterns
-matched.
-
 ### `"patterns"`
 
 *Array of Strings. Required*
@@ -41,3 +33,13 @@ until the next event. As such, patterns with higher hit rates should be
 specified first.
 
 The pattern syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
+
+To negate a pattern such that a line is considered to match when the pattern
+does not match, prefix the pattern with an exclamation mark ("!"). For example,
+the pattern "!^uninteresting" would match any line which does not start with the
+text, "uninteresting".
+
+The pattern can also be prefixed with "=" to explicitly state that a pattern is
+not negated, which then allows a literal match of an exclamation mark at the
+start of the pattern. For example, "=!useful!" would match a line containing,
+"!useful!".

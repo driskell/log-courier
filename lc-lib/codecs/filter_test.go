@@ -29,7 +29,6 @@ func TestFilter(t *testing.T) {
 
 	codec := createFilterCodec(map[string]interface{}{
 		"patterns": []string{"^NEXT line$"},
-		"negate":   false,
 	}, checkFilter, t)
 
 	// Send some data
@@ -54,8 +53,7 @@ func TestFilterNegate(t *testing.T) {
 	filterLines = make([]string, 0, 1)
 
 	codec := createFilterCodec(map[string]interface{}{
-		"patterns": []string{"^NEXT line$"},
-		"negate":   true,
+		"patterns": []string{"!^NEXT line$"},
 	}, checkFilter, t)
 
 	// Send some data
@@ -80,12 +78,36 @@ func TestFilterNegate(t *testing.T) {
 	}
 }
 
+func TestFilterNoNegate(t *testing.T) {
+	filterLines = make([]string, 0, 1)
+
+	codec := createFilterCodec(map[string]interface{}{
+		"patterns": []string{"=^NEXT line$"},
+	}, checkFilter, t)
+
+	// Send some data
+	codec.Event(0, 1, "DEBUG First line")
+	codec.Event(2, 3, "NEXT line")
+	codec.Event(4, 5, "ANOTHER line")
+	codec.Event(6, 7, "DEBUG Next line")
+
+	if len(filterLines) != 1 {
+		t.Error("Wrong line count received")
+	} else if filterLines[0] != "NEXT line" {
+		t.Error("Wrong line[0] received: %s", filterLines[0])
+	}
+
+	offset := codec.Teardown()
+	if offset != 7 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
 func TestFilterMultiple(t *testing.T) {
 	filterLines = make([]string, 0, 1)
 
 	codec := createFilterCodec(map[string]interface{}{
-		"patterns": []string{"^NEXT line$", "^DEBUG First line$"},
-		"negate":   false,
+		"patterns": []string{"^NEXT line$", "=^DEBUG First line$"},
 	}, checkFilter, t)
 
 	// Send some data
@@ -107,5 +129,3 @@ func TestFilterMultiple(t *testing.T) {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
-
-// TODO(driskell): Test for Reset()

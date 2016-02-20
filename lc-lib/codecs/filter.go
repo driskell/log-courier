@@ -25,26 +25,39 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
+// codecFilterPatternInstance holds the regular expression matcher for a
+// single pattern in the configuration file, along with any pattern specific
+// configurations
+type codecFilterPatternInstance struct {
+	matcher *regexp.Regexp
+	negate  bool
+}
+
+// CodecFilterFactory holds the configuration for a filter codec
 type CodecFilterFactory struct {
 	Patterns []string `config:"patterns"`
-	Negate   bool     `config:"negate"`
 
-	matchers []*regexp.Regexp
+	patterns []*codecFilterPatternInstance
 }
 
+// CodecFilter is an instance of a filter codec that is used by the Harvester
+// for filtering
 type CodecFilter struct {
-	config         *CodecFilterFactory
-	last_offset    int64
-	filtered_lines uint64
-	callback_func  CallbackFunc
-	meter_filtered uint64
+	config        *CodecFilterFactory
+	lastOffset    int64
+	filteredLines uint64
+	callbackFunc  CallbackFunc
+	meterFiltered uint64
 }
 
-func NewFilterCodecFactory(config *config.Config, config_path string, unused map[string]interface{}, name string) (interface{}, error) {
+// NewFilterCodecFactory creates a new FilterCodecFactory for a codec definition
+// in the configuration file. This factory can be used to create instances of a
+// filter codec for use by harvesters
+func NewFilterCodecFactory(config *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	result := &CodecFilterFactory{}
-	if err = config.PopulateConfig(result, unused, config_path); err != nil {
+	if err = config.PopulateConfig(result, unused, configPath); err != nil {
 		return nil, err
 	}
 
@@ -52,59 +65,79 @@ func NewFilterCodecFactory(config *config.Config, config_path string, unused map
 		return nil, errors.New("Filter codec pattern must be specified.")
 	}
 
-	result.matchers = make([]*regexp.Regexp, len(result.Patterns))
+	result.patterns = make([]*codecFilterPatternInstance, len(result.Patterns))
 	for k, pattern := range result.Patterns {
-		result.matchers[k], err = regexp.Compile(pattern)
+		patternInstance := &codecFilterPatternInstance{}
+
+		switch pattern[0] {
+		case '!':
+			patternInstance.negate = true
+			pattern = pattern[1:]
+		case '=':
+			pattern = pattern[1:]
+		}
+
+		patternInstance.matcher, err = regexp.Compile(pattern)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to compile filter codec pattern, '%s'.", err)
 		}
+
+		result.patterns[k] = patternInstance
 	}
 
 	return result, nil
 }
 
-func (f *CodecFilterFactory) NewCodec(callback_func CallbackFunc, offset int64) Codec {
+// NewCodec returns a new codec instance that will send events to the callback
+// function provided upon completion of processing
+func (f *CodecFilterFactory) NewCodec(callbackFunc CallbackFunc, offset int64) Codec {
 	return &CodecFilter{
-		config:        f,
-		last_offset:   offset,
-		callback_func: callback_func,
+		config:       f,
+		lastOffset:   offset,
+		callbackFunc: callbackFunc,
 	}
 }
 
+// Teardown ends the codec and returns the last offset shipped to the callback
 func (c *CodecFilter) Teardown() int64 {
-	return c.last_offset
+	return c.lastOffset
 }
 
+// Reset restores the codec to a blank state so it can be reused on a new file
+// stream
 func (c *CodecFilter) Reset() {
 }
 
-func (c *CodecFilter) Event(start_offset int64, end_offset int64, text string) {
+// Event is called by a Harvester when a new line event occurs on a file.
+// Filtering takes place and only accepted lines are shipped to the callback
+func (c *CodecFilter) Event(startOffset int64, endOffset int64, text string) {
 	// Only flush the event if it matches a filter
-	var match bool
-
-	for _, matcher := range c.config.matchers {
-		if matcher.MatchString(text) {
-			match = true
+	var matchFailed bool
+	for _, pattern := range c.config.patterns {
+		if matchFailed = pattern.negate == pattern.matcher.MatchString(text); !matchFailed {
 			break
 		}
 	}
 
-	if c.config.Negate != match {
-		c.callback_func(start_offset, end_offset, text)
+	if !matchFailed {
+		c.callbackFunc(startOffset, endOffset, text)
 	} else {
-		c.filtered_lines++
+		c.filteredLines++
 	}
 
-	c.last_offset = end_offset
+	c.lastOffset = endOffset
 }
 
+// Meter is called by the Harvester to request accounting
 func (c *CodecFilter) Meter() {
-	c.meter_filtered = c.filtered_lines
+	c.meterFiltered = c.filteredLines
 }
 
+// Snapshot is called when lc-admin tool requests a snapshot and the accounting
+// data is returned in a snapshot structure
 func (c *CodecFilter) Snapshot() *core.Snapshot {
 	snap := core.NewSnapshot("Filter Codec")
-	snap.AddEntry("Filtered lines", c.meter_filtered)
+	snap.AddEntry("Filtered lines", c.meterFiltered)
 	return snap
 }
 

@@ -29,61 +29,89 @@ import (
 )
 
 const (
-	codecMultiline_What_Previous = 0x00000001
-	codecMultiline_What_Next     = 0x00000002
+	codecMultilineWhatPrevious = 0x00000001
+	codecMultilineWhatNext     = 0x00000002
 )
 
+// codecMultilinePatternInstance holds the regular expression matcher for a
+// single pattern in the configuration file, along with any pattern specific
+// configurations
+type codecMultilinePatternInstance struct {
+	matcher *regexp.Regexp
+	negate  bool
+}
+
+// CodecMultilineFactory holds the configuration for a multiline codec
 type CodecMultilineFactory struct {
-	Pattern           string        `config:"pattern"`
+	Patterns          []string      `config:"patterns"`
 	What              string        `config:"what"`
-	Negate            bool          `config:"negate"`
 	PreviousTimeout   time.Duration `config:"previous timeout"`
 	MaxMultilineBytes int64         `config:"max multiline bytes"`
 
-	matcher *regexp.Regexp
-	what    int
+	patterns []*codecMultilinePatternInstance
+	what     int
 }
 
+// CodecMultiline is an instance of a multiline codec that is used by the
+// Harvester for multiline processing
 type CodecMultiline struct {
-	config        *CodecMultilineFactory
-	last_offset   int64
-	callback_func CallbackFunc
+	config       *CodecMultilineFactory
+	lastOffset   int64
+	callbackFunc CallbackFunc
 
-	end_offset     int64
-	start_offset   int64
-	buffer         []string
-	buffer_lines   int64
-	buffer_len     int64
-	timer_lock     sync.Mutex
-	timer_stop     chan interface{}
-	timer_wait     sync.WaitGroup
-	timer_deadline time.Time
+	endOffset     int64
+	startOffset   int64
+	buffer        []string
+	bufferLines   int64
+	bufferLen     int64
+	timerLock     sync.Mutex
+	timerStop     chan interface{}
+	timerWait     sync.WaitGroup
+	timerDeadline time.Time
 
-	meter_lines int64
-	meter_bytes int64
+	meterLines int64
+	meterBytes int64
 }
 
-func NewMultilineCodecFactory(config *config.Config, config_path string, unused map[string]interface{}, name string) (interface{}, error) {
+// NewMultilineCodecFactory creates a new MultilineCodecFactory for a codec
+// definition in the configuration file. This factory can be used to create
+// instances of a multiline codec for use by harvesters
+func NewMultilineCodecFactory(config *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	result := &CodecMultilineFactory{}
-	if err = config.PopulateConfig(result, unused, config_path); err != nil {
+	if err = config.PopulateConfig(result, unused, configPath); err != nil {
 		return nil, err
 	}
 
-	if result.Pattern == "" {
-		return nil, errors.New("Multiline codec pattern must be specified.")
+	if len(result.Patterns) == 0 {
+		return nil, errors.New("At least one multiline codec pattern must be specified.")
 	}
 
-	result.matcher, err = regexp.Compile(result.Pattern)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to compile multiline codec pattern, '%s'.", err)
+	result.patterns = make([]*codecMultilinePatternInstance, len(result.Patterns))
+	for k, pattern := range result.Patterns {
+		patternInstance := &codecMultilinePatternInstance{}
+
+		switch pattern[0] {
+		case '!':
+			patternInstance.negate = true
+			pattern = pattern[1:]
+		case '=':
+			pattern = pattern[1:]
+		}
+
+		patternInstance.matcher, err = regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to compile multiline codec pattern, '%s'.", err)
+		}
+
+		result.patterns[k] = patternInstance
 	}
 
 	if result.What == "" || result.What == "previous" {
-		result.what = codecMultiline_What_Previous
+		result.what = codecMultilineWhatPrevious
 	} else if result.What == "next" {
-		result.what = codecMultiline_What_Next
+		result.what = codecMultilineWhatNext
 	}
 
 	if result.MaxMultilineBytes == 0 {
@@ -99,109 +127,125 @@ func NewMultilineCodecFactory(config *config.Config, config_path string, unused 
 	return result, nil
 }
 
-func (f *CodecMultilineFactory) NewCodec(callback_func CallbackFunc, offset int64) Codec {
+// NewCodec returns a new codec instance that will send events to the callback
+// function provided upon completion of processing
+func (f *CodecMultilineFactory) NewCodec(callbackFunc CallbackFunc, offset int64) Codec {
 	c := &CodecMultiline{
-		config:        f,
-		end_offset:    offset,
-		last_offset:   offset,
-		callback_func: callback_func,
+		config:       f,
+		endOffset:    offset,
+		lastOffset:   offset,
+		callbackFunc: callbackFunc,
 	}
 
 	// Start the "previous timeout" routine that will auto flush at deadline
 	if f.PreviousTimeout != 0 {
-		c.timer_stop = make(chan interface{})
-		c.timer_wait.Add(1)
+		c.timerStop = make(chan interface{})
+		c.timerWait.Add(1)
 
-		c.timer_deadline = time.Now().Add(f.PreviousTimeout)
+		c.timerDeadline = time.Now().Add(f.PreviousTimeout)
 
 		go c.deadlineRoutine()
 	}
 	return c
 }
 
+// Teardown ends the codec and returns the last offset shipped to the callback
 func (c *CodecMultiline) Teardown() int64 {
 	if c.config.PreviousTimeout != 0 {
-		close(c.timer_stop)
-		c.timer_wait.Wait()
+		close(c.timerStop)
+		c.timerWait.Wait()
 	}
 
-	return c.last_offset
+	return c.lastOffset
 }
 
+// Reset restores the codec to a blank state so it can be reused on a new file
+// stream
 func (c *CodecMultiline) Reset() {
-	c.last_offset = 0
+	c.lastOffset = 0
 	c.buffer = nil
-	c.buffer_len = 0
-	c.buffer_lines = 0
+	c.bufferLen = 0
+	c.bufferLines = 0
 }
 
-func (c *CodecMultiline) Event(start_offset int64, end_offset int64, text string) {
+// Event is called by a Harvester when a new line event occurs on a file.
+// Multiline processing takes place and when a complete multiline event is found
+// as described by the configuration it is shipped to the callback
+func (c *CodecMultiline) Event(startOffset int64, endOffset int64, text string) {
 	// TODO(driskell): If we are using previous and we match on the very first line read,
 	// then this is because we've started in the middle of a multiline event (the first line
 	// should never match) - so we could potentially offer an option to discard this.
-	// The benefit would be that when using previous_timeout, we could discard any extraneous
+	// The benefit would be that when using previoustimeout, we could discard any extraneous
 	// event data that did not get written in time, if the user so wants it, in order to prevent
 	// odd incomplete data. It would be a signal from the user, "I will worry about the buffering
 	// issues my programs may have - you just make sure to write each event either completely or
 	// partially, always with the FIRST line correct (which could be the important one)."
-	match_failed := c.config.Negate == c.config.matcher.MatchString(text)
-	if c.config.what == codecMultiline_What_Previous {
+	var matchFailed bool
+	for _, pattern := range c.config.patterns {
+		if matchFailed = pattern.negate == pattern.matcher.MatchString(text); !matchFailed {
+			break
+		}
+	}
+
+	if c.config.what == codecMultilineWhatPrevious {
 		if c.config.PreviousTimeout != 0 {
 			// Prevent a flush happening while we're modifying the stored data
-			c.timer_lock.Lock()
+			c.timerLock.Lock()
 		}
-		if match_failed {
+		if matchFailed {
 			c.flush()
 		}
 	}
 
-	var text_len int64 = int64(len(text))
+	textLen := int64(len(text))
 
 	if len(c.buffer) == 0 {
-		c.start_offset = start_offset
+		c.startOffset = startOffset
 	}
 
 	// Check we don't exceed the max multiline bytes
-	check_len := c.buffer_len + text_len + c.buffer_lines
-	for check_len >= c.config.MaxMultilineBytes {
+	checkLen := c.bufferLen + textLen + c.bufferLines
+	for checkLen >= c.config.MaxMultilineBytes {
 		// Store partial and flush
-		overflow := check_len - c.config.MaxMultilineBytes
-		cut := text_len - overflow
+		overflow := checkLen - c.config.MaxMultilineBytes
+		cut := textLen - overflow
 
-		c.end_offset = end_offset - overflow
+		c.endOffset = endOffset - overflow
 
 		c.buffer = append(c.buffer, text[:cut])
-		c.buffer_lines++
-		c.buffer_len += cut
+		c.bufferLines++
+		c.bufferLen += cut
 
 		c.flush()
 
 		// Append the remaining data to the buffer
-		c.start_offset = c.end_offset
+		c.startOffset = c.endOffset
 		text = text[cut:]
-		text_len -= cut
+		textLen -= cut
 
 		// Reset check length in case we're still over the max
-		check_len = text_len
+		checkLen = textLen
 	}
 
-	c.end_offset = end_offset
+	c.endOffset = endOffset
 
 	c.buffer = append(c.buffer, text)
-	c.buffer_lines++
-	c.buffer_len += text_len
+	c.bufferLines++
+	c.bufferLen += textLen
 
-	if c.config.what == codecMultiline_What_Previous {
+	if c.config.what == codecMultilineWhatPrevious {
 		if c.config.PreviousTimeout != 0 {
 			// Reset the timer and unlock
-			c.timer_deadline = time.Now().Add(c.config.PreviousTimeout)
-			c.timer_lock.Unlock()
+			c.timerDeadline = time.Now().Add(c.config.PreviousTimeout)
+			c.timerLock.Unlock()
 		}
-	} else if c.config.what == codecMultiline_What_Next && match_failed {
+	} else if c.config.what == codecMultilineWhatNext && matchFailed {
 		c.flush()
 	}
 }
 
+// flush is called internally when a multiline event is ready.
+// It combines the lines collected and passes the new event to the callback
 func (c *CodecMultiline) flush() {
 	if len(c.buffer) == 0 {
 		return
@@ -210,23 +254,26 @@ func (c *CodecMultiline) flush() {
 	text := strings.Join(c.buffer, "\n")
 
 	// Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
-	c.last_offset = c.end_offset
+	c.lastOffset = c.endOffset
 	c.buffer = nil
-	c.buffer_len = 0
-	c.buffer_lines = 0
+	c.bufferLen = 0
+	c.bufferLines = 0
 
-	c.callback_func(c.start_offset, c.end_offset, text)
+	c.callbackFunc(c.startOffset, c.endOffset, text)
 }
 
+// Meter is called by the Harvester to request accounting
 func (c *CodecMultiline) Meter() {
-	c.meter_lines = c.buffer_lines
-	c.meter_bytes = c.end_offset - c.last_offset
+	c.meterLines = c.bufferLines
+	c.meterBytes = c.endOffset - c.lastOffset
 }
 
+// Snapshot is called when lc-admin tool requests a snapshot and the accounting
+// data is returned in a snapshot structure
 func (c *CodecMultiline) Snapshot() *core.Snapshot {
 	snap := core.NewSnapshot("Multiline Codec")
-	snap.AddEntry("Pending lines", c.meter_lines)
-	snap.AddEntry("Pending bytes", c.meter_bytes)
+	snap.AddEntry("Pending lines", c.meterLines)
+	snap.AddEntry("Pending bytes", c.meterBytes)
 	return snap
 }
 
@@ -236,29 +283,29 @@ func (c *CodecMultiline) deadlineRoutine() {
 DeadlineLoop:
 	for {
 		select {
-		case <-c.timer_stop:
+		case <-c.timerStop:
 			timer.Stop()
 
 			// Shutdown signal so end the routine
 			break DeadlineLoop
 		case now := <-timer.C:
-			c.timer_lock.Lock()
+			c.timerLock.Lock()
 
 			// Have we reached the target time?
-			if !now.After(c.timer_deadline) {
+			if !now.After(c.timerDeadline) {
 				// Deadline moved, update the timer
-				timer.Reset(c.timer_deadline.Sub(now))
-				c.timer_lock.Unlock()
+				timer.Reset(c.timerDeadline.Sub(now))
+				c.timerLock.Unlock()
 				continue
 			}
 
 			c.flush()
 			timer.Reset(c.config.PreviousTimeout)
-			c.timer_lock.Unlock()
+			c.timerLock.Unlock()
 		}
 	}
 
-	c.timer_wait.Done()
+	c.timerWait.Done()
 }
 
 // Register the codec

@@ -54,7 +54,7 @@ func (c *checkMultiline) incorrectLineCount(lines int, message string) {
 	c.t.Errorf("Expected: %d", len(c.expect))
 }
 
-func (c *checkMultiline) EventCallback(start_offset int64, end_offset int64, text string) {
+func (c *checkMultiline) EventCallback(startOffset int64, endOffset int64, text string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -65,15 +65,15 @@ func (c *checkMultiline) EventCallback(start_offset int64, end_offset int64, tex
 		c.t.FailNow()
 	}
 
-	if start_offset != c.expect[c.lines].start {
+	if startOffset != c.expect[c.lines].start {
 		c.t.Error("Start offset incorrect for line: ", line)
-		c.t.Errorf("Got:      %d", start_offset)
+		c.t.Errorf("Got:      %d", startOffset)
 		c.t.Errorf("Expected: %d", c.expect[c.lines].start)
 	}
 
-	if end_offset != c.expect[c.lines].end {
+	if endOffset != c.expect[c.lines].end {
 		c.t.Error("End offset incorrect for line: ", line)
-		c.t.Errorf("Got:      %d", end_offset)
+		c.t.Errorf("Got:      %d", endOffset)
 		c.t.Errorf("Expected: %d", c.expect[c.lines].end)
 	}
 
@@ -109,9 +109,38 @@ func TestMultilinePrevious(t *testing.T) {
 
 	codec := createMultilineCodec(
 		map[string]interface{}{
-			"pattern": "^(ANOTHER|NEXT) ",
-			"what":    "previous",
-			"negate":  false,
+			"patterns": []string{"^(ANOTHER|NEXT) "},
+			"what":     "previous",
+		},
+		check.EventCallback,
+		t,
+	)
+
+	// Send some data
+	codec.Event(0, 1, "DEBUG First line")
+	codec.Event(2, 3, "NEXT line")
+	codec.Event(4, 5, "ANOTHER line")
+	codec.Event(6, 7, "DEBUG Next line")
+
+	check.CheckFinalCount()
+
+	if offset := codec.Teardown(); offset != 5 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
+func TestMultilinePreviousNoNegate(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 5, "DEBUG First line\nNEXT line\nANOTHER line"},
+		},
+		t: t,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"patterns": []string{"=^(ANOTHER|NEXT) "},
+			"what":     "previous",
 		},
 		check.EventCallback,
 		t,
@@ -140,9 +169,8 @@ func TestMultilinePreviousNegate(t *testing.T) {
 
 	codec := createMultilineCodec(
 		map[string]interface{}{
-			"pattern": "^DEBUG ",
-			"what":    "previous",
-			"negate":  true,
+			"patterns": []string{"!^DEBUG "},
+			"what":     "previous",
 		},
 		check.EventCallback,
 		t,
@@ -172,9 +200,8 @@ func TestMultilinePreviousTimeout(t *testing.T) {
 
 	codec := createMultilineCodec(
 		map[string]interface{}{
-			"pattern":          "^(ANOTHER|NEXT) ",
+			"patterns":         []string{"^(ANOTHER|NEXT) "},
 			"what":             "previous",
-			"negate":           false,
 			"previous timeout": "3s",
 		},
 		check.EventCallback,
@@ -213,9 +240,8 @@ func TestMultilineNext(t *testing.T) {
 
 	codec := createMultilineCodec(
 		map[string]interface{}{
-			"pattern": "^(DEBUG|NEXT) ",
-			"what":    "next",
-			"negate":  false,
+			"patterns": []string{"^(DEBUG|NEXT) "},
+			"what":     "next",
 		},
 		check.EventCallback,
 		t,
@@ -245,9 +271,8 @@ func TestMultilineNextNegate(t *testing.T) {
 
 	codec := createMultilineCodec(
 		map[string]interface{}{
-			"pattern": "^ANOTHER ",
-			"what":    "next",
-			"negate":  true,
+			"patterns": []string{"!^ANOTHER "},
+			"what":     "next",
 		},
 		check.EventCallback,
 		t,
@@ -279,8 +304,7 @@ func TestMultilineMaxBytes(t *testing.T) {
 	codec := createMultilineCodec(
 		map[string]interface{}{
 			"max multiline bytes": int64(32),
-			"pattern":             "^DEBUG ",
-			"negate":              true,
+			"patterns":            []string{"!^DEBUG "},
 		},
 		check.EventCallback,
 		t,
@@ -314,8 +338,7 @@ func TestMultilineMaxBytesOverflow(t *testing.T) {
 	codec := createMultilineCodec(
 		map[string]interface{}{
 			"max multiline bytes": int64(10),
-			"pattern":             "^START",
-			"negate":              true,
+			"patterns":            []string{"!^START"},
 		},
 		check.EventCallback,
 		t,
@@ -348,9 +371,8 @@ func TestMultilineReset(t *testing.T) {
 
 	codec := createMultilineCodec(
 		map[string]interface{}{
-			"pattern": "^(ANOTHER|NEXT) ",
-			"what":    "previous",
-			"negate":  false,
+			"patterns": []string{"^(ANOTHER|NEXT) "},
+			"what":     "previous",
 		},
 		check.EventCallback,
 		t,
@@ -372,4 +394,32 @@ func TestMultilineReset(t *testing.T) {
 	}
 }
 
-// TODO(driskell): Test for Reset()
+func TestMultilineMultiplePattern(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 5, "DEBUG First line\nNEXT line\nANOTHER line"},
+		},
+		t: t,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"patterns": []string{"^ANOTHER ", "^NEXT "},
+			"what":     "previous",
+		},
+		check.EventCallback,
+		t,
+	)
+
+	// Send some data
+	codec.Event(0, 1, "DEBUG First line")
+	codec.Event(2, 3, "NEXT line")
+	codec.Event(4, 5, "ANOTHER line")
+	codec.Event(6, 7, "DEBUG Next line")
+
+	check.CheckFinalCount()
+
+	if offset := codec.Teardown(); offset != 5 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}

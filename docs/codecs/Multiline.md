@@ -13,8 +13,7 @@ option.
 - [Example](#example)
 - [Options](#options)
   - [`"max multiline bytes"`](#max-multiline-bytes)
-  - [`"negate"`](#negate)
-  - [`"pattern"`](#pattern)
+  - [`"patterns"`](#patterns)
   - [`"previous timeout"`](#previous-timeout)
   - [`"what"`](#what)
 
@@ -24,8 +23,7 @@ option.
 
 	{
 		"name": "multiline",
-		"pattern": "^[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} ",
-		"negate": true,
+		"patterns": ["!^[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} "],
 		"what": "previous",
 		"previous timeout": "30s"
 	}
@@ -41,20 +39,25 @@ length, it will be split across multiple events.
 
 This setting can not be greater than the `spool max bytes` setting.
 
-### `"negate"`
+### `"patterns"`
 
-*Boolean. Optional. Default: false*
+*Array of Strings. Required*
 
-Negates `pattern` so that a match becomes a non-match and a non-match becomes a
-match.
+A list of regular expressions to match against each line. Each pattern is tried
+one by one until a match occurs, or all patterns have been exhausted. At least
+one pattern must be provided.
 
-### `"pattern"`
+The pattern syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
 
-*String. Required*
+To negate a pattern such that a line is considered to match when the pattern
+does not match, prefix the pattern with an exclamation mark ("!"). For example,
+the pattern "!^STARTEVENT" would match any line which does not start with the
+text, "STARTEVENT".
 
-A regular expression to match against each line.
-
-The syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
+The pattern can also be prefixed with "=" to explicitly state that a pattern is
+not negated, which then allows a literal match of an exclamation mark at the
+start of the pattern. For example, "=!EVENT!" would match a line containing,
+"!EVENT!".
 
 ### `"previous timeout"`
 
