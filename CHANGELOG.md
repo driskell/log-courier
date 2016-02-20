@@ -35,6 +35,17 @@ configuration file was specified during build (see Build Changes)
 `connect` and `config` parameters it will load the default configuration file if
 one was specified during build (see Build Changes)
 * The `dead time` stream configuration directive now defaults to 1 hour
+* Do not open dead files on startup (which causes excessive memory usage if
+there are many of them) if their size has not changed since they were last
+opened (#242)
+
+***RPM Packaging***
+
+* Fix broken systemd configuration (#237)
+
+***DEB Packaging***
+
+* Fix broken systemd configuration (#237)
 
 ***Build Changes***
 
