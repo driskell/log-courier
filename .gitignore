@@ -2,6 +2,7 @@
 /.vagrant
 /*.gem
 /bin
+/lc-lib/config/platform.go
 /lc-lib/core/version.go
 /node_modules
 /spec/tmp

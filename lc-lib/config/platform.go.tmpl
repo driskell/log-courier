@@ -1,5 +1,5 @@
 // THIS IS A GENERATED FILE
-// See: version_generate.go / version_include.go
+// See: platform_generate.go / platform_include.go
 
 /*
  * Copyright 2014-2015 Jason Woods.
@@ -17,7 +17,13 @@
  * limitations under the License.
  */
 
-package core
+package config
 
-// Log Courier Version
-const LogCourierVersion string = "${VERSION}"
+// Default configuration path and filename
+const DefaultConfigurationFile string = "${LC_DEFAULT_CONFIGURATION_FILE}"
+
+// Default persist directory where the .log-courier file will be saved
+const defaultGeneralPersistDir string = "${LC_DEFAULT_GENERAL_PERSIST_DIR}"
+
+// Default admin listen address
+const defaultGeneralAdminBind string = "${LC_DEFAULT_GENERAL_ADMIN_BIND}"

@@ -31,34 +31,30 @@ import (
 )
 
 const (
-	defaultGeneralConfigAdminEnabled       bool          = false
-	defaultGeneralConfigAdminBind          string        = "tcp:127.0.0.1:1234"
-	defaultGeneralConfigProspectInterval   time.Duration = 10 * time.Second
-	defaultGeneralConfigSpoolSize          int64         = 1024
-	defaultGeneralConfigSpoolMaxBytes      int64         = 10485760
-	defaultGeneralConfigSpoolTimeout       time.Duration = 5 * time.Second
-	defaultGeneralConfigLineBufferBytes    int64         = 16384
-	defaultGeneralConfigMaxLineBytes       int64         = 1048576
-	defaultGeneralConfigLogLevel           logging.Level = logging.INFO
-	defaultGeneralConfigLogStdout          bool          = true
-	defaultGeneralConfigLogSyslog          bool          = false
-	defaultNetworkConfigMethod             string        = "failover"
-	defaultNetworkConfigTransport          string        = "tls"
-	defaultNetworkConfigRfc2782Srv         bool          = true
-	defaultNetworkConfigRfc2782Service     string        = "courier"
-	defaultNetworkConfigTimeout            time.Duration = 15 * time.Second
-	defaultNetworkConfigReconnect          time.Duration = 1 * time.Second
-	defaultNetworkConfigMaxPendingPayloads int64         = 4
-	defaultStreamConfigCodec               string        = "plain"
-	defaultStreamConfigDeadTime            time.Duration = 24 * time.Hour
-	defaultStreamConfigAddHostField        bool          = true
-	defaultStreamConfigAddOffsetField      bool          = true
-	defaultStreamConfigAddPathField        bool          = true
-	defaultStreamConfigAddTimezoneField    bool          = false
-)
-
-var (
-	defaultGeneralConfigHost = "localhost.localdomain"
+	defaultGeneralAdminEnabled       bool          = false
+	defaultGeneralHost               string        = "localhost.localdomain"
+	defaultGeneralLogLevel           logging.Level = logging.INFO
+	defaultGeneralLogStdout          bool          = true
+	defaultGeneralLogSyslog          bool          = false
+	defaultGeneralLineBufferBytes    int64         = 16384
+	defaultGeneralMaxLineBytes       int64         = 1048576
+	defaultGeneralProspectInterval   time.Duration = 10 * time.Second
+	defaultGeneralSpoolSize          int64         = 1024
+	defaultGeneralSpoolMaxBytes      int64         = 10485760
+	defaultGeneralSpoolTimeout       time.Duration = 5 * time.Second
+	defaultNetworkMaxPendingPayloads int64         = 4
+	defaultNetworkMethod             string        = "failover"
+	defaultNetworkReconnect          time.Duration = 1 * time.Second
+	defaultNetworkRfc2782Service     string        = "courier"
+	defaultNetworkRfc2782Srv         bool          = true
+	defaultNetworkTimeout            time.Duration = 15 * time.Second
+	defaultNetworkTransport          string        = "tls"
+	defaultStreamAddHostField        bool          = true
+	defaultStreamAddOffsetField      bool          = true
+	defaultStreamAddPathField        bool          = true
+	defaultStreamAddTimezoneField    bool          = false
+	defaultStreamCodec               string        = "plain"
+	defaultStreamDeadTime            time.Duration = 24 * time.Hour
 )
 
 // General holds the general configuration
@@ -82,17 +78,18 @@ type General struct {
 
 // InitDefaults initialises default values for the general configuration
 func (gc *General) InitDefaults() {
-	gc.AdminEnabled = defaultGeneralConfigAdminEnabled
-	gc.AdminBind = defaultGeneralConfigAdminBind
-	gc.ProspectInterval = defaultGeneralConfigProspectInterval
-	gc.SpoolSize = defaultGeneralConfigSpoolSize
-	gc.SpoolMaxBytes = defaultGeneralConfigSpoolMaxBytes
-	gc.SpoolTimeout = defaultGeneralConfigSpoolTimeout
-	gc.LineBufferBytes = defaultGeneralConfigLineBufferBytes
-	gc.MaxLineBytes = defaultGeneralConfigMaxLineBytes
-	gc.LogLevel = defaultGeneralConfigLogLevel
-	gc.LogStdout = defaultGeneralConfigLogStdout
-	gc.LogSyslog = defaultGeneralConfigLogSyslog
+	gc.AdminEnabled = defaultGeneralAdminEnabled
+	gc.AdminBind = defaultGeneralAdminBind
+	gc.LineBufferBytes = defaultGeneralLineBufferBytes
+	gc.LogLevel = defaultGeneralLogLevel
+	gc.LogStdout = defaultGeneralLogStdout
+	gc.LogSyslog = defaultGeneralLogSyslog
+	gc.MaxLineBytes = defaultGeneralMaxLineBytes
+	gc.PersistDir = defaultGeneralPersistDir
+	gc.ProspectInterval = defaultGeneralProspectInterval
+	gc.SpoolSize = defaultGeneralSpoolSize
+	gc.SpoolMaxBytes = defaultGeneralSpoolMaxBytes
+	gc.SpoolTimeout = defaultGeneralSpoolTimeout
 	// NOTE: Empty string for Host means calculate it automatically, so leave it
 }
 
@@ -112,12 +109,12 @@ type Network struct {
 
 // InitDefaults initiases default values for the network configuration
 func (nc *Network) InitDefaults() {
-	nc.Rfc2782Srv = defaultNetworkConfigRfc2782Srv
-	nc.Transport = defaultNetworkConfigTransport
-	nc.Rfc2782Service = defaultNetworkConfigRfc2782Service
-	nc.Timeout = defaultNetworkConfigTimeout
-	nc.Reconnect = defaultNetworkConfigReconnect
-	nc.MaxPendingPayloads = defaultNetworkConfigMaxPendingPayloads
+	nc.Rfc2782Srv = defaultNetworkRfc2782Srv
+	nc.Transport = defaultNetworkTransport
+	nc.Rfc2782Service = defaultNetworkRfc2782Service
+	nc.Timeout = defaultNetworkTimeout
+	nc.Reconnect = defaultNetworkReconnect
+	nc.MaxPendingPayloads = defaultNetworkMaxPendingPayloads
 }
 
 // CodecStub holds an unknown codec configuration
@@ -142,11 +139,11 @@ type Stream struct {
 
 // InitDefaults initialises the default configuration for a log stream
 func (sc *Stream) InitDefaults() {
-	sc.DeadTime = defaultStreamConfigDeadTime
-	sc.AddHostField = defaultStreamConfigAddHostField
-	sc.AddOffsetField = defaultStreamConfigAddOffsetField
-	sc.AddPathField = defaultStreamConfigAddPathField
-	sc.AddTimezoneField = defaultStreamConfigAddTimezoneField
+	sc.DeadTime = defaultStreamDeadTime
+	sc.AddHostField = defaultStreamAddHostField
+	sc.AddOffsetField = defaultStreamAddOffsetField
+	sc.AddPathField = defaultStreamAddPathField
+	sc.AddTimezoneField = defaultStreamAddTimezoneField
 }
 
 // File holds the configuration for a set of paths that share the same stream
@@ -223,6 +220,11 @@ func (c *Config) Load(path string) (err error) {
 		}
 	}
 
+	if c.General.AdminEnabled && c.General.AdminBind == "" {
+		err = fmt.Errorf("/general/admin listen address must be specified if /general/admin enabled is true")
+		return
+	}
+
 	if c.General.PersistDir == "" {
 		err = fmt.Errorf("/general/persist directory must be specified")
 		return
@@ -250,13 +252,13 @@ func (c *Config) Load(path string) (err error) {
 		if err == nil {
 			c.General.Host = ret
 		} else {
-			c.General.Host = defaultGeneralConfigHost
+			c.General.Host = defaultGeneralHost
 			log.Warning("Failed to determine the FQDN; using '%s'.", c.General.Host)
 		}
 	}
 
 	if c.Network.Method == "" {
-		c.Network.Method = defaultNetworkConfigMethod
+		c.Network.Method = defaultNetworkMethod
 	}
 	if c.Network.Method != "failover" && c.Network.Method != "loadbalance" {
 		err = fmt.Errorf("The network method (/network/method) is not recognised: %s", c.Network.Method)
@@ -309,7 +311,7 @@ func (c *Config) Load(path string) (err error) {
 // codec factories the harvesters will require
 func (c *Config) initStreamConfig(path string, streamConfig *Stream) (err error) {
 	if len(streamConfig.Codecs) == 0 {
-		streamConfig.Codecs = []CodecStub{CodecStub{Name: defaultStreamConfigCodec}}
+		streamConfig.Codecs = []CodecStub{CodecStub{Name: defaultStreamCodec}}
 	}
 
 	for i := 0; i < len(streamConfig.Codecs); i++ {

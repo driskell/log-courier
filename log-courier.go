@@ -171,7 +171,7 @@ func (lc *LogCourier) startUp() {
 	flag.BoolVar(&listSupported, "list-supported", false, "List supported transports and codecs")
 	flag.StringVar(&cpuProfile, "cpuprofile", "", "write cpu profile to file")
 
-	flag.StringVar(&lc.configFile, "config", "", "The config file to load")
+	flag.StringVar(&lc.configFile, "config", config.DefaultConfigurationFile, "The config file to load")
 	flag.BoolVar(&lc.stdin, "stdin", false, "Read from stdin instead of files listed in the config file")
 	flag.BoolVar(&lc.fromBeginning, "from-beginning", false, "On first run, read new files from the beginning instead of the end")
 

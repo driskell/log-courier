@@ -20,38 +20,24 @@
 package main
 
 import (
-	"bytes"
 	"io/ioutil"
 	"log"
 	"os"
 )
 
-// Generate version.go
-// It should contain the version number we have compiled
+// Generate platform.go
+// It should contain platform specific defaults, such as the default
+// configuration location and persist directory.
+// Useful for package maintainers
 func main() {
-	version, err := ioutil.ReadFile("../../version.txt")
+	platformFile, err := ioutil.ReadFile("platform.go.tmpl")
 	if err != nil {
-		log.Fatalf("Failed to read ../../version.txt: %s", err)
+		log.Fatalf("Failed to read platform.go.tmpl: %s", err)
 	}
 
-	version = bytes.TrimRight(version, "\r\n")
+	platformFile = []byte(os.ExpandEnv(string(platformFile)))
 
-	mappingFunc := func(param string) string {
-		switch param {
-		case "VERSION":
-			return string(version)
-		}
-		return ""
-	}
-
-	versionFile, err := ioutil.ReadFile("version.go.tmpl")
-	if err != nil {
-		log.Fatalf("Failed to read version.go.tmpl: %s", err)
-	}
-
-	versionFile = []byte(os.Expand(string(versionFile), mappingFunc))
-
-	if err := ioutil.WriteFile("version.go", versionFile, 0644); err != nil {
-		log.Fatalf("Failed to write version.go: %s", err)
+	if err := ioutil.WriteFile("platform.go", platformFile, 0644); err != nil {
+		log.Fatalf("Failed to write platform.go: %s", err)
 	}
 }
