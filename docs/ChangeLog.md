@@ -25,6 +25,24 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## 1.8.3
+
+*???*
+
+***Log Courier***
+
+* Do not open dead files on startup (which causes excessive memory usage if
+there are many of them) if their size has not changed since they were last
+opened (#242)
+
+***RPM Packaging***
+
+* Fix broken systemd configuration (#237)
+
+***DEB Packaging***
+
+* Fix broken systemd configuration (#237)
+
 ## 1.8.2
 
 *30th October 2015*

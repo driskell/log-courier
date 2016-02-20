@@ -21,13 +21,14 @@ package prospector
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/driskell/log-courier/src/lc-lib/core"
 	"github.com/driskell/log-courier/src/lc-lib/harvester"
 	"github.com/driskell/log-courier/src/lc-lib/registrar"
 	"github.com/driskell/log-courier/src/lc-lib/spooler"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 type Prospector struct {
@@ -311,8 +312,14 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
 		resume := !info.isRunning()
 		if resume {
 			if info.status == Status_Resume {
-				// This is a filestate that was saved, resume the harvester
-				log.Info("Resuming harvester on a previously harvested file: %s", file)
+				if info.finish_offset == fileinfo.Size() && time.Since(fileinfo.ModTime()) > config.DeadTime {
+					// Old file with an unchanged offset, skip it
+					log.Info("Skipping file (older than dead time of %v): %s", config.DeadTime, file)
+					info.status = Status_Ok
+				} else {
+					// This is a filestate that was saved, resume the harvester
+					log.Info("Resuming harvester on a previously harvested file: %s", file)
+				}
 			} else if info.status == Status_Failed {
 				// Last attempt we failed to start, try again
 				log.Info("Attempting to restart failed harvester: %s", file)
