@@ -314,8 +314,14 @@ func (p *Prospector) scan(path string, config *config.File) {
 		resume := !info.isRunning()
 		if resume {
 			if info.status == statusResume {
-				// This is a filestate that was saved, resume the harvester
-				log.Info("Resuming harvester on a previously harvested file: %s", file)
+				if info.finishOffset == fileinfo.Size() && time.Since(fileinfo.ModTime()) > config.DeadTime {
+					// Old file with an unchanged offset, skip it
+					log.Info("Skipping file (older than dead time of %v): %s", config.DeadTime, file)
+					info.status = statusOk
+				} else {
+					// This is a filestate that was saved, resume the harvester
+					log.Info("Resuming harvester on a previously harvested file: %s", file)
+				}
 			} else if info.status == statusFailed {
 				// Last attempt we failed to start, try again
 				log.Info("Attempting to restart failed harvester: %s", file)
