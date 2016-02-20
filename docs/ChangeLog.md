@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [1.8.3](#183)
 - [1.8.2](#182)
 - [1.8.1](#181)
 - [1.8](#18)
@@ -38,6 +39,8 @@ opened (#242)
 ***RPM Packaging***
 
 * Fix broken systemd configuration (#237)
+* Fix non-fatal %postun script failure, and fix starting of Log Courier during
+package upgrade even if it was not originally started (#228)
 
 ***DEB Packaging***
 
