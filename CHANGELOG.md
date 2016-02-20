@@ -34,6 +34,7 @@ configuration file was specified during build (see Build Changes)
 `admin listen address` from using the `config` parameter. In the absense of both
 `connect` and `config` parameters it will load the default configuration file if
 one was specified during build (see Build Changes)
+* The `dead time` stream configuration directive now defaults to 1 hour
 
 ***Build Changes***
 

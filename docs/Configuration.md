@@ -233,7 +233,7 @@ Aside from "plain", the following codecs are available at this time.
 
 ### `"dead time"`
 
-*Duration. Optional. Default: "24h"*  
+*Duration. Optional. Default: "1h"*  
 *Configuration reload will only affect new or resumed files*
 
 If a log file has not been modified in this time period, it will be closed and

@@ -54,7 +54,7 @@ const (
 	defaultStreamAddPathField        bool          = true
 	defaultStreamAddTimezoneField    bool          = false
 	defaultStreamCodec               string        = "plain"
-	defaultStreamDeadTime            time.Duration = 24 * time.Hour
+	defaultStreamDeadTime            time.Duration = 1 * time.Hour
 )
 
 // General holds the general configuration
