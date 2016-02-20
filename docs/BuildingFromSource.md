@@ -49,9 +49,10 @@ Courier.
 
 ```
 export GO15VENDOREXPERIMENT=1
-go get https://github.com/driskell/log-courier
-go generate github.com/driskell/log-courier
-go install github.com/driskell/log-courier
+go get -d https://github.com/driskell/log-courier
+go generate github.com/driskell/log-courier/lc-lib/config
+go generate github.com/driskell/log-courier/lc-lib/core
+go install github.com/driskell/log-courier github.com/driskell/log-courier/lc-admin github.com/driskell/log-courier/lc-tlscert
 ```
 
 ### Results
@@ -94,9 +95,10 @@ Courier.
 
 ```
 set GO15VENDOREXPERIMENT=1
-go get https://github.com/driskell/log-courier
-go generate github.com/driskell/log-courier
-go install github.com/driskell/log-courier
+go get -d https://github.com/driskell/log-courier
+go generate github.com/driskell/log-courier/lc-lib/config
+go generate github.com/driskell/log-courier/lc-lib/core
+go install github.com/driskell/log-courier github.com/driskell/log-courier/lc-admin github.com/driskell/log-courier/lc-tlscert
 ```
 
 ### Results
