@@ -6,8 +6,9 @@
 	],
 	"Deps": [
 		{
-			"ImportPath": "github.com/op/go-logging",
-			"Rev": "e8d5414f0947014548c2334044a0fac13187dfee"
+			"ImportPath": "gopkg.in/op/go-logging.v1",
+			"Comment": "v1",
+			"Rev": "b2cb9fa56473e98db8caba80237377e83fe44db5"
 		},
 		{
 			"ImportPath": "gopkg.in/yaml.v2",

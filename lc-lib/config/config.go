@@ -27,7 +27,7 @@ import (
 	"reflect"
 	"time"
 
-	logging "github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
+	"gopkg.in/op/go-logging.v1"
 )
 
 const (

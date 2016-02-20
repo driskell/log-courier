@@ -16,7 +16,7 @@
 
 package admin
 
-import "github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
+import "gopkg.in/op/go-logging.v1"
 
 var log *logging.Logger
 

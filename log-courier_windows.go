@@ -22,7 +22,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
+	"gopkg.in/op/go-logging.v1"
 )
 
 // registerSignals registers platform specific shutdown signals with the shutdown

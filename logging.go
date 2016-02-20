@@ -17,7 +17,7 @@
 package main
 
 import (
-	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
+	"gopkg.in/op/go-logging.v1"
 	"io/ioutil"
 	golog "log"
 	"os"

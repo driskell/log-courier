@@ -28,7 +28,6 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
 	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
@@ -37,6 +36,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/publisher"
 	"github.com/driskell/log-courier/lc-lib/registrar"
 	"github.com/driskell/log-courier/lc-lib/spooler"
+	"gopkg.in/op/go-logging.v1"
 )
 
 import _ "github.com/driskell/log-courier/lc-lib/codecs"

@@ -22,7 +22,7 @@ package config
 import (
 	"io/ioutil"
 
-	yaml "github.com/driskell/log-courier/Godeps/_workspace/src/gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 )
 
 // loadYAMLFile loads the given YAML format file

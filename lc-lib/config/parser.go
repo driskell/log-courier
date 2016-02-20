@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/driskell/log-courier/Godeps/_workspace/src/github.com/op/go-logging"
+	"gopkg.in/op/go-logging.v1"
 )
 
 // PopulateConfig populates dynamic configuration, automatically converting time.Duration etc.

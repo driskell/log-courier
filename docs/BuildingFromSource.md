@@ -19,7 +19,7 @@
 ## Requirements
 
 1. Linux, Unix, OS X or Windows
-1. The [Golang](http://golang.org/doc/install) compiler tools (1.2-1.6)
+1. The [Golang](http://golang.org/doc/install) compiler tools (1.5-1.6)
 
 ## Linux, Unix, OS X
 
@@ -44,19 +44,14 @@ folder, add it by running `export PATH=$PATH:/usr/local/golang/bin` where
 
 ### Building Log Courier
 
-Run the following commands to download and build Log Courier. Replace
-`<your version here>` with the version to download.
+Run the following commands to download and build the latest version of Log
+Courier.
 
 ```
-export VERSION="<your version here>"
-cd "$GOPATH"
-wget "https://github.com/driskell/log-courier/archive/v${VERSION}.zip"
-unzip "${VERSION}"
-mkdir -p src/github.com/driskell
-mv "log-courier-${VERSION}" src/github.com/driskell/log-courier
-cd github.com/driskell/log-courier
-go generate ./...
-go install ./...
+export GO15VENDOREXPERIMENT=1
+go get https://github.com/driskell/log-courier
+go generate github.com/driskell/log-courier
+go install github.com/driskell/log-courier
 ```
 
 ### Results
@@ -94,27 +89,14 @@ to the Golang installation directory.
 
 ### Building Log Courier
 
-Create the workspace folder for Log Courier.
+Run the following commands to download and build the latest version of Log
+Courier.
 
 ```
-cd %GOPATH%
-mkdir src/github.com/driskell
-```
-
-Download the version of Log Courier required from GitHub, and extra the contents
-of the downloaded file. You should end up with a folder called
-`log-courier-VERSION` where VERSION is the version number you downloaded. Rename
-this folder to just `log-courier` and place it inside the Log Courier workspace
-folder, which is inside your chosen workspace at `src/github.com/driskell`. This
-should now mean the Log Courier files are situated at
-`src/github.com/driskell/log-courier`.
-
-Run the following commands to build Log Courier.
-
-```
-cd %GOPATH%/github.com/driskell/log-courier
-go generate ./...
-go install ./...
+set GO15VENDOREXPERIMENT=1
+go get https://github.com/driskell/log-courier
+go generate github.com/driskell/log-courier
+go install github.com/driskell/log-courier
 ```
 
 ### Results
