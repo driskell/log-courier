@@ -4,6 +4,28 @@
 
 *???*
 
+***Breaking Changes***
+
+* CurveZMQ transport has been deprecated and removed
+* The lc-curvekey utility has been deprecated and removed
+* The `negate` configuration directive has been removed from both the multiline
+and the filter codecs as negation can now be specified in the pattern
+
+***Changes***
+
+* A new `global fields` configuration is available in the `general` section
+where fields that are to be added to all events from all paths can be specified.
+This complements the current `fields` configuration that is per-path.
+* Multiline codecs can now be configured with multiple patterns and each pattern
+can be individually negated with a "!" prefix. The `negate` configuration
+directive has been removed. A "=" prefix is also possible to allow patterns that
+need to start with a literal "!"
+* Filter codec patterns now also accept negation in the same method. The
+`negate` configuration directive has also been removed for filters
+* A new `method` configuration directive has been added to the `network`
+section, which allows `failover` or `loadbalance` network modes. Information on
+these new values can be found in the configuration documentation.
+
 ## 1.8
 
 *6th August 2015*
