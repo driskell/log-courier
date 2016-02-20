@@ -18,7 +18,7 @@ if [ -z "$DRELEASE" ]; then
 fi
 
 # Calculate prefix
-PREFIX=log-courier_$(cat log-courier/version_short.txt)
+PREFIX=log-courier_$(cat log-courier/version.txt)
 
 # Archive up the original code if necessary
 if [ ! -f "${PREFIX}.orig.tar.gz" ]; then
@@ -51,7 +51,7 @@ build_package()
       --controlmaint \
       --distribution "$D" \
       -b \
-      --newversion "$(cat version_short.txt)-${RELEASE}~${D}${DRELEASE}" \
+      --newversion "$(cat version.txt)-${RELEASE}~${D}${DRELEASE}" \
       "Package for ${D}"
 
     # Commit any packaging fixes
