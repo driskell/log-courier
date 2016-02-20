@@ -1,5 +1,20 @@
 # Protocol
 
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Overview](#overview)
+- [Message Structure](#message-structure)
+- [Message Types](#message-types)
+  - [PING](#ping)
+  - [PONG](#pong)
+  - [JDAT - JSON Data](#jdat---json-data)
+  - [ACKN - Acknowledgement](#ackn---acknowledgement)
+  - [???? - Unknown message](#---unknown-message)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Overview
 
 This is a technical document intended for other developers who may wish to write
@@ -50,7 +65,7 @@ the connection to be broken when the connection is needed again.
 
 A PONG message MUST be sent after a PONG message has been received.
 
-### JDAT
+### JDAT - JSON Data
 
 *Request*
 
@@ -88,7 +103,7 @@ ACKN message response from the server.
 If a server fails to decompress a JDAT message, it MUST disconnect the client
 immediately.
 
-### ACKN
+### ACKN - Acknowledgement
 
 *Response*
 
@@ -120,7 +135,7 @@ If a client receives an ACKN message with a Nonce that identified a payload of
 events that has not yet completed transmission, it MUST still process this
 message asynchronously while the payload of events is still being transmitted.
 
-### ????
+### ???? - Unknown message
 
 Mandatory length of 0 and no data.
 
