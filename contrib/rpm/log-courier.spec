@@ -102,7 +102,9 @@ fi
 %systemd_postun_with_restart log-courier.service
 %else
 if [ $1 -ge 1 ]; then
-	/sbin/service log-courier restart >/dev/null 2>&1
+	if /sbin/service log-courier status >/dev/null 2>&1; then
+		/sbin/service log-courier restart >/dev/null 2>&1
+	fi
 fi
 %endif
 

@@ -42,6 +42,8 @@ opened (#242)
 ***RPM Packaging***
 
 * Fix broken systemd configuration (#237)
+* Fix non-fatal %postun script failure, and fix starting of Log Courier during
+package upgrade even if it was not originally started (#228)
 
 ***DEB Packaging***
 
