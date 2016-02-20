@@ -1,0 +1,7 @@
+network:
+  servers:
+    - localhost:5043
+  ssl ca: ./logstash.cer
+stdin:
+  fields:
+    type: stdin

@@ -1,0 +1,9 @@
+network:
+  servers:
+    - localhost:5043
+  ssl ca: ./logstash.cer
+files:
+  - paths:
+      - /var/log/httpd/access.log
+    fields:
+      type: apache

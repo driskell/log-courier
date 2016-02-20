@@ -25,6 +25,8 @@ need to start with a literal "!"
 * A new `method` configuration directive has been added to the `network`
 section, which allows `failover` or `loadbalance` network modes. Information on
 these new values can be found in the configuration documentation.
+* Configuration files can now be in YAML format by giving the file a `.yaml`
+extension
 
 ## 1.8
 

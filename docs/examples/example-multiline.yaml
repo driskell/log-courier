@@ -1,0 +1,14 @@
+network:
+  servers:
+    - localhost:5043
+  ssl ca: ./logstash.cer
+files:
+  - paths:
+      - /var/log/httpd/error.log
+    fields:
+      type: errors
+    codecs:
+      - name: multiline
+        patterns:
+          - "!^[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} "
+        what: previous
