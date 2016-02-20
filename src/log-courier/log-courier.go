@@ -29,7 +29,7 @@ import (
 	"github.com/driskell/log-courier/src/lc-lib/publisher"
 	"github.com/driskell/log-courier/src/lc-lib/registrar"
 	"github.com/driskell/log-courier/src/lc-lib/spooler"
-	"github.com/op/go-logging"
+	"gopkg.in/op/go-logging.v1"
 	stdlog "log"
 	"os"
 	"runtime/pprof"

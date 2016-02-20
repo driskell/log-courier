@@ -19,7 +19,7 @@
 package main
 
 import (
-	"github.com/op/go-logging"
+	"gopkg.in/op/go-logging.v1"
 	"os"
 	"os/signal"
 )
