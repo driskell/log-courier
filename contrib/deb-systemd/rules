@@ -4,13 +4,21 @@
 	dh $@ --with=systemd
 
 override_dh_auto_clean:
-	$(MAKE) clean keepgoget=yes
+	# Nothing to do
 
 override_dh_auto_build:
-	$(MAKE)
+	# Configure platform specific defaults
+	export LC_DEFAULT_CONFIGURATION_FILE=/etc/log-courier/log-courier.yaml
+	export LC_DEFAULT_GENERAL_PERSIST_DIR=/var/lib/log-courier
+	export LC_DEFAULT_GENERAL_ADMIN_BIND=unix:/var/run/log-courier/admin.socket
+
+	# Enable vendor experiment in the event of Go 1.5 then generate and build
+	export GO15VENDOREXPERIMENT=1
+	go generate ./lc-lib/config ./lc-lib/core
+	go install . ./lc-admin ./lc-tlscert
 
 override_dh_auto_test:
-	# Maybe tests in future - we'd need to download the ffi gem
+	# Maybe tests in future
 
 override_dh_auto_install:
 	# Install binaries

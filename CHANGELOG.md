@@ -26,7 +26,26 @@ need to start with a literal "!"
 section, which allows `failover` or `loadbalance` network modes. Information on
 these new values can be found in the configuration documentation.
 * Configuration files can now be in YAML format by giving the file a `.yaml`
-extension
+extension, and this will be the preferred format. JSON format will continue to
+be used for `.conf` and `.json` configuration files
+* The `config` parameter can now be omitted from `log-courier` if a default
+configuration file was specified during build (see Build Changes)
+* `lc-admin` can now be given a configuration file to load the
+`admin listen address` from using the `config` parameter. In the absense of both
+`connect` and `config` parameters it will load the default configuration file if
+one was specified during build (see Build Changes)
+
+***Build Changes***
+
+* Some configuration parameters, such as default configuration file and default
+persist directory can now be specified at build time by setting environment
+variables for them. For example: `LC_DEFAULT_CONFIGURATION_FILE` and
+`LC_DEFAULT_GENERAL_PERSIST_DIR`. These will be used in the RPM and DEB packages
+to set platform specific defaults
+* Simplified the entire build process to use only Go tooling to make
+cross-platform building significantly easier, especially on Windows
+* Discarded Ruby test framework in favour of developing a Go test framework over
+time
 
 ## 1.8
 

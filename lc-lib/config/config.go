@@ -79,7 +79,7 @@ type General struct {
 // InitDefaults initialises default values for the general configuration
 func (gc *General) InitDefaults() {
 	gc.AdminEnabled = defaultGeneralAdminEnabled
-	gc.AdminBind = defaultGeneralAdminBind
+	gc.AdminBind = DefaultGeneralAdminBind
 	gc.LineBufferBytes = defaultGeneralLineBufferBytes
 	gc.LogLevel = defaultGeneralLogLevel
 	gc.LogStdout = defaultGeneralLogStdout

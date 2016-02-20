@@ -1,6 +1,3 @@
-// THIS IS A GENERATED FILE
-// See: platform_generate.go / platform_include.go
-
 /*
  * Copyright 2014-2015 Jason Woods.
  *
@@ -17,13 +14,15 @@
  * limitations under the License.
  */
 
-package config
+package main
 
-// Default configuration path and filename
-const DefaultConfigurationFile string = "${LC_DEFAULT_CONFIGURATION_FILE}"
+type commandError struct {
+	message string
+}
 
-// Default admin listen address
-const DefaultGeneralAdminBind string = "${LC_DEFAULT_GENERAL_ADMIN_BIND}"
+func (c *commandError) Error() string {
+	return c.message
+}
 
-// Default persist directory where the .log-courier file will be saved
-const defaultGeneralPersistDir string = "${LC_DEFAULT_GENERAL_PERSIST_DIR}"
+var commandEOF = &commandError{"EOF"}
+var commandTooManyArgs = &commandError{"Too many arguments"}

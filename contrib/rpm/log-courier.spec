@@ -4,7 +4,7 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 1.8
+Version: 2.0
 Release: 1%{dist}
 License: Apache
 Group: System Environment/Libraries
@@ -13,13 +13,8 @@ URL: https://github.com/driskell/log-courier
 Source: https://github.com/driskell/log-courier/archive/v%{version}.zip
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 
-BuildRequires: golang >= 1.2
+BuildRequires: golang >= 1.5
 BuildRequires: git
-BuildRequires: zeromq3-devel
-
-# Maybe tests in future - mock won't build ffi gem
-#BuildRequires: ruby >= 1.9.3, ruby-devel >= 1.9.3
-#BuildRequires: rubygem-bundler
 
 %if 0%{?rhel} >= 7
 Requires(post): systemd
@@ -39,9 +34,15 @@ securely, with low resource usage, to remote Logstash instances.
 %setup -q -n %{name}-%{version}
 
 %build
-make with=zmq3
-# See notes above for BuildRequires ruby
-#make with=zmq3 test
+# Configure platform specific defaults
+export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-courier/log-courier.yaml
+export LC_DEFAULT_GENERAL_PERSIST_DIR=%{_var}/lib/log-courier
+export LC_DEFAULT_GENERAL_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
+
+# Enable vendor experiment in the event of Go 1.5 then generate and build
+export GO15VENDOREXPERIMENT=1
+go generate ./lc-lib/config ./lc-lib/core
+go install . ./lc-admin ./lc-tlscert
 
 %install
 # Install binaries
