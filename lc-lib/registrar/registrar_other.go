@@ -24,11 +24,12 @@ package registrar
 import (
 	"encoding/json"
 	"os"
+	"path"
 )
 
 func (r *Registrar) writeRegistry() error {
 	// Open tmp file, write, flush, rename
-	fname := r.persistdir + string(os.PathSeparator) + r.statefile
+	fname := path.Join(r.persistdir, r.statefile)
 	tname := fname + ".new"
 	file, err := os.Create(tname)
 	if err != nil {
