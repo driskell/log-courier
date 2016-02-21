@@ -137,9 +137,11 @@ func (t *TransportTCP) controller() {
 		}
 
 		// If this returns false, we are shutting down
-		if !t.reconnectWait() {
-			break
+		if t.reconnectWait() {
+			continue
 		}
+
+		return
 	}
 }
 
