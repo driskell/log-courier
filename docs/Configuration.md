@@ -440,19 +440,28 @@ cause excessive memory usage.*
 
 ### `"method"`
 
-*String. Optional. Default: "failover"
-Available values: "failover", "loadbalance"*
+*String. Optional. Default: "random"
+Available values: "random", "failover", "loadbalance"*
 
 Specified the method to use when managing multiple `"servers"`.
 
-`"failover"`: Connect to all servers, preferring the first server in the list
-that has not failed. If the preferred server fails, gracefully failover to the
-next available server. When a server recovers that is more preferred than the
-current server, failback gracefully.
+`"random"`: Connect to a random server on startup. If the connected server
+fails, close that connection and reconnect to another random server. Protection
+is added such that during reconnection, a different server to the one that just
+failed is guaranteed. This is the same behaviour as Log Courier 1.x.
 
-`"loadbalance"`: Connect to all servers, load balancing events between them.
-Faster servers will receive more events than slower servers. Equally fast
-servers will receive events in a round robin fashion.
+`"failover"`: The server list acts as a preference list with the first server in
+the list the preferred server, and every one after that the next preferred
+servers in the order given. The preferred server is connected to initially, and
+only when that connection fails is another less preferred server connected to.
+Log Courier will continually attempt to connect to more preferred servers in the
+background, failing back to the most preferred server if one becomes available
+and closing any connections to less preferred servers.
+
+`"loadbalance"`: Connect to all servers and load balance events between them.
+Faster servers will receive more events than slower servers. The strategy for
+load balancing is best acknowledgement latency. Servers that acknowledge quicker
+will receive more events.
 
 ### `"reconnect"`
 
