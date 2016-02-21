@@ -79,11 +79,17 @@ func (e *Endpoint) Init() {
 
 // Prev returns the previous endpoint in the ordered list
 func (e *Endpoint) Prev() *Endpoint {
+	if e.orderedElement.Prev() == nil {
+		return nil
+	}
 	return e.orderedElement.Prev().Value.(*Endpoint)
 }
 
 // Next returns the next endpoint in the ordered list
 func (e *Endpoint) Next() *Endpoint {
+	if e.orderedElement.Next() == nil {
+		return nil
+	}
 	return e.orderedElement.Next().Value.(*Endpoint)
 }
 

@@ -87,6 +87,9 @@ func (f *Sink) Count() int {
 
 // Front returns the first endpoint currently active
 func (f *Sink) Front() *Endpoint {
+	if f.orderedList.Front() == nil {
+		return nil
+	}
 	return f.orderedList.Front().Value.(*Endpoint)
 }
 
