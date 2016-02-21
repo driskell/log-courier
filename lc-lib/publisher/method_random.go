@@ -87,6 +87,7 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 }
 
 func (m *methodRandom) connectRandom() {
+	// TODO: If all endpoints failed there is no backoff!
 	var server string
 	if len(m.config.Servers) == 1 {
 		// Only one entry
