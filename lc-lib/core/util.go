@@ -21,22 +21,32 @@ import (
 	"time"
 )
 
-func CalculateSpeed(duration time.Duration, speed float64, count float64, seconds_no_change *int) float64 {
-	if count == 0 {
-		*seconds_no_change++
+// CalculateSpeed returns a running average for a speed using variable time
+// periods over 5 seconds. If all measurements are 0 in a 5 second period it
+// will auto-reset
+func CalculateSpeed(duration time.Duration, average float64, measurement float64, secondsNoChange *int) float64 {
+	if measurement == 0 {
+		*secondsNoChange += int(math.Ceil(float64(duration) / float64(time.Second)))
 	} else {
-		*seconds_no_change = 0
+		*secondsNoChange = 0
 	}
 
-	if speed == 0. {
-		return count
-	}
-
-	if *seconds_no_change >= 5 {
-		*seconds_no_change = 0
+	if *secondsNoChange >= 5 {
+		*secondsNoChange = 0
 		return 0.
 	}
 
 	// Calculate a moving average over 5 seconds - use similiar weight as load average
-	return count + math.Exp(float64(duration)/float64(time.Second)/-5.)*(speed-count)
+	return CalculateRunningAverage(float64(duration)/float64(time.Second), 5, average, measurement)
+}
+
+// CalculateRunningAverage returns a running average
+// On the first call, where the existing average is 0, it will return the
+// measurement unchanged
+func CalculateRunningAverage(period float64, totalPeriods float64, average float64, measurement float64) float64 {
+	if average == 0. {
+		return measurement
+	}
+
+	return measurement + math.Exp(period/-totalPeriods)*(average-measurement)
 }
