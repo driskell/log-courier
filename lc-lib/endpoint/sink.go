@@ -17,7 +17,6 @@
 package endpoint
 
 import (
-	"math"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
@@ -244,8 +243,8 @@ func (f *Sink) moveFailed(endpoint *Endpoint) {
 
 	endpoint.status = endpointStatusFailed
 
-	// Reset average latency - ensures the endpoint regains it's trustworthyness
-	endpoint.averageLatency = math.MaxFloat64
+	// Reset average latency
+	endpoint.averageLatency = 0
 
 	f.failedList.PushFront(&endpoint.failedElement)
 }
