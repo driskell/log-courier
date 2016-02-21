@@ -259,10 +259,11 @@ func (c *Config) Load(path string) (err error) {
 		}
 	}
 
+	// TODO: Network method factory in publisher
 	if c.Network.Method == "" {
 		c.Network.Method = defaultNetworkMethod
 	}
-	if c.Network.Method != "failover" && c.Network.Method != "loadbalance" {
+	if c.Network.Method != "random" && c.Network.Method != "failover" && c.Network.Method != "loadbalance" {
 		err = fmt.Errorf("The network method (/network/method) is not recognised: %s", c.Network.Method)
 		return
 	}
