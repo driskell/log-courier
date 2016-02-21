@@ -17,12 +17,14 @@
 package endpoint
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
@@ -37,11 +39,11 @@ type Endpoint struct {
 
 	// Element structures for internal use by InternalList via EndpointSink
 	// MUST have Value member initialised
-	timeoutElement  internallist.Element
-	readyElement    internallist.Element
-	fullElement     internallist.Element
-	failedElement   internallist.Element
-	priorityElement internallist.Element
+	timeoutElement internallist.Element
+	readyElement   internallist.Element
+	fullElement    internallist.Element
+	failedElement  internallist.Element
+	orderedElement internallist.Element
 
 	// Timeout callback and when it should trigger
 	// The Sink manages these
@@ -51,14 +53,14 @@ type Endpoint struct {
 	sink            *Sink
 	server          string
 	addressPool     *addresspool.Pool
+	finishOnFail    bool
 	transport       transports.Transport
 	pendingPayloads map[string]*payload.Payload
 	numPayloads     int
 	pongPending     bool
 
-	lineCount int64
-
-	Health Health
+	lineCount      int64
+	averageLatency float64
 }
 
 // Init prepares the internal Element structures for InternalList and prepares
@@ -68,9 +70,21 @@ func (e *Endpoint) Init() {
 	e.readyElement.Value = e
 	e.fullElement.Value = e
 	e.failedElement.Value = e
-	e.priorityElement.Value = e
+	e.orderedElement.Value = e
 
 	e.resetPayloads()
+
+	e.transport = transports.NewTransport(e.sink.config.Factory, e, e.finishOnFail)
+}
+
+// Prev returns the previous endpoint in the ordered list
+func (e *Endpoint) Prev() *Endpoint {
+	return e.orderedElement.Prev().Value.(*Endpoint)
+}
+
+// Next returns the next endpoint in the ordered list
+func (e *Endpoint) Next() *Endpoint {
+	return e.orderedElement.Next().Value.(*Endpoint)
 }
 
 // shutdownTransport signals the transport to start shutting down
@@ -94,7 +108,7 @@ func (e *Endpoint) Server() string {
 func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 	// Must be in a ready state
 	if e.status != endpointStatusReady {
-		panic("Endpoint is not ready")
+		panic(fmt.Sprintf("Endpoint is not ready (%d)", e.status))
 	}
 
 	// Calculate a nonce
@@ -108,6 +122,7 @@ func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 	}
 
 	payload.Nonce = nonce
+	payload.TransmitTime = time.Now()
 	e.pendingPayloads[nonce] = payload
 	e.numPayloads++
 
@@ -171,6 +186,17 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool 
 		// No more events left for this payload, remove from pending list
 		delete(e.pendingPayloads, ack.Nonce())
 		e.numPayloads--
+
+		// Mark the running average latency of this endpoint per-event over the last
+		// 5 payloads
+		e.averageLatency = core.CalculateRunningAverage(
+			1,
+			5,
+			e.averageLatency,
+			float64(time.Since(payload.TransmitTime))/float64(payload.Size()),
+		)
+
+		log.Debug("[%s] Average latency per event: %f", e.Server(), e.averageLatency)
 	}
 
 	observer.OnAck(e, payload, firstAck)
@@ -219,8 +245,8 @@ func (e *Endpoint) PullBackPending() []*payload.Payload {
 // ReloadConfig submits a new configuration to the transport, and returns true
 // if the transports requested that it be restarted in order for the
 // configuration to take effect
-func (e *Endpoint) ReloadConfig(config *config.Network) bool {
-	return e.transport.ReloadConfig(config)
+func (e *Endpoint) ReloadConfig(config *config.Network, finishOnFail bool) bool {
+	return e.transport.ReloadConfig(config.Factory, finishOnFail)
 }
 
 // HasTimeout returns true if this endpoint already has an associated timeout

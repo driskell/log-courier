@@ -18,7 +18,6 @@ package transports
 
 import (
 	"github.com/driskell/log-courier/lc-lib/addresspool"
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
@@ -32,7 +31,7 @@ type Observer interface {
 
 // Transport is the generic interface that all transports implement
 type Transport interface {
-	ReloadConfig(*config.Network) bool
+	ReloadConfig(interface{}, bool) bool
 	Write(string, []*core.EventDescriptor) error
 	Ping() error
 	Fail()
@@ -44,10 +43,10 @@ type Transport interface {
 // NewTransport is called, return an instance of the transport that obeys that
 // configuration
 type transportFactory interface {
-	NewTransport(Observer) Transport
+	NewTransport(Observer, bool) Transport
 }
 
 // NewTransport returns a Transport interface initialised from the given Factory
-func NewTransport(factory interface{}, observer Observer) Transport {
-	return factory.(transportFactory).NewTransport(observer)
+func NewTransport(factory interface{}, observer Observer, finishOnFail bool) Transport {
+	return factory.(transportFactory).NewTransport(observer, finishOnFail)
 }

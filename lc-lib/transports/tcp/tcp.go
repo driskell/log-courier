@@ -29,7 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -45,9 +44,10 @@ const (
 // TransportTCP implements a transport that sends over TCP
 // It also can optionally introduce a TLS layer for security
 type TransportTCP struct {
-	config    *TransportTCPFactory
-	socket    net.Conn
-	tlssocket *tls.Conn
+	config       *TransportTCPFactory
+	finishOnFail bool
+	socket       net.Conn
+	tlssocket    *tls.Conn
 
 	controllerChan chan int
 	observer       transports.Observer
@@ -66,15 +66,18 @@ type TransportTCP struct {
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-func (t *TransportTCP) ReloadConfig(newNetConfig *config.Network) bool {
-	newConfig := newNetConfig.Factory.(*TransportTCPFactory)
+func (t *TransportTCP) ReloadConfig(factoryInterface interface{}, finishOnFail bool) bool {
+	newConfig := factoryInterface.(*TransportTCPFactory)
+	t.finishOnFail = finishOnFail
 
 	// TODO: Check timestamps of underlying certificate files to detect changes
 	if newConfig.SSLCertificate != t.config.SSLCertificate || newConfig.SSLKey != t.config.SSLKey || newConfig.SSLCA != t.config.SSLCA {
 		return true
 	}
 
-	t.config.netConfig = newNetConfig
+	// Only copy net config just in case something in the factory did change that
+	// we didn't account for which does require a restart
+	t.config.netConfig = newConfig.netConfig
 
 	return false
 }
@@ -116,12 +119,22 @@ func (t *TransportTCP) controller() {
 		}
 
 		if err != nil {
+			if t.finishOnFail {
+				log.Error("[%s] Transport error: %s", t.observer.Pool().Server(), err)
+				t.disconnect()
+				return
+			}
+
 			log.Error("[%s] Transport error, reconnecting: %s", t.observer.Pool().Server(), err)
 		} else {
 			log.Info("[%s] Transport reconnecting", t.observer.Pool().Server())
 		}
 
 		t.disconnect()
+
+		if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Failed)) {
+			return
+		}
 
 		// If this returns false, we are shutting down
 		if !t.reconnectWait() {

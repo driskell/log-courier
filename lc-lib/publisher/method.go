@@ -14,19 +14,16 @@
  * limitations under the License.
  */
 
-package endpoint
+package publisher
 
-// Health describes the health of an Endpoint
-type Health struct {
-	MaxSpoolSize int
-}
+import (
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/endpoint"
+)
 
-// HealthierThan returns true if this Endpoint is healther than the given one
-func (h *Health) HealthierThan(other *Health) bool {
-	// Prioritise endpoints accepting larger spool sizes
-	if h.MaxSpoolSize > other.MaxSpoolSize {
-		return true
-	}
-
-	return false
+type method interface {
+	reloadConfig(*config.Network)
+	onFail(*endpoint.Endpoint)
+	onRecovered(*endpoint.Endpoint)
+	onFinish(*endpoint.Endpoint) bool
 }

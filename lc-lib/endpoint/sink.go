@@ -17,9 +17,9 @@
 package endpoint
 
 import (
+	"math"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/transports"
@@ -28,16 +28,15 @@ import (
 // Sink structure contains the control channels that each endpoint
 // will utilise. The newEndpoint method attaches new endpoints to this
 type Sink struct {
-	endpoints        map[string]*Endpoint
-	config           *config.Network
-	eventChan        chan transports.Event
-	timeoutTimer     *time.Timer
-	timeoutList      internallist.List
-	readyList        internallist.List
-	fullList         internallist.List
-	failedList       internallist.List
-	priorityList     internallist.List
-	priorityEndpoint *Endpoint
+	endpoints    map[string]*Endpoint
+	config       *config.Network
+	eventChan    chan transports.Event
+	timeoutTimer *time.Timer
+	timeoutList  internallist.List
+	readyList    internallist.List
+	fullList     internallist.List
+	failedList   internallist.List
+	orderedList  internallist.List
 }
 
 // NewSink initialises a new message sink for endpoints
@@ -52,56 +51,26 @@ func NewSink(config *config.Network) *Sink {
 
 	ret.timeoutTimer.Stop()
 
-	for _, server := range config.Servers {
-		ret.addEndpoint(server, addresspool.NewPool(server))
-	}
-
 	return ret
 }
 
-// ShutdownEndpoint requests the endpoint associated with the given server
-// entry to shutdown
-func (f *Sink) ShutdownEndpoint(server string) {
-	if f.shutdownEndpoint(server) {
-		// Update priority endpoint if we succeeded
-		f.updatePriorityEndpoint()
-	}
-}
-
-// ReloadConfig updates the configuration held by the sink for new endpoint
-// creation. It also starts shutting down any endpoints that no longer exist in
-// the server list
+// ReloadConfig loads in a new configuration, endpoints will be shutdown if they
+// are no longer in the configuration
 func (f *Sink) ReloadConfig(config *config.Network) {
-	f.config = config
-
-	// Verify the same servers are present
-	var last *Endpoint
-	for _, server := range config.Servers {
-		if endpoint := f.findEndpoint(server); endpoint == nil {
-			// Add a new endpoint
-			last = f.addEndpoint(server, addresspool.NewPool(server))
-		} else {
-			// Ensure ordering
-			f.moveEndpointAfter(endpoint, last)
-			endpoint.ReloadConfig(config)
-			last = endpoint
-		}
-	}
-
+	// TODO: If MaxPendingPayloads is changed, update which endpoints should
+	//       be marked as full
 EndpointLoop:
-	for server := range f.endpoints {
-		for _, item := range config.Servers {
-			if item == server {
+	for endpoint := f.Front(); endpoint != nil; endpoint = endpoint.Next() {
+		var server string
+		for _, server = range config.Servers {
+			if server == endpoint.Server() {
 				continue EndpointLoop
 			}
 		}
 
-		// Not present in server list, shut down
-		f.shutdownEndpoint(server)
+		// Not present in server list anymore, shut down
+		f.ShutdownEndpoint(server)
 	}
-
-	// Update priority endpoint
-	f.updatePriorityEndpoint()
 }
 
 // Shutdown signals all associated endpoints to begin shutting down
@@ -114,6 +83,11 @@ func (f *Sink) Shutdown() {
 // Count returns the number of associated endpoints present
 func (f *Sink) Count() int {
 	return len(f.endpoints)
+}
+
+// Front returns the first endpoint currently active
+func (f *Sink) Front() *Endpoint {
+	return f.orderedList.Front().Value.(*Endpoint)
 }
 
 // EventChan returns the event channel
@@ -184,33 +158,16 @@ func (f *Sink) NextTimeout() (*Endpoint, interface{}, bool) {
 // HasReady returns true if there is at least one endpoint ready to receive
 // events
 func (f *Sink) HasReady() bool {
-	if f.config.Method == "failover" {
-		if f.priorityEndpoint != nil && f.priorityEndpoint.IsReady() {
-			return true
-		}
-		return false
-	}
-
 	return f.readyList.Len() != 0
 }
 
 // NextReady returns the next ready endpoint, in order of least pending payloads
-// If in failover mode, it will only ever return the priority endpoint, unless
-// it has failed in which case the next endpoint becomes priority
 func (f *Sink) NextReady() *Endpoint {
-	if f.config.Method == "failover" {
-		if f.priorityEndpoint != nil && f.priorityEndpoint.IsReady() {
-			return f.priorityEndpoint
-		}
-		return nil
-	}
-
 	if f.readyList.Len() == 0 {
 		return nil
 	}
 
 	endpoint := f.readyList.Remove(f.readyList.Front()).(*Endpoint)
-	endpoint.status = endpointStatusIdle
 	return endpoint
 }
 
@@ -282,12 +239,10 @@ func (f *Sink) moveFailed(endpoint *Endpoint) {
 		f.fullList.Remove(&endpoint.readyElement)
 	}
 
-	if f.priorityEndpoint == endpoint {
-		// The priority endpoint has failed, update it
-		f.updatePriorityEndpoint()
-	}
-
 	endpoint.status = endpointStatusFailed
+
+	// Reset average latency - ensures the endpoint regains it's trustworthyness
+	endpoint.averageLatency = math.MaxFloat64
 
 	f.failedList.PushFront(&endpoint.failedElement)
 }
@@ -310,16 +265,8 @@ func (f *Sink) recoverFailed(endpoint *Endpoint) {
 		return
 	}
 
-	// Update the priority endpoint in case this recovered one is higher priority
 	endpoint.status = endpointStatusIdle
-	f.updatePriorityEndpoint()
 
 	f.failedList.Remove(&endpoint.failedElement)
 	f.markReady(endpoint)
-}
-
-// IsPriorityEndpoint returns true if the given endpoint is the current priority
-// endpoint
-func (f *Sink) IsPriorityEndpoint(endpoint *Endpoint) bool {
-	return endpoint == f.priorityEndpoint
 }

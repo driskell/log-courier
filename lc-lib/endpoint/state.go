@@ -16,37 +16,47 @@
 
 package endpoint
 
-import (
-	"github.com/driskell/log-courier/lc-lib/addresspool"
-	"github.com/driskell/log-courier/lc-lib/internallist"
-	"github.com/driskell/log-courier/lc-lib/transports"
-)
+import "github.com/driskell/log-courier/lc-lib/addresspool"
 
-// AddEndpoint initialises a new endpoint for a given server entry
-func (f *Sink) addEndpoint(server string, addressPool *addresspool.Pool) *Endpoint {
+// addEndpoint initialises a new endpoint
+func (f *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
 	endpoint := &Endpoint{
-		sink:        f,
-		server:      server,
-		addressPool: addressPool,
+		sink:         f,
+		server:       server,
+		addressPool:  addressPool,
+		finishOnFail: finishOnFail,
 	}
 
-	endpoint.transport = transports.NewTransport(f.config.Factory, endpoint)
 	endpoint.Init()
 
 	f.endpoints[server] = endpoint
-
-	if f.priorityList.Len() == 0 {
-		f.priorityEndpoint = endpoint
-	}
-
-	f.priorityList.PushBack(&endpoint.priorityElement)
-
 	return endpoint
 }
 
-// findEndpoint returns the endpoint associated with the given server entry, or
+// AddEndpoint initialises a new endpoint for a given server entry and adds it
+// to the back of the list of endpoints
+func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
+	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
+	f.orderedList.PushBack(&endpoint.orderedElement)
+	return endpoint
+}
+
+// AddEndpointAfter initialises a new endpoint for a given server entry and adds
+// it in the list to the position after the given endpoint. If the given
+// endpoint is nil it is added at the front
+func (f *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, finishOnFail bool, after *Endpoint) *Endpoint {
+	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
+	if after == nil {
+		f.orderedList.PushFront(&endpoint.orderedElement)
+	} else {
+		f.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
+	}
+	return endpoint
+}
+
+// FindEndpoint returns the endpoint associated with the given server entry, or
 // nil if no endpoint is associated
-func (f *Sink) findEndpoint(server string) *Endpoint {
+func (f *Sink) FindEndpoint(server string) *Endpoint {
 	endpoint, ok := f.endpoints[server]
 	if !ok {
 		return nil
@@ -54,10 +64,15 @@ func (f *Sink) findEndpoint(server string) *Endpoint {
 	return endpoint
 }
 
-// moveEndpointAfter ensures the endpoint specified appears directly after the
+// MoveEndpointAfter ensures the endpoint specified appears directly after the
 // requested endpoint, or at the beginning if nil
-func (f *Sink) moveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
-	f.priorityList.MoveAfter(&endpoint.priorityElement, &after.priorityElement)
+func (f *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
+	if after == nil {
+		f.orderedList.PushFront(&endpoint.orderedElement)
+		return
+	}
+
+	f.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
 }
 
 // RemoveEndpoint requests the endpoint associated with the given server to be
@@ -73,15 +88,15 @@ func (f *Sink) removeEndpoint(server string) {
 		return
 	}
 
-	f.priorityList.Remove(&endpoint.priorityElement)
+	f.orderedList.Remove(&endpoint.orderedElement)
 
 	delete(f.endpoints, server)
 }
 
-// shutdownEndpoint requests the endpoint associated with the given server
+// ShutdownEndpoint requests the endpoint associated with the given server
 // entry to shutdown, returning false if the endpoint could not be shutdown
-func (f *Sink) shutdownEndpoint(server string) bool {
-	endpoint := f.findEndpoint(server)
+func (f *Sink) ShutdownEndpoint(server string) bool {
+	endpoint := f.FindEndpoint(server)
 	if endpoint == nil || endpoint.IsClosing() {
 		return false
 	}
@@ -108,20 +123,4 @@ func (f *Sink) shutdownEndpoint(server string) bool {
 	endpoint.shutdownTransport()
 
 	return true
-}
-
-// updatePriorityEndpoint finds the first non-failed endpoint and marks at as
-// the priority endpoint. This endpoint is used when the network method is
-// "failover"
-func (f *Sink) updatePriorityEndpoint() {
-	var element *internallist.Element
-	for element = f.priorityList.Front(); element != nil; element = element.Next() {
-		endpoint := element.Value.(*Endpoint)
-		if endpoint.status <= endpointStatusFull {
-			f.priorityEndpoint = endpoint
-			return
-		}
-	}
-
-	f.priorityEndpoint = nil
 }

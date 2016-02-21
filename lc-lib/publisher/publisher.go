@@ -21,6 +21,7 @@ package publisher
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -65,6 +66,7 @@ type Publisher struct {
 
 	config       *config.Network
 	endpointSink *endpoint.Sink
+	method       method
 
 	payloadList    internallist.List
 	numPayloads    int64
@@ -94,6 +96,8 @@ func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar reg
 		endpointSink: endpoint.NewSink(config),
 	}
 
+	ret.initMethod()
+
 	if registrar == nil {
 		ret.registrarSpool = newNullEventSpool()
 	} else {
@@ -103,6 +107,25 @@ func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar reg
 	pipeline.Register(ret)
 
 	return ret
+}
+
+// initMethod initialises the method the Publisher uses to manage multiple
+// endpoints
+func (p *Publisher) initMethod() {
+	// TODO: Factory registration for methods
+	switch p.config.Method {
+	case "random":
+		p.method = newMethodRandom(p.endpointSink, p.config)
+		return
+	case "failover":
+		p.method = newMethodFailover(p.endpointSink, p.config)
+		return
+	case "loadbalance":
+		p.method = newMethodLoadbalance(p.endpointSink, p.config)
+		return
+	}
+
+	panic(fmt.Sprintf("Internal error: Unknown publishing method: %s", p.config.Method))
 }
 
 // Connect is used by Spooler
@@ -152,15 +175,6 @@ PublisherSelect:
 			// We have ready endpoints, send the spool
 			endpoint := p.endpointSink.NextReady()
 
-			// Do we need to reduce spool size?
-			// TODO: Health related splitting of spools
-			/*var sendSpool []*core.EventDescriptor
-			if endpoint.Health.MaxSpoolSize >= len(spool) {
-				sendSpool, spool = spool, nil
-			} else {
-				sendSpool, spool := p.splitSpool(spool, endpoint.Health.MaxSpoolSize)
-			}*/
-
 			log.Debug("[%s] %d new events, sending to endpoint", endpoint.Server(), len(spool))
 
 			if err := p.sendEvents(endpoint, spool); err == nil {
@@ -207,19 +221,25 @@ PublisherSelect:
 }
 
 func (p *Publisher) reloadConfig(config *config.Config) {
+	oldMethod := p.config.Method
 	p.config = &config.Network
 
-	// Give sink the new config, and allow it to shutdown removed servers
+	// Give sink the new config
 	p.endpointSink.ReloadConfig(&config.Network)
+
+	// Has method changed? Init the new method and discard the old one...
+	if p.config.Method != oldMethod {
+		p.initMethod()
+	} else {
+		// ...otherwise give the existing method the new configuraton
+		p.method.reloadConfig(p.config)
+	}
 
 	// The sink may have changed the priority endpoint after the reload, making
 	// an endpoint available for send
 	if p.eventsAvailable() && p.endpointSink.HasReady() {
 		p.sendIfAvailable(p.endpointSink.NextReady())
 	}
-
-	// TODO: If MaxPendingPayloads is changed, update which endpoints should
-	//       be marked as full
 }
 
 func (p *Publisher) sendEvents(endpoint *endpoint.Endpoint, events []*core.EventDescriptor) error {
@@ -247,6 +267,68 @@ func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, pendingPayload *pay
 	}
 
 	return nil
+}
+
+// OnReady handles an endpoint that is now ready for events
+func (p *Publisher) OnReady(endpoint *endpoint.Endpoint) {
+	if p.sendIfAvailable(endpoint) {
+		return
+	}
+
+	log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
+
+	if !endpoint.HasTimeout() {
+		log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
+		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
+	}
+}
+
+// OnFinish handles when endpoints are finished
+// Should return false if the endpoint is not to be reinitialised, such as when
+// shutting down
+func (p *Publisher) OnFinish(endpoint *endpoint.Endpoint) bool {
+	// Don't recreate anything if shutting down
+	if p.shuttingDown {
+		return false
+	}
+
+	// Method defines how we handle finished endpoints
+	return p.method.onFinish(endpoint)
+}
+
+// OnFail handles a failed endpoint
+func (p *Publisher) OnFail(endpoint *endpoint.Endpoint) {
+	// Pull back pending payloads so we can requeue them onto other endpoints
+	for _, pendingPayload := range endpoint.PullBackPending() {
+		pendingPayload.Resending = true
+		p.resendList.PushBack(&pendingPayload.ResendElement)
+	}
+
+	// If any ready now, requeue immediately
+	for p.resendList.Len() != 0 && p.endpointSink.HasReady() {
+		// We have ready endpoints, send the spool
+		endpoint := p.endpointSink.NextReady()
+		pendingPayload := p.resendList.Front().Value.(*payload.Payload)
+
+		log.Debug("[%s] %d events require resending, sending to endpoint", endpoint.Server(), len(pendingPayload.Events()))
+		err := p.sendPayload(endpoint, pendingPayload)
+
+		if err == nil {
+			pendingPayload.Resending = false
+			p.resendList.Remove(&pendingPayload.ResendElement)
+		}
+	}
+
+	log.Debug("%d payloads held for resend", p.resendList.Len())
+
+	// Allow method to handle what we do due to the failed endpoint
+	p.method.onFail(endpoint)
+}
+
+// OnRecovered handles an endpoint that has recovered from failure
+func (p *Publisher) OnRecovered(endpoint *endpoint.Endpoint) {
+	// Decisions in response to this are purely for the method
+	p.method.onRecovered(endpoint)
 }
 
 // OnAck handles acknowledgements from endpoints
@@ -322,61 +404,6 @@ func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 	if endpoint.NumPending() == 0 {
 		log.Debug("[%s] Resetting keepalive timeout", endpoint.Server())
 		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutKeepalive)
-	}
-}
-
-// OnFinish handles when endpoints are finished
-// Should return false if the endpoint is not to be reinitialised, such as when
-// shutting down
-func (p *Publisher) OnFinish(endpoint *endpoint.Endpoint) bool {
-	// Don't recreate anything if shutting down
-	return !p.shuttingDown
-}
-
-// OnFail handles a failed endpoint
-func (p *Publisher) OnFail(endpoint *endpoint.Endpoint) {
-	// Pull back pending payloads so we can requeue them onto other endpoints
-	for _, pendingPayload := range endpoint.PullBackPending() {
-		pendingPayload.Resending = true
-		p.resendList.PushBack(&pendingPayload.ResendElement)
-	}
-
-	// If any ready now, requeue immediately
-	for p.resendList.Len() != 0 && p.endpointSink.HasReady() {
-		// We have ready endpoints, send the spool
-		endpoint := p.endpointSink.NextReady()
-		pendingPayload := p.resendList.Front().Value.(*payload.Payload)
-
-		log.Debug("[%s] %d events require resending, sending to endpoint", endpoint.Server(), len(pendingPayload.Events()))
-		err := p.sendPayload(endpoint, pendingPayload)
-
-		if err == nil {
-			pendingPayload.Resending = false
-			p.resendList.Remove(&pendingPayload.ResendElement)
-		}
-	}
-
-	log.Debug("%d payloads held for resend", p.resendList.Len())
-}
-
-// OnReady handles an endpoint that is now ready for events
-func (p *Publisher) OnReady(endpoint *endpoint.Endpoint) {
-	// If we're in failover mode, only send if this is the priority endpoint
-	// TODO: Endpoint priority to be determined by publisher, along with load balancing
-	if p.config.Method == "failover" && !p.endpointSink.IsPriorityEndpoint(endpoint) {
-		log.Debug("[%s] Endpoint is standing by", endpoint.Server())
-		return
-	}
-
-	if p.sendIfAvailable(endpoint) {
-		return
-	}
-
-	log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
-
-	if !endpoint.HasTimeout() {
-		log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
-		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
 	}
 }
 

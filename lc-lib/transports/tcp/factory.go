@@ -108,9 +108,10 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map
 
 // NewTransport returns a new Transport interface using the settings from the
 // TransportTCPFactory.
-func (f *TransportTCPFactory) NewTransport(observer transports.Observer) transports.Transport {
+func (f *TransportTCPFactory) NewTransport(observer transports.Observer, finishOnFail bool) transports.Transport {
 	ret := &TransportTCP{
 		config:         f,
+		finishOnFail:   finishOnFail,
 		observer:       observer,
 		controllerChan: make(chan int),
 	}

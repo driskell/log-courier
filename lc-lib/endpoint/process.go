@@ -33,6 +33,8 @@ type Observer interface {
 	OnFinish(*Endpoint) bool
 	// OnFail is called when the endpoint fails
 	OnFail(*Endpoint)
+	// OnRecovered is called when an endpoint recovers from failure
+	OnRecovered(*Endpoint)
 	// OnAck is called when an acknowledgement response is received
 	// The payload is given and the second argument is true if this ack is the
 	// first ack for this payload
@@ -105,6 +107,7 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 		if endpoint.IsFailed() {
 			log.Info("[%s] Endpoint recovered", endpoint.Server())
 			s.recoverFailed(endpoint)
+			observer.OnRecovered(endpoint)
 		} else if endpoint.IsIdle() {
 			// Mark as ready
 			s.markReady(endpoint)
@@ -123,16 +126,17 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 		log.Debug("[%s] Endpoint has finished", server)
 		s.removeEndpoint(server)
 
-		// If finish hook returns true, allow the endpoint to be recreated
-		// When the caller is shutting down it can return false to finish it
-		if observer.OnFinish(endpoint) {
-			// Recreate the endpoint if it's still in the config
-			for _, item := range s.config.Servers {
-				if item == server {
-					s.addEndpoint(server, addresspool.NewPool(server))
-					break
-				}
+		// Is it still in the config?
+		for _, item := range s.config.Servers {
+			if item != server {
+				continue
 			}
+
+			// Still in the config, ask the observer if we should re-add it
+			if observer.OnFinish(endpoint) {
+				s.AddEndpoint(server, addresspool.NewPool(server), endpoint.finishOnFail)
+			}
+			break
 		}
 	default:
 		panic("Invalid transport status code received")

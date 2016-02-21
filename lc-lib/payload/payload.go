@@ -17,6 +17,8 @@
 package payload
 
 import (
+	"time"
+
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 )
@@ -25,14 +27,15 @@ import (
 // and provides methods for processing acknowledgements so that a future resend
 // of the payload does not resend acknowledged events
 type Payload struct {
-	events        []*core.EventDescriptor
-	lastSequence  int
-	sequenceLen   int
-	ackEvents     int
-	processed     int
-	payload       []byte
+	events       []*core.EventDescriptor
+	lastSequence int
+	sequenceLen  int
+	ackEvents    int
+	processed    int
+	payload      []byte
 
 	Nonce         string
+	TransmitTime  time.Time
 	Resending     bool
 	Element       internallist.Element
 	ResendElement internallist.Element
@@ -55,6 +58,11 @@ func NewPayload(events []*core.EventDescriptor) *Payload {
 func (pp *Payload) Init() {
 	pp.Element.Value = pp
 	pp.ResendElement.Value = pp
+}
+
+// Size returns the original size of this payload
+func (pp *Payload) Size() int {
+	return pp.sequenceLen
 }
 
 // Events returns the unacknowledged set of events in the payload
