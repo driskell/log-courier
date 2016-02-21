@@ -83,11 +83,6 @@ func (f *Sink) removeEndpoint(server string) {
 		return
 	}
 
-	// Ensure shutdown was called at the minimum (probably by our own Shutdown)
-	if endpoint.status != endpointStatusClosing {
-		return
-	}
-
 	f.orderedList.Remove(&endpoint.orderedElement)
 
 	delete(f.endpoints, server)
