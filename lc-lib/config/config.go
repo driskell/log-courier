@@ -39,8 +39,8 @@ const (
 	defaultGeneralLineBufferBytes    int64         = 16384
 	defaultGeneralMaxLineBytes       int64         = 1048576
 	defaultGeneralProspectInterval   time.Duration = 10 * time.Second
-	defaultGeneralSpoolSize          int64         = 1024
 	defaultGeneralSpoolMaxBytes      int64         = 10485760
+	defaultGeneralSpoolSize          int64         = 1024
 	defaultGeneralSpoolTimeout       time.Duration = 5 * time.Second
 	defaultNetworkMaxPendingPayloads int64         = 4
 	defaultNetworkMethod             string        = "failover"
@@ -59,21 +59,21 @@ const (
 
 // General holds the general configuration
 type General struct {
-	AdminEnabled     bool                   `config:"admin enabled"`
 	AdminBind        string                 `config:"admin listen address"`
+	AdminEnabled     bool                   `config:"admin enabled"`
+	GlobalFields     map[string]interface{} `config:"global fields"`
+	Host             string                 `config:"host"`
+	LineBufferBytes  int64                  `config:"line buffer bytes"`
+	LogFile          string                 `config:"log file"`
+	LogLevel         logging.Level          `config:"log level"`
+	LogStdout        bool                   `config:"log stdout"`
+	LogSyslog        bool                   `config:"log syslog"`
+	MaxLineBytes     int64                  `config:"max line bytes"`
 	PersistDir       string                 `config:"persist directory"`
 	ProspectInterval time.Duration          `config:"prospect interval"`
 	SpoolSize        int64                  `config:"spool size"`
 	SpoolMaxBytes    int64                  `config:"spool max bytes"`
 	SpoolTimeout     time.Duration          `config:"spool timeout"`
-	LineBufferBytes  int64                  `config:"line buffer bytes"`
-	MaxLineBytes     int64                  `config:"max line bytes"`
-	LogLevel         logging.Level          `config:"log level"`
-	LogStdout        bool                   `config:"log stdout"`
-	LogSyslog        bool                   `config:"log syslog"`
-	LogFile          string                 `config:"log file"`
-	Host             string                 `config:"host"`
-	GlobalFields     map[string]interface{} `config:"global fields"`
 }
 
 // InitDefaults initialises default values for the general configuration
@@ -95,26 +95,28 @@ func (gc *General) InitDefaults() {
 
 // Network holds network related configuration
 type Network struct {
-	Transport          string        `config:"transport"`
-	Servers            []string      `config:"servers"`
-	Method             string        `config:"method"`
-	Rfc2782Srv         bool          `config:"rfc 2782 srv"`
-	Rfc2782Service     string        `config:"rfc 2782 service"`
-	Timeout            time.Duration `config:"timeout"`
-	Reconnect          time.Duration `config:"reconnect"`
-	MaxPendingPayloads int64         `config:"max pending payloads"`
 	Factory            interface{}
-	Unused             map[string]interface{}
+	MaxPendingPayloads int64         `config:"max pending payloads"`
+	Method             string        `config:"method"`
+	Reconnect          time.Duration `config:"reconnect"`
+	Rfc2782Service     string        `config:"rfc 2782 service"`
+	Rfc2782Srv         bool          `config:"rfc 2782 srv"`
+	Servers            []string      `config:"servers"`
+	Timeout            time.Duration `config:"timeout"`
+	Transport          string        `config:"transport"`
+
+	Unused map[string]interface{}
 }
 
 // InitDefaults initiases default values for the network configuration
 func (nc *Network) InitDefaults() {
-	nc.Rfc2782Srv = defaultNetworkRfc2782Srv
-	nc.Transport = defaultNetworkTransport
-	nc.Rfc2782Service = defaultNetworkRfc2782Service
-	nc.Timeout = defaultNetworkTimeout
-	nc.Reconnect = defaultNetworkReconnect
 	nc.MaxPendingPayloads = defaultNetworkMaxPendingPayloads
+	nc.Method = defaultNetworkMethod
+	nc.Reconnect = defaultNetworkReconnect
+	nc.Rfc2782Service = defaultNetworkRfc2782Service
+	nc.Rfc2782Srv = defaultNetworkRfc2782Srv
+	nc.Timeout = defaultNetworkTimeout
+	nc.Transport = defaultNetworkTransport
 }
 
 // CodecStub holds an unknown codec configuration
@@ -128,22 +130,22 @@ type CodecStub struct {
 
 // Stream holds the configuration for a log stream
 type Stream struct {
-	Fields           map[string]interface{} `config:"fields"`
 	AddHostField     bool                   `config:"add host field"`
 	AddOffsetField   bool                   `config:"add offset field"`
 	AddPathField     bool                   `config:"add path field"`
 	AddTimezoneField bool                   `config:"add timezone field"`
 	Codecs           []CodecStub            `config:"codecs"`
 	DeadTime         time.Duration          `config:"dead time"`
+	Fields           map[string]interface{} `config:"fields"`
 }
 
 // InitDefaults initialises the default configuration for a log stream
 func (sc *Stream) InitDefaults() {
-	sc.DeadTime = defaultStreamDeadTime
 	sc.AddHostField = defaultStreamAddHostField
 	sc.AddOffsetField = defaultStreamAddOffsetField
 	sc.AddPathField = defaultStreamAddPathField
 	sc.AddTimezoneField = defaultStreamAddTimezoneField
+	sc.DeadTime = defaultStreamDeadTime
 }
 
 // File holds the configuration for a set of paths that share the same stream
@@ -155,10 +157,10 @@ type File struct {
 
 // Config holds all the configuration for Log Courier
 type Config struct {
-	General  General  `config:"general"`
-	Network  Network  `config:"network"`
 	Files    []File   `config:"files"`
+	General  General  `config:"general"`
 	Includes []string `config:"includes"`
+	Network  Network  `config:"network"`
 	Stdin    Stream   `config:"stdin"`
 }
 
