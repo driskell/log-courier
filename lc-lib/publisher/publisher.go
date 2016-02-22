@@ -79,11 +79,11 @@ type Publisher struct {
 	lastMeasurement time.Time
 	secondsNoAck    int
 
-	statsTimer  *time.Timer
-	onShutdown  <-chan interface{}
-	ifSpoolChan <-chan []*core.EventDescriptor
-	nextSpool   []*core.EventDescriptor
-	resendList  internallist.List
+	measurementTimer *time.Timer
+	onShutdown       <-chan interface{}
+	ifSpoolChan      <-chan []*core.EventDescriptor
+	nextSpool        []*core.EventDescriptor
+	resendList       internallist.List
 }
 
 // NewPublisher creates a new publisher instance on the given pipeline
@@ -135,7 +135,7 @@ func (p *Publisher) Connect() chan<- []*core.EventDescriptor {
 // Run starts the publisher, it handles endpoint status changes send from the
 // EndpointSink so it can make payload distribution decisions
 func (p *Publisher) Run() {
-	p.statsTimer = time.NewTimer(time.Second)
+	p.measurementTimer = time.NewTimer(time.Second)
 	p.onShutdown = p.OnShutdown()
 	p.ifSpoolChan = p.spoolChan
 
@@ -186,9 +186,9 @@ PublisherSelect:
 	case <-p.endpointSink.TimeoutChan():
 		// Process triggered timeouts
 		p.endpointSink.ProcessTimeouts()
-	case <-p.statsTimer.C:
-		p.updateStatistics()
-		p.statsTimer.Reset(time.Second)
+	case <-p.measurementTimer.C:
+		p.takeMeasurements()
+		p.measurementTimer.Reset(time.Second)
 	case config := <-p.OnConfig():
 		p.reloadConfig(config)
 	case <-p.onShutdown:
@@ -493,14 +493,11 @@ func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 	}
 }
 
-func (p *Publisher) updateStatistics() {
+func (p *Publisher) takeMeasurements() {
 	p.Lock()
-
 	p.lineSpeed = core.CalculateSpeed(time.Since(p.lastMeasurement), p.lineSpeed, float64(p.lineCount-p.lastLineCount), &p.secondsNoAck)
-
 	p.lastLineCount = p.lineCount
 	p.lastMeasurement = time.Now()
-
 	p.Unlock()
 }
 
