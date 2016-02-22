@@ -39,16 +39,13 @@ type Endpoint struct {
 
 	// Element structures for internal use by InternalList via EndpointSink
 	// MUST have Value member initialised
-	timeoutElement internallist.Element
 	readyElement   internallist.Element
 	fullElement    internallist.Element
 	failedElement  internallist.Element
 	orderedElement internallist.Element
 
-	// Timeout callback and when it should trigger
-	// The Sink manages these
-	timeoutFunc interface{}
-	timeoutDue  time.Time
+	// Support scheduled task for this endpoint
+	Timeout
 
 	sink            *Sink
 	server          string
@@ -66,11 +63,12 @@ type Endpoint struct {
 // Init prepares the internal Element structures for InternalList and prepares
 // the pending payload structures
 func (e *Endpoint) Init() {
-	e.timeoutElement.Value = e
 	e.readyElement.Value = e
 	e.fullElement.Value = e
 	e.failedElement.Value = e
 	e.orderedElement.Value = e
+
+	e.InitTimeout()
 
 	e.resetPayloads()
 

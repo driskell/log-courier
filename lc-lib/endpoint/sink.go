@@ -104,57 +104,68 @@ func (f *Sink) TimeoutChan() <-chan time.Time {
 	return f.timeoutTimer.C
 }
 
-// ResetTimeoutTimer resets the TimeoutTimer() channel for the next timeout
-func (f *Sink) ResetTimeoutTimer() {
+// resetTimeoutTimer resets the TimeoutTimer() channel for the next timeout
+func (f *Sink) resetTimeoutTimer() {
 	if f.timeoutList.Len() == 0 {
 		f.timeoutTimer.Stop()
 		return
 	}
 
-	endpoint := f.timeoutList.Front().Value.(*Endpoint)
-	log.Debug("Timeout timer reset - due at %v for [%s]", endpoint.timeoutDue, endpoint.Server())
-	f.timeoutTimer.Reset(endpoint.timeoutDue.Sub(time.Now()))
+	timeout := f.timeoutList.Front().Value.(*Timeout)
+	log.Debug("Timeout timer reset - due at %v", timeout.timeoutDue)
+	f.timeoutTimer.Reset(timeout.timeoutDue.Sub(time.Now()))
 }
 
-// RegisterTimeout registers an endpoint with a timeout and timeout callback
-func (f *Sink) RegisterTimeout(endpoint *Endpoint, timeoutDue time.Time, timeoutFunc interface{}) {
-	if endpoint.timeoutFunc != nil {
+// RegisterTimeout registers a timeout structure with a timeout and timeout callback
+func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeoutFunc TimeoutFunc) {
+	if timeout.timeoutFunc != nil {
 		// Remove existing entry
-		f.timeoutList.Remove(&endpoint.timeoutElement)
+		f.timeoutList.Remove(&timeout.timeoutElement)
 	}
 
-	endpoint.timeoutFunc = timeoutFunc
-	endpoint.timeoutDue = timeoutDue
+	timeoutDue := time.Now().Add(duration)
+	timeout.timeoutDue = timeoutDue
+	timeout.timeoutFunc = timeoutFunc
 
 	// Add to the list in time order
 	var existing *internallist.Element
 	for existing = f.timeoutList.Front(); existing != nil; existing = existing.Next() {
-		if existing.Value.(*Endpoint).timeoutDue.After(timeoutDue) {
+		if existing.Value.(*Timeout).timeoutDue.After(timeoutDue) {
 			break
 		}
 	}
 
-	f.ResetTimeoutTimer()
+	if existing == nil {
+		f.timeoutList.PushFront(&timeout.timeoutElement)
+	} else {
+		f.timeoutList.InsertBefore(&timeout.timeoutElement, existing)
+	}
+
+	f.resetTimeoutTimer()
 }
 
-// NextTimeout returns the next endpoint pending a timeout
-// It will also return true if there are more timeouts due
-func (f *Sink) NextTimeout() (*Endpoint, interface{}, bool) {
-	if f.timeoutList.Len() == 0 {
-		return nil, nil, false
-	}
-
-	endpoint := f.timeoutList.Remove(f.timeoutList.Front()).(*Endpoint)
-	callback := endpoint.timeoutFunc
-	endpoint.timeoutFunc = nil
-
+// ProcessTimeouts processes all pending timeouts
+func (f *Sink) ProcessTimeouts() {
 	next := f.timeoutList.Front()
-	if next != nil && next.Value.(*Endpoint).timeoutDue.After(time.Now()) {
-		// No more due after this
-		return endpoint, callback, false
+	if next == nil {
+		return
 	}
 
-	return endpoint, callback, true
+	for {
+		timeout := f.timeoutList.Remove(next).(*Timeout)
+		if callback := timeout.timeoutFunc; callback != nil {
+			timeout.timeoutFunc = nil
+			callback()
+		}
+
+		next = f.timeoutList.Front()
+		if next == nil || next.Value.(*Timeout).timeoutDue.After(time.Now()) {
+			// No more due
+			break
+		}
+	}
+
+	f.resetTimeoutTimer()
 }
 
 // HasReady returns true if there is at least one endpoint ready to receive

@@ -31,6 +31,8 @@ type methodRandom struct {
 	sink         *endpoint.Sink
 	config       *config.Network
 	activeServer int
+
+	endpoint.Timeout
 }
 
 func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom {
@@ -39,6 +41,8 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 		config:       config,
 		activeServer: -1,
 	}
+
+	ret.InitTimeout()
 
 	if sink.Count() == 0 {
 		// Empty sink, connect to a random endpoint
@@ -87,7 +91,6 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 }
 
 func (m *methodRandom) connectRandom() {
-	// TODO: If all endpoints failed there is no backoff!
 	var server string
 	if len(m.config.Servers) == 1 {
 		// Only one entry
@@ -121,13 +124,15 @@ func (m *methodRandom) onFail(endpoint *endpoint.Endpoint) {
 }
 
 func (m *methodRandom) onFinish(endpoint *endpoint.Endpoint) bool {
-	if len(m.config.Servers) == 1 {
-		// Only server, let it recreate
-		return true
-	}
-
-	// Start a new endpoint, let it destroy this one
-	m.connectRandom()
+	// Due to finishOnFail we have no backoff after failure, so start one now to
+	// call connectRandom after the backoff
+	m.sink.RegisterTimeout(
+		&m.Timeout,
+		m.config.Reconnect,
+		func() {
+			m.connectRandom()
+		},
+	)
 	return false
 }
 

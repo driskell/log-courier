@@ -43,8 +43,6 @@ const (
 	keepaliveTimeout time.Duration = 900 * time.Second
 )
 
-type timeoutFunc func(*Publisher, *endpoint.Endpoint)
-
 // Publisher handles payloads and is responsible for passing ordered
 // acknowledgements to the Registrar
 // It makes all the load balancing and distribution decisions, leaving
@@ -164,7 +162,6 @@ PublisherSelect:
 		// Endpoint Sink processes the events, and feeds back relevant changes
 		p.endpointSink.ProcessEvent(event, p)
 
-		// TODO: Pass shutdown back through sink?
 		// If all finished, we're done
 		if p.shuttingDown && p.endpointSink.Count() == 0 {
 			// TODO: What about out of sync ACK?
@@ -187,22 +184,8 @@ PublisherSelect:
 		p.nextSpool = spool
 		p.ifSpoolChan = nil
 	case <-p.endpointSink.TimeoutChan():
-		// Process triggered timers
-		for {
-			endpoint, callback, more := p.endpointSink.NextTimeout()
-			if endpoint != nil {
-				break
-			}
-
-			log.Debug("[%s] Processing timeout", endpoint.Server())
-			callback.(timeoutFunc)(p, endpoint)
-
-			if !more {
-				break
-			}
-		}
-
-		p.endpointSink.ResetTimeoutTimer()
+		// Process triggered timeouts
+		p.endpointSink.ProcessTimeouts()
 	case <-p.statsTimer.C:
 		p.updateStatistics()
 		p.statsTimer.Reset(time.Second)
@@ -215,6 +198,12 @@ PublisherSelect:
 		p.shuttingDown = true
 
 		p.endpointSink.Shutdown()
+
+		// If no endpoints, nothing to wait for
+		if p.endpointSink.Count() == 0 {
+			// TODO: What about out of sync ACK?
+			return true
+		}
 	}
 
 	return false
@@ -263,7 +252,13 @@ func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, pendingPayload *pay
 
 	// If this is the first payload, start the network timeout
 	if endpoint.NumPending() == 1 {
-		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+		p.endpointSink.RegisterTimeout(
+			&endpoint.Timeout,
+			p.config.Timeout,
+			func() {
+				p.timeoutPending(endpoint)
+			},
+		)
 	}
 
 	return nil
@@ -279,7 +274,13 @@ func (p *Publisher) OnReady(endpoint *endpoint.Endpoint) {
 
 	if !endpoint.HasTimeout() {
 		log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
-		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
+		p.endpointSink.RegisterTimeout(
+			&endpoint.Timeout,
+			keepaliveTimeout,
+			func() {
+				p.timeoutKeepalive(endpoint)
+			},
+		)
 	}
 }
 
@@ -339,9 +340,21 @@ func (p *Publisher) OnRecovered(endpoint *endpoint.Endpoint) {
 func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool) {
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.NumPending() != 0 {
-		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+		p.endpointSink.RegisterTimeout(
+			&endpoint.Timeout,
+			p.config.Timeout,
+			func() {
+				p.timeoutPending(endpoint)
+			},
+		)
 	} else {
-		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(keepaliveTimeout), (*Publisher).timeoutKeepalive)
+		p.endpointSink.RegisterTimeout(
+			&endpoint.Timeout,
+			keepaliveTimeout,
+			func() {
+				p.timeoutKeepalive(endpoint)
+			},
+		)
 	}
 
 	// If we're on the resend queue and just completed, remove it
@@ -403,7 +416,13 @@ func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 	// If we haven't started sending anything, return to keepalive timeout
 	if endpoint.NumPending() == 0 {
 		log.Debug("[%s] Resetting keepalive timeout", endpoint.Server())
-		p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutKeepalive)
+		p.endpointSink.RegisterTimeout(
+			&endpoint.Timeout,
+			keepaliveTimeout,
+			func() {
+				p.timeoutKeepalive(endpoint)
+			},
+		)
 	}
 }
 
@@ -461,7 +480,13 @@ func (p *Publisher) timeoutPending(endpoint *endpoint.Endpoint) {
 func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 	// Timeout for PING
 	log.Debug("[%s] Sending PING and starting pending timeout", endpoint.Server())
-	p.endpointSink.RegisterTimeout(endpoint, time.Now().Add(p.config.Timeout), (*Publisher).timeoutPending)
+	p.endpointSink.RegisterTimeout(
+		&endpoint.Timeout,
+		p.config.Timeout,
+		func() {
+			p.timeoutPending(endpoint)
+		},
+	)
 
 	if err := endpoint.SendPing(); err != nil {
 		p.forceEndpointFailure(endpoint, err)
