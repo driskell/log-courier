@@ -83,6 +83,21 @@ func (f *Sink) removeEndpoint(server string) {
 		return
 	}
 
+	// Ensure we are correctly removed from all lists
+	if endpoint.status == endpointStatusReady {
+		f.readyList.Remove(&endpoint.readyElement)
+	} else if endpoint.status == endpointStatusFull {
+		f.fullList.Remove(&endpoint.fullElement)
+	} else if endpoint.status == endpointStatusFailed {
+		f.failedList.Remove(&endpoint.failedElement)
+	}
+
+	// Remove any timer entry
+	if endpoint.Timeout.timeoutFunc != nil {
+		f.timeoutList.Remove(&endpoint.Timeout.timeoutElement)
+		f.resetTimeoutTimer()
+	}
+
 	f.orderedList.Remove(&endpoint.orderedElement)
 
 	delete(f.endpoints, server)
