@@ -20,6 +20,7 @@
 package harvester
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,11 @@ import (
 	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
+)
+
+var (
+	errFileTruncated = errors.New("File truncation detected")
+	errStopRequested = errors.New("Stop requested")
 )
 
 // FinishStatus contains the final file state, and any errors, from the point the
@@ -58,8 +64,17 @@ type Harvester struct {
 	codecChain   []codecs.Codec
 	file         *os.File
 	backOffTimer *time.Timer
+	meterTimer   *time.Timer
 	split        bool
 	timezone     string
+	reader       *LineReader
+
+	lastReadTime         time.Time
+	lastMeasurement      time.Time
+	lastStatCheck        time.Time
+	lastLineCount        uint64
+	lastByteCount        uint64
+	secondsWithoutEvents int
 
 	lineSpeed  float64
 	byteSpeed  float64
@@ -67,6 +82,7 @@ type Harvester struct {
 	byteCount  uint64
 	lastEOFOff *int64
 	lastEOF    *time.Time
+	lastSize   int64
 }
 
 // NewHarvester creates a new harvester with the given configuration for the given stream identifier
@@ -94,6 +110,8 @@ func NewHarvester(stream core.Stream, config *config.Config, streamConfig *confi
 		lastEOF:      nil,
 		codecChain:   make([]codecs.Codec, len(streamConfig.Codecs)-1),
 		backOffTimer: time.NewTimer(0),
+		// TODO: Configurable meter timer? Use same as statCheck timer
+		meterTimer: time.NewTimer(10 * time.Second),
 	}
 
 	ret.backOffTimer.Stop()
@@ -184,134 +202,157 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) 
 	}
 
 	// The buffer size limits the maximum line length we can read, including terminator
-	reader := NewLineReader(h.file, int(h.config.General.LineBufferBytes), int(h.config.General.MaxLineBytes))
+	h.reader = NewLineReader(h.file, int(h.config.General.LineBufferBytes), int(h.config.General.MaxLineBytes))
 
-	// TODO: Make configurable?
-	readTimeout := 10 * time.Second
+	// Prepare internal data
+	h.lastReadTime = time.Now()
+	h.lastMeasurement = h.lastReadTime
+	h.lastStatCheck = h.lastReadTime
 
-	lastReadTime := time.Now()
-	lastLineCount := uint64(0)
-	lastByteCount := uint64(0)
-	lastMeasurement := lastReadTime
-	secondsWithoutEvents := 0
-
-ReadLoop:
 	for {
-		text, bytesread, err := h.readline(reader)
-
-		if duration := time.Since(lastMeasurement); duration >= time.Second {
-			h.Lock()
-
-			h.lineSpeed = core.CalculateSpeed(duration, h.lineSpeed, float64(h.lineCount-lastLineCount), &secondsWithoutEvents)
-			h.byteSpeed = core.CalculateSpeed(duration, h.byteSpeed, float64(h.byteCount-lastByteCount), &secondsWithoutEvents)
-
-			lastByteCount = h.byteCount
-			lastLineCount = h.lineCount
-			lastMeasurement = time.Now()
-
-			h.codec.Meter()
-
-			h.lastEOF = nil
-
-			h.Unlock()
-
-			// Check shutdown
-			select {
-			case <-h.stopChan:
-				break ReadLoop
-			default:
-			}
-		}
-
-		if err == nil {
-			lineOffset := h.offset
-			h.offset += int64(bytesread)
-
-			// Codec is last - it forwards harvester state for us such as offset for resume
-			h.codec.Event(lineOffset, h.offset, text)
-
-			lastReadTime = time.Now()
-			h.lineCount++
-			h.byteCount += uint64(bytesread)
-
-			continue
-		}
-
-		if err != io.EOF {
-			if h.path == "-" {
-				log.Error("Unexpected error reading from stdin: %s", err)
-			} else {
-				log.Error("Unexpected error reading from %s: %s", h.path, err)
+		if err := h.performRead(); err != nil {
+			if err == errStopRequested {
+				break
 			}
 			return h.codecTeardown(), err
 		}
-
-		if h.path == "-" {
-			// Stdin has finished - stdin blocks permanently until the stream ends
-			// Once the stream ends, finish the harvester
-			log.Info("Stopping harvest of stdin; EOF reached")
-			return h.codecTeardown(), nil
-		}
-
-		// Check shutdown
-		select {
-		case <-h.stopChan:
-			break ReadLoop
-		default:
-		}
-
-		h.Lock()
-		if h.lastEOFOff == nil {
-			h.lastEOFOff = new(int64)
-		}
-		*h.lastEOFOff = h.offset
-
-		if h.lastEOF == nil {
-			h.lastEOF = new(time.Time)
-		}
-		*h.lastEOF = lastReadTime
-		h.Unlock()
-
-		// Don't check for truncation until we hit the full readTimeout
-		if time.Since(lastReadTime) < readTimeout {
-			continue
-		}
-
-		info, err := h.file.Stat()
-		if err != nil {
-			log.Error("Unexpected error checking status of %s: %s", h.path, err)
-			return h.codecTeardown(), err
-		}
-
-		if info.Size() < h.offset {
-			log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
-			h.file.Seek(0, os.SEEK_SET)
-			h.offset = 0
-
-			// TODO: Should we be allowing truncation to lose buffer data? Or should
-			//       we be flushing what we have?
-			// Reset line buffer and codec buffers
-			reader.Reset()
-			h.codec.Reset()
-			continue
-		}
-
-		// If lastReadTime was more than dead time, this file is probably dead.
-		// Stop only if the mtime did not change since last check - this stops a
-		// race where we hit EOF but as we Stat() the mtime is updated - this mtime
-		// is the one we monitor in order to resume checking, so we need to check it
-		// didn't already update
-		if age := time.Since(lastReadTime); age > h.streamConfig.DeadTime && h.fileinfo.ModTime() == info.ModTime() {
-			log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
-			return h.codecTeardown(), nil
-		}
-
-		// Store latest stat()
-		h.fileinfo = info
 	}
 
 	log.Info("Harvester for %s exiting", h.path)
 	return h.codecTeardown(), nil
+}
+
+// performRead performs a single read operation
+func (h *Harvester) performRead() error {
+	text, bytesread, err := h.readline()
+
+	// Is a measurement due?
+	if duration := time.Since(h.lastMeasurement); duration >= time.Second {
+		if measureErr := h.takeMeasurements(duration); measureErr != nil {
+			if measureErr == errFileTruncated {
+				log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
+				h.file.Seek(0, os.SEEK_SET)
+				h.offset = 0
+
+				// TODO: Should we be allowing truncation to lose buffer data? Or should
+				//       we be flushing what we have?
+				// Reset line buffer and codec buffers
+				h.reader.Reset()
+				h.codec.Reset()
+				return nil
+			}
+			return measureErr
+		}
+	}
+
+	if err == nil {
+		lineOffset := h.offset
+		h.offset += int64(bytesread)
+
+		// Codec is last - it forwards harvester state for us such as offset for resume
+		h.codec.Event(lineOffset, h.offset, text)
+
+		h.lastReadTime = time.Now()
+		h.lineCount++
+		h.byteCount += uint64(bytesread)
+		return nil
+	}
+
+	if err != io.EOF {
+		if h.path == "-" {
+			log.Error("Unexpected error reading from stdin: %s", err)
+		} else {
+			log.Error("Unexpected error reading from %s: %s", h.path, err)
+		}
+		return err
+	}
+
+	if h.path == "-" {
+		// Stdin has finished - stdin blocks permanently until the stream ends
+		// Once the stream ends, finish the harvester
+		log.Info("Stopping harvest of stdin; EOF reached")
+		return nil
+	}
+
+	h.Lock()
+	if h.lastEOF == nil {
+		h.lastEOF = new(time.Time)
+		h.lastEOFOff = new(int64)
+	}
+	*h.lastEOF = h.lastReadTime
+	*h.lastEOFOff = h.offset
+	h.Unlock()
+
+	// Check shutdown
+	select {
+	case <-h.stopChan:
+		return errStopRequested
+	default:
+	}
+
+	return nil
+}
+
+func (h *Harvester) takeMeasurements(duration time.Duration) error {
+	h.lastMeasurement = time.Now()
+
+	// Has enough time passed for a truncation / deletion check?
+	// TODO: Make time configurable?
+	if duration := time.Since(h.lastStatCheck); duration >= 10*time.Second {
+		h.lastStatCheck = h.lastMeasurement
+
+		var err error
+		if err = h.statCheck(); err != nil {
+			return err
+		}
+	}
+
+	h.Lock()
+	h.lineSpeed = core.CalculateSpeed(duration, h.lineSpeed, float64(h.lineCount-h.lastLineCount), &h.secondsWithoutEvents)
+	h.byteSpeed = core.CalculateSpeed(duration, h.byteSpeed, float64(h.byteCount-h.lastByteCount), &h.secondsWithoutEvents)
+	h.lastByteCount = h.byteCount
+	h.lastLineCount = h.lineCount
+	h.lastSize = h.fileinfo.Size()
+	h.codec.Meter()
+	h.Unlock()
+
+	// Check shutdown
+	select {
+	case <-h.stopChan:
+		return errStopRequested
+	default:
+	}
+
+	return nil
+}
+
+// statCheck checks for truncation and returns the file size of the file
+func (h *Harvester) statCheck() error {
+	info, err := h.file.Stat()
+	if err != nil {
+		log.Error("Unexpected error checking status of %s: %s", h.path, err)
+		return err
+	}
+
+	if info.Size() < h.offset {
+		return errFileTruncated
+	}
+
+	// If lastReadTime was more than dead time, this file is probably dead.
+	// Stop only if the mtime did not change since last check - this stops a
+	// race where we hit EOF but as we Stat() the mtime is updated - this mtime
+	// is the one we monitor in order to resume checking, so we need to check it
+	// didn't already update
+	if age := time.Since(h.lastReadTime); age > h.streamConfig.DeadTime && h.fileinfo.ModTime() == info.ModTime() {
+		log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
+		// TODO: dead_action implementation here
+		return errStopRequested
+	}
+
+	// Store latest stat()
+	h.fileinfo = info
+
+	return nil
 }
 
 // eventCallback receives events from the final codec and ships them to the output
@@ -373,6 +414,16 @@ EventLoop:
 			break EventLoop
 		case h.output <- desc:
 			break EventLoop
+		case <-h.meterTimer.C:
+			// TODO: Configurable meter timer? Same as statCheck?
+			h.meterTimer.Reset(10 * time.Second)
+
+			// Take measurements if enough time has elapsed since the last measurement
+			if duration := time.Since(h.lastMeasurement); duration >= time.Second {
+				if measureErr := h.takeMeasurements(duration); measureErr == errStopRequested {
+					break EventLoop
+				}
+			}
 		}
 	}
 }
@@ -414,10 +465,10 @@ func (h *Harvester) prepareHarvester() error {
 
 // readline reads a single line from the file, handling mixed line endings
 // and detecting where lines were split due to being too big for the buffer
-func (h *Harvester) readline(reader *LineReader) (string, int, error) {
+func (h *Harvester) readline() (string, int, error) {
 	var newline int
 
-	line, err := reader.ReadSlice()
+	line, err := h.reader.ReadSlice()
 
 	if line != nil {
 		if err == nil {
@@ -465,6 +516,13 @@ func (h *Harvester) Snapshot() *core.Snapshot {
 	ret.AddEntry("Speed (Bps)", h.byteSpeed)
 	ret.AddEntry("Processed lines", h.lineCount)
 	ret.AddEntry("Current offset", h.offset)
+	ret.AddEntry("Last known size", h.lastSize)
+	if h.offset == h.lastSize {
+		ret.AddEntry("Completion", 100.)
+	} else {
+		completion := float64(h.offset) * 100 / float64(h.lastSize)
+		ret.AddEntry("Completion", completion)
+	}
 	if h.lastEOFOff == nil {
 		ret.AddEntry("Last EOF Offset", "Never")
 	} else {

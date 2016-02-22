@@ -38,6 +38,10 @@ one was specified during build (see Build Changes)
 * Do not open dead files on startup (which causes excessive memory usage if
 there are many of them) if their size has not changed since they were last
 opened (#242)
+* Harvester snapshot information reported by `lc-admin` now contains additional
+information such as the last known file size and percentage completion (#239)
+* Harvester snapshot information is now updated even when the remote server is
+down
 
 ***RPM Packaging***
 
