@@ -69,7 +69,7 @@ func main() {
 	if adminConnect == "" {
 		// Load admin connect address from the configuration file
 		config := config.NewConfig()
-		if err := config.Load(configFile); err != nil {
+		if err := config.Load(configFile, false); err != nil {
 			fmt.Printf("Configuration error: %s\n", err)
 			os.Exit(1)
 		}

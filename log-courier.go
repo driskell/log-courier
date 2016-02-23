@@ -274,7 +274,7 @@ func (lc *LogCourier) configureLogging() (err error) {
 // loadConfig loads the configuration data
 func (lc *LogCourier) loadConfig() error {
 	lc.config = config.NewConfig()
-	if err := lc.config.Load(lc.configFile); err != nil {
+	if err := lc.config.Load(lc.configFile, true); err != nil {
 		return err
 	}
 

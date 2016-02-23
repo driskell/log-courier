@@ -187,7 +187,9 @@ func (c *Config) loadFile(filePath string, rawConfig interface{}) error {
 }
 
 // Load the configuration from the given file
-func (c *Config) Load(path string) (err error) {
+// If initFactories is false, factories (such as codec names or transport
+// names) are not initialised so they do not need to be built in
+func (c *Config) Load(path string, initFactories bool) (err error) {
 	// Read the main config file
 	rawConfig := make(map[string]interface{})
 	if err = c.loadFile(path, &rawConfig); err != nil {
@@ -283,13 +285,15 @@ func (c *Config) Load(path string) (err error) {
 	}
 	servers = nil
 
-	if registrarFunc, ok := registeredTransports[c.Network.Transport]; ok {
-		if c.Network.Factory, err = registrarFunc(c, "/network/", c.Network.Unused, c.Network.Transport); err != nil {
+	if initFactories {
+		if registrarFunc, ok := registeredTransports[c.Network.Transport]; ok {
+			if c.Network.Factory, err = registrarFunc(c, "/network/", c.Network.Unused, c.Network.Transport); err != nil {
+				return
+			}
+		} else {
+			err = fmt.Errorf("Unrecognised transport '%s'", c.Network.Transport)
 			return
 		}
-	} else {
-		err = fmt.Errorf("Unrecognised transport '%s'", c.Network.Transport)
-		return
 	}
 
 	for k := range c.Files {
@@ -298,12 +302,12 @@ func (c *Config) Load(path string) (err error) {
 			return
 		}
 
-		if err = c.initStreamConfig(fmt.Sprintf("/files[%d]", k), &c.Files[k].Stream); err != nil {
+		if err = c.initStreamConfig(fmt.Sprintf("/files[%d]", k), &c.Files[k].Stream, initFactories); err != nil {
 			return
 		}
 	}
 
-	if err = c.initStreamConfig("/stdin", &c.Stdin); err != nil {
+	if err = c.initStreamConfig("/stdin", &c.Stdin, initFactories); err != nil {
 		return
 	}
 
@@ -312,7 +316,12 @@ func (c *Config) Load(path string) (err error) {
 
 // initStreamConfig initialises a stream configuration by creating the necessary
 // codec factories the harvesters will require
-func (c *Config) initStreamConfig(path string, streamConfig *Stream) (err error) {
+func (c *Config) initStreamConfig(path string, streamConfig *Stream, initFactories bool) (err error) {
+	if !initFactories {
+		// Currently only codec factory is initialised, so skip if we're not doing that
+		return nil
+	}
+
 	if len(streamConfig.Codecs) == 0 {
 		streamConfig.Codecs = []CodecStub{CodecStub{Name: defaultStreamCodec}}
 	}
