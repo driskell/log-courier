@@ -517,7 +517,7 @@ func (h *Harvester) Snapshot() *core.Snapshot {
 	ret.AddEntry("Processed lines", h.lineCount)
 	ret.AddEntry("Current offset", h.offset)
 	ret.AddEntry("Last known size", h.lastSize)
-	if h.offset == h.lastSize {
+	if h.offset >= h.lastSize {
 		ret.AddEntry("Completion", 100.)
 	} else {
 		completion := float64(h.offset) * 100 / float64(h.lastSize)
