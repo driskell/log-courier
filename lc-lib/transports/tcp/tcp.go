@@ -206,6 +206,7 @@ func (t *TransportTCP) connect() (bool, error) {
 		if err != nil {
 			t.tlssocket.Close()
 			tcpsocket.Close()
+			t.checkClientCertificates()
 			return false, fmt.Errorf("TLS Handshake failure with %s: %s", desc, err)
 		}
 
@@ -242,6 +243,29 @@ func (t *TransportTCP) connect() (bool, error) {
 	go t.receiver()
 
 	return false, nil
+}
+
+// checkClientCertificates logs a warning if it finds any certificates that are
+// not currently valid
+func (t *TransportTCP) checkClientCertificates() {
+	now := time.Now()
+	certIssues := false
+
+	for _, cert := range t.config.certificateList {
+		if cert.NotBefore.After(now) {
+			log.Warning("The SSL Certificate with subject '%s' is not valid until %s.", cert.Subject, cert.NotBefore.Format("Jan _2 2016"))
+			certIssues = true
+		}
+
+		if cert.NotAfter.Before(now) {
+			log.Warning("The SSL Certificate with subject '%s' expired on %s.", cert.Subject, cert.NotAfter.Format("Jan _2 2016"))
+			certIssues = true
+		}
+	}
+
+	if certIssues {
+		log.Warning("Client certificate issues may be preventing successful connection.")
+	}
 }
 
 // disconnect shuts down the sender and receiver routines and disconnects the

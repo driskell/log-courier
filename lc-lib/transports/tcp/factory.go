@@ -40,9 +40,11 @@ type TransportTCPFactory struct {
 	SSLKey         string `config:"ssl key"`
 	SSLCA          string `config:"ssl ca"`
 
-	hostportRegexp *regexp.Regexp
-	tlsConfig      tls.Config
-	netConfig      *config.Network
+	hostportRegexp  *regexp.Regexp
+	tlsConfig       tls.Config
+	netConfig       *config.Network
+	certificateList []*x509.Certificate
+	caList          []*x509.Certificate
 }
 
 // NewTransportTCPFactory create a new TransportTCPFactory from the provided
@@ -68,6 +70,16 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map
 				return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
 			}
 
+			for _, certEntry := range ret.tlsConfig.Certificates {
+				for _, certBytes := range certEntry.Certificate {
+					thisCert, err := x509.ParseCertificate(certBytes)
+					if err != nil {
+						return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
+					}
+					ret.certificateList = append(ret.certificateList, thisCert)
+				}
+			}
+
 			ret.tlsConfig.Certificates = []tls.Certificate{cert}
 		}
 
@@ -91,6 +103,7 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map
 						return nil, fmt.Errorf("Failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
 					}
 					ret.tlsConfig.RootCAs.AddCert(cert)
+					ret.caList = append(ret.caList, cert)
 					pemBlockNum++
 				} else {
 					break
