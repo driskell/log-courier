@@ -248,36 +248,29 @@ func (c *Config) populateValue(vField reflect.Value, vValue reflect.Value, confi
 		return
 	}
 
-	if vField.Kind() == reflect.Int64 {
-		if vValue.Kind() != reflect.Float64 {
+	if vField.Kind() == reflect.Int64 || vField.Kind() == reflect.Int {
+		var number int
+
+		if vValue.Kind() == reflect.Float64 {
+			floatNumber := vValue.Float()
+			if math.Floor(floatNumber) != floatNumber {
+				err = fmt.Errorf("Option %s%s is not a valid integer (float encountered)", configPath, tag)
+				return
+			}
+
+			number = int(floatNumber)
+		} else if vValue.Kind() == reflect.Int {
+			number = int(vValue.Int())
+		} else {
 			err = fmt.Errorf("Option %s%s is not a valid integer", configPath, tag)
 			return
 		}
 
-		number := vValue.Float()
-		if math.Floor(number) != number {
-			err = fmt.Errorf("Option %s%s is not a valid integer (float encountered)", configPath, tag)
-			return
+		if vField.Kind() == reflect.Int64 {
+			vField.Set(reflect.ValueOf(int64(number)))
+		} else {
+			vField.Set(reflect.ValueOf(number))
 		}
-
-		vField.Set(reflect.ValueOf(int64(number)))
-
-		return
-	}
-
-	if vField.Kind() == reflect.Int {
-		if vValue.Kind() != reflect.Float64 {
-			err = fmt.Errorf("Option %s%s is not a valid integer", configPath, tag)
-			return
-		}
-
-		number := vValue.Float()
-		if math.Floor(number) != number {
-			err = fmt.Errorf("Option %s%s is not a valid integer (float encountered)", configPath, tag)
-			return
-		}
-
-		vField.Set(reflect.ValueOf(int(number)))
 
 		return
 	}
@@ -311,43 +304,6 @@ func (c *Config) populateSlice(vField reflect.Value, vRawConfig reflect.Value, c
 
 	return
 }
-
-// ensureStringMapKeys ensures the map has string keys and not interface{} keys,
-// converting them if necessary and throwing back an error if non-string keys
-// were found
-/*func (c *Config) ensureStringMapKeys(rawConfig reflect.Value, configPath string, tag string) (reflect.Value, error) {
-	var interfaceVal interface{}
-	interfaceType = reflect.TypeOf(interfaceVal)
-
-	// Ensure it's a map[something]interface{}
-	if rawConfig.Type().Elem() != interfaceType {
-		return nil, fmt.Errorf("Options %s%s must be a hash with all-string keys", configPath, tag)
-	}
-
-	// If it's a map[string]interface{} we're good to go
-	if rawConfig.Type().Key() == reflect.TypeOf(configPath) {
-		return rawConfig, nil
-	}
-
-	// If it's anything else but a map[interface{}]interface{}, that's a problem
-	if rawConfig.Type().Key() != interfaceType {
-		return nil, fmt.Errorf("Options %s%s must be a hash with all-string keys", configPath, tag)
-	}
-
-	// OK, we have map[interface{}]interface{}, verify each key is a string and
-	// move it to a map[string]interface{}, as that's what we want
-	newConfig := reflect.ValueOf(make(map[string]interface{}))
-	for _, j := range rawConfig.MapKeys() {
-		if j.Type() != reflect.TypeOf(configPath) {
-			return nil, fmt.Errorf("Option %s%s must be a hash with all-string keys", configPath, tag)
-		}
-
-		item := rawConfig.MapIndex(j)
-		newConfig.SetMapIndex(j, item.Elem())
-	}
-
-	return newConfig, nil
-}*/
 
 // ReportUnusedConfig returns an error if the given configuration map is not
 // empty. This is used to report unrecognised configuration entries. As each
