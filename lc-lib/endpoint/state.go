@@ -37,7 +37,10 @@ func (f *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishO
 // to the back of the list of endpoints
 func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
 	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
+
+	f.Lock()
 	f.orderedList.PushBack(&endpoint.orderedElement)
+	f.Unlock()
 	return endpoint
 }
 
@@ -46,11 +49,14 @@ func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishO
 // endpoint is nil it is added at the front
 func (f *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, finishOnFail bool, after *Endpoint) *Endpoint {
 	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
+
+	f.Lock()
 	if after == nil {
 		f.orderedList.PushFront(&endpoint.orderedElement)
 	} else {
 		f.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
 	}
+	f.Unlock()
 	return endpoint
 }
 
@@ -68,11 +74,15 @@ func (f *Sink) FindEndpoint(server string) *Endpoint {
 // requested endpoint, or at the beginning if nil
 func (f *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
 	if after == nil {
+		f.Lock()
 		f.orderedList.PushFront(&endpoint.orderedElement)
+		f.Unlock()
 		return
 	}
 
+	f.Lock()
 	f.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
+	f.Unlock()
 }
 
 // RemoveEndpoint requests the endpoint associated with the given server to be
@@ -84,11 +94,13 @@ func (f *Sink) removeEndpoint(server string) {
 	}
 
 	// Ensure we are correctly removed from all lists
-	if endpoint.status == endpointStatusReady {
+	if endpoint.isReady {
 		f.readyList.Remove(&endpoint.readyElement)
-	} else if endpoint.status == endpointStatusFull {
+	}
+
+	if endpoint.IsFull() {
 		f.fullList.Remove(&endpoint.fullElement)
-	} else if endpoint.status == endpointStatusFailed {
+	} else if endpoint.IsFailed() {
 		f.failedList.Remove(&endpoint.failedElement)
 	}
 
@@ -98,7 +110,9 @@ func (f *Sink) removeEndpoint(server string) {
 		f.resetTimeoutTimer()
 	}
 
+	f.Lock()
 	f.orderedList.Remove(&endpoint.orderedElement)
+	f.Unlock()
 
 	delete(f.endpoints, server)
 }
@@ -111,15 +125,20 @@ func (f *Sink) ShutdownEndpoint(server string) bool {
 		return false
 	}
 
-	if endpoint.status == endpointStatusReady {
+	if endpoint.isReady {
+		endpoint.isReady = false
 		f.readyList.Remove(&endpoint.readyElement)
-	} else if endpoint.status == endpointStatusFull {
+	}
+
+	if endpoint.IsFull() {
 		f.fullList.Remove(&endpoint.fullElement)
-	} else if endpoint.status == endpointStatusFailed {
+	} else if endpoint.IsFailed() {
 		f.failedList.Remove(&endpoint.failedElement)
 	}
 
+	f.Lock()
 	endpoint.status = endpointStatusClosing
+	f.Unlock()
 
 	// If we still have pending payloads wait for them to finish
 	if endpoint.NumPending() != 0 {

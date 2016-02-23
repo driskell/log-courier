@@ -272,7 +272,7 @@ func (p *Publisher) OnReady(endpoint *endpoint.Endpoint) {
 
 	log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
 
-	if !endpoint.HasTimeout() {
+	if endpoint.NumPending() == 0 {
 		log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
 		p.endpointSink.RegisterTimeout(
 			&endpoint.Timeout,
@@ -511,8 +511,11 @@ func (p *Publisher) Snapshot() []*core.Snapshot {
 	snapshot.AddEntry("Speed (Lps)", p.lineSpeed)
 	snapshot.AddEntry("Published lines", p.lastLineCount)
 	snapshot.AddEntry("Pending Payloads", p.numPayloads)
+	snapshot.AddEntry("Method", p.config.Method)
 
 	p.RUnlock()
+
+	snapshot.AddSub(p.endpointSink.Snapshot())
 
 	return []*core.Snapshot{snapshot}
 }

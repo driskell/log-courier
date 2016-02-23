@@ -42,6 +42,8 @@ opened (#242)
 information such as the last known file size and percentage completion (#239)
 * Harvester snapshot information is now updated even when the remote server is
 down
+* Publisher snapshot information reported by `lc-admin` now contains a list of
+enabled endpoints and their statuses (#199)
 
 ***RPM Packaging***
 

@@ -35,7 +35,8 @@ type Endpoint struct {
 	sync.Mutex
 
 	// The endpoint status
-	status status
+	status  status
+	isReady bool
 
 	// Element structures for internal use by InternalList via EndpointSink
 	// MUST have Value member initialised
@@ -56,8 +57,9 @@ type Endpoint struct {
 	numPayloads     int
 	pongPending     bool
 
-	lineCount      int64
-	averageLatency float64
+	lineCount       int64
+	averageLatency  float64
+	totalEstAckTime time.Time
 }
 
 // Init prepares the internal Element structures for InternalList and prepares
@@ -111,7 +113,7 @@ func (e *Endpoint) Server() string {
 // transport
 func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 	// Must be in a ready state
-	if e.status != endpointStatusReady {
+	if e.status != endpointStatusActive || !e.isReady {
 		panic(fmt.Sprintf("Endpoint is not ready (%d)", e.status))
 	}
 
@@ -126,7 +128,6 @@ func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 	}
 
 	payload.Nonce = nonce
-	payload.TransmitTime = time.Now()
 	e.pendingPayloads[nonce] = payload
 	e.numPayloads++
 
@@ -136,7 +137,7 @@ func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 		return err
 	}
 
-	e.status = endpointStatusBusy
+	e.isReady = false
 	return nil
 }
 
@@ -162,6 +163,11 @@ func (e *Endpoint) SendPing() error {
 // to a previous Ping request
 func (e *Endpoint) IsPinging() bool {
 	return e.pongPending
+}
+
+// AverageLatency returns the endpoint's average latency
+func (e *Endpoint) AverageLatency() time.Duration {
+	return time.Duration(e.averageLatency)
 }
 
 // processAck processes a received acknowledgement message.
@@ -225,16 +231,6 @@ func (e *Endpoint) NumPending() int {
 	return e.numPayloads
 }
 
-// IsIdle returns true if this Endpoint is idle (newly created and unused)
-func (e *Endpoint) IsIdle() bool {
-	return e.status == endpointStatusIdle
-}
-
-// IsClosing returns true if this Endpoint is closing down
-func (e *Endpoint) IsClosing() bool {
-	return e.status == endpointStatusClosing
-}
-
 // PullBackPending returns all queued payloads back to the publisher
 // Called when a failure happens
 func (e *Endpoint) PullBackPending() []*payload.Payload {
@@ -253,24 +249,9 @@ func (e *Endpoint) ReloadConfig(config *config.Network, finishOnFail bool) bool 
 	return e.transport.ReloadConfig(config.Factory, finishOnFail)
 }
 
-// HasTimeout returns true if this endpoint already has an associated timeout
-func (e *Endpoint) HasTimeout() bool {
-	return e.timeoutFunc != nil
-}
-
-// IsFailed returns true if this endpoint has been marked as failed
-func (e *Endpoint) IsFailed() bool {
-	return e.status == endpointStatusFailed
-}
-
-// IsFull returns true if this endpoint has been marked as full
-func (e *Endpoint) IsFull() bool {
-	return e.status == endpointStatusFull
-}
-
 // IsReady returns true if this endpoint has been marked as ready
 func (e *Endpoint) IsReady() bool {
-	return e.status == endpointStatusReady
+	return e.isReady
 }
 
 // resetPayloads resets the internal state for pending payloads

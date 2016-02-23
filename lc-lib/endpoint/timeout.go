@@ -38,3 +38,55 @@ type Timeout struct {
 func (t *Timeout) InitTimeout() {
 	t.timeoutElement.Value = t
 }
+
+// RegisterTimeout registers a timeout structure with a timeout and timeout callback
+func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeoutFunc TimeoutFunc) {
+	if timeout.timeoutFunc != nil {
+		// Remove existing entry
+		f.timeoutList.Remove(&timeout.timeoutElement)
+	}
+
+	timeoutDue := time.Now().Add(duration)
+	timeout.timeoutDue = timeoutDue
+	timeout.timeoutFunc = timeoutFunc
+
+	// Add to the list in time order
+	var existing *internallist.Element
+	for existing = f.timeoutList.Front(); existing != nil; existing = existing.Next() {
+		if existing.Value.(*Timeout).timeoutDue.After(timeoutDue) {
+			break
+		}
+	}
+
+	if existing == nil {
+		f.timeoutList.PushFront(&timeout.timeoutElement)
+	} else {
+		f.timeoutList.InsertBefore(&timeout.timeoutElement, existing)
+	}
+
+	f.resetTimeoutTimer()
+}
+
+// ProcessTimeouts processes all pending timeouts
+func (f *Sink) ProcessTimeouts() {
+	next := f.timeoutList.Front()
+	if next == nil {
+		return
+	}
+
+	for {
+		timeout := f.timeoutList.Remove(next).(*Timeout)
+		if callback := timeout.timeoutFunc; callback != nil {
+			timeout.timeoutFunc = nil
+			callback()
+		}
+
+		next = f.timeoutList.Front()
+		if next == nil || next.Value.(*Timeout).timeoutDue.After(time.Now()) {
+			// No more due
+			break
+		}
+	}
+
+	f.resetTimeoutTimer()
+}

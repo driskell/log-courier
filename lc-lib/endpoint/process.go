@@ -82,7 +82,7 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 		observer.OnReady(endpoint)
 
 		// If the endpoint is still ready, nothing was sent, add to ready list
-		if endpoint.status == endpointStatusReady {
+		if endpoint.isReady {
 			s.moveReady(endpoint)
 		}
 	case transports.Failed:
@@ -118,7 +118,7 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 		observer.OnReady(endpoint)
 
 		// If the endpoint is still ready, nothing was sent, add to ready list
-		if endpoint.status == endpointStatusReady {
+		if endpoint.isReady {
 			s.moveReady(endpoint)
 		}
 	case transports.Finished:
@@ -163,7 +163,7 @@ func (s *Sink) processAck(ack *transports.AckEvent, endpoint *Endpoint, observer
 		observer.OnReady(endpoint)
 
 		// If the endpoint is still ready, nothing was sent, add to ready list
-		if endpoint.status == endpointStatusReady {
+		if endpoint.isReady {
 			s.moveReady(endpoint)
 		}
 	}

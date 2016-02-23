@@ -17,9 +17,11 @@
 package endpoint
 
 import (
+	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -27,6 +29,8 @@ import (
 // Sink structure contains the control channels that each endpoint
 // will utilise. The newEndpoint method attaches new endpoints to this
 type Sink struct {
+	sync.RWMutex
+
 	endpoints    map[string]*Endpoint
 	config       *config.Network
 	eventChan    chan transports.Event
@@ -116,58 +120,6 @@ func (f *Sink) resetTimeoutTimer() {
 	f.timeoutTimer.Reset(timeout.timeoutDue.Sub(time.Now()))
 }
 
-// RegisterTimeout registers a timeout structure with a timeout and timeout callback
-func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeoutFunc TimeoutFunc) {
-	if timeout.timeoutFunc != nil {
-		// Remove existing entry
-		f.timeoutList.Remove(&timeout.timeoutElement)
-	}
-
-	timeoutDue := time.Now().Add(duration)
-	timeout.timeoutDue = timeoutDue
-	timeout.timeoutFunc = timeoutFunc
-
-	// Add to the list in time order
-	var existing *internallist.Element
-	for existing = f.timeoutList.Front(); existing != nil; existing = existing.Next() {
-		if existing.Value.(*Timeout).timeoutDue.After(timeoutDue) {
-			break
-		}
-	}
-
-	if existing == nil {
-		f.timeoutList.PushFront(&timeout.timeoutElement)
-	} else {
-		f.timeoutList.InsertBefore(&timeout.timeoutElement, existing)
-	}
-
-	f.resetTimeoutTimer()
-}
-
-// ProcessTimeouts processes all pending timeouts
-func (f *Sink) ProcessTimeouts() {
-	next := f.timeoutList.Front()
-	if next == nil {
-		return
-	}
-
-	for {
-		timeout := f.timeoutList.Remove(next).(*Timeout)
-		if callback := timeout.timeoutFunc; callback != nil {
-			timeout.timeoutFunc = nil
-			callback()
-		}
-
-		next = f.timeoutList.Front()
-		if next == nil || next.Value.(*Timeout).timeoutDue.After(time.Now()) {
-			// No more due
-			break
-		}
-	}
-
-	f.resetTimeoutTimer()
-}
-
 // HasReady returns true if there is at least one endpoint ready to receive
 // events
 func (f *Sink) HasReady() bool {
@@ -187,15 +139,18 @@ func (f *Sink) NextReady() *Endpoint {
 // moveFull marks an endpoint as full
 func (f *Sink) moveFull(endpoint *Endpoint) {
 	// Ignore if we are already marked as full or were marked as failed/closing
-	if endpoint.status >= endpointStatusFull {
+	if !endpoint.IsNotFull() {
 		return
 	}
 
-	if endpoint.status == endpointStatusReady {
+	if endpoint.isReady {
 		f.readyList.Remove(&endpoint.readyElement)
+		endpoint.isReady = false
 	}
 
+	f.Lock()
 	endpoint.status = endpointStatusFull
+	f.Unlock()
 
 	f.fullList.PushFront(&endpoint.fullElement)
 }
@@ -204,20 +159,26 @@ func (f *Sink) moveFull(endpoint *Endpoint) {
 // but it does not move it to the ready list
 func (f *Sink) markReady(endpoint *Endpoint) {
 	// Ignore if already ready or if we were marked as failed/closing
-	if endpoint.status == endpointStatusReady || endpoint.status >= endpointStatusFailed {
+	if endpoint.isReady || !endpoint.IsAlive() {
 		return
 	}
 
-	if endpoint.status == endpointStatusFull {
+	if endpoint.IsFull() {
 		f.fullList.Remove(&endpoint.fullElement)
 	}
 
-	endpoint.status = endpointStatusReady
+	if !endpoint.IsActive() {
+		f.Lock()
+		endpoint.status = endpointStatusActive
+		f.Unlock()
+	}
+
+	endpoint.isReady = true
 }
 
 // moveReady moves a ready endpoint to the ready list
 func (f *Sink) moveReady(endpoint *Endpoint) {
-	if endpoint.status != endpointStatusReady {
+	if !endpoint.isReady {
 		panic("Attempt to call moveReady on endpoint that is not ready")
 	}
 
@@ -240,22 +201,23 @@ func (f *Sink) moveReady(endpoint *Endpoint) {
 // ready or full lists so no more events are sent to it
 func (f *Sink) moveFailed(endpoint *Endpoint) {
 	// Should never get here if we're closing, caller should check IsClosing()
-	if endpoint.status == endpointStatusClosing || endpoint.status == endpointStatusFailed {
+	if !endpoint.IsAlive() {
 		return
 	}
 
-	if endpoint.status == endpointStatusReady {
+	if endpoint.isReady {
 		f.readyList.Remove(&endpoint.readyElement)
+		endpoint.isReady = false
 	}
 
-	if endpoint.status == endpointStatusFull {
+	if endpoint.IsFull() {
 		f.fullList.Remove(&endpoint.readyElement)
 	}
 
+	f.Lock()
 	endpoint.status = endpointStatusFailed
-
-	// Reset average latency
 	endpoint.averageLatency = 0
+	f.Unlock()
 
 	f.failedList.PushFront(&endpoint.failedElement)
 }
@@ -268,18 +230,32 @@ func (f *Sink) ForceFailure(endpoint *Endpoint) {
 
 // recoverFailed removes an endpoint from the failed list and marks it ready
 func (f *Sink) recoverFailed(endpoint *Endpoint) {
-	// Should never get here if we're closing, caller should check IsClosing()
-	if endpoint.status == endpointStatusClosing {
-		return
-	}
-
 	// Ignore if we haven't failed
-	if endpoint.status != endpointStatusFailed {
+	if !endpoint.IsAlive() {
 		return
 	}
 
+	f.Lock()
 	endpoint.status = endpointStatusIdle
+	f.Unlock()
 
 	f.failedList.Remove(&endpoint.failedElement)
 	f.markReady(endpoint)
+}
+
+// Snapshot returns a snapshot of the endpoint statuses
+func (f *Sink) Snapshot() *core.Snapshot {
+	snapshot := core.NewSnapshot("Endpoints")
+
+	f.RLock()
+
+	for endpoint := f.Front(); endpoint != nil; endpoint = endpoint.Next() {
+		endpointSnap := core.NewSnapshot(endpoint.Server())
+		endpointSnap.AddEntry("Status", endpoint.status.String())
+		snapshot.AddSub(endpointSnap)
+	}
+
+	f.RUnlock()
+
+	return snapshot
 }

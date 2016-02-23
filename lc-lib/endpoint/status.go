@@ -20,15 +20,13 @@ package endpoint
 type status int
 
 // Endpoint statuses
+// Ordering is important due to use of >= etc.
 const (
-	// Not yet ready
+	// Not yet used
 	endpointStatusIdle status = iota
 
-	// Ready to receive events
-	endpointStatusReady
-
-	// Busy
-	endpointStatusBusy
+	// Active
+	endpointStatusActive
 
 	// Could receive events but too many are oustanding
 	endpointStatusFull
@@ -39,3 +37,54 @@ const (
 	// The endpoint is about to shutdown once pending payloads are complete
 	endpointStatusClosing
 )
+
+func (s status) String() string {
+	switch s {
+	case endpointStatusIdle:
+		return "Idle"
+	case endpointStatusActive:
+		return "Active"
+	case endpointStatusFull:
+		return "Full"
+	case endpointStatusFailed:
+		return "Failed"
+	case endpointStatusClosing:
+		return "Shutting down"
+	}
+	return "Unknown"
+}
+
+// IsIdle returns true if this Endpoint is idle (newly created and unused)
+func (e *Endpoint) IsIdle() bool {
+	return e.status == endpointStatusIdle
+}
+
+// IsActive returns true if this Endpoint is active
+func (e *Endpoint) IsActive() bool {
+	return e.status == endpointStatusActive
+}
+
+// IsFull returns true if this endpoint has been marked as full
+func (e *Endpoint) IsFull() bool {
+	return e.status == endpointStatusFull
+}
+
+// IsFailed returns true if this endpoint has been marked as failed
+func (e *Endpoint) IsFailed() bool {
+	return e.status == endpointStatusFailed
+}
+
+// IsClosing returns true if this Endpoint is closing down
+func (e *Endpoint) IsClosing() bool {
+	return e.status == endpointStatusClosing
+}
+
+// IsNotFull returns true if this endpoint is alive and not full
+func (e *Endpoint) IsNotFull() bool {
+	return e.status < endpointStatusFailed
+}
+
+// IsAlive returns true if this endpoint is not failed or closing
+func (e *Endpoint) IsAlive() bool {
+	return e.status < endpointStatusFailed
+}
