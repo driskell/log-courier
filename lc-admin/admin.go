@@ -276,6 +276,7 @@ func (a *lcAdmin) run() {
 		for {
 			line, prefix, err := reader.ReadLine()
 			if err != nil {
+				fmt.Printf("Error: %s", err)
 				break
 			} else if prefix {
 				discard = true
