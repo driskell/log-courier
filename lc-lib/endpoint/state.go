@@ -38,9 +38,9 @@ func (f *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishO
 func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
 	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
 
-	f.Lock()
+	f.mutex.Lock()
 	f.orderedList.PushBack(&endpoint.orderedElement)
-	f.Unlock()
+	f.mutex.Unlock()
 	return endpoint
 }
 
@@ -50,13 +50,13 @@ func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishO
 func (f *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, finishOnFail bool, after *Endpoint) *Endpoint {
 	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
 
-	f.Lock()
+	f.mutex.Lock()
 	if after == nil {
 		f.orderedList.PushFront(&endpoint.orderedElement)
 	} else {
 		f.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
 	}
-	f.Unlock()
+	f.mutex.Unlock()
 	return endpoint
 }
 
@@ -74,15 +74,15 @@ func (f *Sink) FindEndpoint(server string) *Endpoint {
 // requested endpoint, or at the beginning if nil
 func (f *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
 	if after == nil {
-		f.Lock()
+		f.mutex.Lock()
 		f.orderedList.PushFront(&endpoint.orderedElement)
-		f.Unlock()
+		f.mutex.Unlock()
 		return
 	}
 
-	f.Lock()
+	f.mutex.Lock()
 	f.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
-	f.Unlock()
+	f.mutex.Unlock()
 }
 
 // RemoveEndpoint requests the endpoint associated with the given server to be
@@ -110,9 +110,9 @@ func (f *Sink) removeEndpoint(server string) {
 		f.resetTimeoutTimer()
 	}
 
-	f.Lock()
+	f.mutex.Lock()
 	f.orderedList.Remove(&endpoint.orderedElement)
-	f.Unlock()
+	f.mutex.Unlock()
 
 	delete(f.endpoints, server)
 }
@@ -136,9 +136,9 @@ func (f *Sink) ShutdownEndpoint(server string) bool {
 		f.failedList.Remove(&endpoint.failedElement)
 	}
 
-	f.Lock()
+	endpoint.mutex.Lock()
 	endpoint.status = endpointStatusClosing
-	f.Unlock()
+	endpoint.mutex.Unlock()
 
 	// If we still have pending payloads wait for them to finish
 	if endpoint.NumPending() != 0 {

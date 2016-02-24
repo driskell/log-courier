@@ -32,7 +32,7 @@ import (
 
 // Endpoint structure represents a single remote endpoint
 type Endpoint struct {
-	sync.Mutex
+	mutex sync.RWMutex
 
 	// The endpoint status
 	status  status
@@ -129,7 +129,10 @@ func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 
 	payload.Nonce = nonce
 	e.pendingPayloads[nonce] = payload
+
+	e.mutex.Lock()
 	e.numPayloads++
+	e.mutex.Unlock()
 
 	log.Debug("[%s] Sending payload %x", e.Server(), nonce)
 
@@ -170,6 +173,11 @@ func (e *Endpoint) AverageLatency() time.Duration {
 	return time.Duration(e.averageLatency)
 }
 
+// LineCount returns the endpoint's published line count
+func (e *Endpoint) LineCount() int64 {
+	return e.lineCount
+}
+
 // processAck processes a received acknowledgement message.
 // This will pass the payload that was acked, and whether this is the first
 // acknoweldgement or a later one, to the observer
@@ -189,12 +197,14 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool 
 	firstAck := !payload.HasAck()
 
 	// Process ACK
-	lines, complete := payload.Ack(int(ack.Sequence()))
-	e.lineCount += int64(lines)
+	lineCount, complete := payload.Ack(int(ack.Sequence()))
 
 	if complete {
 		// No more events left for this payload, remove from pending list
 		delete(e.pendingPayloads, ack.Nonce())
+
+		e.mutex.Lock()
+		e.lineCount += int64(lineCount)
 		e.numPayloads--
 
 		// Mark the running average latency of this endpoint per-event over the last
@@ -205,11 +215,16 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool 
 			e.averageLatency,
 			float64(time.Since(payload.TransmitTime))/float64(payload.Size()),
 		)
+		e.mutex.Unlock()
 
 		log.Debug("[%s] Average latency per event: %f", e.Server(), e.averageLatency)
+	} else {
+		e.mutex.Lock()
+		e.lineCount += int64(lineCount)
+		e.mutex.Unlock()
 	}
 
-	observer.OnAck(e, payload, firstAck)
+	observer.OnAck(e, payload, firstAck, lineCount)
 
 	return complete
 }

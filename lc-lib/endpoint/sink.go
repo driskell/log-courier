@@ -29,7 +29,7 @@ import (
 // Sink structure contains the control channels that each endpoint
 // will utilise. The newEndpoint method attaches new endpoints to this
 type Sink struct {
-	sync.RWMutex
+	mutex sync.RWMutex
 
 	endpoints    map[string]*Endpoint
 	config       *config.Network
@@ -148,9 +148,9 @@ func (f *Sink) moveFull(endpoint *Endpoint) {
 		endpoint.isReady = false
 	}
 
-	f.Lock()
+	endpoint.mutex.Lock()
 	endpoint.status = endpointStatusFull
-	f.Unlock()
+	endpoint.mutex.Unlock()
 
 	f.fullList.PushFront(&endpoint.fullElement)
 }
@@ -168,9 +168,9 @@ func (f *Sink) markReady(endpoint *Endpoint) {
 	}
 
 	if !endpoint.IsActive() {
-		f.Lock()
+		endpoint.mutex.Lock()
 		endpoint.status = endpointStatusActive
-		f.Unlock()
+		endpoint.mutex.Unlock()
 	}
 
 	endpoint.isReady = true
@@ -214,10 +214,10 @@ func (f *Sink) moveFailed(endpoint *Endpoint) {
 		f.fullList.Remove(&endpoint.readyElement)
 	}
 
-	f.Lock()
+	endpoint.mutex.Lock()
 	endpoint.status = endpointStatusFailed
 	endpoint.averageLatency = 0
-	f.Unlock()
+	endpoint.mutex.Unlock()
 
 	f.failedList.PushFront(&endpoint.failedElement)
 }
@@ -235,9 +235,9 @@ func (f *Sink) recoverFailed(endpoint *Endpoint) {
 		return
 	}
 
-	f.Lock()
+	endpoint.mutex.Lock()
 	endpoint.status = endpointStatusIdle
-	f.Unlock()
+	endpoint.mutex.Unlock()
 
 	f.failedList.Remove(&endpoint.failedElement)
 	f.markReady(endpoint)
@@ -247,15 +247,17 @@ func (f *Sink) recoverFailed(endpoint *Endpoint) {
 func (f *Sink) Snapshot() *core.Snapshot {
 	snapshot := core.NewSnapshot("Endpoints")
 
-	f.RLock()
-
+	f.mutex.RLock()
 	for endpoint := f.Front(); endpoint != nil; endpoint = endpoint.Next() {
 		endpointSnap := core.NewSnapshot(endpoint.Server())
+		endpoint.mutex.RLock()
 		endpointSnap.AddEntry("Status", endpoint.status.String())
+		endpointSnap.AddEntry("Pending payloads", endpoint.NumPending())
+		endpointSnap.AddEntry("Published lines", endpoint.LineCount())
+		endpoint.mutex.RUnlock()
 		snapshot.AddSub(endpointSnap)
 	}
-
-	f.RUnlock()
+	f.mutex.RUnlock()
 
 	return snapshot
 }

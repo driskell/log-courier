@@ -38,7 +38,7 @@ type Observer interface {
 	// OnAck is called when an acknowledgement response is received
 	// The payload is given and the second argument is true if this ack is the
 	// first ack for this payload
-	OnAck(*Endpoint, *payload.Payload, bool)
+	OnAck(*Endpoint, *payload.Payload, bool, int)
 	// OnPong is called when a pong response is received from the endpoint
 	OnPong(*Endpoint)
 }

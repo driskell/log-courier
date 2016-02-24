@@ -337,7 +337,7 @@ func (p *Publisher) OnRecovered(endpoint *endpoint.Endpoint) {
 // shutdown can be postponed if we've received Acks for newer events before
 // older events. It also serialises the Ack offsets for correct registrar
 // storage to ensure the registrar offsets are always sequential
-func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool) {
+func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool, lineCount int) {
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.NumPending() != 0 {
 		p.endpointSink.RegisterTimeout(
@@ -365,6 +365,8 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 		p.resendList.Remove(&pendingPayload.ResendElement)
 	}
 
+	numComplete := int64(0)
+
 	// We potentially receive out-of-order ACKs due to payloads distributed across servers
 	// This is where we enforce ordering again to ensure registrar receives ACK in order
 	if pendingPayload == p.payloadList.Front().Value.(*payload.Payload) {
@@ -387,9 +389,7 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 			outOfSync--
 			p.outOfSync = outOfSync
 
-			p.Lock()
-			p.numPayloads--
-			p.Unlock()
+			numComplete++
 
 			// TODO: Resume sending if we stopped due to excessive pending payload count
 			//if !p.shutdown && p.canSend == nil {
@@ -409,6 +409,13 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 		// for this payload, then increase out of sync payload count
 		p.outOfSync++
 	}
+
+	p.Lock()
+	if numComplete != 0 {
+		p.numPayloads -= numComplete
+	}
+	p.lineCount += int64(lineCount)
+	p.Unlock()
 }
 
 // OnPong handles when endpoints receive a pong message
@@ -510,8 +517,7 @@ func (p *Publisher) Snapshot() []*core.Snapshot {
 
 	snapshot.AddEntry("Speed (Lps)", p.lineSpeed)
 	snapshot.AddEntry("Published lines", p.lastLineCount)
-	snapshot.AddEntry("Pending Payloads", p.numPayloads)
-	snapshot.AddEntry("Method", p.config.Method)
+	snapshot.AddEntry("Total pending payloads", p.numPayloads)
 
 	p.RUnlock()
 
