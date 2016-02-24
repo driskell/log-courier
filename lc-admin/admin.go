@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -276,12 +277,16 @@ func (a *lcAdmin) run() {
 		for {
 			line, prefix, err := reader.ReadLine()
 			if err != nil {
-				fmt.Printf("Error: %s", err)
-				break
+				if err == io.EOF {
+					fmt.Printf("exit\n")
+				} else {
+					fmt.Printf("\nError: %s\n", err)
+				}
+				commandChan <- "exit"
 			} else if prefix {
 				discard = true
 			} else if discard {
-				fmt.Printf("Line too long!\n")
+				fmt.Printf("\nLine too long!\n")
 				discard = false
 			} else {
 				commandChan <- string(line)
