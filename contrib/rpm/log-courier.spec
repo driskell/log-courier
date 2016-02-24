@@ -5,14 +5,18 @@
 Summary: Log Courier
 Name: log-courier
 Version: 2.0
-Release: 1%{dist}
+Release: 1.beta1%{dist}
 License: Apache
 Group: System Environment/Libraries
 Packager: Jason Woods <packages@jasonwoods.me.uk>
 URL: https://github.com/driskell/log-courier
-Source: https://github.com/driskell/log-courier/archive/v%{version}.zip
+Source: https://github.com/driskell/log-courier/archive/v%{version}-beta1.zip
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 
+# Get this from the great Jason Brooks:
+#   https://copr.fedorainfracloud.org/coprs/jasonbrooks/docker/package/golang/
+# We could also get from a RedHat dev, but currently broken and leaking out 1.6:
+#   https://copr.fedorainfracloud.org/coprs/jcajka/golang1.5/package/golang/
 BuildRequires: golang >= 1.5
 BuildRequires: git
 
@@ -31,9 +35,15 @@ Log Courier is a lightweight tool created to ship log files speedily and
 securely, with low resource usage, to remote Logstash instances.
 
 %prep
-%setup -q -n %{name}-%{version}
+%setup -q -n %{name}-master
 
 %build
+# Build a go workspace
+mkdir -p _workspace/src/github.com/driskell
+ln -nsf $(pwd) _workspace/src/github.com/driskell/log-courier
+export GOPATH=$(pwd)/_workspace
+cd "$GOPATH/src/github.com/driskell/log-courier"
+
 # Configure platform specific defaults
 export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-courier/log-courier.yaml
 export LC_DEFAULT_GENERAL_PERSIST_DIR=%{_var}/lib/log-courier
@@ -45,12 +55,14 @@ go generate ./lc-lib/config ./lc-lib/core
 go install . ./lc-admin ./lc-tlscert
 
 %install
+export GOPATH=$(pwd)/_workspace
+
 # Install binaries
 mkdir -p %{buildroot}%{_sbindir}
-install -m 0755 bin/log-courier %{buildroot}%{_sbindir}/log-courier
+install -m 0755 $GOPATH/bin/log-courier %{buildroot}%{_sbindir}/log-courier
 mkdir -p %{buildroot}%{_bindir}
-install -m 0755 bin/lc-admin %{buildroot}%{_bindir}/lc-admin
-install -m 0755 bin/lc-tlscert %{buildroot}%{_bindir}/lc-tlscert
+install -m 0755 "$GOPATH/bin/lc-admin" %{buildroot}%{_bindir}/lc-admin
+install -m 0755 "$GOPATH/bin/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
 
 # Install example configuration
 mkdir -p %{buildroot}%{_sysconfdir}/log-courier %{buildroot}%{_sysconfdir}/log-courier/examples/
@@ -59,6 +71,10 @@ install -m 0644 docs/examples/* %{buildroot}%{_sysconfdir}/log-courier/examples/
 # Make the run dir
 mkdir -p %{buildroot}%{_var}/run %{buildroot}%{_var}/run/log-courier
 touch %{buildroot}%{_var}/run/log-courier/admin.socket
+
+# Make the state dir
+mkdir -p %{buildroot}%{_var}/lib/log-courier
+touch %{buildroot}%{_var}/lib/log-courier/.log-courier
 
 # Install init script and related paraphernalia
 %if 0%{?rhel} >= 7
@@ -72,10 +88,6 @@ touch %{buildroot}%{_var}/run/log-courier.pid
 %endif
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 install -m 0644 contrib/initscripts/log-courier.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
-
-# Make the state dir
-mkdir -p %{buildroot}%{_var}/lib/log-courier
-touch %{buildroot}%{_var}/lib/log-courier/.log-courier
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -132,6 +144,9 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Thu Feb 24 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0-1.beta1
+- Upgrade to v2.0 beta1
+
 * Thu Aug 6 2015 Jason Woods <devel@jasonwoods.me.uk> - 1.8-1
 - Upgrade to v1.8
 

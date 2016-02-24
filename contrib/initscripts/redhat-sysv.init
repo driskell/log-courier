@@ -24,7 +24,7 @@ DATA_DIR=/var/lib/${NAME}
 PID_FILE=/var/run/${NAME}.pid
 
 # Defaults
-LOG_COURIER_ARGS="-config /etc/${NAME}/log-courier.conf"
+LOG_COURIER_ARGS=""
 
 # Override defaults from sysconfig
 [ -f "/etc/sysconfig/${NAME}" ] &&	. "/etc/sysconfig/${NAME}"

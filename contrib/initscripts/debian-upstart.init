@@ -22,7 +22,7 @@ DAEMON=/usr/sbin/log-courier
 PIDFILE=/var/run/${NAME}.pid
 
 # Defaults
-LOG_COURIER_ARGS="-config /etc/${NAME}/log-courier.conf"
+LOG_COURIER_ARGS=""
 
 # Override defaults from default
 [ -f "/etc/default/${NAME}" ] && . "/etc/default/${NAME}"
