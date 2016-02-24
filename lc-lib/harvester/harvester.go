@@ -83,6 +83,7 @@ type Harvester struct {
 	lastEOFOff *int64
 	lastEOF    *time.Time
 	lastSize   int64
+	lastOffset int64
 }
 
 // NewHarvester creates a new harvester with the given configuration for the given stream identifier
@@ -312,7 +313,11 @@ func (h *Harvester) takeMeasurements(duration time.Duration) error {
 	h.byteSpeed = core.CalculateSpeed(duration, h.byteSpeed, float64(h.byteCount-h.lastByteCount), &h.secondsWithoutEvents)
 	h.lastByteCount = h.byteCount
 	h.lastLineCount = h.lineCount
+	h.lastOffset = h.offset
 	h.lastSize = h.fileinfo.Size()
+	if h.offset > h.lastSize {
+		h.lastSize = h.offset
+	}
 	h.codec.Meter()
 	h.Unlock()
 
@@ -515,7 +520,7 @@ func (h *Harvester) Snapshot() *core.Snapshot {
 	ret.AddEntry("Speed (Lps)", h.lineSpeed)
 	ret.AddEntry("Speed (Bps)", h.byteSpeed)
 	ret.AddEntry("Processed lines", h.lineCount)
-	ret.AddEntry("Current offset", h.offset)
+	ret.AddEntry("Current offset", h.lastOffset)
 	ret.AddEntry("Last known size", h.lastSize)
 	if h.offset >= h.lastSize {
 		ret.AddEntry("Completion", 100.)
