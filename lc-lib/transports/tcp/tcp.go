@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -47,7 +48,8 @@ type TransportTCP struct {
 	config       *TransportTCPFactory
 	finishOnFail bool
 	socket       net.Conn
-	tlssocket    *tls.Conn
+	tlsSocket    *tls.Conn
+	tlsConfig    tls.Config
 
 	controllerChan chan int
 	observer       transports.Observer
@@ -195,22 +197,31 @@ func (t *TransportTCP) connect() (bool, error) {
 	// Now wrap in TLS if this is the "tls" transport
 	if t.config.transport == "tls" {
 		// Disable SSLv3 (mitigate POODLE vulnerability)
-		t.config.tlsConfig.MinVersion = tls.VersionTLS10
+		t.tlsConfig.MinVersion = tls.VersionTLS10
 
-		// Set the tlsconfig server name for server validation (required since Go 1.3)
-		t.config.tlsConfig.ServerName = t.observer.Pool().Host()
+		// Set the certificate
+		t.tlsConfig.Certificates = []tls.Certificate{t.config.certificate}
 
-		t.tlssocket = tls.Client(&transportTCPWrap{transport: t, tcpsocket: tcpsocket}, &t.config.tlsConfig)
-		t.tlssocket.SetDeadline(time.Now().Add(t.config.netConfig.Timeout))
-		err = t.tlssocket.Handshake()
+		// Set CA for server verification
+		t.tlsConfig.RootCAs = x509.NewCertPool()
+		for _, cert := range t.config.caList {
+			t.tlsConfig.RootCAs.AddCert(cert)
+		}
+
+		// Set the tlsConfig server name for server validation (required since Go 1.3)
+		t.tlsConfig.ServerName = t.observer.Pool().Host()
+
+		t.tlsSocket = tls.Client(&transportTCPWrap{transport: t, tcpsocket: tcpsocket}, &t.tlsConfig)
+		t.tlsSocket.SetDeadline(time.Now().Add(t.config.netConfig.Timeout))
+		err = t.tlsSocket.Handshake()
 		if err != nil {
-			t.tlssocket.Close()
+			t.tlsSocket.Close()
 			tcpsocket.Close()
 			t.checkClientCertificates()
 			return false, fmt.Errorf("TLS Handshake failure with %s: %s", desc, err)
 		}
 
-		t.socket = t.tlssocket
+		t.socket = t.tlsSocket
 	} else {
 		t.socket = tcpsocket
 	}
@@ -284,7 +295,7 @@ func (t *TransportTCP) disconnect() {
 
 	// If tls, shutdown tls socket first
 	if t.config.transport == "tls" {
-		t.tlssocket.Close()
+		t.tlsSocket.Close()
 	}
 
 	t.socket.Close()

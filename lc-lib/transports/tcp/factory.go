@@ -41,8 +41,8 @@ type TransportTCPFactory struct {
 	SSLCA          string `config:"ssl ca"`
 
 	hostportRegexp  *regexp.Regexp
-	tlsConfig       tls.Config
 	netConfig       *config.Network
+	certificate     tls.Certificate
 	certificateList []*x509.Certificate
 	caList          []*x509.Certificate
 }
@@ -65,26 +65,21 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map
 		}
 
 		if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
-			cert, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
+			ret.certificate, err = tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
 			if err != nil {
 				return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
 			}
 
-			for _, certEntry := range ret.tlsConfig.Certificates {
-				for _, certBytes := range certEntry.Certificate {
-					thisCert, err := x509.ParseCertificate(certBytes)
-					if err != nil {
-						return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
-					}
-					ret.certificateList = append(ret.certificateList, thisCert)
+			for _, certBytes := range ret.certificate.Certificate {
+				thisCert, err := x509.ParseCertificate(certBytes)
+				if err != nil {
+					return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
 				}
+				ret.certificateList = append(ret.certificateList, thisCert)
 			}
-
-			ret.tlsConfig.Certificates = []tls.Certificate{cert}
 		}
 
 		if len(ret.SSLCA) > 0 {
-			ret.tlsConfig.RootCAs = x509.NewCertPool()
 			pemdata, err := ioutil.ReadFile(ret.SSLCA)
 			if err != nil {
 				return nil, fmt.Errorf("Failure reading CA certificate: %s\n", err)
@@ -102,7 +97,6 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map
 					if err != nil {
 						return nil, fmt.Errorf("Failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
 					}
-					ret.tlsConfig.RootCAs.AddCert(cert)
 					ret.caList = append(ret.caList, cert)
 					pemBlockNum++
 				} else {
