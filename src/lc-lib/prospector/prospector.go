@@ -316,6 +316,7 @@ func (p *Prospector) scan(path string, config *core.FileConfig) {
 					// Old file with an unchanged offset, skip it
 					log.Info("Skipping file (older than dead time of %v): %s", config.DeadTime, file)
 					info.status = Status_Ok
+					resume = false
 				} else {
 					// This is a filestate that was saved, resume the harvester
 					log.Info("Resuming harvester on a previously harvested file: %s", file)
