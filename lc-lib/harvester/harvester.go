@@ -297,14 +297,16 @@ func (h *Harvester) performRead() error {
 func (h *Harvester) takeMeasurements(duration time.Duration) error {
 	h.lastMeasurement = time.Now()
 
-	// Has enough time passed for a truncation / deletion check?
-	// TODO: Make time configurable?
-	if duration := time.Since(h.lastStatCheck); duration >= 10*time.Second {
-		h.lastStatCheck = h.lastMeasurement
+	if h.path != "-" {
+		// Has enough time passed for a truncation / deletion check?
+		// TODO: Make time configurable?
+		if duration := time.Since(h.lastStatCheck); duration >= 10*time.Second {
+			h.lastStatCheck = h.lastMeasurement
 
-		var err error
-		if err = h.statCheck(); err != nil {
-			return err
+			var err error
+			if err = h.statCheck(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -314,7 +316,9 @@ func (h *Harvester) takeMeasurements(duration time.Duration) error {
 	h.lastByteCount = h.byteCount
 	h.lastLineCount = h.lineCount
 	h.lastOffset = h.offset
-	h.lastSize = h.fileinfo.Size()
+	if h.fileinfo != nil {
+		h.lastSize = h.fileinfo.Size()
+	}
 	if h.offset > h.lastSize {
 		h.lastSize = h.offset
 	}
