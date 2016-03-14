@@ -21,6 +21,7 @@ package publisher
 
 import (
 	"math/rand"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
@@ -31,6 +32,7 @@ type methodRandom struct {
 	sink         *endpoint.Sink
 	config       *config.Network
 	activeServer int
+	generator    *rand.Rand
 
 	endpoint.Timeout
 }
@@ -40,6 +42,7 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 		sink:         sink,
 		config:       config,
 		activeServer: -1,
+		generator:    rand.New(rand.NewSource(int64(time.Now().Nanosecond()))),
 	}
 
 	ret.InitTimeout()
@@ -101,7 +104,7 @@ func (m *methodRandom) connectRandom() {
 		server = m.config.Servers[m.activeServer]
 	} else {
 		for {
-			selected := rand.Intn(len(m.config.Servers))
+			selected := m.generator.Intn(len(m.config.Servers))
 			if selected == m.activeServer {
 				// Same server, try again
 				continue
