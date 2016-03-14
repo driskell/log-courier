@@ -40,6 +40,9 @@ func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishO
 
 	f.mutex.Lock()
 	f.orderedList.PushBack(&endpoint.orderedElement)
+	if f.api != nil {
+		f.api.AddEntry(server, endpoint.apiEntry())
+	}
 	f.mutex.Unlock()
 	return endpoint
 }
@@ -55,6 +58,9 @@ func (f *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, fi
 		f.orderedList.PushFront(&endpoint.orderedElement)
 	} else {
 		f.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
+	}
+	if f.api != nil {
+		f.api.AddEntry(server, endpoint.apiEntry())
 	}
 	f.mutex.Unlock()
 	return endpoint
@@ -112,6 +118,9 @@ func (f *Sink) removeEndpoint(server string) {
 
 	f.mutex.Lock()
 	f.orderedList.Remove(&endpoint.orderedElement)
+	if f.api != nil {
+		f.api.RemoveEntry(server)
+	}
 	f.mutex.Unlock()
 
 	delete(f.endpoints, server)

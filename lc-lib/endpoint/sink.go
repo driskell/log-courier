@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -35,11 +35,14 @@ type Sink struct {
 	config       *config.Network
 	eventChan    chan transports.Event
 	timeoutTimer *time.Timer
-	timeoutList  internallist.List
-	readyList    internallist.List
-	fullList     internallist.List
-	failedList   internallist.List
-	orderedList  internallist.List
+
+	api *admin.APIArray
+
+	timeoutList internallist.List
+	readyList   internallist.List
+	fullList    internallist.List
+	failedList  internallist.List
+	orderedList internallist.List
 }
 
 // NewSink initialises a new message sink for endpoints
@@ -243,21 +246,13 @@ func (f *Sink) recoverFailed(endpoint *Endpoint) {
 	f.markReady(endpoint)
 }
 
-// Snapshot returns a snapshot of the endpoint statuses
-func (f *Sink) Snapshot() *core.Snapshot {
-	snapshot := core.NewSnapshot("Endpoints")
-
-	f.mutex.RLock()
-	for endpoint := f.Front(); endpoint != nil; endpoint = endpoint.Next() {
-		endpointSnap := core.NewSnapshot(endpoint.Server())
-		endpoint.mutex.RLock()
-		endpointSnap.AddEntry("Status", endpoint.status.String())
-		endpointSnap.AddEntry("Pending payloads", endpoint.NumPending())
-		endpointSnap.AddEntry("Published lines", endpoint.LineCount())
-		endpoint.mutex.RUnlock()
-		snapshot.AddSub(endpointSnap)
+// APIEntry returns an APIEntry that exposes status information for this sink
+// It should be called BEFORE adding any endpoints as existing endpoints will
+// not automatically become monitored
+func (f *Sink) APIEntry() admin.APIEntry {
+	if f.api == nil {
+		f.api = &admin.APIArray{}
 	}
-	f.mutex.RUnlock()
 
-	return snapshot
+	return f.api
 }

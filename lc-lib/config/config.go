@@ -31,7 +31,6 @@ import (
 )
 
 const (
-	defaultGeneralAdminEnabled       bool          = false
 	defaultGeneralHost               string        = "localhost.localdomain"
 	defaultGeneralLogLevel           logging.Level = logging.INFO
 	defaultGeneralLogStdout          bool          = true
@@ -57,10 +56,21 @@ const (
 	defaultStreamDeadTime            time.Duration = 1 * time.Hour
 )
 
+// Section is implemented by external config structures that will be
+// registered with the config package
+type Section interface {
+	Validate() error
+}
+
+// SectionCreator creates new Section structures
+type SectionCreator func() Section
+
+// registeredSectionCreators contains a list of registered external Section
+// creators that should be processed in all new Config structures
+var registeredSectionCreators = make(map[string]SectionCreator)
+
 // General holds the general configuration
 type General struct {
-	AdminBind        string                 `config:"admin listen address"`
-	AdminEnabled     bool                   `config:"admin enabled"`
 	GlobalFields     map[string]interface{} `config:"global fields"`
 	Host             string                 `config:"host"`
 	LineBufferBytes  int64                  `config:"line buffer bytes"`
@@ -78,8 +88,6 @@ type General struct {
 
 // InitDefaults initialises default values for the general configuration
 func (gc *General) InitDefaults() {
-	gc.AdminEnabled = defaultGeneralAdminEnabled
-	gc.AdminBind = DefaultGeneralAdminBind
 	gc.LineBufferBytes = defaultGeneralLineBufferBytes
 	gc.LogLevel = defaultGeneralLogLevel
 	gc.LogStdout = defaultGeneralLogStdout
@@ -162,11 +170,22 @@ type Config struct {
 	Includes []string `config:"includes"`
 	Network  Network  `config:"network"`
 	Stdin    Stream   `config:"stdin"`
+	// Dynamic sections
+	// TODO: All top level sections to use this
+	Sections map[string]Section `config:",dynamic"`
 }
 
 // NewConfig creates a new, empty, configuration structure
 func NewConfig() *Config {
-	return &Config{}
+	c := &Config{
+		Sections: make(map[string]Section),
+	}
+
+	for name, creator := range registeredSectionCreators {
+		c.Sections[name] = creator()
+	}
+
+	return c
 }
 
 // loadFile detects the extension of the given file and loads it using the
@@ -222,11 +241,6 @@ func (c *Config) Load(path string, initFactories bool) (err error) {
 				return
 			}
 		}
-	}
-
-	if c.General.AdminEnabled && c.General.AdminBind == "" {
-		err = fmt.Errorf("/general/admin listen address must be specified if /general/admin enabled is true")
-		return
 	}
 
 	if c.General.PersistDir == "" {
@@ -311,6 +325,13 @@ func (c *Config) Load(path string, initFactories bool) (err error) {
 		return
 	}
 
+	// Validate the registered configurables
+	for _, section := range c.Sections {
+		if err = section.Validate(); err != nil {
+			return
+		}
+	}
+
 	return
 }
 
@@ -340,4 +361,21 @@ func (c *Config) initStreamConfig(path string, streamConfig *Stream, initFactori
 	// TODO: EDGE CASE: Event transmit length is uint32, if fields length is rediculous we will fail
 
 	return nil
+}
+
+// Get returns the requested dynamic configuration entry
+func (c *Config) Get(name string) interface{} {
+	ret, ok := c.Sections[name]
+	if !ok {
+		return nil
+	}
+
+	return ret
+}
+
+// RegisterConfigSection registers a new Section creator which will be used to
+// create new sections that will be available via Get() in all created Config
+// structures
+func RegisterConfigSection(name string, creator SectionCreator) {
+	registeredSectionCreators[name] = creator
 }

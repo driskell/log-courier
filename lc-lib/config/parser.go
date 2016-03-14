@@ -62,7 +62,7 @@ FieldLoop:
 	for i := 0; i < vConfig.NumField(); i++ {
 		vField := vConfig.Field(i)
 
-		// Field can't be set and usually means it's not exported so we ignore it
+		// Ensure field is public
 		if !vField.CanSet() {
 			continue
 		}
@@ -76,13 +76,34 @@ FieldLoop:
 
 		// Parse the mods we have on this field
 		for _, mod := range mods {
-			if mod == "embed" && vField.Kind() == reflect.Struct {
+			switch mod {
+			case "embed":
+				// Embedded field must be public
+				if !vField.CanSet() {
+					continue
+				}
+
 				// Embed means we recurse into the field, but pull it's values from the
 				// same level within the configuration file we loaded
+				if vField.Kind() != reflect.Struct {
+					panic("Embedded configuration field is not a struct")
+				}
 				if err = c.populateStruct(vField.Addr(), vRawConfig, configPath); err != nil {
 					return
 				}
 				continue FieldLoop
+			case "dynamic":
+				// Dynamic means this is a map of Configurables that is dynamically
+				// populated with configuration structures at run-time, with the config
+				// file key being the map key
+				// This is generally not exported so don't check that
+				dynamicKeys := vField.MapKeys()
+				for _, key := range dynamicKeys {
+					// Unwrap the interface and the pointer
+					if err = c.populateEntry(vField.MapIndex(key).Elem().Elem(), vRawConfig, configPath, key.String()); err != nil {
+						return
+					}
+				}
 			}
 		}
 
@@ -91,47 +112,7 @@ FieldLoop:
 			continue
 		}
 
-		var vMapIndex reflect.Value
-
-		if vRawConfig.IsValid() {
-			// Find the value for this field in the raw configuration data
-			vTag := reflect.ValueOf(tag)
-			vMapIndex = vRawConfig.MapIndex(vTag)
-
-			// If the map index existed, unwrap the interface{}
-			if vMapIndex.IsValid() {
-				vMapIndex = vMapIndex.Elem()
-			}
-
-			// Remove the used entry
-			vRawConfig.SetMapIndex(vTag, reflect.Value{})
-		} else {
-			// vRawConfig is zero value, so there's no configuration to work with
-			// and we're just recursing to set defaults
-			vMapIndex = vRawConfig
-		}
-
-		if vField.Kind() == reflect.Struct {
-			// If we found an entry, check it's the right type, a map
-			if vRawConfig.IsValid() && vRawConfig.Type().Kind() != reflect.Map {
-				return fmt.Errorf("Option %s%s must be a hash", configPath, tag)
-			}
-
-			// Recurse with the new structure and values
-			if err := c.populateStruct(vField.Addr(), vMapIndex, fmt.Sprintf("%s%s/", configPath, tag)); err != nil {
-				return err
-			}
-
-			continue
-		}
-
-		// If the configuration data is empty for this section, don't consider any
-		// values, leave them as the default
-		if !vMapIndex.IsValid() {
-			continue
-		}
-
-		if err = c.populateValue(vField, vMapIndex, configPath, tag); err != nil {
+		if err = c.populateEntry(vField, vRawConfig, configPath, tag); err != nil {
 			return
 		}
 	}
@@ -158,6 +139,53 @@ FieldLoop:
 	// Report to the user any unused values if there are any, in case they
 	// misspelled an option
 	return c.reportUnusedConfig(vRawConfig, configPath)
+}
+
+// populateEntry handles population of a single entry, working out whether it
+// can assign directly or needs to process as a struct
+func (c *Config) populateEntry(vField reflect.Value, vRawConfig reflect.Value, configPath string, tag string) (err error) {
+	var vMapIndex reflect.Value
+
+	if vRawConfig.IsValid() {
+		// Find the value for this field in the raw configuration data
+		vTag := reflect.ValueOf(tag)
+		vMapIndex = vRawConfig.MapIndex(vTag)
+
+		// If the map index existed, unwrap the interface{}
+		if vMapIndex.IsValid() {
+			vMapIndex = vMapIndex.Elem()
+		}
+
+		// Remove the used entry
+		vRawConfig.SetMapIndex(vTag, reflect.Value{})
+	} else {
+		// vRawConfig is zero value, so there's no configuration to work with
+		// and we're just recursing to set defaults
+		vMapIndex = vRawConfig
+	}
+
+	if vField.Kind() == reflect.Struct {
+		// If we found an entry, check it's the right type, a map
+		if vRawConfig.IsValid() && vRawConfig.Type().Kind() != reflect.Map {
+			return fmt.Errorf("Option %s%s must be a hash", configPath, tag)
+		}
+
+		// Recurse with the new structure and values
+		if err := c.populateStruct(vField.Addr(), vMapIndex, fmt.Sprintf("%s%s/", configPath, tag)); err != nil {
+			return err
+		}
+
+		return
+	}
+
+	// If the configuration data is empty for this section, don't consider any
+	// values, leave them as the default
+	if !vMapIndex.IsValid() {
+		return
+	}
+
+	err = c.populateValue(vField, vMapIndex, configPath, tag)
+	return
 }
 
 // populateValue handles value to value mappings within a single configuration
@@ -322,6 +350,11 @@ func (c *Config) reportUnusedConfig(vRawConfig reflect.Value, configPath string)
 	}
 
 	for _, vKey := range vRawConfig.MapKeys() {
+		// If the key is wrapped in interface{}, unwrap it
+		if vKey.Type().Kind() == reflect.Interface {
+			vKey = vKey.Elem()
+		}
+
 		err = fmt.Errorf("Option %s%s is not available", configPath, vKey.String())
 		return
 	}

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
@@ -37,6 +38,8 @@ type Endpoint struct {
 	// The endpoint status
 	status  status
 	isReady bool
+
+	api *apiEndpoint
 
 	// Element structures for internal use by InternalList via EndpointSink
 	// MUST have Value member initialised
@@ -291,4 +294,15 @@ func (e *Endpoint) EventChan() chan<- transports.Event {
 // that the Transport is likely unaware of
 func (e *Endpoint) forceFailure() {
 	e.transport.Fail()
+}
+
+// apiEntry returns an APIEntry that can be used to monitor this endpoint
+func (e *Endpoint) apiEntry() admin.APIEntry {
+	if e.api == nil {
+		e.api = &apiEndpoint{
+			e: e,
+		}
+	}
+
+	return e.api
 }

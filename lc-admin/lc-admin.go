@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 )
@@ -74,7 +75,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		adminConnect = config.General.AdminBind
+		adminConnect = config.Get("admin").(*admin.Config).Bind
 	}
 
 	args := flag.Args()

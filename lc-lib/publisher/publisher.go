@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
@@ -58,11 +59,11 @@ const (
 type Publisher struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
-	core.PipelineSnapshotProvider
 
 	sync.RWMutex
 
 	config       *config.Network
+	adminConfig  *admin.Config
 	endpointSink *endpoint.Sink
 	method       method
 
@@ -87,13 +88,15 @@ type Publisher struct {
 }
 
 // NewPublisher creates a new publisher instance on the given pipeline
-func NewPublisher(pipeline *core.Pipeline, config *config.Network, registrar registrar.Registrator) *Publisher {
+func NewPublisher(pipeline *core.Pipeline, config *config.Config, registrar registrar.Registrator) *Publisher {
 	ret := &Publisher{
-		config:       config,
+		config:       &config.Network,
+		adminConfig:  config.Get("admin").(*admin.Config),
 		spoolChan:    make(chan []*core.EventDescriptor, 1),
-		endpointSink: endpoint.NewSink(config),
+		endpointSink: endpoint.NewSink(&config.Network),
 	}
 
+	ret.initAPI()
 	ret.initMethod()
 
 	if registrar == nil {
@@ -508,20 +511,16 @@ func (p *Publisher) takeMeasurements() {
 	p.Unlock()
 }
 
-// Snapshot returns a snapshot of the current publisher status. This is normally
-// called by the pipeline when a pipeline snapshot is requested
-func (p *Publisher) Snapshot() []*core.Snapshot {
-	p.RLock()
+// initAPI initialises the publisher API entries
+func (p *Publisher) initAPI() {
+	// Is admin loaded into the pipeline?
+	if p.adminConfig == nil {
+		return
+	}
 
-	snapshot := core.NewSnapshot("Publisher")
+	publisherAPI := &admin.APINode{}
+	publisherAPI.SetEntry("endpoints", p.endpointSink.APIEntry())
+	publisherAPI.SetEntry("status", &apiStatus{p: p})
 
-	snapshot.AddEntry("Speed (Lps)", p.lineSpeed)
-	snapshot.AddEntry("Published lines", p.lastLineCount)
-	snapshot.AddEntry("Total pending payloads", p.numPayloads)
-
-	p.RUnlock()
-
-	snapshot.AddSub(p.endpointSink.Snapshot())
-
-	return []*core.Snapshot{snapshot}
+	p.adminConfig.SetEntry("publisher", publisherAPI)
 }

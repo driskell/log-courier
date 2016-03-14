@@ -41,7 +41,7 @@ func connectTCP(transport, addr string) (net.Conn, error) {
 	return conn, nil
 }
 
-func listenTCP(transport, addr string) (NetListener, error) {
+func listenTCP(transport, addr string) (netListener, error) {
 	taddr, err := net.ResolveTCPAddr(transport, addr)
 	if err != nil {
 		return nil, fmt.Errorf("The admin bind address specified is not valid: %s", err)

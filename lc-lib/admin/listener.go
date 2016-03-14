@@ -1,166 +1,255 @@
 /*
-* Copyright 2014-2015 Jason Woods.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+ * Copyright 2014-2015 Jason Woods.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package admin
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
-	"net"
+	"net/http"
 	"strings"
 	"time"
+
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
+	"gopkg.in/tylerb/graceful.v1"
 )
 
-type Listener struct {
+// Server provides a REST interface for administration
+type Server struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
 
-	config          *config.General
-	command_chan    chan string
-	response_chan   chan *Response
-	listener        NetListener
-	client_shutdown chan interface{}
-	client_started  chan interface{}
-	client_ended    chan interface{}
+	config   *Config
+	listener netListener
+	server   *graceful.Server
 }
 
-func NewListener(pipeline *core.Pipeline, config *config.General) (*Listener, error) {
-	var err error
-
-	ret := &Listener{
-		config:          config,
-		command_chan:    make(chan string),
-		response_chan:   make(chan *Response),
-		client_shutdown: make(chan interface{}),
-		// TODO: Make this limit configurable
-		client_started: make(chan interface{}, 50),
-		client_ended:   make(chan interface{}, 50),
+// NewServer creates a new admin listener on the pipeline
+func NewServer(pipeline *core.Pipeline, config *config.Config) (*Server, error) {
+	ret := &Server{
+		config: config.Get("admin").(*Config),
 	}
 
-	if ret.listener, err = ret.listen(config); err != nil {
+	listener, err := ret.listen(ret.config)
+	if err != nil {
 		return nil, err
 	}
+
+	ret.initServer(listener)
 
 	pipeline.Register(ret)
 
 	return ret, nil
 }
 
-func (l *Listener) listen(config *config.General) (NetListener, error) {
-	bind := strings.SplitN(config.AdminBind, ":", 2)
+func (l *Server) listen(config *Config) (netListener, error) {
+	bind := strings.SplitN(config.Bind, ":", 2)
 	if len(bind) == 1 {
 		bind = append(bind, bind[0])
 		bind[0] = "tcp"
 	}
 
 	if listener, ok := registeredListeners[bind[0]]; ok {
+		log.Info("[admin] REST admin now listening on %s:%s", bind[0], bind[1])
 		return listener(bind[0], bind[1])
 	}
 
 	return nil, fmt.Errorf("Unknown transport specified for admin bind: '%s'", bind[0])
 }
 
-func (l *Listener) OnCommand() <-chan string {
-	return l.command_chan
+func (l *Server) initServer(listener netListener) {
+	l.listener = listener
+	l.server = &graceful.Server{
+		// We handle shutdown ourselves
+		NoSignalHandling: true,
+		// The HTTP server
+		Server: &http.Server{
+			// TODO: Make all these configurable?
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				l.handle(w, r)
+			}),
+		},
+	}
 }
 
-func (l *Listener) Respond(response *Response) {
-	l.response_chan <- response
+func (l *Server) startServer() {
+	// TODO: error checking
+	go l.server.Serve(l.listener)
 }
 
-func (l *Listener) Run() {
+// Run is the main routine for the admin listener
+func (l *Server) Run() {
 	defer func() {
 		l.Done()
 	}()
+
+	l.startServer()
+
+	var closingOldServer <-chan struct{}
+	var reloadingConfig *Config
+	var shuttingDown, shutdownStarted bool
 
 ListenerLoop:
 	for {
 		select {
 		case <-l.OnShutdown():
-			break ListenerLoop
+			shuttingDown = true
+			if closingOldServer == nil {
+				// Start the shutdown
+				closingOldServer = l.shutdownServer()
+				shutdownStarted = true
+			}
 		case config := <-l.OnConfig():
 			// We can't yet disable admin during a reload
-			if config.General.AdminEnabled {
-				if config.General.AdminBind != l.config.AdminBind {
-					new_listener, err := l.listen(&config.General)
-					if err != nil {
-						log.Error("The new admin configuration failed to apply: %s", err)
+			aconfig := config.Get("admin").(*Config)
+			if aconfig.Enabled {
+				if aconfig.Bind != l.config.Bind {
+					// Delay reload if still waiting for old server to close
+					if closingOldServer != nil {
+						reloadingConfig = aconfig
 						continue
 					}
 
-					l.listener.Close()
-					l.listener = new_listener
-					l.config = &config.General
+					closingOldServer = l.reloadServer(aconfig)
 				}
 			}
-		default:
-		}
+		case <-closingOldServer:
+			log.Info("[admin] REST administration stopped")
+			if shuttingDown {
+				// Is shutdown in progress? Leave if so
+				if shutdownStarted {
+					break ListenerLoop
+				}
 
-		l.listener.SetDeadline(time.Now().Add(time.Second))
-
-		conn, err := l.listener.Accept()
-		if err != nil {
-			if net_err, ok := err.(*net.OpError); ok && net_err.Timeout() {
+				// Need to start the shutdown
+				closingOldServer = l.shutdownServer()
+				shutdownStarted = true
 				continue
 			}
-			log.Warning("Failed to accept admin connection: %s", err)
-		}
 
-		log.Debug("New admin connection from %s", conn.RemoteAddr())
-
-		l.startServer(conn)
-	}
-
-	// Shutdown listener
-	l.listener.Close()
-
-	// Trigger shutdowns
-	close(l.client_shutdown)
-
-	// Wait for shutdowns
-	for {
-		if len(l.client_started) == 0 {
-			break
-		}
-
-		select {
-		case <-l.client_ended:
-			<-l.client_started
+			if reloadingConfig != nil {
+				// Another reload queued - process it
+				closingOldServer = l.reloadServer(reloadingConfig)
+				continue
+			}
 		default:
 		}
 	}
+
+	log.Info("[admin] REST administration exited")
 }
 
-func (l *Listener) startServer(conn net.Conn) {
-	server := newServer(l, conn)
+func (l *Server) shutdownServer() <-chan struct{} {
+	// TODO: Make configurable? This is the shutdown timeout
+	l.server.Stop(10 * time.Second)
+	return l.server.StopChan()
+}
 
-	select {
-	case <-l.client_ended:
-		<-l.client_started
-	default:
+func (l *Server) reloadServer(config *Config) <-chan struct{} {
+	newListener, err := l.listen(config)
+	if err != nil {
+		log.Error("The new admin configuration failed to apply: %s", err)
+		return nil
 	}
 
-	select {
-	case l.client_started <- 1:
-	default:
-		// TODO: Make this limit configurable
-		log.Warning("Refused admin connection: Admin connection limit (50) reached")
+	stopChan := l.shutdownServer()
+
+	l.initServer(newListener)
+	l.startServer()
+
+	return stopChan
+}
+
+func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		panicArg := recover()
+		if panicArg == nil {
+			return
+		}
+
+		err, ok := panicArg.(error)
+		if !ok {
+			return
+		}
+
+		l.accessLog(r, http.StatusInternalServerError)
+		http.Error(w, err.Error(), 500)
+	}()
+
+	if r.Method != "GET" {
+		l.accessLog(r, http.StatusMethodNotAllowed)
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	go server.Run()
+	// Check for leading forward slash
+	if len(r.URL.Path) == 0 || r.URL.Path[0] != '/' {
+		l.accessLog(r, http.StatusNotFound)
+		http.NotFound(w, r)
+		return
+	}
+
+	parts := strings.Split(r.URL.Path[1:], "/")
+	root := APIEntry(&l.config.APINode)
+
+	for _, part := range parts {
+		log.Error("Examining: %s", part)
+		newRoot, err := root.Get(part)
+		if err != nil {
+			panic(err)
+		}
+		if newRoot == nil {
+			l.accessLog(r, http.StatusNotFound)
+			http.NotFound(w, r)
+			return
+		}
+
+		log.Error("Entered: %s", part)
+		root = newRoot
+	}
+
+	// Ensure up to date values
+	if err := root.Update(); err != nil {
+		panic(err)
+	}
+
+	var err error
+	var contentType string
+	var response []byte
+
+	if r.URL.Query().Get("w") == "pretty" {
+		contentType = "text/plain"
+		response, err = root.HumanReadable("")
+	} else {
+		contentType = "application/json"
+		response, err = json.Marshal(root)
+	}
+
+	if err != nil {
+		panic(err)
+	}
+
+	l.accessLog(r, http.StatusOK)
+	w.Header().Add("Content-Type", contentType)
+	w.Write(response)
+}
+
+func (l *Server) accessLog(r *http.Request, c int) {
+	log.Debug("[admin] %s %s %d", r.Method, r.URL.Path, c)
 }

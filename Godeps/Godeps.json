@@ -2,13 +2,24 @@
 	"ImportPath": "github.com/driskell/log-courier",
 	"GoVersion": "go1.5.1",
 	"Packages": [
-		"./..."
+		".",
+		"./lc-admin",
+		"./lc-tlscert"
 	],
 	"Deps": [
+		{
+			"ImportPath": "golang.org/x/net/netutil",
+			"Rev": "08f168e593b5aab61849054b77981de812666697"
+		},
 		{
 			"ImportPath": "gopkg.in/op/go-logging.v1",
 			"Comment": "v1",
 			"Rev": "b2cb9fa56473e98db8caba80237377e83fe44db5"
+		},
+		{
+			"ImportPath": "gopkg.in/tylerb/graceful.v1",
+			"Comment": "v1.2.4",
+			"Rev": "119c58e176bce26fd40698146d9a106c8f1723a5"
 		},
 		{
 			"ImportPath": "gopkg.in/yaml.v2",

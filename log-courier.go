@@ -72,8 +72,6 @@ func NewLogCourier() *LogCourier {
 
 // Run starts the log-courier binary
 func (lc *LogCourier) Run() {
-	var adminListener *admin.Listener
-	var onCommand <-chan string
 	var harvesterWait <-chan *harvester.FinishStatus
 	var registrarImp registrar.Registrator
 
@@ -85,21 +83,19 @@ func (lc *LogCourier) Run() {
 	if lc.stdin {
 		registrarImp = newStdinRegistrar(lc.pipeline)
 	} else {
-		if lc.config.General.AdminEnabled {
+		if lc.config.Get("admin").(*admin.Config).Enabled {
 			var err error
 
-			adminListener, err = admin.NewListener(lc.pipeline, &lc.config.General)
+			_, err = admin.NewServer(lc.pipeline, lc.config)
 			if err != nil {
 				log.Fatalf("Failed to initialise: %s", err)
 			}
-
-			onCommand = adminListener.OnCommand()
 		}
 
 		registrarImp = registrar.NewRegistrar(lc.pipeline, lc.config.General.PersistDir)
 	}
 
-	publisherImp := publisher.NewPublisher(lc.pipeline, &lc.config.Network, registrarImp)
+	publisherImp := publisher.NewPublisher(lc.pipeline, lc.config, registrarImp)
 
 	spoolerImp := spooler.NewSpooler(lc.pipeline, &lc.config.General, publisherImp)
 
@@ -131,8 +127,6 @@ SignalLoop:
 			break SignalLoop
 		case <-lc.reloadChan:
 			lc.reloadConfig()
-		case command := <-onCommand:
-			adminListener.Respond(lc.processCommand(command))
 		case finished := <-harvesterWait:
 			if finished.Error != nil {
 				log.Notice("An error occurred reading from stdin at offset %d: %s", finished.LastReadOffset, finished.Error)

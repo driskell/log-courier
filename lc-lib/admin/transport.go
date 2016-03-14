@@ -21,19 +21,17 @@ import (
 	"time"
 )
 
-type NetListener interface {
-	Accept() (net.Conn, error)
-	Close() error
-	Addr() net.Addr
+type netListener interface {
+	net.Listener
 	SetDeadline(time.Time) error
 }
 
 type connectorFunc func(string, string) (net.Conn, error)
-type listenerFunc func(string, string) (NetListener, error)
+type listenerFunc func(string, string) (netListener, error)
 
 var (
-	registeredConnectors map[string]connectorFunc = make(map[string]connectorFunc)
-	registeredListeners  map[string]listenerFunc  = make(map[string]listenerFunc)
+	registeredConnectors = make(map[string]connectorFunc)
+	registeredListeners  = make(map[string]listenerFunc)
 )
 
 func registerTransport(name string, connector connectorFunc, listener listenerFunc) {

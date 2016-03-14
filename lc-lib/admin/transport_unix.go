@@ -44,7 +44,7 @@ func connectUnix(transport, path string) (net.Conn, error) {
 	return conn, nil
 }
 
-func listenUnix(transport, addr string) (NetListener, error) {
+func listenUnix(transport, addr string) (netListener, error) {
 	uaddr, err := net.ResolveUnixAddr("unix", addr)
 	if err != nil {
 		return nil, fmt.Errorf("The admin bind address specified is not valid: %s", err)
