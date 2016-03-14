@@ -32,11 +32,11 @@ type apiStatus struct {
 // Update updates the publisher status information
 func (a *apiStatus) Update() error {
 	// Update the values and pass through to node
-	a.p.RLock()
+	a.p.mutex.RLock()
 	a.SetEntry("speed", admin.APIFloat(a.p.lineSpeed))
 	a.SetEntry("publishedLines", admin.APINumber(a.p.lastLineCount))
 	a.SetEntry("pendingPayloads", admin.APINumber(a.p.numPayloads))
-	a.p.RUnlock()
+	a.p.mutex.RUnlock()
 
 	return nil
 }
