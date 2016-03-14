@@ -19,11 +19,19 @@ package admin
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"net/url"
 )
 
 // APIIndentation is a single indentation to be used in HumanReadable calls on
 // API entries
 const APIIndentation = "  "
+
+// An API error when the call is not implemented
+var ErrNotImplemented = errors.New("Not Implemented")
+
+// An API error when the requested information was not found
+var ErrNotFound = errors.New("Not Found")
 
 // APIEncodable is an encodable entry in the API, which can be a navigatable
 // entry or just a piece of data
@@ -43,6 +51,9 @@ type APIEntry interface {
 	// Get returns the child entry with the requested name, or nil there are no
 	// children
 	Get(name string) (APIEntry, error)
+
+	// Call happens in response to a POST request
+	Call(params url.Values) error
 
 	// Update updates the entry data
 	Update() error
@@ -70,6 +81,11 @@ func (n *APINode) Get(path string) (APIEntry, error) {
 		return nil, nil
 	}
 	return entry, nil
+}
+
+// Call an API
+func (n *APINode) Call(params url.Values) error {
+	return ErrNotImplemented
 }
 
 // MarshalJSON returns the entire path structures in JSON form

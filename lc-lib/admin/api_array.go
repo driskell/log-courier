@@ -19,6 +19,7 @@ package admin
 import (
 	"bytes"
 	"encoding/json"
+	"net/url"
 	"strconv"
 )
 
@@ -91,6 +92,11 @@ func (a *APIArray) Get(path string) (APIEntry, error) {
 	}
 
 	return a.entries[entryNum], nil
+}
+
+// Call an API
+func (a *APIArray) Call(params url.Values) error {
+	return ErrNotImplemented
 }
 
 // MarshalJSON returns the APIArray in JSON form

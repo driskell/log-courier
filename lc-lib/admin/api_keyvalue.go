@@ -19,6 +19,7 @@ package admin
 import (
 	"bytes"
 	"encoding/json"
+	"net/url"
 )
 
 // APIKeyValue represents a set of data
@@ -29,6 +30,11 @@ type APIKeyValue struct {
 // Get always returns nil for an APIKeyValue as it is not navigatable
 func (d *APIKeyValue) Get(string) (APIEntry, error) {
 	return nil, nil
+}
+
+// Call an API
+func (d *APIKeyValue) Call(params url.Values) error {
+	return ErrNotImplemented
 }
 
 // SetEntry sets a new data entry

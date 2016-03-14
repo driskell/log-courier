@@ -185,14 +185,21 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 		err, ok := panicArg.(error)
 		if !ok {
+			log.Error("[admin] Unexpected error: %v", panicArg)
 			return
 		}
 
-		l.accessLog(r, http.StatusInternalServerError)
-		http.Error(w, err.Error(), 500)
+		switch err {
+		case ErrNotImplemented:
+			l.errorResponse(w, r, err, http.StatusNotImplemented)
+			return
+		}
+
+		log.Info("[admin] Request error: %s", err.Error())
+		l.errorResponse(w, r, err, http.StatusInternalServerError)
 	}()
 
-	if r.Method != "GET" {
+	if r.Method != "GET" && r.Method != "POST" && r.Method != "PUT" {
 		l.accessLog(r, http.StatusMethodNotAllowed)
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
@@ -200,8 +207,7 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	// Check for leading forward slash
 	if len(r.URL.Path) == 0 || r.URL.Path[0] != '/' {
-		l.accessLog(r, http.StatusNotFound)
-		http.NotFound(w, r)
+		panic(ErrNotFound)
 		return
 	}
 
@@ -209,19 +215,32 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	root := APIEntry(&l.config.APINode)
 
 	for _, part := range parts {
-		log.Error("Examining: %s", part)
 		newRoot, err := root.Get(part)
 		if err != nil {
 			panic(err)
 		}
 		if newRoot == nil {
-			l.accessLog(r, http.StatusNotFound)
-			http.NotFound(w, r)
+			panic(ErrNotFound)
 			return
 		}
 
-		log.Error("Entered: %s", part)
 		root = newRoot
+	}
+
+	// Call?
+	if r.Method != "GET" {
+		err := r.ParseForm()
+		if err != nil {
+			panic(err)
+		}
+
+		err = root.Call(r.Form)
+		if err != nil {
+			panic(err)
+		}
+
+		l.accessLog(r, http.StatusOK)
+		return
 	}
 
 	// Ensure up to date values
@@ -248,6 +267,23 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	l.accessLog(r, http.StatusOK)
 	w.Header().Add("Content-Type", contentType)
 	w.Write(response)
+}
+
+func (l *Server) errorResponse(w http.ResponseWriter, r *http.Request, err error, c int) {
+	structErr := struct {
+		Error string `json:"error"`
+	}{
+		Error: err.Error(),
+	}
+
+	jsonError, encodeErr := json.Marshal(structErr)
+	if encodeErr != nil {
+		l.accessLog(r, http.StatusServiceUnavailable)
+		http.Error(w, encodeErr.Error(), http.StatusServiceUnavailable)
+	}
+
+	l.accessLog(r, c)
+	http.Error(w, string(jsonError), c)
 }
 
 func (l *Server) accessLog(r *http.Request, c int) {
