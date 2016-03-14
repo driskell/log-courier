@@ -130,6 +130,7 @@ func (e *Endpoint) SendPayload(payload *payload.Payload) error {
 		nonce = e.generateNonce()
 	}
 
+	payload.TransmitTime = time.Now()
 	payload.Nonce = nonce
 	e.pendingPayloads[nonce] = payload
 
