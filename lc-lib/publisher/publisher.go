@@ -60,7 +60,7 @@ type Publisher struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
 
-	sync.RWMutex
+	mutex sync.RWMutex
 
 	config       *config.Network
 	adminConfig  *admin.Config
@@ -239,9 +239,9 @@ func (p *Publisher) sendEvents(endpoint *endpoint.Endpoint, events []*core.Event
 
 	p.payloadList.PushBack(&pendingPayload.Element)
 
-	p.Lock()
+	p.mutex.Lock()
 	p.numPayloads++
-	p.Unlock()
+	p.mutex.Unlock()
 
 	return p.sendPayload(endpoint, pendingPayload)
 }
@@ -413,12 +413,12 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 		p.outOfSync++
 	}
 
-	p.Lock()
+	p.mutex.Lock()
 	if numComplete != 0 {
 		p.numPayloads -= numComplete
 	}
 	p.lineCount += int64(lineCount)
-	p.Unlock()
+	p.mutex.Unlock()
 }
 
 // OnPong handles when endpoints receive a pong message
@@ -504,11 +504,11 @@ func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 }
 
 func (p *Publisher) takeMeasurements() {
-	p.Lock()
+	p.mutex.Lock()
 	p.lineSpeed = core.CalculateSpeed(time.Since(p.lastMeasurement), p.lineSpeed, float64(p.lineCount-p.lastLineCount), &p.secondsNoAck)
 	p.lastLineCount = p.lineCount
 	p.lastMeasurement = time.Now()
-	p.Unlock()
+	p.mutex.Unlock()
 }
 
 // initAPI initialises the publisher API entries
