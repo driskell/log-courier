@@ -109,13 +109,12 @@ ProspectLoop:
 
 		for configKey, config := range p.config.Files {
 			for _, path := range config.Paths {
-				// Scan - flag false so new files always start at beginning
 				p.scan(path, &p.config.Files[configKey])
 			}
 		}
 
-		// We only obey *fromBeginning (which is stored in this) on startup,
-		// afterwards we force from beginning
+		// We only obey *fromBeginning (which is stored in this) on startup, if no
+		// persist file exists. Afterwards we force from beginning
 		p.fromBeginning = true
 
 		// Clean up the prospector collections
@@ -318,6 +317,7 @@ func (p *Prospector) scan(path string, config *config.File) {
 					// Old file with an unchanged offset, skip it
 					log.Info("Skipping file (older than dead time of %v): %s", config.DeadTime, file)
 					info.status = statusOk
+					resume = false
 				} else {
 					// This is a filestate that was saved, resume the harvester
 					log.Info("Resuming harvester on a previously harvested file: %s", file)
