@@ -19,7 +19,7 @@ package prospector
 import (
 	"os"
 
-	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/harvester"
 	"github.com/driskell/log-courier/lc-lib/registrar"
 )
@@ -106,8 +106,8 @@ func (pi *prospectorInfo) wait() {
 	pi.setHarvesterStopped(status)
 }
 
-func (pi *prospectorInfo) getSnapshot() *core.Snapshot {
-	return pi.harvester.Snapshot()
+func (pi *prospectorInfo) apiEncodable() admin.APIEncodable {
+	return pi.harvester.APIEncodable()
 }
 
 func (pi *prospectorInfo) setHarvesterStopped(status *harvester.FinishStatus) {

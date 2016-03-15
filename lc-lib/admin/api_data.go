@@ -16,7 +16,25 @@
 
 package admin
 
-import "strconv"
+import (
+	"encoding/json"
+	"strconv"
+)
+
+type apiNull struct{}
+
+// MarshalJSON returns the apiNull in JSON form
+func (n apiNull) MarshalJSON() ([]byte, error) {
+	return json.Marshal(nil)
+}
+
+// HumanReadable returns the apiNull as a string
+func (n apiNull) HumanReadable(string) ([]byte, error) {
+	return []byte("N/A"), nil
+}
+
+// APINull represents a null value
+var APINull = apiNull{}
 
 // APINumber represents an integer number in the API
 type APINumber int64

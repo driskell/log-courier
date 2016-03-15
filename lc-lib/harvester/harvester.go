@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
@@ -49,7 +50,7 @@ type FinishStatus struct {
 // Harvester reads from a file, passes lines through a codec, and sends them
 // for spooling
 type Harvester struct {
-	sync.RWMutex
+	mutex sync.RWMutex
 
 	stopChan     chan interface{}
 	returnChan   chan *FinishStatus
@@ -275,14 +276,14 @@ func (h *Harvester) performRead() error {
 		return nil
 	}
 
-	h.Lock()
+	h.mutex.Lock()
 	if h.lastEOF == nil {
 		h.lastEOF = new(time.Time)
 		h.lastEOFOff = new(int64)
 	}
 	*h.lastEOF = h.lastReadTime
 	*h.lastEOFOff = h.offset
-	h.Unlock()
+	h.mutex.Unlock()
 
 	// Check shutdown
 	select {
@@ -310,7 +311,7 @@ func (h *Harvester) takeMeasurements(duration time.Duration) error {
 		}
 	}
 
-	h.Lock()
+	h.mutex.Lock()
 	h.lineSpeed = core.CalculateSpeed(duration, h.lineSpeed, float64(h.lineCount-h.lastLineCount), &h.secondsWithoutEvents)
 	h.byteSpeed = core.CalculateSpeed(duration, h.byteSpeed, float64(h.byteCount-h.lastByteCount), &h.secondsWithoutEvents)
 	h.lastByteCount = h.byteCount
@@ -323,7 +324,7 @@ func (h *Harvester) takeMeasurements(duration time.Duration) error {
 		h.lastSize = h.offset
 	}
 	h.codec.Meter()
-	h.Unlock()
+	h.mutex.Unlock()
 
 	// Check shutdown
 	select {
@@ -515,44 +516,40 @@ func (h *Harvester) readline() (string, int, error) {
 	return "", 0, io.EOF
 }
 
-// Snapshot returns a snapshot structure containing information about the status
-// of this harvester
-func (h *Harvester) Snapshot() *core.Snapshot {
-	h.RLock()
+// APIEncodeable returns an admin API entry with harvester status
+func (h *Harvester) APIEncodable() admin.APIEncodable {
+	h.mutex.RLock()
 
-	ret := core.NewSnapshot("Harvester")
-	ret.AddEntry("Speed (Lps)", h.lineSpeed)
-	ret.AddEntry("Speed (Bps)", h.byteSpeed)
-	ret.AddEntry("Processed lines", h.lineCount)
-	ret.AddEntry("Current offset", h.lastOffset)
-	ret.AddEntry("Last known size", h.lastSize)
+	apiEncodable := &admin.APIKeyValue{}
+	apiEncodable.SetEntry("speed_lps", admin.APIFloat(h.lineSpeed))
+	apiEncodable.SetEntry("speed_bps", admin.APIFloat(h.byteSpeed))
+	apiEncodable.SetEntry("processed_lines", admin.APINumber(h.lineCount))
+	apiEncodable.SetEntry("current_offset", admin.APINumber(h.lastOffset))
+	apiEncodable.SetEntry("last_known_size", admin.APINumber(h.lastSize))
+
 	if h.offset >= h.lastSize {
-		ret.AddEntry("Completion", 100.)
+		apiEncodable.SetEntry("completion", admin.APIFloat(100.))
 	} else {
 		completion := float64(h.offset) * 100 / float64(h.lastSize)
-		ret.AddEntry("Completion", completion)
+		apiEncodable.SetEntry("completion", admin.APIFloat(completion))
 	}
 	if h.lastEOFOff == nil {
-		ret.AddEntry("Last EOF Offset", "Never")
+		apiEncodable.SetEntry("last_eof_offset", admin.APINull)
 	} else {
-		ret.AddEntry("Last EOF Offset", h.lastEOFOff)
+		apiEncodable.SetEntry("last_eof_offset", admin.APINumber(*h.lastEOFOff))
 	}
 	if h.lastEOF == nil {
-		ret.AddEntry("Status", "Alive")
+		apiEncodable.SetEntry("status", admin.APIString("alive"))
 	} else {
-		ret.AddEntry("Status", "Idle")
+		apiEncodable.SetEntry("status", admin.APIString("idle"))
 		if age := time.Since(*h.lastEOF); age < h.streamConfig.DeadTime {
-			ret.AddEntry("Dead timer", h.streamConfig.DeadTime-age)
+			apiEncodable.SetEntry("dead_timer", admin.APIString(fmt.Sprintf("%s", h.streamConfig.DeadTime-age)))
 		} else {
-			ret.AddEntry("Dead timer", "0s")
+			apiEncodable.SetEntry("dead_timer", admin.APIString("0s"))
 		}
 	}
 
-	if subSnap := h.codec.Snapshot(); subSnap != nil {
-		ret.AddSub(subSnap)
-	}
+	h.mutex.RUnlock()
 
-	h.RUnlock()
-
-	return ret
+	return apiEncodable
 }
