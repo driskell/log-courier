@@ -41,13 +41,6 @@ crash should never lose events *[1]*
 * Keep resource usage low
 * Be easy to use
 
-*[1] A __Logstash__ crash or output failure will still lose some events until
-Logstash itself implements delivery guarantees or persistence - see
-[elastic/logstash#2609](https://github.com/elastic/logstash/issues/2609) and
-[elastic/logstash#2605](https://github.com/elastic/logstash/issues/2605). Log
-Courier aims to provide complete compatibility with theses features as they
-develop.*
-
 ## Documentation
 
 ### Installation
