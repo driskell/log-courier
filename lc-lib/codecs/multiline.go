@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 const (
@@ -268,13 +268,12 @@ func (c *CodecMultiline) Meter() {
 	c.meterBytes = c.endOffset - c.lastOffset
 }
 
-// Snapshot is called when lc-admin tool requests a snapshot and the accounting
-// data is returned in a snapshot structure
-func (c *CodecMultiline) Snapshot() *core.Snapshot {
-	snap := core.NewSnapshot("Multiline Codec")
-	snap.AddEntry("Pending lines", c.meterLines)
-	snap.AddEntry("Pending bytes", c.meterBytes)
-	return snap
+// APIEncodable is called to get the codec status for the API
+func (c *CodecMultiline) APIEncodable() admin.APIEncodable {
+	api := &admin.APIKeyValue{}
+	api.SetEntry("pending_lines", admin.APINumber(c.meterLines))
+	api.SetEntry("pending_bytes", admin.APINumber(c.meterBytes))
+	return api
 }
 
 func (c *CodecMultiline) deadlineRoutine() {

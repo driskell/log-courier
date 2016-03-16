@@ -142,3 +142,33 @@ func (a *api) Get(path string) (admin.APIEntry, error) {
 
 	return a.APINode.Get(path)
 }
+
+// MarshalJSON encodes the status in json form
+func (a *api) MarshalJSON() ([]byte, error) {
+	// Add on the ephemeral files entry
+	// TODO: This should be managed as part of adding/removing file tracking
+	files := &apiFiles{p: a.p}
+	if err := files.Update(); err != nil {
+		return nil, err
+	}
+
+	a.SetEntry("files", files)
+	result, err := a.APINode.MarshalJSON()
+	a.RemoveEntry("files")
+	return result, err
+}
+
+// HumanReadable encodes the status as a readable string
+func (a *api) HumanReadable(indent string) ([]byte, error) {
+	// Add on the ephemeral files entry
+	// TODO: This should be managed as part of adding/removing file tracking
+	files := &apiFiles{p: a.p}
+	if err := files.Update(); err != nil {
+		return nil, err
+	}
+
+	a.SetEntry("files", files)
+	result, err := a.APINode.HumanReadable(indent)
+	a.RemoveEntry("files")
+	return result, err
+}

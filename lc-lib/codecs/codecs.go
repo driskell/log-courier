@@ -17,7 +17,7 @@
 package codecs
 
 import (
-	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/admin"
 )
 
 // Codec is the generic interface that all codecs implement
@@ -26,7 +26,7 @@ type Codec interface {
 	Reset()
 	Event(int64, int64, string)
 	Meter()
-	Snapshot() *core.Snapshot
+	APIEncodable() admin.APIEncodable
 }
 
 // CallbackFunc is a callback function that a codec will call for each of its

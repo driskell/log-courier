@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -183,10 +184,16 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Only keep normal errors
 		err, ok := panicArg.(error)
 		if !ok {
-			log.Error("[admin] Unexpected error: %v", panicArg)
+			panic(panicArg)
 			return
+		}
+
+		// Don't keep runtime errors or we'll miss stack trace
+		if _, ok := err.(runtime.Error); ok {
+			panic(err)
 		}
 
 		switch err {
@@ -195,8 +202,8 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Info("[admin] Request error: %s", err.Error())
 		l.errorResponse(w, r, err, http.StatusInternalServerError)
+		log.Info("[admin] Request error: %s", err.Error())
 	}()
 
 	if r.Method != "GET" && r.Method != "POST" && r.Method != "PUT" {

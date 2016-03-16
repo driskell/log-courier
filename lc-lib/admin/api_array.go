@@ -20,11 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/url"
+	"sort"
 	"strconv"
 )
 
 type apiArrayEntry struct {
 	row   int
+	key   string
 	entry APIEntry
 }
 
@@ -32,7 +34,7 @@ type apiArrayEntry struct {
 // primary key
 type APIArray struct {
 	entryMap map[string]apiArrayEntry
-	entries  []APIEntry
+	entries  []apiArrayEntry
 }
 
 // AddEntry a new array entry
@@ -45,12 +47,15 @@ func (a *APIArray) AddEntry(key string, entry APIEntry) {
 		}
 	}
 
-	a.entryMap[key] = apiArrayEntry{
+	arrayEntry := apiArrayEntry{
 		row:   len(a.entries),
+		key:   key,
 		entry: entry,
 	}
 
-	a.entries = append(a.entries, entry)
+	a.entryMap[key] = arrayEntry
+
+	a.entries = append(a.entries, arrayEntry)
 }
 
 // RemoveEntry removes an array entry
@@ -91,7 +96,7 @@ func (a *APIArray) Get(path string) (APIEntry, error) {
 		return nil, nil
 	}
 
-	return a.entries[entryNum], nil
+	return a.entries[entryNum].entry, nil
 }
 
 // Call an API
@@ -106,29 +111,39 @@ func (a *APIArray) MarshalJSON() ([]byte, error) {
 
 // HumanReadable returns the APIArray as a string
 func (a *APIArray) HumanReadable(indent string) ([]byte, error) {
-	if a.entryMap == nil {
-		return nil, nil
+	if a.entryMap == nil || len(a.entryMap) == 0 {
+		return []byte("none"), nil
 	}
 
 	var result bytes.Buffer
 	newIndent := indent + APIIndentation
 
-	for primaryKey, entry := range a.entryMap {
-		subResult, err := entry.entry.HumanReadable(newIndent)
+	mapOrder := make([]string, 0, len(a.entryMap))
+	for key := range a.entryMap {
+		mapOrder = append(mapOrder, key)
+	}
+	sort.Strings(mapOrder)
+
+	for _, key := range mapOrder {
+		arrayEntry := a.entryMap[key]
+
+		subResult, err := arrayEntry.entry.HumanReadable(newIndent)
 		if err != nil {
 			return nil, err
 		}
 
+		result.WriteString(indent)
+		result.WriteString(arrayEntry.key)
+
 		if bytes.IndexRune(subResult, '\n') != -1 {
-			result.WriteString(primaryKey)
 			result.WriteString(":\n")
 			result.Write(subResult)
 			continue
 		}
 
-		result.WriteString(primaryKey)
 		result.WriteString(": ")
 		result.Write(subResult)
+		result.WriteString("\n")
 	}
 
 	return result.Bytes(), nil
@@ -138,8 +153,8 @@ func (a *APIArray) HumanReadable(indent string) ([]byte, error) {
 // if required to keep the contents up to date on each request
 // Default behaviour is to update each of the array entries
 func (a *APIArray) Update() error {
-	for _, entry := range a.entries {
-		if err := entry.Update(); err != nil {
+	for _, arrayEntry := range a.entries {
+		if err := arrayEntry.entry.Update(); err != nil {
 			return err
 		}
 	}

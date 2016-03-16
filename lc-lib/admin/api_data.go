@@ -30,7 +30,7 @@ func (n apiNull) MarshalJSON() ([]byte, error) {
 
 // HumanReadable returns the apiNull as a string
 func (n apiNull) HumanReadable(string) ([]byte, error) {
-	return []byte("N/A"), nil
+	return []byte("n/a"), nil
 }
 
 // APINull represents a null value

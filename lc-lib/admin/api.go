@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"sort"
 )
 
 // APIIndentation is a single indentation to be used in HumanReadable calls on
@@ -74,6 +75,15 @@ func (n *APINode) SetEntry(path string, entry APIEntry) {
 	n.children[path] = entry
 }
 
+// RemoveEntry removes a path entry
+func (n *APINode) RemoveEntry(path string) {
+	if n.children == nil {
+		return
+	}
+
+	delete(n.children, path)
+}
+
 // Get the child entry with the specified name
 func (n *APINode) Get(path string) (APIEntry, error) {
 	entry, ok := n.children[path]
@@ -84,7 +94,7 @@ func (n *APINode) Get(path string) (APIEntry, error) {
 }
 
 // Call an API
-func (n *APINode) Call(params url.Values) error {
+func (n *APINode) Call(url.Values) error {
 	return ErrNotImplemented
 }
 
@@ -95,30 +105,39 @@ func (n *APINode) MarshalJSON() ([]byte, error) {
 
 // HumanReadable returns the entire path structures in human-readable form
 func (n *APINode) HumanReadable(indent string) ([]byte, error) {
-	if n.children == nil {
-		return nil, nil
+	if n.children == nil || len(n.children) == 0 {
+		return []byte("none"), nil
 	}
 
 	var result bytes.Buffer
-
 	newIndent := indent + APIIndentation
 
-	for name, entry := range n.children {
+	mapOrder := make([]string, 0, len(n.children))
+	for key := range n.children {
+		mapOrder = append(mapOrder, key)
+	}
+	sort.Strings(mapOrder)
+
+	for _, name := range mapOrder {
+		entry := n.children[name]
+
 		part, err := entry.HumanReadable(newIndent)
 		if err != nil {
 			return nil, err
 		}
 
+		result.WriteString(indent)
+		result.WriteString(name)
+
 		if bytes.IndexRune(part, '\n') != -1 {
-			result.WriteString(name)
 			result.WriteString(":\n")
 			result.Write(part)
 			continue
 		}
 
-		result.WriteString(name)
 		result.WriteString(": ")
 		result.Write(part)
+		result.WriteString("\n")
 	}
 
 	return result.Bytes(), nil
@@ -134,5 +153,41 @@ func (n *APINode) Update() error {
 		}
 	}
 
+	return nil
+}
+
+// APIDataEntry wraps an APIEncodable so it can be used as an APIEntry
+// It stubs the navigation methods so they are no-ops
+type APIDataEntry struct {
+	a APIEncodable
+}
+
+// NewAPIDataEntry creates a new APIDataEntry from an APIEncodable
+func NewAPIDataEntry(a APIEncodable) *APIDataEntry {
+	return &APIDataEntry{a: a}
+}
+
+// MarshalJSON returns the APIDataEntry in JSON form
+func (d *APIDataEntry) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.a)
+}
+
+// HumanReadable returns the APIDataEntry as a string
+func (d *APIDataEntry) HumanReadable(indent string) ([]byte, error) {
+	return d.a.HumanReadable(indent)
+}
+
+// Get always returns nil for an APIDataEntry
+func (d *APIDataEntry) Get(path string) (APIEntry, error) {
+	return nil, nil
+}
+
+// Call always returns ErrNotImplemented for an APIDataEntry
+func (d *APIDataEntry) Call(url.Values) error {
+	return ErrNotImplemented
+}
+
+// Update does nothing for an APIDataEntry
+func (d *APIDataEntry) Update() error {
 	return nil
 }

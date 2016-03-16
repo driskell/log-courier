@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 // codecFilterPatternInstance holds the regular expression matcher for a
@@ -133,12 +133,11 @@ func (c *CodecFilter) Meter() {
 	c.meterFiltered = c.filteredLines
 }
 
-// Snapshot is called when lc-admin tool requests a snapshot and the accounting
-// data is returned in a snapshot structure
-func (c *CodecFilter) Snapshot() *core.Snapshot {
-	snap := core.NewSnapshot("Filter Codec")
-	snap.AddEntry("Filtered lines", c.meterFiltered)
-	return snap
+// APIEncodable is called to get the codec status for the API
+func (c *CodecFilter) APIEncodable() admin.APIEncodable {
+	api := &admin.APIKeyValue{}
+	api.SetEntry("filtered_lines", admin.APINumber(c.meterFiltered))
+	return api
 }
 
 // Register the codec

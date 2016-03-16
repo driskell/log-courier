@@ -17,8 +17,8 @@
 package codecs
 
 import (
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 // CodecPlainFactory holds the configuration, it is responsible for generating
@@ -76,14 +76,14 @@ func (c *CodecPlain) Event(startOffset int64, endOffset int64, text string) {
 
 // Meter is called by the harvester periodically to allow the codec to calculate
 // statistics if necessary
+// It is called from the harvester routine so synchronisation is unnecessary
 func (c *CodecPlain) Meter() {
 }
 
-// Snapshot is called by the harvester when the lc-admin utility has requested
-// the status of the codec, it should return values managed by Meter().
-// Be sure to use RLock/RUnlock here and Lock/Unlock in Meter as Snapshot is
-// called from a completely different Go routine to the harvester
-func (c *CodecPlain) Snapshot() *core.Snapshot {
+// APIEncodable is called to get the status for the API
+// Meter and APIEncodable are already synchronised by the Harvester, so you
+// do not need to worry about race conditions between them
+func (c *CodecPlain) APIEncodable() admin.APIEncodable {
 	return nil
 }
 

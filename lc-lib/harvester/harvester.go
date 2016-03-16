@@ -324,6 +324,9 @@ func (h *Harvester) takeMeasurements(duration time.Duration) error {
 		h.lastSize = h.offset
 	}
 	h.codec.Meter()
+	for _, codec := range h.codecChain {
+		codec.Meter()
+	}
 	h.mutex.Unlock()
 
 	// Check shutdown
@@ -516,7 +519,7 @@ func (h *Harvester) readline() (string, int, error) {
 	return "", 0, io.EOF
 }
 
-// APIEncodeable returns an admin API entry with harvester status
+// APIEncodable returns an admin API entry with harvester status
 func (h *Harvester) APIEncodable() admin.APIEncodable {
 	h.mutex.RLock()
 
@@ -548,6 +551,15 @@ func (h *Harvester) APIEncodable() admin.APIEncodable {
 			apiEncodable.SetEntry("dead_timer", admin.APIString("0s"))
 		}
 	}
+
+	codecs := &admin.APIArray{}
+	i := 0
+	codecs.AddEntry(h.streamConfig.Codecs[0].Name, admin.NewAPIDataEntry(h.codec.APIEncodable()))
+	for _, codec := range h.codecChain {
+		i++
+		codecs.AddEntry(h.streamConfig.Codecs[i].Name, admin.NewAPIDataEntry(codec.APIEncodable()))
+	}
+	apiEncodable.SetEntry("codecs", codecs)
 
 	h.mutex.RUnlock()
 

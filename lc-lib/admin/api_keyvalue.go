@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/url"
+	"sort"
 )
 
 // APIKeyValue represents a set of data
@@ -62,29 +63,39 @@ func (d *APIKeyValue) MarshalJSON() ([]byte, error) {
 
 // HumanReadable returns the APIKeyValue as a string
 func (d *APIKeyValue) HumanReadable(indent string) ([]byte, error) {
-	if d.entryMap == nil {
-		return nil, nil
+	if d.entryMap == nil || len(d.entryMap) == 0 {
+		return []byte("none"), nil
 	}
 
 	var result bytes.Buffer
 	newIndent := indent + APIIndentation
 
-	for key, entry := range d.entryMap {
+	mapOrder := make([]string, 0, len(d.entryMap))
+	for key := range d.entryMap {
+		mapOrder = append(mapOrder, key)
+	}
+	sort.Strings(mapOrder)
+
+	for _, key := range mapOrder {
+		entry := d.entryMap[key]
+
 		subResult, err := entry.HumanReadable(newIndent)
 		if err != nil {
 			return nil, err
 		}
 
+		result.WriteString(indent)
+		result.WriteString(key)
+
 		if bytes.IndexRune(subResult, '\n') != -1 {
-			result.WriteString(key)
 			result.WriteString(":\n")
 			result.Write(subResult)
 			continue
 		}
 
-		result.WriteString(key)
 		result.WriteString(": ")
 		result.Write(subResult)
+		result.WriteString("\n")
 	}
 
 	return result.Bytes(), nil
@@ -93,6 +104,5 @@ func (d *APIKeyValue) HumanReadable(indent string) ([]byte, error) {
 // Update ensures the data we have is up to date - should be overriden by users
 // if required to keep the contents up to date on each request
 func (d *APIKeyValue) Update() error {
-	log.Debug("DEAD KEY VALUE")
 	return nil
 }
