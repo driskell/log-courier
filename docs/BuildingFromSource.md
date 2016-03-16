@@ -45,12 +45,25 @@ folder, add it by running `export PATH=$PATH:/usr/local/golang/bin` where
 ### Building Log Courier
 
 Run the following commands to download and build the latest version of Log
-Courier.
+Courier. Ensure you run all commands in the same session to maintain the
+`GO15VENDOREXPERIMENT` variable.
 
 ```
 export GO15VENDOREXPERIMENT=1
-go get -d https://github.com/driskell/log-courier
-cd $GOPATH/src/gitub.com/driskell/log-courier
+go get -d github.com/driskell/log-courier
+cd $GOPATH/src/github.com/driskell/log-courier
+go generate ./lc-lib/config ./lc-lib/core
+go install . ./lc-admin ./lc-tlscert
+```
+
+To build a downloaded copy of Log Courier, such as a beta version, use the
+following instructions instead. Ensure you run all commands in the same session
+to maintain the `GO15VENDOREXPERIMENT` variable.
+
+```
+export GO15VENDOREXPERIMENT=1
+mkdir -p $GOPATH/src/github.com/driskell/log-courier
+*Place the contents of the downloaded copy into the above folder*
 go generate ./lc-lib/config ./lc-lib/core
 go install . ./lc-admin ./lc-tlscert
 ```
@@ -91,12 +104,13 @@ to the Golang installation directory.
 ### Building Log Courier
 
 Run the following commands to download and build the latest version of Log
-Courier.
+Courier. Ensure you run all commands in the same session to maintain the
+`GO15VENDOREXPERIMENT` variable.
 
 ```
 set GO15VENDOREXPERIMENT=1
-go get -d https://github.com/driskell/log-courier
-cd %GOPATH%/src/gitub.com/driskell/log-courier
+go get -d github.com/driskell/log-courier
+cd %GOPATH%/src/github.com/driskell/log-courier
 go generate ./lc-lib/config ./lc-lib/core
 go install . ./lc-admin ./lc-tlscert
 ```
