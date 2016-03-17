@@ -87,6 +87,7 @@ type Publisher struct {
 	line_count       int64
 	retry_count      int64
 	seconds_no_ack   int
+	backoff          *core.ExpBackoff
 
 	timeout_count    int64
 	line_speed       float64
@@ -97,8 +98,9 @@ type Publisher struct {
 
 func NewPublisher(pipeline *core.Pipeline, config *core.NetworkConfig, registrar registrar.Registrator) (*Publisher, error) {
 	ret := &Publisher{
-		config: config,
-		input:  make(chan []*core.EventDescriptor, 1),
+		config:  config,
+		input:   make(chan []*core.EventDescriptor, 1),
+		backoff: core.NewExpBackoff(config.Reconnect),
 	}
 
 	if registrar == nil {
@@ -189,11 +191,10 @@ PublishLoop:
 			log.Error("Transport init failed: %s", err)
 
 			now := time.Now()
-			reconnect_due := now.Add(p.config.Reconnect)
+			reconnect_due := now.Add(p.backoff.Trigger())
 
 		ReconnectTimeLoop:
 			for {
-
 				select {
 				case <-time.After(reconnect_due.Sub(now)):
 					break ReconnectTimeLoop
@@ -228,6 +229,8 @@ PublishLoop:
 		p.Lock()
 		p.status = Status_Connected
 		p.Unlock()
+
+		p.backoff.Reset()
 
 		timer.Reset(keepalive_timeout)
 		stats_timer.Reset(time.Second)
@@ -431,7 +434,7 @@ PublishLoop:
 
 			// An error occurred, reconnect after timeout
 			log.Error("Transport error, will try again: %s", err)
-			time.Sleep(p.config.Reconnect)
+			time.Sleep(p.backoff.Trigger())
 		} else {
 			log.Info("Reconnecting transport")
 
