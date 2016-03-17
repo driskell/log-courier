@@ -26,36 +26,34 @@ import (
 
 type apiArrayEntry struct {
 	row   int
-	key   string
 	entry APIEntry
 }
 
 // APIArray represents an array of entries in the API accessible through a
 // primary key
 type APIArray struct {
-	entryMap map[string]apiArrayEntry
-	entries  []apiArrayEntry
+	entryMap map[string]*apiArrayEntry
+	entries  []APIEntry
 }
 
 // AddEntry a new array entry
 func (a *APIArray) AddEntry(key string, entry APIEntry) {
 	if a.entryMap == nil {
-		a.entryMap = make(map[string]apiArrayEntry)
+		a.entryMap = make(map[string]*apiArrayEntry)
 	} else {
 		if _, ok := a.entryMap[key]; ok {
 			panic("Key already exists")
 		}
 	}
 
-	arrayEntry := apiArrayEntry{
+	arrayEntry := &apiArrayEntry{
 		row:   len(a.entries),
-		key:   key,
 		entry: entry,
 	}
 
 	a.entryMap[key] = arrayEntry
 
-	a.entries = append(a.entries, arrayEntry)
+	a.entries = append(a.entries, entry)
 }
 
 // RemoveEntry removes an array entry
@@ -96,7 +94,7 @@ func (a *APIArray) Get(path string) (APIEntry, error) {
 		return nil, nil
 	}
 
-	return a.entries[entryNum].entry, nil
+	return a.entries[entryNum], nil
 }
 
 // Call an API
@@ -133,7 +131,7 @@ func (a *APIArray) HumanReadable(indent string) ([]byte, error) {
 		}
 
 		result.WriteString(indent)
-		result.WriteString(arrayEntry.key)
+		result.WriteString(key)
 
 		if bytes.IndexRune(subResult, '\n') != -1 {
 			result.WriteString(":\n")
@@ -153,8 +151,8 @@ func (a *APIArray) HumanReadable(indent string) ([]byte, error) {
 // if required to keep the contents up to date on each request
 // Default behaviour is to update each of the array entries
 func (a *APIArray) Update() error {
-	for _, arrayEntry := range a.entries {
-		if err := arrayEntry.entry.Update(); err != nil {
+	for _, entry := range a.entries {
+		if err := entry.Update(); err != nil {
 			return err
 		}
 	}

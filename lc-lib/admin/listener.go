@@ -221,6 +221,9 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path[1:], "/")
 	root := APIEntry(&l.config.APINode)
 
+	if len(parts) == 1 && parts[0] == "" {
+		parts = parts[:0]
+	}
 	for _, part := range parts {
 		newRoot, err := root.Get(part)
 		if err != nil {

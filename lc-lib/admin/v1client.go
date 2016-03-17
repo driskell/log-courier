@@ -19,27 +19,27 @@ package admin
 import (
 	"encoding/gob"
 	"fmt"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/driskell/log-courier/lc-lib/core"
 )
 
-type Client struct {
-	admin_connect string
-	conn          net.Conn
-	decoder       *gob.Decoder
+// V1Client is a client compatible with Log Courier 1.x
+type V1Client struct {
+	adminConnect string
+	conn         net.Conn
+	decoder      *gob.Decoder
 }
 
-func NewClient(admin_connect string) (*Client, error) {
+// NewV1Client returns a new admin client compatible with Log Courier 1.x
+func NewV1Client(adminConnect string) (*V1Client, error) {
 	var err error
 
-	ret := &Client{}
+	ret := &V1Client{}
 
-	// TODO: handle the connection in a goroutine that can PING
-	//       on idle, and implement a close member to shut it
-	//       it down. For now we'll rely on the auto-reconnect
-	if ret.conn, err = ret.connect(admin_connect); err != nil {
+	if ret.conn, err = ret.connect(adminConnect); err != nil {
 		return nil, err
 	}
 
@@ -48,8 +48,8 @@ func NewClient(admin_connect string) (*Client, error) {
 	return ret, nil
 }
 
-func (c *Client) connect(admin_connect string) (net.Conn, error) {
-	connect := strings.SplitN(admin_connect, ":", 2)
+func (c *V1Client) connect(adminConnect string) (net.Conn, error) {
+	connect := strings.SplitN(adminConnect, ":", 2)
 	if len(connect) == 1 {
 		connect = append(connect, connect[0])
 		connect[0] = "tcp"
@@ -62,21 +62,21 @@ func (c *Client) connect(admin_connect string) (net.Conn, error) {
 	return nil, fmt.Errorf("Unknown transport specified in connection address: '%s'", connect[0])
 }
 
-func (c *Client) request(command string) (*Response, error) {
+func (c *V1Client) request(command string) (*Response, error) {
 	if err := c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		return nil, err
 	}
 
-	total_written := 0
+	totalWritten := 0
 
 	for {
-		wrote, err := c.conn.Write([]byte(command[total_written:4]))
+		wrote, err := c.conn.Write([]byte(command[totalWritten:4]))
 		if err != nil {
 			return nil, err
 		}
 
-		total_written += wrote
-		if total_written == 4 {
+		totalWritten += wrote
+		if totalWritten == 4 {
 			break
 		}
 	}
@@ -94,7 +94,7 @@ func (c *Client) request(command string) (*Response, error) {
 	return &response, nil
 }
 
-func (c *Client) resolveError(response *Response) error {
+func (c *V1Client) resolveError(response *Response) error {
 	ret, ok := response.Response.(*ErrorResponse)
 	if ok {
 		return ret
@@ -103,7 +103,8 @@ func (c *Client) resolveError(response *Response) error {
 	return &ErrorResponse{Message: fmt.Sprintf("Unrecognised response: %v\n", ret)}
 }
 
-func (c *Client) Ping() error {
+// Ping sends a PING command to test the admin connection
+func (c *V1Client) Ping() error {
 	response, err := c.request("PING")
 	if err != nil {
 		return err
@@ -116,7 +117,8 @@ func (c *Client) Ping() error {
 	return c.resolveError(response)
 }
 
-func (c *Client) Reload() error {
+// Reload requests the connected Log Courier to reload its configuration
+func (c *V1Client) Reload() error {
 	response, err := c.request("RELD")
 	if err != nil {
 		return err
@@ -129,7 +131,8 @@ func (c *Client) Reload() error {
 	return c.resolveError(response)
 }
 
-func (c *Client) FetchSnapshot() (*core.Snapshot, error) {
+// FetchSnapshot requests a status snapshot from Log Courier
+func (c *V1Client) FetchSnapshot() (*core.Snapshot, error) {
 	response, err := c.request("SNAP")
 	if err != nil {
 		return nil, err
