@@ -33,8 +33,8 @@ type Observer interface {
 	OnFinish(*Endpoint) bool
 	// OnFail is called when the endpoint fails
 	OnFail(*Endpoint)
-	// OnRecovered is called when an endpoint recovers from failure
-	OnRecovered(*Endpoint)
+	// OnStarted is called when an endpoint starts up and is ready
+	OnStarted(*Endpoint)
 	// OnAck is called when an acknowledgement response is received
 	// The payload is given and the second argument is true if this ack is the
 	// first ack for this payload
@@ -100,17 +100,14 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 		if shutdown {
 			endpoint.shutdownTransport()
 		}
-	case transports.Recovered:
-		// Allow idle state to also use Recovered, as idle transports always have
-		// zero pending payloads as they've only just been created
-		// This simplifies the transport logic a little
+	case transports.Started:
 		if endpoint.IsFailed() {
 			log.Info("[%s] Endpoint recovered", endpoint.Server())
 			s.recoverFailed(endpoint)
-			observer.OnRecovered(endpoint)
+			observer.OnStarted(endpoint)
 		} else if endpoint.IsIdle() {
-			// Mark as ready
-			s.markReady(endpoint)
+			// Mark as active and ready
+			s.markActiveAndReady(endpoint)
 		} else {
 			break
 		}

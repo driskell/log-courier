@@ -86,5 +86,5 @@ func (e *Endpoint) IsNotFull() bool {
 
 // IsAlive returns true if this endpoint is not failed or closing
 func (e *Endpoint) IsAlive() bool {
-	return e.status < endpointStatusFailed
+	return !e.IsIdle() && e.status < endpointStatusFailed
 }

@@ -22,8 +22,8 @@ import (
 )
 
 type method interface {
-	reloadConfig(*config.Network)
 	onFail(*endpoint.Endpoint)
-	onRecovered(*endpoint.Endpoint)
 	onFinish(*endpoint.Endpoint) bool
+	onStarted(*endpoint.Endpoint)
+	reloadConfig(*config.Network)
 }

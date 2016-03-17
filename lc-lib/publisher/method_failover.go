@@ -87,7 +87,7 @@ func (m *methodFailover) onFinish(endpoint *endpoint.Endpoint) bool {
 	return false
 }
 
-func (m *methodFailover) onRecovered(endpoint *endpoint.Endpoint) {
+func (m *methodFailover) onStarted(endpoint *endpoint.Endpoint) {
 	// Is this the current endpoint? Nothing to do if it is
 	if endpoint == m.currentEndpoint {
 		return

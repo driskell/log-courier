@@ -158,8 +158,23 @@ func (f *Sink) moveFull(endpoint *Endpoint) {
 	f.fullList.PushFront(&endpoint.fullElement)
 }
 
-// markReady marks an endpoint as ready to receive events
-// but it does not move it to the ready list
+// markActiveAndReady marks an idle endpoint as active and automatically moves
+// it to the ready state (but not onto the ready list)
+func (f *Sink) markActiveAndReady(endpoint *Endpoint) {
+	// Ignore if not idle
+	if !endpoint.IsIdle() {
+		return
+	}
+
+	endpoint.mutex.Lock()
+	endpoint.status = endpointStatusActive
+	endpoint.mutex.Unlock()
+
+	f.markReady(endpoint)
+}
+
+// markReady marks an endpoint as ready to receive event but it does not move it
+// to the ready list
 func (f *Sink) markReady(endpoint *Endpoint) {
 	// Ignore if already ready or if we were marked as failed/closing
 	if endpoint.isReady || !endpoint.IsAlive() {
@@ -168,12 +183,6 @@ func (f *Sink) markReady(endpoint *Endpoint) {
 
 	if endpoint.IsFull() {
 		f.fullList.Remove(&endpoint.fullElement)
-	}
-
-	if !endpoint.IsActive() {
-		endpoint.mutex.Lock()
-		endpoint.status = endpointStatusActive
-		endpoint.mutex.Unlock()
 	}
 
 	endpoint.isReady = true

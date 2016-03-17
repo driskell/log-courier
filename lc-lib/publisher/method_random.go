@@ -25,6 +25,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
 )
 
@@ -33,6 +34,7 @@ type methodRandom struct {
 	config       *config.Network
 	activeServer int
 	generator    *rand.Rand
+	backoff      *core.ExpBackoff
 
 	endpoint.Timeout
 }
@@ -43,6 +45,7 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 		config:       config,
 		activeServer: -1,
 		generator:    rand.New(rand.NewSource(int64(time.Now().Nanosecond()))),
+		backoff:      core.NewExpBackoff(config.Reconnect),
 	}
 
 	ret.InitTimeout()
@@ -131,7 +134,7 @@ func (m *methodRandom) onFinish(endpoint *endpoint.Endpoint) bool {
 	// call connectRandom after the backoff
 	m.sink.RegisterTimeout(
 		&m.Timeout,
-		m.config.Reconnect,
+		m.backoff.Trigger(),
 		func() {
 			m.connectRandom()
 		},
@@ -139,8 +142,9 @@ func (m *methodRandom) onFinish(endpoint *endpoint.Endpoint) bool {
 	return false
 }
 
-func (m *methodRandom) onRecovered(endpoint *endpoint.Endpoint) {
-	// Only relevant when we have a single server, and we just ignore it
+func (m *methodRandom) onStarted(endpoint *endpoint.Endpoint) {
+	// Reset backoff timer
+	m.backoff.Reset()
 	return
 }
 

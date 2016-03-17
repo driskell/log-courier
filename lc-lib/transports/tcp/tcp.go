@@ -50,6 +50,7 @@ type TransportTCP struct {
 	socket       net.Conn
 	tlsSocket    *tls.Conn
 	tlsConfig    tls.Config
+	backoff      *core.ExpBackoff
 
 	controllerChan chan int
 	observer       transports.Observer
@@ -104,6 +105,8 @@ func (t *TransportTCP) controller() {
 		}
 		if err == nil {
 			// Connected - sit and wait for shutdown or error
+			t.backoff.Reset()
+
 			select {
 			// TODO: Handle configuration reload
 			case <-t.controllerChan:
@@ -151,23 +154,16 @@ func (t *TransportTCP) controller() {
 // It also monitors for shutdown and configuration reload events while waiting.
 func (t *TransportTCP) reconnectWait() bool {
 	now := time.Now()
-	reconnectDue := now.Add(t.config.netConfig.Reconnect)
+	reconnectDue := now.Add(t.backoff.Trigger())
 
 ReconnectWaitLoop:
-	for {
-		select {
-		// TODO: Handle configuration reload
-		case <-t.controllerChan:
-			// Shutdown request
-			return false
-		case <-time.After(reconnectDue.Sub(now)):
-			break ReconnectWaitLoop
-		}
-
-		now = time.Now()
-		if now.After(reconnectDue) {
-			break
-		}
+	select {
+	// TODO: Handle configuration reload
+	case <-t.controllerChan:
+		// Shutdown request
+		return false
+	case <-time.After(reconnectDue.Sub(now)):
+		break ReconnectWaitLoop
 	}
 
 	return true
@@ -239,8 +235,8 @@ func (t *TransportTCP) connect() (bool, error) {
 	//       on the shutdown channel, which will close on the first error returned
 	t.failChan = make(chan error, 2)
 
-	// Send a recovery signal - this implicitly means we're also ready
-	if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Recovered)) {
+	// Send a started signal - this implicitly means we're also ready
+	if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Started)) {
 		return true, nil
 	}
 

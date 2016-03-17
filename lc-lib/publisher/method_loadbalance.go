@@ -51,7 +51,7 @@ func (m *methodLoadbalance) onFinish(endpoint *endpoint.Endpoint) bool {
 	return true
 }
 
-func (m *methodLoadbalance) onRecovered(endpoint *endpoint.Endpoint) {
+func (m *methodLoadbalance) onStarted(endpoint *endpoint.Endpoint) {
 	// All endpoints are maintained
 	return
 }

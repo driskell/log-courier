@@ -28,8 +28,8 @@ type StatusChange int
 
 // Transport status change signals
 const (
-	Ready StatusChange = iota
-	Recovered
+	Started StatusChange = iota
+	Ready
 	Failed
 	Finished
 )

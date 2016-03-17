@@ -329,10 +329,11 @@ func (p *Publisher) OnFail(endpoint *endpoint.Endpoint) {
 	p.method.onFail(endpoint)
 }
 
-// OnRecovered handles an endpoint that has recovered from failure
-func (p *Publisher) OnRecovered(endpoint *endpoint.Endpoint) {
+// OnStarted handles an endpoint that has moved from idle to now active and
+// ready
+func (p *Publisher) OnStarted(endpoint *endpoint.Endpoint) {
 	// Decisions in response to this are purely for the method
-	p.method.onRecovered(endpoint)
+	p.method.onStarted(endpoint)
 }
 
 // OnAck handles acknowledgements from endpoints
