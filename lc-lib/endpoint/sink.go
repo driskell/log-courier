@@ -243,7 +243,7 @@ func (f *Sink) ForceFailure(endpoint *Endpoint) {
 // recoverFailed removes an endpoint from the failed list and marks it ready
 func (f *Sink) recoverFailed(endpoint *Endpoint) {
 	// Ignore if we haven't failed
-	if !endpoint.IsAlive() {
+	if !endpoint.IsFailed() {
 		return
 	}
 
