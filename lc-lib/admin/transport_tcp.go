@@ -27,18 +27,33 @@ func init() {
 	registerTransport("tcp6", connectTCP, listenTCP)
 }
 
-func connectTCP(transport, addr string) (net.Conn, error) {
+type tcpDialer struct {
+	transport string
+	taddr     *net.TCPAddr
+	addr      string
+}
+
+func (d *tcpDialer) Dial(network string, addr string) (net.Conn, error) {
+	return net.DialTCP(d.transport, nil, d.taddr)
+}
+
+func (d *tcpDialer) Host() string {
+	return d.addr
+}
+
+func connectTCP(transport, addr string) (netDialer, error) {
 	taddr, err := net.ResolveTCPAddr(transport, addr)
 	if err != nil {
 		return nil, fmt.Errorf("The connection address specified is not valid: %s", err)
 	}
 
-	conn, err := net.DialTCP(transport, nil, taddr)
-	if err != nil {
-		return nil, err
+	dialer := &tcpDialer{
+		transport: transport,
+		taddr:     taddr,
+		addr:      addr,
 	}
 
-	return conn, nil
+	return dialer, nil
 }
 
 func listenTCP(transport, addr string) (netListener, error) {

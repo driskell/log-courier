@@ -17,11 +17,7 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"os"
-	"os/signal"
 	"strings"
 	"text/scanner"
 	"time"
@@ -30,8 +26,8 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
-type lcAdmin struct {
-	client       *admin.Client
+type v1LcAdmin struct {
+	client       *admin.V1Client
 	connected    bool
 	quiet        bool
 	adminConnect string
@@ -39,14 +35,27 @@ type lcAdmin struct {
 	scannerErr   error
 }
 
-func newLcAdmin(quiet bool, adminConnect string) *lcAdmin {
-	return &lcAdmin{
+func newV1LcAdmin(quiet bool, adminConnect string) (*v1LcAdmin, error) {
+	ret := &v1LcAdmin{
 		quiet:        quiet,
 		adminConnect: adminConnect,
 	}
+
+	if err := ret.connect(); err != nil {
+		return nil, err
+	}
+
+	return ret, nil
 }
 
-func (a *lcAdmin) connect() error {
+func (a *v1LcAdmin) printHelp() {
+	fmt.Printf("Available commands:\n")
+	fmt.Printf("  reload    Reload configuration\n")
+	fmt.Printf("  status    Display the current shipping status\n")
+	fmt.Printf("  exit      Exit\n")
+}
+
+func (a *v1LcAdmin) connect() error {
 	if !a.connected {
 		var err error
 
@@ -54,8 +63,7 @@ func (a *lcAdmin) connect() error {
 			fmt.Printf("Attempting connection to %s...\n", a.adminConnect)
 		}
 
-		if a.client, err = admin.NewClient(a.adminConnect); err != nil {
-			fmt.Printf("Failed to connect: %s\n", err)
+		if a.client, err = admin.NewV1Client(a.adminConnect); err != nil {
 			return err
 		}
 
@@ -69,7 +77,7 @@ func (a *lcAdmin) connect() error {
 	return nil
 }
 
-func (a *lcAdmin) processCommand(command string) bool {
+func (a *v1LcAdmin) ProcessCommand(command string) bool {
 	var reconnected bool
 
 	for {
@@ -126,7 +134,7 @@ func (a *lcAdmin) processCommand(command string) bool {
 				break
 			}
 
-			printHelp()
+			a.printHelp()
 		default:
 			err = &commandError{fmt.Sprintf("Unknown command: %s", command)}
 		}
@@ -155,7 +163,7 @@ func (a *lcAdmin) processCommand(command string) bool {
 	return false
 }
 
-func (a *lcAdmin) initScanner(command string) {
+func (a *v1LcAdmin) initScanner(command string) {
 	a.scanner.Init(strings.NewReader(command))
 	a.scanner.Mode = scanner.ScanIdents | scanner.ScanInts | scanner.ScanStrings
 	a.scanner.Whitespace = 1 << ' '
@@ -165,7 +173,7 @@ func (a *lcAdmin) initScanner(command string) {
 	}
 }
 
-func (a *lcAdmin) scanIdent() (string, error) {
+func (a *v1LcAdmin) scanIdent() (string, error) {
 	r := a.scanner.Scan()
 	if a.scannerErr != nil {
 		return "", a.scannerErr
@@ -179,7 +187,7 @@ func (a *lcAdmin) scanIdent() (string, error) {
 	return "", &commandError{"Invalid token"}
 }
 
-func (a *lcAdmin) scanEOF() bool {
+func (a *v1LcAdmin) scanEOF() bool {
 	r := a.scanner.Scan()
 	if a.scannerErr == nil && r == scanner.EOF {
 		return true
@@ -187,7 +195,7 @@ func (a *lcAdmin) scanEOF() bool {
 	return false
 }
 
-func (a *lcAdmin) renderSnap(format string, snap *core.Snapshot) {
+func (a *v1LcAdmin) renderSnap(format string, snap *core.Snapshot) {
 	switch format {
 	case "json":
 		fmt.Printf("{\n")
@@ -198,7 +206,7 @@ func (a *lcAdmin) renderSnap(format string, snap *core.Snapshot) {
 	}
 }
 
-func (a *lcAdmin) renderSnapJSON(indent string, snap *core.Snapshot) {
+func (a *v1LcAdmin) renderSnapJSON(indent string, snap *core.Snapshot) {
 	if snap.NumEntries() != 0 {
 		for i, j := 0, snap.NumEntries(); i < j; i = i + 1 {
 			k, v := snap.Entry(i)
@@ -237,7 +245,7 @@ func (a *lcAdmin) renderSnapJSON(indent string, snap *core.Snapshot) {
 	}
 }
 
-func (a *lcAdmin) renderSnapYAML(indent string, snap *core.Snapshot) {
+func (a *v1LcAdmin) renderSnapYAML(indent string, snap *core.Snapshot) {
 	if snap.NumEntries() != 0 {
 		for i, j := 0, snap.NumEntries(); i < j; i = i + 1 {
 			k, v := snap.Entry(i)
@@ -264,81 +272,4 @@ func (a *lcAdmin) renderSnapYAML(indent string, snap *core.Snapshot) {
 			a.renderSnapYAML(indent+"  ", subSnap)
 		}
 	}
-}
-
-func (a *lcAdmin) run() {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
-	commandChan := make(chan string)
-	go func() {
-		var discard bool
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			line, prefix, err := reader.ReadLine()
-			if err != nil {
-				if err == io.EOF {
-					fmt.Printf("exit\n")
-				} else {
-					fmt.Printf("\nError: %s\n", err)
-				}
-				commandChan <- "exit"
-			} else if prefix {
-				discard = true
-			} else if discard {
-				fmt.Printf("\nLine too long!\n")
-				discard = false
-			} else {
-				commandChan <- string(line)
-			}
-		}
-	}()
-
-CommandLoop:
-	for {
-		fmt.Printf("> ")
-		select {
-		case command := <-commandChan:
-			if command == "exit" {
-				break CommandLoop
-			}
-			a.processCommand(command)
-		case <-signalChan:
-			fmt.Printf("\n> exit\n")
-			break CommandLoop
-		}
-	}
-}
-
-func (a *lcAdmin) argsCommand(args []string, watch bool) bool {
-	var signalChan chan os.Signal
-
-	if watch {
-		signalChan = make(chan os.Signal, 1)
-		signal.Notify(signalChan, os.Interrupt)
-	}
-
-WatchLoop:
-	for {
-		if !a.processCommand(strings.Join(args, " ")) {
-			if !watch {
-				return false
-			}
-		}
-
-		if !watch {
-			break
-		}
-
-		// Gap between repeats
-		fmt.Printf("\n")
-
-		select {
-		case <-signalChan:
-			break WatchLoop
-		case <-time.After(time.Second):
-		}
-	}
-
-	return true
 }

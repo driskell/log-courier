@@ -28,10 +28,10 @@ import (
 // API entries
 const APIIndentation = "  "
 
-// An API error when the call is not implemented
+// ErrNotImplemented is an API error when the call is not implemented
 var ErrNotImplemented = errors.New("Not Implemented")
 
-// An API error when the requested information was not found
+// ErrNotFound is an API error when the requested information was not found
 var ErrNotFound = errors.New("Not Found")
 
 // APIEncodable is an encodable entry in the API, which can be a navigatable

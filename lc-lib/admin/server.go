@@ -58,11 +58,7 @@ func NewServer(pipeline *core.Pipeline, config *config.Config) (*Server, error) 
 }
 
 func (l *Server) listen(config *Config) (netListener, error) {
-	bind := strings.SplitN(config.Bind, ":", 2)
-	if len(bind) == 1 {
-		bind = append(bind, bind[0])
-		bind[0] = "tcp"
-	}
+	bind := splitAdminConnectString(config.Bind)
 
 	if listener, ok := registeredListeners[bind[0]]; ok {
 		log.Info("[admin] REST admin now listening on %s:%s", bind[0], bind[1])
@@ -159,13 +155,14 @@ ListenerLoop:
 func (l *Server) shutdownServer() <-chan struct{} {
 	// TODO: Make configurable? This is the shutdown timeout
 	l.server.Stop(10 * time.Second)
+	log.Info("[admin] REST administration is shutting down")
 	return l.server.StopChan()
 }
 
 func (l *Server) reloadServer(config *Config) <-chan struct{} {
 	newListener, err := l.listen(config)
 	if err != nil {
-		log.Error("The new admin configuration failed to apply: %s", err)
+		log.Errorf("The new admin configuration failed to apply: %s", err)
 		return nil
 	}
 
@@ -188,7 +185,6 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 		err, ok := panicArg.(error)
 		if !ok {
 			panic(panicArg)
-			return
 		}
 
 		// Don't keep runtime errors or we'll miss stack trace
@@ -215,7 +211,6 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	// Check for leading forward slash
 	if len(r.URL.Path) == 0 || r.URL.Path[0] != '/' {
 		panic(ErrNotFound)
-		return
 	}
 
 	parts := strings.Split(r.URL.Path[1:], "/")
@@ -231,7 +226,6 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		if newRoot == nil {
 			panic(ErrNotFound)
-			return
 		}
 
 		root = newRoot

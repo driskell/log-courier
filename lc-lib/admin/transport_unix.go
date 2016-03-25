@@ -28,7 +28,19 @@ func init() {
 	registerTransport("unix", connectUnix, listenUnix)
 }
 
-func connectUnix(transport, path string) (net.Conn, error) {
+type unixDialer struct {
+	uaddr *net.UnixAddr
+}
+
+func (d *unixDialer) Dial(network string, addr string) (net.Conn, error) {
+	return net.DialUnix("unix", nil, d.uaddr)
+}
+
+func (d *unixDialer) Host() string {
+	return "log-courier"
+}
+
+func connectUnix(transport, path string) (netDialer, error) {
 	uaddr, err := net.ResolveUnixAddr("unix", path)
 	if err != nil {
 		return nil, fmt.Errorf("The connection address specified is not valid: %s", err)
@@ -36,12 +48,11 @@ func connectUnix(transport, path string) (net.Conn, error) {
 
 	// TODO: Change umask to 111 so all can write (need to move to _unix)
 	// Permission will be controlled by folder permissions instead of file
-	conn, err := net.DialUnix("unix", nil, uaddr)
-	if err != nil {
-		return nil, err
+	dialer := &unixDialer{
+		uaddr: uaddr,
 	}
 
-	return conn, nil
+	return dialer, nil
 }
 
 func listenUnix(transport, addr string) (netListener, error) {

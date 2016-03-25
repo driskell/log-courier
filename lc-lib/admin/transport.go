@@ -18,23 +18,38 @@ package admin
 
 import (
 	"net"
+	"strings"
 	"time"
 )
+
+type netDialer interface {
+	Dial(string, string) (net.Conn, error)
+}
 
 type netListener interface {
 	net.Listener
 	SetDeadline(time.Time) error
 }
 
-type connectorFunc func(string, string) (net.Conn, error)
+type dialerFunc func(string, string) (netDialer, error)
 type listenerFunc func(string, string) (netListener, error)
 
 var (
-	registeredConnectors = make(map[string]connectorFunc)
-	registeredListeners  = make(map[string]listenerFunc)
+	registeredDialers   = make(map[string]dialerFunc)
+	registeredListeners = make(map[string]listenerFunc)
 )
 
-func registerTransport(name string, connector connectorFunc, listener listenerFunc) {
-	registeredConnectors[name] = connector
+func registerTransport(name string, dialer dialerFunc, listener listenerFunc) {
+	registeredDialers[name] = dialer
 	registeredListeners[name] = listener
+}
+
+func splitAdminConnectString(adminConnect string) []string {
+	connect := strings.SplitN(adminConnect, ":", 2)
+	if len(connect) == 1 {
+		connect = append(connect, connect[0])
+		connect[0] = "tcp"
+	}
+
+	return connect
 }

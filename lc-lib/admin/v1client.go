@@ -20,7 +20,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/core"
@@ -49,14 +48,15 @@ func NewV1Client(adminConnect string) (*V1Client, error) {
 }
 
 func (c *V1Client) connect(adminConnect string) (net.Conn, error) {
-	connect := strings.SplitN(adminConnect, ":", 2)
-	if len(connect) == 1 {
-		connect = append(connect, connect[0])
-		connect[0] = "tcp"
-	}
+	connect := splitAdminConnectString(adminConnect)
 
-	if connector, ok := registeredConnectors[connect[0]]; ok {
-		return connector(connect[0], connect[1])
+	if dialer, ok := registeredDialers[connect[0]]; ok {
+		dialerStruct, err := dialer(connect[0], connect[1])
+		if err != nil {
+			return nil, err
+		}
+
+		return dialerStruct.Dial(connect[0], connect[1])
 	}
 
 	return nil, fmt.Errorf("Unknown transport specified in connection address: '%s'", connect[0])

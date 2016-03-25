@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 const (
@@ -42,6 +43,8 @@ func (c *Config) Validate() (err error) {
 		err = fmt.Errorf("/admin/listen address must be specified if /admin/enabled is true")
 		return
 	}
+
+	c.APINode.SetEntry("version", NewAPIDataEntry(APIString(core.LogCourierVersion)))
 
 	return
 }
