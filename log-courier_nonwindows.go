@@ -30,7 +30,7 @@ import (
 
 // registerSignals registers platform specific shutdown signals with the shutdown
 // channel and reload signals with the reload channel
-func (lc *LogCourier) registerSignals() {
+func (lc *logCourier) registerSignals() {
 	// *nix systems support SIGTERM so handle shutdown on that too
 	signal.Notify(lc.shutdownChan, os.Interrupt, syscall.SIGTERM)
 
@@ -40,7 +40,7 @@ func (lc *LogCourier) registerSignals() {
 
 // configureLoggingPlatform enables platform specific logging backends in the
 // logging configuration
-func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
+func (lc *logCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
 	// Make it color if it's a TTY
 	// TODO: This could be prone to problems when updating logging in future
 	if lc.isatty(os.Stdout) && lc.config.General.LogStdout {
@@ -61,7 +61,7 @@ func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) erro
 
 // isatty is used to detect a console terminal so that coloured logging can be
 // enabled
-func (lc *LogCourier) isatty(f *os.File) bool {
+func (lc *logCourier) isatty(f *os.File) bool {
 	var pgrp int64
 	// NOTE(Driskell): Most real isatty implementations use TIOCGETA
 	// However, TIOCGPRGP is easier than TIOCGETA as it only requires an int and not a termios struct

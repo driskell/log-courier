@@ -43,12 +43,11 @@ import _ "github.com/driskell/log-courier/lc-lib/codecs"
 import _ "github.com/driskell/log-courier/lc-lib/transports/tcp"
 
 func main() {
-	logcourier := NewLogCourier()
-	logcourier.Run()
+	newLogCourier().Run()
 }
 
-// LogCourier is the root structure for the log-courier binary
-type LogCourier struct {
+// logCourier is the root structure for the log-courier binary
+type logCourier struct {
 	pipeline      *core.Pipeline
 	config        *config.Config
 	shutdownChan  chan os.Signal
@@ -62,16 +61,16 @@ type LogCourier struct {
 	snapshot      *core.Snapshot
 }
 
-// NewLogCourier creates a new LogCourier structure for the log-courier binary
-func NewLogCourier() *LogCourier {
-	ret := &LogCourier{
+// newLogCourier creates a new LogCourier structure for the log-courier binary
+func newLogCourier() *logCourier {
+	ret := &logCourier{
 		pipeline: core.NewPipeline(),
 	}
 	return ret
 }
 
 // Run starts the log-courier binary
-func (lc *LogCourier) Run() {
+func (lc *logCourier) Run() {
 	var harvesterWait <-chan *harvester.FinishStatus
 	var registrarImp registrar.Registrator
 
@@ -154,7 +153,7 @@ SignalLoop:
 }
 
 // startUp processes the command line arguments and sets up logging
-func (lc *LogCourier) startUp() {
+func (lc *logCourier) startUp() {
 	var version bool
 	var configTest bool
 	var listSupported bool
@@ -234,7 +233,7 @@ func (lc *LogCourier) startUp() {
 }
 
 // configureLogging enables the available logging backends
-func (lc *LogCourier) configureLogging() (err error) {
+func (lc *logCourier) configureLogging() (err error) {
 	backends := make([]logging.Backend, 0, 1)
 
 	// First, the stdout backend
@@ -266,7 +265,7 @@ func (lc *LogCourier) configureLogging() (err error) {
 }
 
 // loadConfig loads the configuration data
-func (lc *LogCourier) loadConfig() error {
+func (lc *logCourier) loadConfig() error {
 	lc.config = config.NewConfig()
 	if err := lc.config.Load(lc.configFile, true); err != nil {
 		return err
@@ -284,7 +283,7 @@ func (lc *LogCourier) loadConfig() error {
 // reloadConfig reloads the configuration data and submits to all running
 // routines in the pipeline that are subscribed to it, so they may update their
 // runtime configuration
-func (lc *LogCourier) reloadConfig() error {
+func (lc *logCourier) reloadConfig() error {
 	if err := lc.loadConfig(); err != nil {
 		return err
 	}
@@ -309,7 +308,7 @@ func (lc *LogCourier) reloadConfig() error {
 // processCommand is called from the admin routine in response to commands from
 // a connected lc-admin compatible utility
 // TODO: Replace with a REST API
-func (lc *LogCourier) processCommand(command string) *admin.Response {
+func (lc *logCourier) processCommand(command string) *admin.Response {
 	switch command {
 	case "RELD":
 		if err := lc.reloadConfig(); err != nil {
@@ -329,7 +328,7 @@ func (lc *LogCourier) processCommand(command string) *admin.Response {
 }
 
 // cleanShutdown initiates a clean shutdown of log-courier
-func (lc *LogCourier) cleanShutdown() {
+func (lc *logCourier) cleanShutdown() {
 	log.Notice("Initiating shutdown")
 
 	if lc.harvester != nil {

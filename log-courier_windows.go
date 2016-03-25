@@ -27,7 +27,7 @@ import (
 
 // registerSignals registers platform specific shutdown signals with the shutdown
 // channel and reload signals with the reload channel
-func (lc *LogCourier) registerSignals() {
+func (lc *logCourier) registerSignals() {
 	// Windows only supports os.Interrupt
 	signal.Notify(lc.shutdownChan, os.Interrupt)
 
@@ -36,6 +36,6 @@ func (lc *LogCourier) registerSignals() {
 
 // configureLoggingPlatform enables platform specific logging backends in the
 // logging configuration
-func (lc *LogCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
+func (lc *logCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
 	return nil
 }
