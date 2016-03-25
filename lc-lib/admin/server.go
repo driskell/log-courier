@@ -155,7 +155,7 @@ ListenerLoop:
 func (l *Server) shutdownServer() <-chan struct{} {
 	// TODO: Make configurable? This is the shutdown timeout
 	l.server.Stop(10 * time.Second)
-	log.Info("[admin] REST administration is shutting down")
+	log.Info("[admin] REST administration exiting")
 	return l.server.StopChan()
 }
 
