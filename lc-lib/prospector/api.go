@@ -48,6 +48,14 @@ type apiFiles struct {
 	p *Prospector
 }
 
+func (a *apiFiles) Get(path string) (admin.APIEntry, error) {
+	if err := a.Update(); err != nil {
+		return nil, err
+	}
+
+	return a.APIArray.Get(path)
+}
+
 func (a *apiFiles) Update() error {
 	// Update the values and pass through to node
 	a.p.mutex.RLock()
