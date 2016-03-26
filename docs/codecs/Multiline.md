@@ -14,6 +14,7 @@ option.
 - [Options](#options)
   - [`"max multiline bytes"`](#max-multiline-bytes)
   - [`"patterns"`](#patterns)
+  - [`"match"`](#match)
   - [`"previous timeout"`](#previous-timeout)
   - [`"what"`](#what)
 
@@ -43,9 +44,12 @@ This setting can not be greater than the `spool max bytes` setting.
 
 *Array of Strings. Required*
 
-A list of regular expressions to match against each line. Each pattern is tried
-one by one until a match occurs, or all patterns have been exhausted. At least
-one pattern must be provided.
+A list of regular expressions to match against each line.
+
+These are applied in the order that they are specified. As soon as the required
+number of matches occurred (dictated by the `match` configuration that defaults
+to `any`), the pattern is considered matched, and the action specified by `what`
+takes place.
 
 The pattern syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
 
@@ -58,6 +62,14 @@ The pattern can also be prefixed with "=" to explicitly state that a pattern is
 not negated, which then allows a literal match of an exclamation mark at the
 start of the pattern. For example, "=!EVENT!" would match a line containing,
 "!EVENT!".
+
+### `"match"`
+
+*String. Optional. Default: "any"*  
+*Available values: "any", "all"*
+
+Specifies whether matching a single pattern must be matched or if all patterns
+must be matched.
 
 ### `"previous timeout"`
 

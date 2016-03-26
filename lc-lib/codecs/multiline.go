@@ -17,9 +17,7 @@
 package codecs
 
 import (
-	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -33,22 +31,15 @@ const (
 	codecMultilineWhatNext     = 0x00000002
 )
 
-// codecMultilinePatternInstance holds the regular expression matcher for a
-// single pattern in the configuration file, along with any pattern specific
-// configurations
-type codecMultilinePatternInstance struct {
-	matcher *regexp.Regexp
-	negate  bool
-}
-
 // CodecMultilineFactory holds the configuration for a multiline codec
 type CodecMultilineFactory struct {
 	Patterns          []string      `config:"patterns"`
+	Match             string        `config:"match"`
 	What              string        `config:"what"`
 	PreviousTimeout   time.Duration `config:"previous timeout"`
 	MaxMultilineBytes int64         `config:"max multiline bytes"`
 
-	patterns []*codecMultilinePatternInstance
+	patterns PatternCollection
 	what     int
 }
 
@@ -84,34 +75,16 @@ func NewMultilineCodecFactory(config *config.Config, configPath string, unused m
 		return nil, err
 	}
 
-	if len(result.Patterns) == 0 {
-		return nil, errors.New("At least one multiline codec pattern must be specified.")
-	}
-
-	result.patterns = make([]*codecMultilinePatternInstance, len(result.Patterns))
-	for k, pattern := range result.Patterns {
-		patternInstance := &codecMultilinePatternInstance{}
-
-		switch pattern[0] {
-		case '!':
-			patternInstance.negate = true
-			pattern = pattern[1:]
-		case '=':
-			pattern = pattern[1:]
-		}
-
-		patternInstance.matcher, err = regexp.Compile(pattern)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to compile multiline codec pattern, '%s'.", err)
-		}
-
-		result.patterns[k] = patternInstance
+	if err = result.patterns.Set(result.Patterns, result.Match); err != nil {
+		return nil, err
 	}
 
 	if result.What == "" || result.What == "previous" {
 		result.what = codecMultilineWhatPrevious
 	} else if result.What == "next" {
 		result.what = codecMultilineWhatNext
+	} else {
+		return nil, fmt.Errorf("Unknown \"what\" value for multiline codec, '%s'.", result.What)
 	}
 
 	if result.MaxMultilineBytes == 0 {
@@ -180,19 +153,14 @@ func (c *CodecMultiline) Event(startOffset int64, endOffset int64, text string) 
 	// odd incomplete data. It would be a signal from the user, "I will worry about the buffering
 	// issues my programs may have - you just make sure to write each event either completely or
 	// partially, always with the FIRST line correct (which could be the important one)."
-	var matchFailed bool
-	for _, pattern := range c.config.patterns {
-		if matchFailed = pattern.negate == pattern.matcher.MatchString(text); !matchFailed {
-			break
-		}
-	}
+	matched := c.config.patterns.Match(text)
 
 	if c.config.what == codecMultilineWhatPrevious {
 		if c.config.PreviousTimeout != 0 {
 			// Prevent a flush happening while we're modifying the stored data
 			c.timerLock.Lock()
 		}
-		if matchFailed {
+		if !matched {
 			c.flush()
 		}
 	}
@@ -239,7 +207,7 @@ func (c *CodecMultiline) Event(startOffset int64, endOffset int64, text string) 
 			c.timerDeadline = time.Now().Add(c.config.PreviousTimeout)
 			c.timerLock.Unlock()
 		}
-	} else if c.config.what == codecMultilineWhatNext && matchFailed {
+	} else if c.config.what == codecMultilineWhatNext && !matched {
 		c.flush()
 	}
 }

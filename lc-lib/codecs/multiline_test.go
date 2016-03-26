@@ -36,7 +36,7 @@ type checkMultiline struct {
 	lines int
 }
 
-func (c *checkMultiline) formatPrintable(text string) []rune {
+func (c *checkMultiline) formatPrintable(text string) string {
 	runes := []rune(text)
 	for i, char := range runes {
 		if unicode.IsPrint(char) {
@@ -45,7 +45,7 @@ func (c *checkMultiline) formatPrintable(text string) []rune {
 			runes[i] = '.'
 		}
 	}
-	return runes
+	return string(runes)
 }
 
 func (c *checkMultiline) incorrectLineCount(lines int, message string) {
@@ -110,36 +110,6 @@ func TestMultilinePrevious(t *testing.T) {
 	codec := createMultilineCodec(
 		map[string]interface{}{
 			"patterns": []string{"^(ANOTHER|NEXT) "},
-			"what":     "previous",
-		},
-		check.EventCallback,
-		t,
-	)
-
-	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
-
-	check.CheckFinalCount()
-
-	if offset := codec.Teardown(); offset != 5 {
-		t.Error("Teardown returned incorrect offset: ", offset)
-	}
-}
-
-func TestMultilinePreviousNoNegate(t *testing.T) {
-	check := &checkMultiline{
-		expect: []checkMultilineExpect{
-			{0, 5, "DEBUG First line\nNEXT line\nANOTHER line"},
-		},
-		t: t,
-	}
-
-	codec := createMultilineCodec(
-		map[string]interface{}{
-			"patterns": []string{"=^(ANOTHER|NEXT) "},
 			"what":     "previous",
 		},
 		check.EventCallback,
@@ -404,7 +374,38 @@ func TestMultilineMultiplePattern(t *testing.T) {
 
 	codec := createMultilineCodec(
 		map[string]interface{}{
-			"patterns": []string{"^ANOTHER ", "^NEXT "},
+			"patterns": []string{"=^ANOTHER ", "^NEXT "},
+			"what":     "previous",
+		},
+		check.EventCallback,
+		t,
+	)
+
+	// Send some data
+	codec.Event(0, 1, "DEBUG First line")
+	codec.Event(2, 3, "NEXT line")
+	codec.Event(4, 5, "ANOTHER line")
+	codec.Event(6, 7, "DEBUG Next line")
+
+	check.CheckFinalCount()
+
+	if offset := codec.Teardown(); offset != 5 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
+func TestMultilineMultiplePatternAll(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 5, "DEBUG First line\nNEXT line\nANOTHER line"},
+		},
+		t: t,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"patterns": []string{"!^DEBUG Next ", "!^DEBUG First "},
+			"match":    "all",
 			"what":     "previous",
 		},
 		check.EventCallback,

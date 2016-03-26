@@ -9,6 +9,7 @@ The filter codec strips out unwanted events, shipping only those desired.
 - [Example](#example)
 - [Options](#options)
   - [`"patterns"`](#patterns)
+  - [`"match"`](#match)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -27,10 +28,10 @@ The filter codec strips out unwanted events, shipping only those desired.
 
 A set of regular expressions to match against each line.
 
-These are applied in the order that they are specified. As soon as a matching
-pattern is found the event is shipped and the remaining patterns are skipped
-until the next event. As such, patterns with higher hit rates should be
-specified first.
+These are applied in the order that they are specified. As soon as the required
+number of matches occurred (dictated by the `match` configuration that defaults
+to `any`), the event is shipped. Patterns with higher hit rates should be
+specified first when `match` is `any`.
 
 The pattern syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
 
@@ -43,3 +44,11 @@ The pattern can also be prefixed with "=" to explicitly state that a pattern is
 not negated, which then allows a literal match of an exclamation mark at the
 start of the pattern. For example, "=!useful!" would match a line containing,
 "!useful!".
+
+### `"match"`
+
+*String. Optional. Default: "any"*  
+*Available values: "any", "all"*
+
+Specifies whether matching a single pattern will ship an event, or if all
+patterns must match before shipping occurs.

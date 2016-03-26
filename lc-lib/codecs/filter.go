@@ -18,26 +18,18 @@ package codecs
 
 import (
 	"errors"
-	"fmt"
-	"regexp"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
-// codecFilterPatternInstance holds the regular expression matcher for a
-// single pattern in the configuration file, along with any pattern specific
-// configurations
-type codecFilterPatternInstance struct {
-	matcher *regexp.Regexp
-	negate  bool
-}
-
 // CodecFilterFactory holds the configuration for a filter codec
 type CodecFilterFactory struct {
 	Patterns []string `config:"patterns"`
+	Match    string   `config:"match"`
 
-	patterns []*codecFilterPatternInstance
+	patterns        PatternCollection
+	requiredMatches int
 }
 
 // CodecFilter is an instance of a filter codec that is used by the Harvester
@@ -65,24 +57,8 @@ func NewFilterCodecFactory(config *config.Config, configPath string, unused map[
 		return nil, errors.New("Filter codec pattern must be specified.")
 	}
 
-	result.patterns = make([]*codecFilterPatternInstance, len(result.Patterns))
-	for k, pattern := range result.Patterns {
-		patternInstance := &codecFilterPatternInstance{}
-
-		switch pattern[0] {
-		case '!':
-			patternInstance.negate = true
-			pattern = pattern[1:]
-		case '=':
-			pattern = pattern[1:]
-		}
-
-		patternInstance.matcher, err = regexp.Compile(pattern)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to compile filter codec pattern, '%s'.", err)
-		}
-
-		result.patterns[k] = patternInstance
+	if err = result.patterns.Set(result.Patterns, result.Match); err != nil {
+		return nil, err
 	}
 
 	return result, nil
@@ -111,15 +87,10 @@ func (c *CodecFilter) Reset() {
 // Event is called by a Harvester when a new line event occurs on a file.
 // Filtering takes place and only accepted lines are shipped to the callback
 func (c *CodecFilter) Event(startOffset int64, endOffset int64, text string) {
-	// Only flush the event if it matches a filter
-	var matchFailed bool
-	for _, pattern := range c.config.patterns {
-		if matchFailed = pattern.negate == pattern.matcher.MatchString(text); !matchFailed {
-			break
-		}
-	}
+	// Only flush the event if it matches
+	matched := c.config.patterns.Match(text)
 
-	if !matchFailed {
+	if matched {
 		c.callbackFunc(startOffset, endOffset, text)
 	} else {
 		c.filteredLines++
