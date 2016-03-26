@@ -305,28 +305,6 @@ func (lc *logCourier) reloadConfig() error {
 	return nil
 }
 
-// processCommand is called from the admin routine in response to commands from
-// a connected lc-admin compatible utility
-// TODO: Replace with a REST API
-func (lc *logCourier) processCommand(command string) *admin.Response {
-	switch command {
-	case "RELD":
-		if err := lc.reloadConfig(); err != nil {
-			return &admin.Response{&admin.ErrorResponse{Message: fmt.Sprintf("Configuration error, reload unsuccessful: %s", err.Error())}}
-		}
-		return &admin.Response{&admin.ReloadResponse{}}
-	case "SNAP":
-		if lc.snapshot == nil || time.Since(lc.lastSnapshot) >= time.Second {
-			lc.snapshot = lc.pipeline.Snapshot()
-			lc.snapshot.Sort()
-			lc.lastSnapshot = time.Now()
-		}
-		return &admin.Response{lc.snapshot}
-	}
-
-	return &admin.Response{&admin.ErrorResponse{Message: "Unknown command"}}
-}
-
 // cleanShutdown initiates a clean shutdown of log-courier
 func (lc *logCourier) cleanShutdown() {
 	log.Notice("Initiating shutdown")

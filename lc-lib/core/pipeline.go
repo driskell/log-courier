@@ -23,21 +23,17 @@ import (
 )
 
 type Pipeline struct {
-	pipes          []IPipelineSegment
-	signal         chan interface{}
-	group          sync.WaitGroup
-	config_sinks   map[*PipelineConfigReceiver]chan *config.Config
-	snapshot_chan  chan []*Snapshot
-	snapshot_pipes map[IPipelineSnapshotProvider]IPipelineSnapshotProvider
+	pipes        []IPipelineSegment
+	signal       chan interface{}
+	group        sync.WaitGroup
+	config_sinks map[*PipelineConfigReceiver]chan *config.Config
 }
 
 func NewPipeline() *Pipeline {
 	return &Pipeline{
-		pipes:          make([]IPipelineSegment, 0, 5),
-		signal:         make(chan interface{}),
-		config_sinks:   make(map[*PipelineConfigReceiver]chan *config.Config),
-		snapshot_chan:  make(chan []*Snapshot),
-		snapshot_pipes: make(map[IPipelineSnapshotProvider]IPipelineSnapshotProvider),
+		pipes:        make([]IPipelineSegment, 0, 5),
+		signal:       make(chan interface{}),
+		config_sinks: make(map[*PipelineConfigReceiver]chan *config.Config),
 	}
 }
 
@@ -55,10 +51,6 @@ func (p *Pipeline) Register(ipipe IPipelineSegment) {
 		sink := make(chan *config.Config)
 		p.config_sinks[pipe_ext] = sink
 		pipe_ext.config_chan = sink
-	}
-
-	if ipipe_ext, ok := ipipe.(IPipelineSnapshotProvider); ok {
-		p.snapshot_pipes[ipipe_ext] = ipipe_ext
 	}
 }
 
@@ -80,18 +72,6 @@ func (p *Pipeline) SendConfig(config *config.Config) {
 	for _, sink := range p.config_sinks {
 		sink <- config
 	}
-}
-
-func (p *Pipeline) Snapshot() *Snapshot {
-	snap := NewSnapshot("Log Courier")
-
-	for _, sink := range p.snapshot_pipes {
-		for _, sub := range sink.Snapshot() {
-			snap.AddSub(sub)
-		}
-	}
-
-	return snap
 }
 
 type IPipelineSegment interface {
@@ -134,21 +114,4 @@ func (s *PipelineConfigReceiver) getConfigReceiverStruct() *PipelineConfigReceiv
 
 func (s *PipelineConfigReceiver) OnConfig() <-chan *config.Config {
 	return s.config_chan
-}
-
-type IPipelineSnapshotProvider interface {
-	Snapshot() []*Snapshot
-}
-
-type PipelineSnapshotProvider struct {
-}
-
-func (s *PipelineSnapshotProvider) getSnapshotProviderStruct() *PipelineSnapshotProvider {
-	return s
-}
-
-func (s *PipelineSnapshotProvider) Snapshot() []*Snapshot {
-	ret := NewSnapshot("Unknown")
-	ret.AddEntry("Error", "NotImplemented")
-	return []*Snapshot{ret}
 }
