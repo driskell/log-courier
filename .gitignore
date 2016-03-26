@@ -6,3 +6,4 @@
 /lc-lib/core/version.go
 /node_modules
 /spec/tmp
+/vendor/bundle
