@@ -152,12 +152,18 @@ func (m *methodRandom) reloadConfig(config *config.Network) {
 	currentServer := m.config.Servers[m.activeServer]
 	m.config = config
 
+	front := m.sink.Front()
+	if front == nil {
+		// No endpoints - skip reloading current endpoint
+		return
+	}
+
 	// If the current active endpoint is no longer present, shut it down
 	// onFinish will trigger a new endpoint connection
 	for _, server := range config.Servers {
 		if server == currentServer {
 			// Still present, all good, pass through the reload
-			m.sink.Front().ReloadConfig(config, true)
+			front.ReloadConfig(config, true)
 			return
 		}
 	}
