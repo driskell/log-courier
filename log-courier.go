@@ -85,7 +85,11 @@ func (lc *logCourier) Run() {
 		if lc.config.Get("admin").(*admin.Config).Enabled {
 			var err error
 
-			_, err = admin.NewServer(lc.pipeline, lc.config)
+			// TODO: Reload config and load config should be in core along with
+			// logging implementation
+			_, err = admin.NewServer(lc.pipeline, lc.config, func() error {
+				return lc.reloadConfig()
+			})
 			if err != nil {
 				log.Fatalf("Failed to initialise: %s", err)
 			}

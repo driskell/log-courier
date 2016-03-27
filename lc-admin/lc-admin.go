@@ -177,10 +177,18 @@ func (a *lcAdmin) ProcessCommand(command string) bool {
 
 	resp, err := a.client.Request(path)
 	if err != nil {
-		if clientErr, ok := err.(admin.ClientError); ok {
-			fmt.Printf("Log Courier returned an error: %s\n", clientErr)
+		switch err {
+		case admin.ErrNotFound:
+			fmt.Printf("Unknown command\n")
 			return false
 		}
+
+		switch err.(type) {
+		case admin.ErrUnknown:
+			fmt.Printf("Log Courier returned an error: %s\n", err.(admin.ErrUnknown).Error())
+			return false
+		}
+
 		fmt.Printf("The API request failed: %s\n", err)
 		return false
 	}

@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 const (
@@ -34,7 +33,7 @@ type Config struct {
 	Enabled bool   `config:"enabled"`
 	Bind    string `config:"listen address"`
 
-	APINode
+	apiRoot APINavigatable
 }
 
 // Validate validates the config structure
@@ -44,15 +43,19 @@ func (c *Config) Validate() (err error) {
 		return
 	}
 
-	c.APINode.SetEntry("version", NewAPIDataEntry(APIString(core.LogCourierVersion)))
-
 	return
+}
+
+// SetEntry sets a new root API entry
+func (c *Config) SetEntry(path string, entry APINavigatable) {
+	c.apiRoot.(*apiRoot).SetEntry(path, entry)
 }
 
 func init() {
 	config.RegisterConfigSection("admin", func() config.Section {
 		c := &Config{}
 		c.Enabled = defaultGeneralAdminEnabled
+		// TODO: Implement default bind address which is currently stored in config pkg
 		c.Bind = "" //DefaultGeneralAdminBind
 		return c
 	})

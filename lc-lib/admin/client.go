@@ -23,11 +23,8 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 )
-
-// ClientError represents a successful request where Log Courier returned an
-// error, as opposed to an error processing a request
-type ClientError error
 
 // Client provides an interface for accessing the REST API with pretty responses
 type Client struct {
@@ -89,26 +86,63 @@ func (c *Client) RemoteVersion() string {
 }
 
 // Request performs a request and returns a pretty response
+// It will defer to Call method if the path is a known Call path
 func (c *Client) Request(path string) (string, error) {
+	// Is this a Call request?
+	if _, ok := callMap[path]; ok {
+		return c.Call(path, url.Values{})
+	}
+
 	resp, err := c.client.Get("http://log-courier/" + path + "?w=pretty")
 	if err != nil {
 		return "", err
 	}
 
+	return c.handleResponse(resp)
+}
+
+// Call performs a remote action and returns the result
+func (c *Client) Call(path string, values url.Values) (string, error) {
+	resp, err := c.client.PostForm("http://log-courier/"+path+"?w=pretty", values)
+	if err != nil {
+		return "", err
+	}
+
+	return c.handleResponse(resp)
+}
+
+func (c *Client) handleResponse(resp *http.Response) (string, error) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		data := make(map[string]interface{})
-		if err := json.Unmarshal(body, &data); err != nil {
-			return "", err
-		}
+	// Ensure we close body so we don't leave hanging connections open
+	if err := resp.Body.Close(); err != nil {
+		return "", err
+	}
 
-		if dataErr, ok := data["error"].(string); ok {
-			return "", ClientError(errors.New(dataErr))
-		}
+	if resp.StatusCode != http.StatusOK {
+		return c.handleError(resp, body)
+	}
+
+	return string(body), nil
+}
+
+func (c *Client) handleError(resp *http.Response, body []byte) (string, error) {
+	// Return friendly Not Found as Unknown command
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		return "", ErrNotFound
+	}
+
+	data := make(map[string]interface{})
+	if err := json.Unmarshal(body, &data); err != nil {
+		return "", err
+	}
+
+	if dataErr, ok := data["error"].(string); ok {
+		return "", ErrUnknown(errors.New(dataErr))
 	}
 
 	return string(body), nil

@@ -520,7 +520,7 @@ func (p *Publisher) initAPI() {
 	}
 
 	publisherAPI := &admin.APINode{}
-	publisherAPI.SetEntry("endpoints", p.endpointSink.APIEntry())
+	publisherAPI.SetEntry("endpoints", p.endpointSink.APINavigatable())
 	publisherAPI.SetEntry("status", &apiStatus{p: p})
 
 	p.adminConfig.SetEntry("publisher", publisherAPI)

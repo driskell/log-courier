@@ -40,10 +40,12 @@ type Server struct {
 }
 
 // NewServer creates a new admin listener on the pipeline
-func NewServer(pipeline *core.Pipeline, config *config.Config) (*Server, error) {
+func NewServer(pipeline *core.Pipeline, config *config.Config, reloadFunc func() error) (*Server, error) {
 	ret := &Server{
 		config: config.Get("admin").(*Config),
 	}
+
+	ret.config.apiRoot = newAPIRoot(reloadFunc)
 
 	listener, err := ret.listen(ret.config)
 	if err != nil {
@@ -176,30 +178,7 @@ func (l *Server) reloadServer(config *Config) <-chan struct{} {
 
 func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	defer func() {
-		panicArg := recover()
-		if panicArg == nil {
-			return
-		}
-
-		// Only keep normal errors
-		err, ok := panicArg.(error)
-		if !ok {
-			panic(panicArg)
-		}
-
-		// Don't keep runtime errors or we'll miss stack trace
-		if _, ok := err.(runtime.Error); ok {
-			panic(err)
-		}
-
-		switch err {
-		case ErrNotImplemented:
-			l.errorResponse(w, r, err, http.StatusNotImplemented)
-			return
-		}
-
-		l.errorResponse(w, r, err, http.StatusInternalServerError)
-		log.Info("[admin] Request error: %s", err.Error())
+		l.handlePanic(w, r, recover())
 	}()
 
 	if r.Method != "GET" && r.Method != "POST" && r.Method != "PUT" {
@@ -214,7 +193,7 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parts := strings.Split(r.URL.Path[1:], "/")
-	root := APIEntry(&l.config.APINode)
+	root := l.config.apiRoot
 
 	if len(parts) == 1 && parts[0] == "" {
 		parts = parts[:0]
@@ -233,17 +212,7 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	// Call?
 	if r.Method != "GET" {
-		err := r.ParseForm()
-		if err != nil {
-			panic(err)
-		}
-
-		err = root.Call(r.Form)
-		if err != nil {
-			panic(err)
-		}
-
-		l.accessLog(r, http.StatusOK)
+		l.handleCall(w, r, root)
 		return
 	}
 
@@ -252,6 +221,10 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
+	l.handleRequest(w, r, root)
+}
+
+func (l *Server) handleRequest(w http.ResponseWriter, r *http.Request, root APINavigatable) {
 	var err error
 	var contentType string
 	var response []byte
@@ -273,6 +246,73 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	w.Write(response)
 }
 
+func (l *Server) handleCall(w http.ResponseWriter, r *http.Request, root APINavigatable) {
+	var err error
+
+	err = r.ParseForm()
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := root.Call(r.Form)
+	if err != nil {
+		panic(err)
+	}
+
+	var contentType string
+	var response []byte
+
+	if r.URL.Query().Get("w") == "pretty" {
+		contentType = "text/plain"
+		response = []byte(result)
+	} else {
+		contentType = "application/json"
+		response, err = json.Marshal(struct {
+			Result string `json:"result"`
+		}{
+			Result: result,
+		})
+
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	l.accessLog(r, http.StatusOK)
+	w.Header().Add("Content-Type", contentType)
+	w.Write(response)
+}
+
+func (l *Server) handlePanic(w http.ResponseWriter, r *http.Request, panicArg interface{}) {
+	if panicArg == nil {
+		return
+	}
+
+	// Only keep normal errors
+	err, ok := panicArg.(error)
+	if !ok {
+		panic(panicArg)
+	}
+
+	// Don't keep runtime errors or we'll miss stack trace
+	if _, ok := err.(runtime.Error); ok {
+		panic(err)
+	}
+
+	var code int
+	switch err {
+	case ErrNotFound:
+		code = http.StatusNotFound
+	case ErrNotImplemented:
+		code = http.StatusNotImplemented
+	default:
+		code = http.StatusInternalServerError
+	}
+
+	l.errorResponse(w, r, err, code)
+	log.Info("[admin] Request error: %s", err.Error())
+}
+
 func (l *Server) errorResponse(w http.ResponseWriter, r *http.Request, err error, c int) {
 	structErr := struct {
 		Error string `json:"error"`
@@ -284,6 +324,7 @@ func (l *Server) errorResponse(w http.ResponseWriter, r *http.Request, err error
 	if encodeErr != nil {
 		l.accessLog(r, http.StatusServiceUnavailable)
 		http.Error(w, encodeErr.Error(), http.StatusServiceUnavailable)
+		return
 	}
 
 	l.accessLog(r, c)

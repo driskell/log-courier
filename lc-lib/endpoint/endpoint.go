@@ -297,8 +297,8 @@ func (e *Endpoint) forceFailure() {
 	e.transport.Fail()
 }
 
-// apiEntry returns an APIEntry that can be used to monitor this endpoint
-func (e *Endpoint) apiEntry() admin.APIEntry {
+// apiEntry returns an APINavigatable that can be used to monitor this endpoint
+func (e *Endpoint) apiEntry() admin.APINavigatable {
 	if e.api == nil {
 		e.api = &apiEndpoint{
 			e: e,

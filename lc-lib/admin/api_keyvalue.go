@@ -29,13 +29,13 @@ type APIKeyValue struct {
 }
 
 // Get always returns nil for an APIKeyValue as it is not navigatable
-func (d *APIKeyValue) Get(string) (APIEntry, error) {
+func (d *APIKeyValue) Get(string) (APINavigatable, error) {
 	return nil, nil
 }
 
 // Call an API
-func (d *APIKeyValue) Call(params url.Values) error {
-	return ErrNotImplemented
+func (d *APIKeyValue) Call(params url.Values) (string, error) {
+	return "", ErrNotImplemented
 }
 
 // SetEntry sets a new data entry

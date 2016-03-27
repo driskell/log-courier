@@ -255,10 +255,10 @@ func (f *Sink) recoverFailed(endpoint *Endpoint) {
 	f.markReady(endpoint)
 }
 
-// APIEntry returns an APIEntry that exposes status information for this sink
+// APINavigatable returns an APINavigatable that exposes status information for this sink
 // It should be called BEFORE adding any endpoints as existing endpoints will
 // not automatically become monitored
-func (f *Sink) APIEntry() admin.APIEntry {
+func (f *Sink) APINavigatable() admin.APINavigatable {
 	if f.api == nil {
 		f.api = &admin.APIArray{}
 	}

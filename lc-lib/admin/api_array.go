@@ -26,18 +26,18 @@ import (
 
 type apiArrayEntry struct {
 	row   int
-	entry APIEntry
+	entry APINavigatable
 }
 
 // APIArray represents an array of entries in the API accessible through a
 // primary key
 type APIArray struct {
 	entryMap map[string]*apiArrayEntry
-	entries  []APIEntry
+	entries  []APINavigatable
 }
 
 // AddEntry a new array entry
-func (a *APIArray) AddEntry(key string, entry APIEntry) {
+func (a *APIArray) AddEntry(key string, entry APINavigatable) {
 	if a.entryMap == nil {
 		a.entryMap = make(map[string]*apiArrayEntry)
 	} else {
@@ -75,7 +75,7 @@ func (a *APIArray) RemoveEntry(key string) {
 }
 
 // Get returns an entry using it's primary key name or row number
-func (a *APIArray) Get(path string) (APIEntry, error) {
+func (a *APIArray) Get(path string) (APINavigatable, error) {
 	if a.entryMap == nil {
 		return nil, nil
 	}
@@ -98,8 +98,8 @@ func (a *APIArray) Get(path string) (APIEntry, error) {
 }
 
 // Call an API
-func (a *APIArray) Call(params url.Values) error {
-	return ErrNotImplemented
+func (a *APIArray) Call(params url.Values) (string, error) {
+	return "", ErrNotImplemented
 }
 
 // MarshalJSON returns the APIArray in JSON form
