@@ -457,7 +457,7 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *pros
 // initAPI sets up admin connectivity
 func (p *Prospector) initAPI() {
 	// Is admin loaded into the pipeline?
-	if p.adminConfig == nil {
+	if !p.adminConfig.Enabled {
 		return
 	}
 

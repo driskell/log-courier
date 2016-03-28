@@ -515,7 +515,7 @@ func (p *Publisher) takeMeasurements() {
 // initAPI initialises the publisher API entries
 func (p *Publisher) initAPI() {
 	// Is admin loaded into the pipeline?
-	if p.adminConfig == nil {
+	if !p.adminConfig.Enabled {
 		return
 	}
 
