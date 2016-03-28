@@ -183,6 +183,9 @@ func (f *Sink) markReady(endpoint *Endpoint) {
 
 	if endpoint.IsFull() {
 		f.fullList.Remove(&endpoint.fullElement)
+		endpoint.mutex.Lock()
+		endpoint.status = endpointStatusActive
+		endpoint.mutex.Unlock()
 	}
 
 	endpoint.isReady = true
