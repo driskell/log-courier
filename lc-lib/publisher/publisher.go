@@ -296,12 +296,27 @@ func (p *Publisher) OnFinish(endpoint *endpoint.Endpoint) bool {
 		return false
 	}
 
+	if endpoint.NumPending() != 0 {
+		p.pullBackPending(endpoint)
+	}
+
 	// Method defines how we handle finished endpoints
 	return p.method.onFinish(endpoint)
 }
 
 // OnFail handles a failed endpoint
 func (p *Publisher) OnFail(endpoint *endpoint.Endpoint) {
+	if endpoint.NumPending() != 0 {
+		p.pullBackPending(endpoint)
+	}
+
+	// Allow method to handle what we do due to the failed endpoint
+	p.method.onFail(endpoint)
+}
+
+// pullBackPending returns undelivered payloads from the endpoint back to the
+// publisher for redelivery
+func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 	// Pull back pending payloads so we can requeue them onto other endpoints
 	for _, pendingPayload := range endpoint.PullBackPending() {
 		pendingPayload.Resending = true
@@ -324,9 +339,6 @@ func (p *Publisher) OnFail(endpoint *endpoint.Endpoint) {
 	}
 
 	log.Debug("%d payloads held for resend", p.resendList.Len())
-
-	// Allow method to handle what we do due to the failed endpoint
-	p.method.onFail(endpoint)
 }
 
 // OnStarted handles an endpoint that has moved from idle to now active and
