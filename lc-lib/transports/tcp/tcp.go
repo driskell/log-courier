@@ -116,7 +116,9 @@ func (t *TransportTCP) controller() {
 			case err = <-t.failChan:
 				// If err is nil, it's a forced failure by publisher so we need not
 				// call observer fail to let it know about it
-				if err != nil && t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Failed)) {
+				if err == nil {
+					err = transports.ErrForcedFailure
+				} else if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Failed)) {
 					t.disconnect()
 					return
 				}

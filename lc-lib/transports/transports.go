@@ -17,9 +17,15 @@
 package transports
 
 import (
+	"errors"
+
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/core"
 )
+
+// ErrForcedFailure is an error a Transport can use to represent a forced
+// failure by the publisher
+var ErrForcedFailure = errors.New("Failed by endpoint manager")
 
 // Observer is the interface implemented by the consumer of a transport, to
 // allow the transport to communicate back
