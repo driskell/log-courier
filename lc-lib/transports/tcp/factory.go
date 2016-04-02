@@ -32,6 +32,13 @@ import (
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
+var (
+	// TransportTCPTCP is the transport name for plain TCP
+	TransportTCPTCP = "tcp"
+	// TransportTCPTLS is the transport name for encrypted TLS
+	TransportTCPTLS = "tls"
+)
+
 // TransportTCPFactory holds the configuration from the configuration file
 // It allows creation of TransportTCP instances that use this configuration
 type TransportTCPFactory struct {
@@ -59,8 +66,8 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map
 		netConfig:      &config.Network,
 	}
 
-	// Only allow SSL configurations if this is "tls"
-	if name == "tls" {
+	// Only allow SSL configurations if using TLS
+	if name == TransportTCPTLS {
 		if err = config.PopulateConfig(ret, unUsed, configPath); err != nil {
 			return nil, err
 		}
@@ -132,6 +139,6 @@ func (f *TransportTCPFactory) NewTransport(observer transports.Observer, finishO
 
 // Register the transports
 func init() {
-	config.RegisterTransport("tcp", NewTransportTCPFactory)
-	config.RegisterTransport("tls", NewTransportTCPFactory)
+	config.RegisterTransport(TransportTCPTCP, NewTransportTCPFactory)
+	config.RegisterTransport(TransportTCPTLS, NewTransportTCPFactory)
 }

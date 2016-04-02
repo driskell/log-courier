@@ -159,7 +159,6 @@ func (p *Publisher) Run() {
 // Called continuously by Run until shutdown is completed, at which point the
 // return value changed from false to true to signal completion
 func (p *Publisher) runOnce() bool {
-PublisherSelect:
 	select {
 	case event := <-p.endpointSink.EventChan():
 		// Endpoint Sink processes the events, and feeds back relevant changes
@@ -171,18 +170,16 @@ PublisherSelect:
 			return true
 		}
 	case spool := <-p.ifSpoolChan:
-		for p.endpointSink.HasReady() {
-			// We have ready endpoints, send the spool
-			endpoint := p.endpointSink.NextReady()
-
-			log.Debug("[%s] %d new events, sending to endpoint", endpoint.Server(), len(spool))
-
-			if err := p.sendEvents(endpoint, spool); err == nil {
-				break PublisherSelect
+		if p.numPayloads >= p.config.MaxPendingPayloads {
+			log.Debug("Maximum pending payloads of %d reached, holding %d new events", p.config.MaxPendingPayloads, len(spool))
+		} else if p.endpointSink.CanQueue() {
+			if _, ok := p.sendEvents(spool); ok {
+				break
 			}
+
+			log.Debug("Holding %d new events until an endpoint is ready", len(spool))
 		}
 
-		log.Debug("%d new events queued awaiting endpoint readiness", len(spool))
 		// No ready endpoint, wait for one
 		p.nextSpool = spool
 		p.ifSpoolChan = nil
@@ -228,63 +225,30 @@ func (p *Publisher) reloadConfig(config *config.Config) {
 	}
 
 	// The sink may have changed the priority endpoint after the reload, making
-	// an endpoint available for send
-	if p.eventsAvailable() && p.endpointSink.HasReady() {
-		p.sendIfAvailable(p.endpointSink.NextReady())
-	}
+	// an endpoint available
+	p.tryQueueHeld()
 }
 
-func (p *Publisher) sendEvents(endpoint *endpoint.Endpoint, events []*core.EventDescriptor) error {
-	pendingPayload := payload.NewPayload(events)
+// OnStarted handles an endpoint that has moved from idle to now active
+func (p *Publisher) OnStarted(endpoint *endpoint.Endpoint) {
+	p.method.onStarted(endpoint)
 
-	p.payloadList.PushBack(&pendingPayload.Element)
-
-	p.mutex.Lock()
-	p.numPayloads++
-	p.mutex.Unlock()
-
-	return p.sendPayload(endpoint, pendingPayload)
-}
-
-func (p *Publisher) sendPayload(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload) error {
-	// Don't queue if send fails and fail the endpoint
-	if err := endpoint.SendPayload(pendingPayload); err != nil {
-		p.forceEndpointFailure(endpoint, err)
-		return err
-	}
-
-	// If this is the first payload, start the network timeout
-	if endpoint.NumPending() == 1 {
-		p.endpointSink.RegisterTimeout(
-			&endpoint.Timeout,
-			p.config.Timeout,
-			func() {
-				p.timeoutPending(endpoint)
-			},
-		)
-	}
-
-	return nil
-}
-
-// OnReady handles an endpoint that is now ready for events
-func (p *Publisher) OnReady(endpoint *endpoint.Endpoint) {
-	if p.sendIfAvailable(endpoint) {
+	if endpoint.NumPending() > 0 {
 		return
 	}
 
-	log.Debug("[%s] Send is now ready, awaiting new events", endpoint.Server())
-
-	if endpoint.NumPending() == 0 {
-		log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
-		p.endpointSink.RegisterTimeout(
-			&endpoint.Timeout,
-			keepaliveTimeout,
-			func() {
-				p.timeoutKeepalive(endpoint)
-			},
-		)
+	if p.tryQueueHeld() {
+		return
 	}
+
+	log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
+	p.endpointSink.RegisterTimeout(
+		&endpoint.Timeout,
+		keepaliveTimeout,
+		func() {
+			p.timeoutKeepalive(endpoint)
+		},
+	)
 }
 
 // OnFinish handles when endpoints are finished
@@ -324,28 +288,22 @@ func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 	}
 
 	// If any ready now, requeue immediately
-	for p.resendList.Len() != 0 && p.endpointSink.HasReady() {
+	for p.resendList.Len() != 0 && p.endpointSink.CanQueue() {
 		// We have ready endpoints, send the spool
-		endpoint := p.endpointSink.NextReady()
 		pendingPayload := p.resendList.Front().Value.(*payload.Payload)
 
-		log.Debug("[%s] %d events require resending, sending to endpoint", endpoint.Server(), len(pendingPayload.Events()))
-		err := p.sendPayload(endpoint, pendingPayload)
-
-		if err == nil {
+		if _, ok := p.sendPayload(pendingPayload); ok {
 			pendingPayload.Resending = false
 			p.resendList.Remove(&pendingPayload.ResendElement)
 		}
 	}
 
-	log.Debug("%d payloads held for resend", p.resendList.Len())
-}
+	if p.resendList.Len() > 0 {
+		// Prevent incoming spools
+		p.ifSpoolChan = nil
+	}
 
-// OnStarted handles an endpoint that has moved from idle to now active and
-// ready
-func (p *Publisher) OnStarted(endpoint *endpoint.Endpoint) {
-	// Decisions in response to this are purely for the method
-	p.method.onStarted(endpoint)
+	log.Debug("%d payloads held for resend", p.resendList.Len())
 }
 
 // OnAck handles acknowledgements from endpoints
@@ -355,7 +313,7 @@ func (p *Publisher) OnStarted(endpoint *endpoint.Endpoint) {
 // storage to ensure the registrar offsets are always sequential
 func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool, lineCount int) {
 	// Expect next ACK within network timeout if we still have pending
-	if endpoint.NumPending() != 0 {
+	if endpoint.NumPending() > 0 {
 		p.endpointSink.RegisterTimeout(
 			&endpoint.Timeout,
 			p.config.Timeout,
@@ -377,7 +335,6 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 	// This prevents a condition occurring where the endpoint incorrectly reports
 	// a failure but then afterwards reports an acknowledgement
 	if pendingPayload.Resending && pendingPayload.Complete() {
-		log.Debug("[%s] Retransmission was successful", endpoint.Server())
 		p.resendList.Remove(&pendingPayload.ResendElement)
 	}
 
@@ -407,11 +364,6 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 
 			numComplete++
 
-			// TODO: Resume sending if we stopped due to excessive pending payload count
-			//if !p.shutdown && p.canSend == nil {
-			//	p.canSend = p.transport.CanSend()
-			//}
-
 			if p.payloadList.Len() == 0 {
 				break
 			}
@@ -432,6 +384,9 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 	}
 	p.lineCount += int64(lineCount)
 	p.mutex.Unlock()
+
+	// Resume sending if we stopped due to excessive pending payload count
+	p.tryQueueHeld()
 }
 
 // OnPong handles when endpoints receive a pong message
@@ -456,39 +411,75 @@ func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error)
 	p.endpointSink.ForceFailure(endpoint)
 }
 
-func (p *Publisher) eventsAvailable() bool {
-	return p.resendList.Len() != 0 || p.nextSpool != nil
+// eventsHeld returns true if there are events held waiting to be queued
+func (p *Publisher) eventsHeld() bool {
+	return p.resendList.Len() > 0 || p.nextSpool != nil
 }
 
-func (p *Publisher) sendIfAvailable(endpoint *endpoint.Endpoint) bool {
-	if p.resendList.Len() != 0 {
+// tryQueueHeld attempts to queue held payloads
+func (p *Publisher) tryQueueHeld() bool {
+	if p.shuttingDown || !p.eventsHeld() || !p.endpointSink.CanQueue() {
+		return false
+	}
+
+	if p.resendList.Len() > 0 {
 		pendingPayload := p.resendList.Front().Value.(*payload.Payload)
 
-		log.Debug("[%s] Send is now ready, resending %d events", endpoint.Server(), len(pendingPayload.Events()))
-
 		// We have a payload to resend, send it now
-		if err := p.sendPayload(endpoint, pendingPayload); err == nil {
+		if _, ok := p.sendPayload(pendingPayload); ok {
 			pendingPayload.Resending = false
 			p.resendList.Remove(&pendingPayload.ResendElement)
 			log.Debug("%d payloads remain held for resend", p.resendList.Len())
+			return true
 		}
 
-		return true
+		return false
 	}
 
 	if p.nextSpool != nil {
-		log.Debug("[%s] Send is now ready, sending %d queued events", endpoint.Server(), len(p.nextSpool))
-
 		// We have events, send it to the endpoint and wait for more
-		if err := p.sendEvents(endpoint, p.nextSpool); err == nil {
+		if _, ok := p.sendEvents(p.nextSpool); ok {
 			p.nextSpool = nil
 			p.ifSpoolChan = p.spoolChan
+			return true
 		}
-
-		return true
 	}
 
 	return false
+}
+
+func (p *Publisher) sendEvents(events []*core.EventDescriptor) (*endpoint.Endpoint, bool) {
+	pendingPayload := payload.NewPayload(events)
+
+	p.payloadList.PushBack(&pendingPayload.Element)
+
+	p.mutex.Lock()
+	p.numPayloads++
+	p.mutex.Unlock()
+
+	return p.sendPayload(pendingPayload)
+}
+
+func (p *Publisher) sendPayload(pendingPayload *payload.Payload) (*endpoint.Endpoint, bool) {
+	// Attempt to queue the payload with the best endpoint
+	endpoint, err := p.endpointSink.QueuePayload(pendingPayload)
+	if err != nil {
+		p.forceEndpointFailure(endpoint, err)
+		return nil, false
+	}
+
+	// If this is the first payload, start the network timeout
+	if endpoint.NumPending() == 1 {
+		p.endpointSink.RegisterTimeout(
+			&endpoint.Timeout,
+			p.config.Timeout,
+			func() {
+				p.timeoutPending(endpoint)
+			},
+		)
+	}
+
+	return endpoint, true
 }
 
 func (p *Publisher) timeoutPending(endpoint *endpoint.Endpoint) {

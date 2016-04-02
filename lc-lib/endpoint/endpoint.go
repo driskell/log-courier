@@ -36,15 +36,13 @@ type Endpoint struct {
 	mutex sync.RWMutex
 
 	// The endpoint status
-	status  status
-	isReady bool
+	status status
 
 	api *apiEndpoint
 
 	// Element structures for internal use by InternalList via EndpointSink
 	// MUST have Value member initialised
 	readyElement   internallist.Element
-	fullElement    internallist.Element
 	failedElement  internallist.Element
 	orderedElement internallist.Element
 
@@ -60,16 +58,16 @@ type Endpoint struct {
 	numPayloads     int
 	pongPending     bool
 
-	lineCount       int64
-	averageLatency  float64
-	totalEstAckTime time.Time
+	lineCount         int64
+	averageLatency    float64
+	transmissionStart time.Time
+	estDelTime        time.Time
 }
 
 // Init prepares the internal Element structures for InternalList and prepares
 // the pending payload structures
 func (e *Endpoint) Init() {
 	e.readyElement.Value = e
-	e.fullElement.Value = e
 	e.failedElement.Value = e
 	e.orderedElement.Value = e
 
@@ -112,39 +110,50 @@ func (e *Endpoint) Server() string {
 	return e.server
 }
 
-// SendPayload registers a payload with the endpoint and sends it to the
+// queuePayload registers a payload with the endpoint and sends it to the
 // transport
-func (e *Endpoint) SendPayload(payload *payload.Payload) error {
+func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 	// Must be in a ready state
-	if e.status != endpointStatusActive || !e.isReady {
+	if e.status != endpointStatusActive {
 		panic(fmt.Sprintf("Endpoint is not ready (%d)", e.status))
 	}
 
-	// Calculate a nonce
-	nonce := e.generateNonce()
-	for {
-		if _, found := e.pendingPayloads[nonce]; !found {
-			break
+	// Calculate a nonce if we don't already have one
+	if payload.Nonce == "" {
+		nonce := e.generateNonce()
+		for {
+			if _, found := e.pendingPayloads[nonce]; !found {
+				break
+			}
+			// Collision - generate again - should be extremely rare
+			nonce = e.generateNonce()
 		}
-		// Collision - generate again - should be extremely rare
-		nonce = e.generateNonce()
+
+		payload.Nonce = nonce
 	}
 
-	payload.TransmitTime = time.Now()
-	payload.Nonce = nonce
-	e.pendingPayloads[nonce] = payload
+	e.pendingPayloads[payload.Nonce] = payload
 
 	e.mutex.Lock()
 	e.numPayloads++
 	e.mutex.Unlock()
 
-	log.Debug("[%s] Sending payload %x", e.Server(), nonce)
+	e.updateEstDelTime()
+
+	if e.numPayloads == 1 {
+		e.transmissionStart = time.Now()
+	}
+
+	if payload.Resending {
+		log.Debug("[%s] Resending payload %x (%d events)", e.Server(), payload.Nonce, payload.Size())
+	} else {
+		log.Debug("[%s] Sending payload %x (%d events)", e.Server(), payload.Nonce, payload.Size())
+	}
 
 	if err := e.transport.Write(payload.Nonce, payload.Events()); err != nil {
 		return err
 	}
 
-	e.isReady = false
 	return nil
 }
 
@@ -158,8 +167,8 @@ func (e *Endpoint) generateNonce() string {
 	return string(nonce)
 }
 
-// SendPing requests that the transport ensure its connection is still available
-// by sending data across it and calling back with Pong(). Some transports may
+// SendPing sends a ping message to the transport that it sends to the remote
+// endpoint to ensure its connection is still available. Some transports may
 // simply do nothing and Pong() back immediately if they are managed as such.
 func (e *Endpoint) SendPing() error {
 	e.pongPending = true
@@ -172,9 +181,31 @@ func (e *Endpoint) IsPinging() bool {
 	return e.pongPending
 }
 
+// EstDelTime returns the expected time this endpoint will have delivered all of
+// its events
+func (e *Endpoint) EstDelTime() time.Time {
+	return e.estDelTime
+}
+
 // AverageLatency returns the endpoint's average latency
 func (e *Endpoint) AverageLatency() time.Duration {
 	return time.Duration(e.averageLatency)
+}
+
+// ReduceLatency artificially reduces the recorded latency of the endpoint. It
+// is used to ensure that really bad endpoints do not get ignored forever, as
+// if events are never sent to it, the latency is never recalculated
+func (e *Endpoint) ReduceLatency() {
+	e.averageLatency = e.averageLatency * 0.99
+}
+
+// updateEstDelTime updates the total expected delivery time based on the number
+// of outstanding events
+func (e *Endpoint) updateEstDelTime() {
+	e.estDelTime = time.Now()
+	for _, payload := range e.pendingPayloads {
+		e.estDelTime.Add(time.Duration(e.averageLatency) * time.Duration(payload.Size()))
+	}
 }
 
 // LineCount returns the endpoint's published line count
@@ -217,11 +248,17 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool 
 			1,
 			5,
 			e.averageLatency,
-			float64(time.Since(payload.TransmitTime))/float64(payload.Size()),
+			float64(time.Since(e.transmissionStart))/float64(payload.Size()),
 		)
 		e.mutex.Unlock()
 
 		log.Debug("[%s] Average latency per event: %f", e.Server(), e.averageLatency)
+
+		e.updateEstDelTime()
+
+		if e.numPayloads > 0 {
+			e.transmissionStart = time.Now()
+		}
 	} else {
 		e.mutex.Lock()
 		e.lineCount += int64(lineCount)
@@ -268,15 +305,11 @@ func (e *Endpoint) ReloadConfig(config *config.Network, finishOnFail bool) bool 
 	return e.transport.ReloadConfig(config.Factory, finishOnFail)
 }
 
-// IsReady returns true if this endpoint has been marked as ready
-func (e *Endpoint) IsReady() bool {
-	return e.isReady
-}
-
 // resetPayloads resets the internal state for pending payloads
 func (e *Endpoint) resetPayloads() {
 	e.pendingPayloads = make(map[string]*payload.Payload)
 	e.numPayloads = 0
+	e.estDelTime = time.Now()
 }
 
 // Pool returns the associated address pool

@@ -28,9 +28,6 @@ const (
 	// Active
 	endpointStatusActive
 
-	// Could receive events but too many are oustanding
-	endpointStatusFull
-
 	// Do not use this endpoint, it has failed
 	endpointStatusFailed
 
@@ -44,8 +41,6 @@ func (s status) String() string {
 		return "Idle"
 	case endpointStatusActive:
 		return "Active"
-	case endpointStatusFull:
-		return "Full"
 	case endpointStatusFailed:
 		return "Failed"
 	case endpointStatusClosing:
@@ -64,11 +59,6 @@ func (e *Endpoint) IsActive() bool {
 	return e.status == endpointStatusActive
 }
 
-// IsFull returns true if this endpoint has been marked as full
-func (e *Endpoint) IsFull() bool {
-	return e.status == endpointStatusFull
-}
-
 // IsFailed returns true if this endpoint has been marked as failed
 func (e *Endpoint) IsFailed() bool {
 	return e.status == endpointStatusFailed
@@ -77,11 +67,6 @@ func (e *Endpoint) IsFailed() bool {
 // IsClosing returns true if this Endpoint is closing down
 func (e *Endpoint) IsClosing() bool {
 	return e.status == endpointStatusClosing
-}
-
-// IsNotFull returns true if this endpoint is alive and not full
-func (e *Endpoint) IsNotFull() bool {
-	return e.status < endpointStatusFailed
 }
 
 // IsAlive returns true if this endpoint is not failed or closing

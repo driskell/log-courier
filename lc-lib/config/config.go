@@ -41,7 +41,7 @@ const (
 	defaultGeneralSpoolMaxBytes      int64         = 10485760
 	defaultGeneralSpoolSize          int64         = 1024
 	defaultGeneralSpoolTimeout       time.Duration = 5 * time.Second
-	defaultNetworkMaxPendingPayloads int64         = 4
+	defaultNetworkMaxPendingPayloads int64         = 10
 	defaultNetworkMethod             string        = "random"
 	defaultNetworkReconnect          time.Duration = 1 * time.Second
 	defaultNetworkRfc2782Service     string        = "courier"

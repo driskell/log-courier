@@ -127,12 +127,12 @@ func (t *TransportTCP) controller() {
 
 		if err != nil {
 			if t.finishOnFail {
-				log.Error("[%s] Transport error: %s", t.observer.Pool().Server(), err)
+				log.Errorf("[%s] Transport error: %s", t.observer.Pool().Server(), err)
 				t.disconnect()
 				return
 			}
 
-			log.Error("[%s] Transport error, reconnecting: %s", t.observer.Pool().Server(), err)
+			log.Errorf("[%s] Transport error, reconnecting: %s", t.observer.Pool().Server(), err)
 		} else {
 			log.Info("[%s] Transport reconnecting", t.observer.Pool().Server())
 		}
@@ -192,8 +192,8 @@ func (t *TransportTCP) connect() (bool, error) {
 		return false, fmt.Errorf("Failed to connect to %s: %s", desc, err)
 	}
 
-	// Now wrap in TLS if this is the "tls" transport
-	if t.config.transport == "tls" {
+	// Now wrap in TLS if this is the TLS transport
+	if t.config.transport == TransportTCPTLS {
 		// Disable SSLv3 (mitigate POODLE vulnerability)
 		t.tlsConfig.MinVersion = tls.VersionTLS10
 
@@ -229,18 +229,13 @@ func (t *TransportTCP) connect() (bool, error) {
 	// Signal channels
 	t.sendControl = make(chan int, 1)
 	t.recvControl = make(chan int, 1)
-	t.sendChan = make(chan []byte, 1)
+	t.sendChan = make(chan []byte, t.config.netConfig.MaxPendingPayloads)
 
 	// Failure channel - ensure we can fit 2 errors here, one from sender and one
 	// from receive - otherwise if both fail at the same time, disconnect blocks
 	// NOTE: This may not be necessary anymore - both recv_chan pushes also select
 	//       on the shutdown channel, which will close on the first error returned
 	t.failChan = make(chan error, 2)
-
-	// Send a started signal - this implicitly means we're also ready
-	if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Started)) {
-		return true, nil
-	}
 
 	t.wait.Add(2)
 
@@ -292,7 +287,7 @@ func (t *TransportTCP) disconnect() {
 	t.recvControl = nil
 
 	// If tls, shutdown tls socket first
-	if t.config.transport == "tls" {
+	if t.config.transport == TransportTCPTLS {
 		t.tlsSocket.Close()
 	}
 
@@ -303,6 +298,11 @@ func (t *TransportTCP) disconnect() {
 
 // sender handles socket writes
 func (t *TransportTCP) sender() {
+	// Send a started signal to say we're ready to receive events
+	if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Started)) {
+		return
+	}
+
 SenderLoop:
 	for {
 		select {
@@ -310,12 +310,8 @@ SenderLoop:
 			// Shutdown
 			break SenderLoop
 		case msg := <-t.sendChan:
-			// Ask for more while we send this
-			if t.sendEvent(t.sendControl, transports.NewStatusEvent(t.observer, transports.Ready)) {
-				break SenderLoop
-			}
-
-			// Write deadline is managed by our net.Conn wrapper that tls will call into
+			// Write deadline is managed by our net.Conn wrapper that TLS will call
+			// into and keeps retrying writes until timeout or error
 			_, err := t.socket.Write(msg)
 			if err != nil {
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {

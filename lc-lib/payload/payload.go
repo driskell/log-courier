@@ -17,8 +17,6 @@
 package payload
 
 import (
-	"time"
-
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 )
@@ -35,7 +33,6 @@ type Payload struct {
 	payload      []byte
 
 	Nonce         string
-	TransmitTime  time.Time
 	Resending     bool
 	Element       internallist.Element
 	ResendElement internallist.Element

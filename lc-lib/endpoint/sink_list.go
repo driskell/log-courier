@@ -20,11 +20,25 @@ import "github.com/driskell/log-courier/lc-lib/addresspool"
 
 // addEndpoint initialises a new endpoint
 func (f *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
+	var initialLatency float64
+
+	if f.readyList.Len() == 0 {
+		// No endpoints ready currently, use initial 0
+		initialLatency = 0
+	} else {
+		// Use slightly over average so we don't slow down the fastest
+		for entry := f.readyList.Front(); entry != nil; entry = entry.Next() {
+			initialLatency = initialLatency + float64(entry.Value.(*Endpoint).AverageLatency())
+		}
+		initialLatency = initialLatency / float64(f.readyList.Len()) * 1.01
+	}
+
 	endpoint := &Endpoint{
-		sink:         f,
-		server:       server,
-		addressPool:  addressPool,
-		finishOnFail: finishOnFail,
+		sink:           f,
+		server:         server,
+		addressPool:    addressPool,
+		finishOnFail:   finishOnFail,
+		averageLatency: initialLatency,
 	}
 
 	endpoint.Init()
@@ -100,12 +114,8 @@ func (f *Sink) removeEndpoint(server string) {
 	}
 
 	// Ensure we are correctly removed from all lists
-	if endpoint.isReady {
+	if endpoint.IsActive() {
 		f.readyList.Remove(&endpoint.readyElement)
-	}
-
-	if endpoint.IsFull() {
-		f.fullList.Remove(&endpoint.fullElement)
 	} else if endpoint.IsFailed() {
 		f.failedList.Remove(&endpoint.failedElement)
 	}
@@ -134,13 +144,8 @@ func (f *Sink) ShutdownEndpoint(server string) bool {
 		return false
 	}
 
-	if endpoint.isReady {
-		endpoint.isReady = false
+	if endpoint.IsActive() {
 		f.readyList.Remove(&endpoint.readyElement)
-	}
-
-	if endpoint.IsFull() {
-		f.fullList.Remove(&endpoint.fullElement)
 	} else if endpoint.IsFailed() {
 		f.failedList.Remove(&endpoint.failedElement)
 	}

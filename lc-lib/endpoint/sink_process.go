@@ -25,22 +25,20 @@ import (
 // Observer is the interface implemented by the observer of the sink and will
 // receive callbacks on status changes it needs to action
 type Observer interface {
-	// OnReady is called when an endpoint enters a ready state
-	OnReady(*Endpoint)
-	// OnFinished is called when an endpoint finishes and is removed
-	// Returning false prevents the endpoint from being recreated, which it will
-	// be if it still exists in the configuration
-	OnFinish(*Endpoint) bool
-	// OnFail is called when the endpoint fails
-	OnFail(*Endpoint)
-	// OnStarted is called when an endpoint starts up and is ready
-	OnStarted(*Endpoint)
 	// OnAck is called when an acknowledgement response is received
 	// The payload is given and the second argument is true if this ack is the
 	// first ack for this payload
 	OnAck(*Endpoint, *payload.Payload, bool, int)
+	// OnFail is called when the endpoint fails
+	OnFail(*Endpoint)
+	// OnFinished is called when an endpoint finishes and is removed
+	// Returning false prevents the endpoint from being recreated, which it will
+	// be if it still exists in the configuration
+	OnFinish(*Endpoint) bool
 	// OnPong is called when a pong response is received from the endpoint
 	OnPong(*Endpoint)
+	// OnStarted is called when an endpoint starts up and is ready
+	OnStarted(*Endpoint)
 }
 
 // ProcessEvent performs the necessary processing of events
@@ -62,29 +60,6 @@ func (s *Sink) ProcessEvent(event transports.Event, observer Observer) {
 // processStatusChange handles status change events
 func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *Endpoint, observer Observer) {
 	switch status.StatusChange() {
-	case transports.Ready:
-		// Ignore late messages from a closing or failing transport
-		// A transport may have multiple routines that are still shutting down after
-		// a failure and one of those may still be sending ready events
-		if endpoint.IsClosing() || endpoint.IsFailed() {
-			break
-		}
-
-		// Full?
-		if endpoint.NumPending() >= int(s.config.MaxPendingPayloads) {
-			log.Debug("[%s] Endpoint is full (%d pending payloads)", endpoint.Server(), endpoint.NumPending())
-			s.moveFull(endpoint)
-			break
-		}
-
-		// Mark endpoint as ready and call the observer
-		s.markReady(endpoint)
-		observer.OnReady(endpoint)
-
-		// If the endpoint is still ready, nothing was sent, add to ready list
-		if endpoint.isReady {
-			s.moveReady(endpoint)
-		}
 	case transports.Failed:
 		if endpoint.IsFailed() {
 			break
@@ -102,22 +77,21 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 		}
 	case transports.Started:
 		if endpoint.IsFailed() {
-			log.Info("[%s] Endpoint recovered", endpoint.Server())
+			log.Info("[%s] Endpoint has recovered", endpoint.Server())
 			s.recoverFailed(endpoint)
 			observer.OnStarted(endpoint)
-		} else if endpoint.IsIdle() {
-			// Mark as active and ready
-			s.markActiveAndReady(endpoint)
-		} else {
 			break
 		}
 
-		observer.OnReady(endpoint)
-
-		// If the endpoint is still ready, nothing was sent, add to ready list
-		if endpoint.isReady {
-			s.moveReady(endpoint)
+		if !endpoint.IsIdle() {
+			break
 		}
+
+		log.Debug("[%s] Endpoint is ready", endpoint.Server())
+
+		// Mark as active
+		s.markActive(endpoint)
+		observer.OnStarted(endpoint)
 	case transports.Finished:
 		server := endpoint.Server()
 		log.Debug("[%s] Endpoint has finished", server)
@@ -149,19 +123,9 @@ func (s *Sink) processAck(ack *transports.AckEvent, endpoint *Endpoint, observer
 	}
 
 	// Do we need to finish shutting down?
-	if endpoint.IsClosing() && endpoint.NumPending() == 0 {
-		endpoint.shutdownTransport()
+	if !endpoint.IsClosing() || endpoint.NumPending() > 0 {
 		return
 	}
 
-	// Were we full? Are we ready again?
-	if endpoint.IsFull() && endpoint.NumPending() < int(s.config.MaxPendingPayloads) {
-		s.markReady(endpoint)
-		observer.OnReady(endpoint)
-
-		// If the endpoint is still ready, nothing was sent, add to ready list
-		if endpoint.isReady {
-			s.moveReady(endpoint)
-		}
-	}
+	endpoint.shutdownTransport()
 }

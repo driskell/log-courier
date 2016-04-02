@@ -37,11 +37,11 @@ type Observer interface {
 
 // Transport is the generic interface that all transports implement
 type Transport interface {
-	ReloadConfig(interface{}, bool) bool
-	Write(string, []*core.EventDescriptor) error
-	Ping() error
 	Fail()
+	Ping() error
+	ReloadConfig(interface{}, bool) bool
 	Shutdown()
+	Write(string, []*core.EventDescriptor) error
 }
 
 // transportFactory is the interface that all transport factories implement. The

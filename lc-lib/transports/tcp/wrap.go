@@ -21,9 +21,10 @@ import (
 	"time"
 )
 
-// If tls.Conn.Write ever times out it will permanently break, so we cannot use SetWriteDeadline with it directly
-// So we wrap the given tcpsocket and handle the SetWriteDeadline there and check shutdown signal and loop
-// Inside tls.Conn the Write blocks until it finishes and everyone is happy
+// If tls.Conn.Write ever times out it will permanently break, so we cannot use
+// SetWriteDeadline with it directly. So we wrap the given tcpsocket and handle
+// the SetWriteDeadline there and check shutdown signal and loop. Inside
+// tls.Conn the Write blocks until it finishes and everyone is happy
 type transportTCPWrap struct {
 	transport *TransportTCP
 	tcpsocket net.Conn
