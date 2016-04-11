@@ -1,5 +1,5 @@
-general:
-  admin enabled: true
+admin:
+  enabled: true
 network:
   servers:
     - localhost:5043

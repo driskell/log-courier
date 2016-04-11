@@ -267,7 +267,7 @@ Examples:
 The admin configuration enables or disabled the REST interface within Log
 Courier and allows you to configure the interface to listen on.
 
-### `admin enabled`
+### `enabled`
 
 *Boolean. Optional. Default: false*  
 *Requires restart*
@@ -275,7 +275,7 @@ Courier and allows you to configure the interface to listen on.
 Enables the REST interface. The `lc-admin` utility can be used to connect to
 this.
 
-### `admin listen address`
+### `listen address`
 
 *String. Optional. Default: tcp:127.0.0.1:1234*
 
