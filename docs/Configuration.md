@@ -279,7 +279,7 @@ this.
 
 *String. Optional. Default: tcp:127.0.0.1:1234*
 
-The address the RESET interface should listen on in the format
+The address the REST interface should listen on in the format
 `transport:address`.
 
 Allowed transports are "tcp", "tcp4", "tcp6" (Windows and *nix) and "unix"
