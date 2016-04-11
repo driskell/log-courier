@@ -62,11 +62,16 @@ type Endpoint struct {
 	averageLatency    float64
 	transmissionStart time.Time
 	estDelTime        time.Time
+	warming           bool
+	backoff           *core.ExpBackoff
 }
 
 // Init prepares the internal Element structures for InternalList and prepares
 // the pending payload structures
 func (e *Endpoint) Init() {
+	e.warming = true
+	e.backoff = core.NewExpBackoff(e.sink.config.Backoff, e.sink.config.BackoffMax)
+
 	e.readyElement.Value = e
 	e.failedElement.Value = e
 	e.orderedElement.Value = e
@@ -259,6 +264,10 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool 
 		if e.numPayloads > 0 {
 			e.transmissionStart = time.Now()
 		}
+
+		// Reset backoff now we finished a whole payload - and reset warming flag
+		e.warming = false
+		e.backoff.Reset()
 	} else {
 		e.mutex.Lock()
 		e.lineCount += int64(lineCount)
@@ -280,6 +289,11 @@ func (e *Endpoint) processPong(observer Observer) {
 	e.pongPending = false
 
 	observer.OnPong(e)
+}
+
+// IsWarming returns whether the endpoint is warming up or not (slow-start)
+func (e *Endpoint) IsWarming() bool {
+	return e.warming && e.numPayloads != 0
 }
 
 // NumPending returns the number of pending payloads on this endpoint

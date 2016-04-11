@@ -41,9 +41,10 @@ const (
 	defaultGeneralSpoolMaxBytes      int64         = 10485760
 	defaultGeneralSpoolSize          int64         = 1024
 	defaultGeneralSpoolTimeout       time.Duration = 5 * time.Second
+	defaultNetworkBackoff            time.Duration = 5 * time.Second
+	defaultNetworkBackoffMax         time.Duration = 300 * time.Second
 	defaultNetworkMaxPendingPayloads int64         = 10
 	defaultNetworkMethod             string        = "random"
-	defaultNetworkReconnect          time.Duration = 1 * time.Second
 	defaultNetworkRfc2782Service     string        = "courier"
 	defaultNetworkRfc2782Srv         bool          = true
 	defaultNetworkTimeout            time.Duration = 15 * time.Second
@@ -103,10 +104,12 @@ func (gc *General) InitDefaults() {
 
 // Network holds network related configuration
 type Network struct {
-	Factory            interface{}
+	Factory interface{}
+
+	Backoff            time.Duration `config:"failure backoff"`
+	BackoffMax         time.Duration `config:"failure backoff max"`
 	MaxPendingPayloads int64         `config:"max pending payloads"`
 	Method             string        `config:"method"`
-	Reconnect          time.Duration `config:"reconnect"`
 	Rfc2782Service     string        `config:"rfc 2782 service"`
 	Rfc2782Srv         bool          `config:"rfc 2782 srv"`
 	Servers            []string      `config:"servers"`
@@ -118,9 +121,10 @@ type Network struct {
 
 // InitDefaults initiases default values for the network configuration
 func (nc *Network) InitDefaults() {
+	nc.Backoff = defaultNetworkBackoff
+	nc.BackoffMax = defaultNetworkBackoffMax
 	nc.MaxPendingPayloads = defaultNetworkMaxPendingPayloads
 	nc.Method = defaultNetworkMethod
-	nc.Reconnect = defaultNetworkReconnect
 	nc.Rfc2782Service = defaultNetworkRfc2782Service
 	nc.Rfc2782Srv = defaultNetworkRfc2782Srv
 	nc.Timeout = defaultNetworkTimeout

@@ -21,14 +21,12 @@ import (
 	"time"
 )
 
-// DefaultExpFactor is the default factor for expontential backoff
-const DefaultExpFactor = 1.25
-
-// MaxExpFactor is the maximum backoff factor allowed
-const MaxExpFactor = 60
+// expFactor is the factor for expontential backoff
+const expFactor = 2
 
 // DefaultDelay is the default delay for an ExpBackoff structure when it is
-// not specified
+// not specified, or when it is zero (in which case this becomes the delay after
+// the first immediate retry)
 const DefaultDelay = 1 * time.Second
 
 // ExpBackoff implements an exponential backoff helper
@@ -36,16 +34,16 @@ const DefaultDelay = 1 * time.Second
 type ExpBackoff struct {
 	requiresInit bool
 	defaultDelay time.Duration
-	expFactor    float64
+	maxDelay     time.Duration
 	expCount     float64
 }
 
 // NewExpBackoff creates a new ExpBackoff structure with the given default delay
-func NewExpBackoff(defaultDelay time.Duration) *ExpBackoff {
+func NewExpBackoff(defaultDelay time.Duration, maxDelay time.Duration) *ExpBackoff {
 	return &ExpBackoff{
 		requiresInit: false,
 		defaultDelay: defaultDelay,
-		expFactor:    DefaultExpFactor,
+		maxDelay:     maxDelay,
 	}
 }
 
@@ -54,20 +52,31 @@ func NewExpBackoff(defaultDelay time.Duration) *ExpBackoff {
 func (e *ExpBackoff) Trigger() time.Duration {
 	if e.requiresInit {
 		e.defaultDelay = DefaultDelay
-		e.expFactor = DefaultExpFactor
+	}
+
+	// If 0 initial delay, retry immediately if first failure
+	delay := e.defaultDelay
+	if delay == 0 {
+		if e.expCount == 0. {
+			e.expCount++
+			return 0
+		}
+
+		// 0 initial delay, but not first retry, use defaultDelay
+		delay = DefaultDelay
 	}
 
 	// Calculate next delay factor - it starts at 1 due to starting expCount of 0
-	factor := math.Pow(e.expFactor, e.expCount)
-	if factor < MaxExpFactor {
-		// Increase exponential delay but only if factor not hit max
+	factor := math.Pow(expFactor, e.expCount)
+	nextDelay := time.Duration(float64(delay) * factor)
+	log.Debug("Backoff: %v (factor: %f default: %v)", nextDelay, factor, e.defaultDelay)
+
+	if nextDelay < e.maxDelay {
+		// Increase exponential delay but only if max delay not hit
 		e.expCount++
 	} else {
-		factor = MaxExpFactor
+		nextDelay = e.maxDelay
 	}
-
-	nextDelay := time.Duration(float64(e.defaultDelay) * factor)
-	log.Debug("Backoff: %v (factor: %f default: %v)", nextDelay, factor, e.defaultDelay)
 
 	return nextDelay
 }

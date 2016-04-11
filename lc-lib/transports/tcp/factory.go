@@ -23,9 +23,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"regexp"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
@@ -39,18 +41,25 @@ var (
 	TransportTCPTLS = "tls"
 )
 
+const (
+	defaultNetworkReconnect    time.Duration = 0 * time.Second
+	defaultNetworkReconnectMax time.Duration = 300 * time.Second
+)
+
 // TransportTCPFactory holds the configuration from the configuration file
 // It allows creation of TransportTCP instances that use this configuration
 type TransportTCPFactory struct {
 	transport string
 
-	SSLCertificate string `config:"ssl certificate"`
-	SSLKey         string `config:"ssl key"`
-	SSLCA          string `config:"ssl ca"`
+	Reconnect      time.Duration `config:"reconnect backoff"`
+	ReconnectMax   time.Duration `config:"reconnect backoff max"`
+	SSLCertificate string        `config:"ssl certificate"`
+	SSLKey         string        `config:"ssl key"`
+	SSLCA          string        `config:"ssl ca"`
 
 	hostportRegexp  *regexp.Regexp
 	netConfig       *config.Network
-	certificate     tls.Certificate
+	certificate     *tls.Certificate
 	certificateList []*x509.Certificate
 	caList          []*x509.Certificate
 }
@@ -72,11 +81,21 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map
 			return nil, err
 		}
 
-		if len(ret.SSLCertificate) > 0 && len(ret.SSLKey) > 0 {
-			ret.certificate, err = tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
+		if len(ret.SSLCertificate) > 0 || len(ret.SSLKey) > 0 {
+			if len(ret.SSLCertificate) == 0 {
+				return nil, errors.New("ssl key is only valid with a matching ssl certificate")
+			}
+
+			if len(ret.SSLKey) == 0 {
+				return nil, errors.New("ssl key must be specified when a ssl certificate is provided")
+			}
+
+			certificate, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
 			if err != nil {
 				return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
 			}
+
+			ret.certificate = &certificate
 
 			for _, certBytes := range ret.certificate.Certificate {
 				thisCert, err := x509.ParseCertificate(certBytes)
@@ -87,29 +106,31 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map
 			}
 		}
 
-		if len(ret.SSLCA) > 0 {
-			pemdata, err := ioutil.ReadFile(ret.SSLCA)
-			if err != nil {
-				return nil, fmt.Errorf("Failure reading CA certificate: %s\n", err)
-			}
-			rest := pemdata
-			var block *pem.Block
-			var pemBlockNum = 1
-			for {
-				block, rest = pem.Decode(rest)
-				if block != nil {
-					if block.Type != "CERTIFICATE" {
-						return nil, fmt.Errorf("Block %d does not contain a certificate: %s\n", pemBlockNum, ret.SSLCA)
-					}
-					cert, err := x509.ParseCertificate(block.Bytes)
-					if err != nil {
-						return nil, fmt.Errorf("Failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
-					}
-					ret.caList = append(ret.caList, cert)
-					pemBlockNum++
-				} else {
-					break
+		if len(ret.SSLCA) == 0 {
+			return nil, errors.New("ssl ca is required when transport is TLS")
+		}
+
+		pemdata, err := ioutil.ReadFile(ret.SSLCA)
+		if err != nil {
+			return nil, fmt.Errorf("Failure reading CA certificate: %s\n", err)
+		}
+		rest := pemdata
+		var block *pem.Block
+		var pemBlockNum = 1
+		for {
+			block, rest = pem.Decode(rest)
+			if block != nil {
+				if block.Type != "CERTIFICATE" {
+					return nil, fmt.Errorf("Block %d does not contain a certificate: %s\n", pemBlockNum, ret.SSLCA)
 				}
+				cert, err := x509.ParseCertificate(block.Bytes)
+				if err != nil {
+					return nil, fmt.Errorf("Failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
+				}
+				ret.caList = append(ret.caList, cert)
+				pemBlockNum++
+			} else {
+				break
 			}
 		}
 	} else {
@@ -121,6 +142,12 @@ func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map
 	return ret, nil
 }
 
+// InitDefaults sets the default configuration values
+func (f *TransportTCPFactory) InitDefaults() {
+	f.Reconnect = defaultNetworkReconnect
+	f.ReconnectMax = defaultNetworkReconnectMax
+}
+
 // NewTransport returns a new Transport interface using the settings from the
 // TransportTCPFactory.
 func (f *TransportTCPFactory) NewTransport(observer transports.Observer, finishOnFail bool) transports.Transport {
@@ -129,7 +156,7 @@ func (f *TransportTCPFactory) NewTransport(observer transports.Observer, finishO
 		finishOnFail:   finishOnFail,
 		observer:       observer,
 		controllerChan: make(chan int),
-		backoff:        core.NewExpBackoff(f.netConfig.Reconnect),
+		backoff:        core.NewExpBackoff(f.Reconnect, f.ReconnectMax),
 	}
 
 	go ret.controller()

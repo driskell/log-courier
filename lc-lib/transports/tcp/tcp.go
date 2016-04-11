@@ -197,8 +197,12 @@ func (t *TransportTCP) connect() (bool, error) {
 		// Disable SSLv3 (mitigate POODLE vulnerability)
 		t.tlsConfig.MinVersion = tls.VersionTLS10
 
-		// Set the certificate
-		t.tlsConfig.Certificates = []tls.Certificate{t.config.certificate}
+		// Set the certificate if we set one
+		if t.config.certificate != nil {
+			t.tlsConfig.Certificates = []tls.Certificate{*t.config.certificate}
+		} else {
+			t.tlsConfig.Certificates = nil
+		}
 
 		// Set CA for server verification
 		t.tlsConfig.RootCAs = x509.NewCertPool()
@@ -252,6 +256,11 @@ func (t *TransportTCP) connect() (bool, error) {
 // checkClientCertificates logs a warning if it finds any certificates that are
 // not currently valid
 func (t *TransportTCP) checkClientCertificates() {
+	if t.config.certificateList == nil {
+		// No certificates were specified, don't do anything
+		return
+	}
+
 	now := time.Now()
 	certIssues := false
 

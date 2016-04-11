@@ -67,7 +67,6 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 
 		shutdown := endpoint.IsClosing()
 
-		log.Info("[%s] Marking endpoint as failed", endpoint.Server())
 		s.moveFailed(endpoint)
 		observer.OnFail(endpoint)
 
@@ -77,7 +76,6 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 		}
 	case transports.Started:
 		if endpoint.IsFailed() {
-			log.Info("[%s] Endpoint has recovered", endpoint.Server())
 			s.recoverFailed(endpoint)
 			observer.OnStarted(endpoint)
 			break
@@ -87,14 +85,11 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 			break
 		}
 
-		log.Debug("[%s] Endpoint is ready", endpoint.Server())
-
 		// Mark as active
 		s.markActive(endpoint)
 		observer.OnStarted(endpoint)
 	case transports.Finished:
 		server := endpoint.Server()
-		log.Debug("[%s] Endpoint has finished", server)
 		s.removeEndpoint(server)
 
 		// Is it still in the config?

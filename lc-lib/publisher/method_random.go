@@ -45,7 +45,7 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 		config:       config,
 		activeServer: -1,
 		generator:    rand.New(rand.NewSource(int64(time.Now().Nanosecond()))),
-		backoff:      core.NewExpBackoff(config.Reconnect),
+		backoff:      core.NewExpBackoff(config.Backoff, config.BackoffMax),
 	}
 
 	ret.InitTimeout()

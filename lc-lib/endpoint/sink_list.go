@@ -113,6 +113,8 @@ func (f *Sink) removeEndpoint(server string) {
 		return
 	}
 
+	log.Debug("[%s] Endpoint has finished", server)
+
 	// Ensure we are correctly removed from all lists
 	if endpoint.IsActive() {
 		f.readyList.Remove(&endpoint.readyElement)

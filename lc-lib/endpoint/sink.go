@@ -127,23 +127,13 @@ func (f *Sink) markActive(endpoint *Endpoint) {
 		return
 	}
 
+	log.Debug("[%s] Endpoint is ready", endpoint.Server())
+
 	endpoint.mutex.Lock()
 	endpoint.status = endpointStatusActive
 	endpoint.mutex.Unlock()
 
-	// Least pending payloads takes preference
-	var existing *internallist.Element
-	for existing = f.readyList.Front(); existing != nil; existing = existing.Next() {
-		if existing.Value.(*Endpoint).NumPending() > endpoint.NumPending() {
-			break
-		}
-	}
-
-	if existing == nil {
-		f.readyList.PushBack(&endpoint.readyElement)
-	} else {
-		f.readyList.InsertBefore(&endpoint.readyElement, existing)
-	}
+	f.readyList.PushBack(&endpoint.readyElement)
 }
 
 // moveFailed stores the endpoint on the failed list, removing it from the
@@ -153,6 +143,8 @@ func (f *Sink) moveFailed(endpoint *Endpoint) {
 	if !endpoint.IsAlive() {
 		return
 	}
+
+	log.Info("[%s] Marking endpoint as failed", endpoint.Server())
 
 	if endpoint.IsActive() {
 		f.readyList.Remove(&endpoint.readyElement)
@@ -179,7 +171,18 @@ func (f *Sink) recoverFailed(endpoint *Endpoint) {
 
 	f.failedList.Remove(&endpoint.failedElement)
 
-	f.markActive(endpoint)
+	backoff := endpoint.backoff.Trigger()
+	log.Info("[%s] Endpoint has recovered - will resume in %v", endpoint.Server(), backoff)
+
+	// Backoff before allowing recovery
+	f.RegisterTimeout(
+		&endpoint.Timeout,
+		backoff,
+		func() {
+			log.Info("[%s] Endpoint is now resuming", endpoint.Server())
+			f.markActive(endpoint)
+		},
+	)
 }
 
 // APINavigatable returns an APINavigatable that exposes status information for this sink

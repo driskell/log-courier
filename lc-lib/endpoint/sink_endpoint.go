@@ -49,6 +49,13 @@ func (f *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
 
 	for ; entry != nil; entry = entry.Next() {
 		endpoint := entry.Value.(*Endpoint)
+
+		// Warming endpoints have received their first payload and should not receive
+		// any more
+		if endpoint.IsWarming() {
+			continue
+		}
+
 		endpointEDT := endpoint.EstDelTime().Add(endpoint.AverageLatency() * events)
 
 		if endpointEDT.Before(bestEDT) {
