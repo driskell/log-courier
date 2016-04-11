@@ -8,18 +8,24 @@ Log Courier 2.x is compatible with the 1.x Logstash plugins.
 
 ***Breaking Changes***
 
-* CurveZMQ transport has been deprecated and removed
-* The lc-curvekey utility has been deprecated and removed
-* Multiline codecs can now be configured with multiple patterns
+* CurveZMQ transport has been removed
+* The `lc-curvekey` utility has been removed
+* Multiline codecs can now be configured with multiple patterns and have a new
+`match` configuration that can be set to `all` or `any`. The default is `any`.
 * Multiline patterns can be individually negated with a "!" prefix. The `negate`
 configuration directive has been removed. A "=" prefix is also possible to allow
 patterns that need to start with a literal "!"
 * Filter codec patterns now also accept negation in the same method. The
-`negate` configuration directive has also been removed for filters
+`negate` configuration directive has also been removed for filters and a new
+`match` configuration added that also defaults to `any`
 * Multiple codecs can now be specified. As such, the `codec` configuration has
 been renamed to `codecs` and must now be an array.
 * The `persist directory` configuration is now required, unless it was built in
 at build time (which it will be for RPM and DEB packages - see Build Changes).
+* All `admin` prefixed configurations have been moved from the `general` section
+into their own `admin` section, and the prefix removed
+* The `reconnect` transport configuration has been removed, and replaced with
+`reconnect backoff` and `reconnect backoff max`
 
 ***Changes***
 
@@ -27,28 +33,36 @@ at build time (which it will be for RPM and DEB packages - see Build Changes).
 where fields that are to be added to all events from all paths can be specified.
 This complements the current `fields` configuration that is per-path.
 * A new `method` configuration directive has been added to the `network`
-section, which allows `failover` or `loadbalance` network modes. Information on
-these new values can be found in the configuration documentation. The default
-is `failover` for backwards compatibility.
+section, which allows `random`, `failover` or `loadbalance` network modes.
+Information on these new values can be found in the configuration documentation.
+The default is `random` for backwards compatibility.
+* The `dead time` stream configuration directive now defaults to 1 hour
+* New backoff configurations, `failure backoff` and `failure backoff max`, have
+been added, to allow backoff from problematic remote endpoints where, for
+example, connection always succeeds but transmission attempts always timeout.
 * Configuration files can now be in YAML format by giving the file a `.yaml`
 extension, and this will be the preferred format. JSON format will continue to
 be used for `.conf` and `.json` configuration files
 * The `config` parameter can now be omitted from `log-courier` if a default
 configuration file was specified during build (see Build Changes)
 * `lc-admin` can now be given a configuration file to load the
-`admin listen address` from using the `config` parameter. In the absense of both
-`connect` and `config` parameters it will load the default configuration file if
+`admin`.`listen address` from using the `config` parameter. In the absense of
+both `connect` and `config` parameters it will load the default configuration file if
 one was specified during build (see Build Changes)
-* The `dead time` stream configuration directive now defaults to 1 hour
-* Do not open dead files on startup (which causes excessive memory usage if
-there are many of them) if their size has not changed since they were last
-opened (#242)
+* Log Courier remote administration via `lc-admin` is now a REST interface,
+allowing third-party integrations and monitoring
 * Harvester snapshot information reported by `lc-admin` now contains additional
 information such as the last known file size and percentage completion (#239)
 * Harvester snapshot information is now updated even when the remote server is
 down
 * Publisher snapshot information reported by `lc-admin` now contains a list of
 enabled endpoints and their statuses (#199)
+
+***Fixes***
+
+* Do not open dead files on startup (which causes excessive memory usage if
+there are many of them) if their size has not changed since they were last
+opened (#242)
 
 ***RPM Packaging***
 
