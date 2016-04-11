@@ -17,8 +17,12 @@ if [ -z "$DRELEASE" ]; then
   DRELEASE=1
 fi
 
+# Remove hyphens from version and replace with dot for deb as hyphens aren't
+# allowed and are used to separate the upstream from the debian version
+FIXEDVERSION=$(cat log-courier/version.txt | tr '-' '.')
+
 # Calculate prefix
-PREFIX=log-courier_$(cat log-courier/version.txt)
+PREFIX=log-courier_$FIXEDVERSION
 
 # Archive up the original code if necessary
 if [ ! -f "${PREFIX}.orig.tar.gz" ]; then
