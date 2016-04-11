@@ -61,33 +61,15 @@ func (s *Sink) ProcessEvent(event transports.Event, observer Observer) {
 func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *Endpoint, observer Observer) {
 	switch status.StatusChange() {
 	case transports.Failed:
-		if endpoint.IsFailed() {
-			break
-		}
-
-		shutdown := endpoint.IsClosing()
-
-		s.moveFailed(endpoint)
-		observer.OnFail(endpoint)
-
-		// If we're shutting down, give up and complete transport shutdown
-		if shutdown {
-			endpoint.shutdownTransport()
-		}
+		s.moveFailed(endpoint, observer)
 	case transports.Started:
 		if endpoint.IsFailed() {
-			s.recoverFailed(endpoint)
-			observer.OnStarted(endpoint)
-			break
-		}
-
-		if !endpoint.IsIdle() {
+			s.recoverFailed(endpoint, observer)
 			break
 		}
 
 		// Mark as active
-		s.markActive(endpoint)
-		observer.OnStarted(endpoint)
+		s.markActive(endpoint, observer)
 	case transports.Finished:
 		server := endpoint.Server()
 		s.removeEndpoint(server)

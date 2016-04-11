@@ -76,6 +76,6 @@ func (f *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
 
 // ForceFailure forces an endpoint to fail
 func (f *Sink) ForceFailure(endpoint *Endpoint) {
-	f.moveFailed(endpoint)
+	f.moveFailed(endpoint, nil)
 	endpoint.forceFailure()
 }

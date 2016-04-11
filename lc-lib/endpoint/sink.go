@@ -121,7 +121,7 @@ func (f *Sink) resetTimeoutTimer() {
 }
 
 // markActive marks an idle endpoint as active and puts it on the ready list
-func (f *Sink) markActive(endpoint *Endpoint) {
+func (f *Sink) markActive(endpoint *Endpoint, observer Observer) {
 	// Ignore if not idle
 	if !endpoint.IsIdle() {
 		return
@@ -134,11 +134,13 @@ func (f *Sink) markActive(endpoint *Endpoint) {
 	endpoint.mutex.Unlock()
 
 	f.readyList.PushBack(&endpoint.readyElement)
+
+	observer.OnStarted(endpoint)
 }
 
 // moveFailed stores the endpoint on the failed list, removing it from the
 // ready list so no more events are sent to it
-func (f *Sink) moveFailed(endpoint *Endpoint) {
+func (f *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
 	// Should never get here if we're closing, caller should check IsClosing()
 	if !endpoint.IsAlive() {
 		return
@@ -150,16 +152,28 @@ func (f *Sink) moveFailed(endpoint *Endpoint) {
 		f.readyList.Remove(&endpoint.readyElement)
 	}
 
+	shutdown := endpoint.IsClosing()
+
 	endpoint.mutex.Lock()
 	endpoint.status = endpointStatusFailed
 	endpoint.averageLatency = 0
 	endpoint.mutex.Unlock()
 
 	f.failedList.PushFront(&endpoint.failedElement)
+
+	// endpoint.ForceFailure has no observer and calls with nil
+	if observer != nil {
+		observer.OnFail(endpoint)
+	}
+
+	// If we're shutting down, give up and complete transport shutdown
+	if shutdown {
+		endpoint.shutdownTransport()
+	}
 }
 
 // recoverFailed removes an endpoint from the failed list and marks it active
-func (f *Sink) recoverFailed(endpoint *Endpoint) {
+func (f *Sink) recoverFailed(endpoint *Endpoint, observer Observer) {
 	// Ignore if we haven't failed
 	if !endpoint.IsFailed() {
 		return
@@ -179,8 +193,7 @@ func (f *Sink) recoverFailed(endpoint *Endpoint) {
 		&endpoint.Timeout,
 		backoff,
 		func() {
-			log.Info("[%s] Endpoint is now resuming", endpoint.Server())
-			f.markActive(endpoint)
+			f.markActive(endpoint, observer)
 		},
 	)
 }
