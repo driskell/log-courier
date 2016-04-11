@@ -51,17 +51,19 @@ func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeout
 	timeout.timeoutFunc = timeoutFunc
 
 	// Add to the list in time order
-	var existing *internallist.Element
+	// TODO: Need a sorted set to simplify this
+	var existing, previous *internallist.Element
 	for existing = f.timeoutList.Front(); existing != nil; existing = existing.Next() {
 		if existing.Value.(*Timeout).timeoutDue.After(timeoutDue) {
 			break
 		}
+		previous = existing
 	}
 
-	if existing == nil {
+	if previous == nil {
 		f.timeoutList.PushFront(&timeout.timeoutElement)
 	} else {
-		f.timeoutList.InsertBefore(&timeout.timeoutElement, existing)
+		f.timeoutList.InsertAfter(&timeout.timeoutElement, previous)
 	}
 
 	f.resetTimeoutTimer()
