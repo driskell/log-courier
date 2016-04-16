@@ -207,8 +207,8 @@ machine's local timezone in the format, "-0700 MST".
 
 ### `codecs`
 
-*Codec configuration. Optional. Default: `[ { "name": "plain" } ]`*  
-*Configuration reload will only affect new or resumed files*
+*Codec configuration. Optional. Default: Single `plain` codec  
+Configuration reload will only affect new or resumed files*
 
 *Depending on how log-courier was built, some codecs may not be available. Run
 `log-courier -list-supported` to see the list of codecs available in a specific
@@ -237,8 +237,8 @@ Aside from "plain", the following codecs are available at this time.
 
 ### `dead time`
 
-*Duration. Optional. Default: "1h"*  
-*Configuration reload will only affect new or resumed files*
+*Duration. Optional. Default: "1h"  
+Configuration reload will only affect new or resumed files*
 
 If a log file has not been modified in this time period, it will be closed and
 Log Courier will simply watch it for modifications. If the file is modified it
@@ -250,8 +250,8 @@ ensure old log files are not kept open preventing deletion.
 
 ### `fields`
 
-*Dictionary. Optional*  
-*Configuration reload will only affect new or resumed files*
+*Dictionary. Optional  
+Configuration reload will only affect new or resumed files*
 
 Extra fields to attach to events prior to shipping. These can be simple strings,
 numbers or even arrays and dictionaries.
@@ -269,8 +269,8 @@ Courier and allows you to configure the interface to listen on.
 
 ### `enabled`
 
-*Boolean. Optional. Default: false*  
-*Requires restart*
+*Boolean. Optional. Default: false  
+Requires restart*
 
 Enables the REST interface. The `lc-admin` utility can be used to connect to
 this.
@@ -344,15 +344,15 @@ of new log files.
 
 ### `log file`
 
-*Filepath. Optional*  
-*Requires restart*
+*Filepath. Optional  
+Requires restart*
 
 A log file to save Log Courier's internal log into. May be used in conjunction with `log stdout` and `log syslog`.
 
 ### `global fields`
 
-*Dictionary. Optional*
-*Configuration reload will only affect new or resumed files*
+*Dictionary. Optional  
+Configuration reload will only affect new or resumed files*
 
 Extra fields to attach to events prior to shipping. This is identical in
 behaviour to the `fields` Stream Configuration and applies globally to the
@@ -360,8 +360,8 @@ behaviour to the `fields` Stream Configuration and applies globally to the
 
 ### `host`
 
-*String. Optional. Default: System FQDN.*  
-*Configuration reload will only affect new or resumed files*
+*String. Optional. Default: System FQDN.  
+Configuration reload will only affect new or resumed files*
 
 Every event has an automatic field, "host", that contains the current system
 FQDN. Using this option allows a custom value to be given to the "host" field
@@ -370,22 +370,22 @@ instead of the system FQDN.
 ### `log level`
 
 *String. Optional. Default: "info".  
-Available values: "critical", "error", "warning", "notice", "info", "debug"*  
-*Requires restart*
+Available values: "critical", "error", "warning", "notice", "info", "debug"  
+Requires restart*
 
 The minimum level of detail to produce in Log Courier's internal log.
 
 ### `log stdout`
 
-*Boolean. Optional. Default: true*  
-*Requires restart*
+*Boolean. Optional. Default: true  
+Requires restart*
 
 Enables sending of Log Courier's internal log to the console (stdout). May be used in conjunction with `log syslog` and `log file`.
 
 ### `log syslog`
 
-*Boolean. Optional. Default: false*  
-*Requires restart*
+*Boolean. Optional. Default: false  
+Requires restart*
 
 Enables sending of Log Courier's internal log to syslog. May be used in conjunction with `log stdout` and `log file`.
 
@@ -417,8 +417,8 @@ This setting can not be greater than the `spool max bytes` setting.
 
 ### `persist directory`
 
-*String. Required*  
-*Requires restart*
+*String. Required  
+Requires restart*
 
 The directory that Log Courier should store its persistence data in.
 
