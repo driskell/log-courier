@@ -57,6 +57,8 @@ information such as the last known file size and percentage completion (#239)
 down
 * Publisher snapshot information reported by `lc-admin` now contains a list of
 enabled endpoints and their statuses (#199)
+* If the harvester detects a log file has had data written without a new line
+ending, it will report a warning to the log so it can be investigated
 
 ***Fixes***
 

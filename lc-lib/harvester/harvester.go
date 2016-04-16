@@ -34,6 +34,9 @@ import (
 )
 
 var (
+	// Stdin is the filename that represents stdin
+	Stdin = "stdin"
+
 	errFileTruncated = errors.New("File truncation detected")
 	errStopRequested = errors.New("Stop requested")
 )
@@ -69,6 +72,8 @@ type Harvester struct {
 	split        bool
 	timezone     string
 	reader       *LineReader
+	staleOffset  int64
+	isStream     bool
 
 	lastReadTime         time.Time
 	lastMeasurement      time.Time
@@ -89,22 +94,9 @@ type Harvester struct {
 
 // NewHarvester creates a new harvester with the given configuration for the given stream identifier
 func NewHarvester(stream core.Stream, config *config.Config, streamConfig *config.Stream, offset int64) *Harvester {
-	var fileinfo os.FileInfo
-	var path string
-
-	if stream != nil {
-		// Grab now so we can safely use them even if prospector changes them
-		path, fileinfo = stream.Info()
-	} else {
-		// This is stdin
-		path, fileinfo = "-", nil
-	}
-
 	ret := &Harvester{
 		stopChan:     make(chan interface{}),
 		stream:       stream,
-		fileinfo:     fileinfo,
-		path:         path,
 		config:       config,
 		streamConfig: streamConfig,
 		offset:       offset,
@@ -117,6 +109,17 @@ func NewHarvester(stream core.Stream, config *config.Config, streamConfig *confi
 	}
 
 	ret.backOffTimer.Stop()
+
+	if stream != nil {
+		// Grab now so we can safely use them even if prospector changes them
+		ret.path, ret.fileinfo = stream.Info()
+		ret.isStream = false
+	} else {
+		// This is stdin
+		ret.file = os.Stdin
+		ret.path, ret.fileinfo = Stdin, nil
+		ret.isStream = true
+	}
 
 	// Build the codec chain
 	var entry codecs.Codec
@@ -183,8 +186,8 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) 
 
 	h.output = output
 
-	if h.path == "-" {
-		log.Info("Started stdin harvester")
+	if h.isStream {
+		log.Info("Started harvester: %s", h.path)
 		h.offset = 0
 	} else {
 		// Get current offset in file
@@ -230,21 +233,12 @@ func (h *Harvester) performRead() error {
 
 	// Is a measurement due?
 	if duration := time.Since(h.lastMeasurement); duration >= time.Second {
-		if measureErr := h.takeMeasurements(duration); measureErr != nil {
-			if measureErr == errFileTruncated {
-				log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
-				h.file.Seek(0, os.SEEK_SET)
-				h.offset = 0
-
-				// TODO: Should we be allowing truncation to lose buffer data? Or should
-				//       we be flushing what we have?
-				// Reset line buffer and codec buffers
-				h.reader.Reset()
-				h.codec.Reset()
-				return nil
-			}
-			return measureErr
+		measureErr := h.takeMeasurements(duration)
+		if measureErr == errFileTruncated {
+			h.handleTruncation()
+			return nil
 		}
+		return measureErr
 	}
 
 	if err == nil {
@@ -261,18 +255,13 @@ func (h *Harvester) performRead() error {
 	}
 
 	if err != io.EOF {
-		if h.path == "-" {
-			log.Error("Unexpected error reading from stdin: %s", err)
-		} else {
-			log.Error("Unexpected error reading from %s: %s", h.path, err)
-		}
+		log.Errorf("Unexpected error reading from %s: %s", h.path, err)
 		return err
 	}
 
-	if h.path == "-" {
-		// Stdin has finished - stdin blocks permanently until the stream ends
-		// Once the stream ends, finish the harvester
-		log.Info("Stopping harvest of stdin; EOF reached")
+	if h.isStream {
+		// Stream has finished
+		log.Info("Stopping harvest of %s; EOF reached")
 		return nil
 	}
 
@@ -295,12 +284,43 @@ func (h *Harvester) performRead() error {
 	return nil
 }
 
+func (h *Harvester) handleTruncation() {
+	log.Warning("Unexpected file truncation, seeking to beginning: %s", h.path)
+
+	h.file.Seek(0, os.SEEK_SET)
+	h.offset = 0
+	h.staleOffset = 0
+
+	// TODO: Should we be allowing truncation to lose buffer data? Or should
+	//       we be flushing what we have?
+	if h.reader.BufferedLen() != 0 {
+		log.Errorf("%d bytes of incomplete log data was lost due to file truncation", h.reader.BufferedLen())
+	}
+
+	// Reset line buffer and codec buffers
+	h.reader.Reset()
+	h.codec.Reset()
+}
+
 func (h *Harvester) takeMeasurements(duration time.Duration) error {
 	h.lastMeasurement = time.Now()
 
-	if h.path != "-" {
+	// Check for stale data in the buffer
+	if duration := time.Since(h.lastStatCheck); duration >= 10*time.Second {
+		if h.reader.BufferedLen() != 0 && h.staleOffset != h.offset+int64(h.reader.BufferedLen()) {
+			log.Warningf(
+				"There are %d bytes at the end of %s and no line ending has been written in over 10 seconds, please check the application",
+				h.reader.BufferedLen(),
+				h.path,
+			)
+		}
+		h.staleOffset = h.offset + int64(h.reader.BufferedLen())
+	}
+
+	if !h.isStream {
 		// Has enough time passed for a truncation / deletion check?
-		// TODO: Make time configurable?
+		// TODO: Make time configurable? Bear in mind this does a stale buffer check
+		//       and reports an error saying "stale data for more than 10s"
 		if duration := time.Since(h.lastStatCheck); duration >= 10*time.Second {
 			h.lastStatCheck = h.lastMeasurement
 
@@ -343,7 +363,7 @@ func (h *Harvester) takeMeasurements(duration time.Duration) error {
 func (h *Harvester) statCheck() error {
 	info, err := h.file.Stat()
 	if err != nil {
-		log.Error("Unexpected error checking status of %s: %s", h.path, err)
+		log.Errorf("Unexpected error checking status of %s: %s", h.path, err)
 		return err
 	}
 
@@ -398,9 +418,10 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, text strin
 	// If we split any of the line data, tag it
 	if h.split {
 		if v, ok := event["tags"]; ok {
-			if v, ok := v.([]string); ok {
-				v = append(v, "splitline")
+			if v, ok = v.([]string); ok {
+				v = append(v.([]string), "splitline")
 			}
+			event["tags"] = v
 		} else {
 			event["tags"] = []string{"splitline"}
 		}
@@ -442,16 +463,15 @@ EventLoop:
 }
 
 func (h *Harvester) prepareHarvester() error {
-	// Special handling that "-" means to read from standard input
-	if h.path == "-" {
-		h.file = os.Stdin
+	// Streams don't need opening or checking
+	if h.isStream {
 		return nil
 	}
 
 	var err error
 	h.file, err = h.openFile(h.path)
 	if err != nil {
-		log.Error("Failed opening %s: %s", h.path, err)
+		log.Errorf("Failed opening %s: %s", h.path, err)
 		return err
 	}
 
