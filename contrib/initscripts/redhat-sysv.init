@@ -20,11 +20,11 @@
 NAME=log-courier
 DESC="Log Courier"
 DAEMON=/usr/sbin/log-courier
-PID_FILE=/var/run/${NAME}.pid
+PID_FILE=/var/run/log-courier/${NAME}.pid
 
 # Defaults
 LOG_COURIER_ARGS=""
-LOG_COURIER_USER="log-courier"
+LOG_COURIER_USER="root"
 
 # Override defaults from sysconfig
 # shellcheck source=/dev/null
@@ -38,10 +38,15 @@ do_start()
 	if [ $RC -eq 0 ]; then
 		success
 	else
-		# shellcheck disable=SC2086
-		nohup "$DAEMON" $LOG_COURIER_ARGS </dev/null &>/dev/null &
-		RC=$?
-		echo "$!" > "$PID_FILE"
+		if [ "$LOG_COURIER_USER" = "root" ]; then
+			nohup "$DAEMON" $LOG_COURIER_ARGS </dev/null &>/dev/null &
+			RC=$?
+			echo "$!" > "$PID_FILE"
+		else
+			# shellcheck disable=SC2086
+			nohup runuser -s /bin/bash "$LOG_COURIER_USER" -c "$(printf '%q' "$DAEMON") $LOG_COURIER_ARGS </dev/null &>/dev/null & echo \"\$!\" > $(printf '%q' $PID_FILE)" &>/dev/null
+			RC=$?
+		fi
 		if [ $RC -eq 0 ]; then
 			success
 		else
@@ -97,7 +102,7 @@ case "$1" in
 	;;
 	configtest)
 		echo -n "Configuration test: "
-		TESTRESULT=$( su --login "$LOG_COURIER_USER" -c "$(printf '%q' "$DAEMON") $LOG_COURIER_ARGS -config-test" )
+		TESTRESULT=$( su --login -s /bin/bash "$LOG_COURIER_USER" -c "$(printf '%q' "$DAEMON") $LOG_COURIER_ARGS -config-test" )
 		RC=$?
 		if [ $RC -ne 0 ]; then
 			failure

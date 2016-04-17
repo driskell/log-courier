@@ -5,12 +5,12 @@
 Summary: Log Courier
 Name: log-courier
 Version: 2.0.0
-Release: 2%{dist}
+Release: 3%{dist}
 License: Apache
 Group: System Environment/Libraries
 Packager: Jason Woods <packages@jasonwoods.me.uk>
 URL: https://github.com/driskell/log-courier
-Source: https://github.com/driskell/log-courier/archive/v%{version}-beta1.zip
+Source: https://github.com/driskell/log-courier/archive/v%{version}.zip
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 
 # Get this from the great Jason Brooks:
@@ -84,7 +84,7 @@ install -m 0644 contrib/initscripts/redhat-systemd.service %{buildroot}%{_unitdi
 %else
 mkdir -p %{buildroot}%{_sysconfdir}/init.d
 install -m 0755 contrib/initscripts/redhat-sysv.init %{buildroot}%{_sysconfdir}/init.d/log-courier
-touch %{buildroot}%{_var}/run/log-courier.pid
+touch %{buildroot}%{_var}/run/log-courier/log-courier.pid
 %endif
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 install -m 0644 contrib/initscripts/log-courier.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
@@ -122,6 +122,9 @@ fi
 %systemd_postun_with_restart log-courier.service
 %else
 if [ $1 -ge 1 ]; then
+	if [ -f /var/run/log-courier.pid ]; then
+		mv /var/run/log-courier.pid /var/run/log-courier/log-courier.pid
+	fi
 	if /sbin/service log-courier status >/dev/null 2>&1; then
 		/sbin/service log-courier restart >/dev/null 2>&1
 	fi
@@ -146,7 +149,7 @@ fi
 
 %defattr(0644,log-courier,log-courier,0755)
 %if 0%{?rhel} < 7
-%ghost %{_var}/run/log-courier.pid
+%ghost %{_var}/run/log-courier/log-courier.pid
 %endif
 %dir %attr(0700,log-courier,log-courier) %{_var}/run/log-courier
 %ghost %{_var}/run/log-courier/admin.socket
@@ -154,6 +157,9 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Sun Apr 17 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.0-3
+- Init script updates
+
 * Sun Apr 17 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.0-2
 - Upgrade to v2.0.0 release
 

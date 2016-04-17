@@ -19,11 +19,11 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
 NAME=log-courier
 DESC="Log Courier"
 DAEMON=/usr/sbin/log-courier
-PIDFILE=/var/run/${NAME}.pid
+PIDFILE=/var/run/log-courier/${NAME}.pid
 
 # Defaults
 LOG_COURIER_ARGS=""
-LOG_COURIER_USER="log-courier"
+LOG_COURIER_USER="root"
 
 # Override defaults from default
 # shellcheck source=/dev/null
@@ -99,7 +99,7 @@ case "$1" in
     ;;
   configtest)
     log_daemon_msg "Configuration testing ${DESC}" "$NAME"
-    TESTRESULT=$( su --login "$LOG_COURIER_USER" -c "$(printf '%q' "$DAEMON") $LOG_COURIER_ARGS -config-test" )
+    TESTRESULT=$( su --login -s /bin/bash "$LOG_COURIER_USER" -c "$(printf '%q' "$DAEMON") $LOG_COURIER_ARGS -config-test" )
     RC=$?
     if [ $RC -ne 0 ]; then
       echo
