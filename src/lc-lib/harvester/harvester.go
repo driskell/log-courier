@@ -304,8 +304,8 @@ func (h *Harvester) eventCallback(start_offset int64, end_offset int64, text str
 			va, ok := v.([]string)
 			if ok {
 				va = append(va, "splitline")
+				event["tags"] = va
 			}
-			event["tags"] = va
 		} else {
 			event["tags"] = []string{"splitline"}
 		}
