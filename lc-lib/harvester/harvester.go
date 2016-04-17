@@ -418,10 +418,11 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, text strin
 	// If we split any of the line data, tag it
 	if h.split {
 		if v, ok := event["tags"]; ok {
-			if v, ok = v.([]string); ok {
-				v = append(v.([]string), "splitline")
+			va, ok := v.([]string)
+			if ok {
+				va = append(va, "splitline")
+				event["tags"] = va
 			}
-			event["tags"] = v
 		} else {
 			event["tags"] = []string{"splitline"}
 		}
