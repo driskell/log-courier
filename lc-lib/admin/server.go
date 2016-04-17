@@ -147,7 +147,6 @@ ListenerLoop:
 				closingOldServer = l.reloadServer(reloadingConfig)
 				continue
 			}
-		default:
 		}
 	}
 
@@ -294,11 +293,6 @@ func (l *Server) handlePanic(w http.ResponseWriter, r *http.Request, panicArg in
 		panic(panicArg)
 	}
 
-	// Don't keep runtime errors or we'll miss stack trace
-	if _, ok := err.(runtime.Error); ok {
-		panic(err)
-	}
-
 	var code int
 	switch err {
 	case ErrNotFound:
@@ -311,6 +305,11 @@ func (l *Server) handlePanic(w http.ResponseWriter, r *http.Request, panicArg in
 
 	l.errorResponse(w, r, err, code)
 	log.Info("[admin] Request error: %s", err.Error())
+
+	// Don't keep runtime errors or we'll miss stack trace
+	if _, ok := err.(runtime.Error); ok {
+		panic(err)
+	}
 }
 
 func (l *Server) errorResponse(w http.ResponseWriter, r *http.Request, err error, c int) {

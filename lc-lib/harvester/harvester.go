@@ -575,10 +575,14 @@ func (h *Harvester) APIEncodable() admin.APIEncodable {
 
 	codecs := &admin.APIArray{}
 	i := 0
-	codecs.AddEntry(h.streamConfig.Codecs[0].Name, admin.NewAPIDataEntry(h.codec.APIEncodable()))
+	if encodable := h.codec.APIEncodable(); encodable != nil {
+		codecs.AddEntry(h.streamConfig.Codecs[0].Name, admin.NewAPIDataEntry(encodable))
+	}
 	for _, codec := range h.codecChain {
-		i++
-		codecs.AddEntry(h.streamConfig.Codecs[i].Name, admin.NewAPIDataEntry(codec.APIEncodable()))
+		if encodable := codec.APIEncodable(); encodable != nil {
+			i++
+			codecs.AddEntry(h.streamConfig.Codecs[i].Name, admin.NewAPIDataEntry(encodable))
+		}
 	}
 	apiEncodable.SetEntry("codecs", codecs)
 
