@@ -35,6 +35,8 @@
 * Do not open dead files on startup (which causes excessive memory usage if
 there are many of them) if their size has not changed since they were last
 opened (#242)
+* When a long line was split, the "splitline" tag was not being appended if the
+fields configuration already contained tags
 
 ***RPM Packaging***
 
