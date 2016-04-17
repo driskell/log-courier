@@ -1,2 +1,0 @@
-# log-courier options
-LOG_COURIER_ARGS="-config=/etc/log-courier/log-courier.conf"

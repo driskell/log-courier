@@ -89,6 +89,14 @@ touch %{buildroot}%{_var}/run/log-courier.pid
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 install -m 0644 contrib/initscripts/log-courier.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
 
+%pre
+if ! getent group log-courier >/dev/null; then
+	groupadd log-courier
+fi
+if ! getent passwd log-courier >/dev/null; then
+	useradd -r -d /var/lib/log-courier -s /sbin/nologin -g log-courier log-courier
+fi
+
 %clean
 rm -rf $RPM_BUILD_ROOT
 
@@ -135,10 +143,12 @@ fi
 %dir %{_sysconfdir}/log-courier
 %{_sysconfdir}/log-courier/examples
 %config(noreplace) %{_sysconfdir}/sysconfig/log-courier
+
+%defattr(0644,log-courier,log-courier,0755)
 %if 0%{?rhel} < 7
 %ghost %{_var}/run/log-courier.pid
 %endif
-%dir %attr(0700,root,root) %{_var}/run/log-courier
+%dir %attr(0700,log-courier,log-courier) %{_var}/run/log-courier
 %ghost %{_var}/run/log-courier/admin.socket
 %dir %{_var}/lib/log-courier
 %ghost %{_var}/lib/log-courier/.log-courier

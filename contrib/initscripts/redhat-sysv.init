@@ -20,14 +20,15 @@
 NAME=log-courier
 DESC="Log Courier"
 DAEMON=/usr/sbin/log-courier
-DATA_DIR=/var/lib/${NAME}
 PID_FILE=/var/run/${NAME}.pid
 
 # Defaults
 LOG_COURIER_ARGS=""
+LOG_COURIER_USER="log-courier"
 
 # Override defaults from sysconfig
-[ -f "/etc/sysconfig/${NAME}" ] &&	. "/etc/sysconfig/${NAME}"
+# shellcheck source=/dev/null
+[ -f "/etc/sysconfig/${NAME}" ] && . "/etc/sysconfig/${NAME}"
 
 do_start()
 {
@@ -37,7 +38,6 @@ do_start()
 	if [ $RC -eq 0 ]; then
 		success
 	else
-		cd "$DATA_DIR"
 		# shellcheck disable=SC2086
 		nohup "$DAEMON" $LOG_COURIER_ARGS </dev/null &>/dev/null &
 		RC=$?
@@ -97,8 +97,7 @@ case "$1" in
 	;;
 	configtest)
 		echo -n "Configuration test: "
-		# shellcheck disable=SC2086
-		TESTRESULT=$( "${DAEMON}" $LOG_COURIER_ARGS -config-test )
+		TESTRESULT=$( su --login "$LOG_COURIER_USER" -c "$(printf '%q' "$DAEMON") $LOG_COURIER_ARGS -config-test" )
 		RC=$?
 		if [ $RC -ne 0 ]; then
 			failure

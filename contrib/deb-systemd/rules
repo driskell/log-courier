@@ -36,6 +36,7 @@ override_dh_auto_install:
 	mkdir -p debian/log-courier/etc/init.d debian/log-courier/lib/systemd/system
 	install -m 0755 contrib/initscripts/debian-upstart.init debian/log-courier/etc/init.d/log-courier
 	install -m 0644 contrib/initscripts/debian-systemd.service debian/log-courier/lib/systemd/system/log-courier.service
+	install -m 0644 contrib/initscripts/log-courier.env debian/log-courier/etc/default/log-courier
 
 	# Make the run dir
 	mkdir -p debian/log-courier/var/run/log-courier

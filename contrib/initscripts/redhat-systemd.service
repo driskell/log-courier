@@ -11,6 +11,7 @@ ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s TERM $MAINPID
 PrivateTmp=true
 StandardError=syslog
+User=$LOG_COURIER_USER
 
 [Install]
 WantedBy=multi-user.target

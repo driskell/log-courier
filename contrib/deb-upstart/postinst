@@ -1,0 +1,4 @@
+#!/bin/bash
+
+adduser --quiet --system --home /var/lib/log-courier --no-create-home --group log-courier
+chown -R log-courier: /var/lib/log-courier /var/run/log-courier
