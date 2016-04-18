@@ -49,7 +49,7 @@ type APIFloat float64
 
 // HumanReadable returns the APIFloat as a string
 func (f APIFloat) HumanReadable(string) ([]byte, error) {
-	return []byte(strconv.FormatFloat(float64(f), 'e', 2, 64)), nil
+	return []byte(strconv.FormatFloat(float64(f), 'g', -1, 64)), nil
 }
 
 // APIString represents a string in the API
