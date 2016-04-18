@@ -71,27 +71,34 @@ func (a *lcAdmin) startUp() {
 	flag.Parse()
 
 	if version {
-		fmt.Printf("Log Courier version %s\n", core.LogCourierVersion)
+		fmt.Printf("Log Courier client version %s\n", core.LogCourierVersion)
 		os.Exit(0)
 	}
 
 	if !a.quiet {
-		fmt.Printf("Log Courier version %s client\n\n", core.LogCourierVersion)
+		fmt.Printf("Log Courier client version %s\n", core.LogCourierVersion)
 	}
+
+	a.loadConfig()
+
+	fmt.Println("")
 }
 
 func (a *lcAdmin) loadConfig() {
 	if a.configFile == "" && a.adminConnect == "" {
 		if config.DefaultGeneralAdminBind == "" {
-			fmt.Printf("Either connect or config parameter must be specified\n")
+			fmt.Printf("Either -connect or -config must be specified\n")
 			flag.PrintDefaults()
 			os.Exit(1)
 		} else {
 			a.adminConnect = config.DefaultGeneralAdminBind
 		}
+		return
 	}
 
 	if a.adminConnect == "" {
+		fmt.Printf("Loading configuration: %s\n", a.configFile)
+
 		// Load admin connect address from the configuration file
 		config := config.NewConfig()
 		if err := config.Load(a.configFile, false); err != nil {
