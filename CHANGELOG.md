@@ -10,8 +10,11 @@ Log Courier 2.x is compatible with the 1.x Logstash plugins.
 
 * CurveZMQ transport has been removed
 * The `lc-curvekey` utility has been removed
-* Multiline codecs can now be configured with multiple patterns and have a new
-`match` configuration that can be set to `all` or `any`. The default is `any`.
+* Multiline codecs can now be configured with multiple patterns. As such, the
+`pattern` configuration has been replaced with `patterns` and it is now an array
+of patterns
+* Multiline codecs have a new `match` configuration that can be set to `all` or
+`any`, to control how multiple patterns are used. The default is `any`.
 * Multiline patterns can be individually negated with a "!" prefix. The `negate`
 configuration directive has been removed. A "=" prefix is also possible to allow
 patterns that need to start with a literal "!"
