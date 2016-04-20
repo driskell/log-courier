@@ -7,6 +7,7 @@
 - [Overview](#overview)
 - [Redhat / CentOS](#redhat--centos)
 - [Ubuntu](#ubuntu)
+- [Older Version 1.x Packages](#older-version-1x-packages)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -27,9 +28,9 @@ To install the Log Courier YUM repository, download the corresponding `.repo`
 configuration file below, and place it in `/etc/yum.repos.d`. Log Courier may
 then be installed using `yum install log-courier`.
 
-* **CentOS/RedHat 6.x**: [driskell-log-courier-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-6.repo)
+* **CentOS/RedHat 6.x**: [driskell-log-courier2-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier2/repo/epel-6/driskell-log-courier2-epel-6.repo)
 * **CentOS/RedHat 7.x**:
-[driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-7/driskell-log-courier-epel-7.repo)
+[driskell-log-courier2-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier2/repo/epel-7/driskell-log-courier2-epel-7.repo)
 
 Once installed, create a configuration file at
 `/etc/log-courier/log-courier.conf` to suit your needs, then start the Log
@@ -41,7 +42,7 @@ Courier service to begin shipping.
 
 To install the Log Courier apt-get repository, run the following commands.
 
-    sudo add-apt-repository ppa:devel-k/log-courier
+    sudo add-apt-repository ppa:devel-k/log-courier2
     sudo apt-get update
 
 Log Courier may then be installed using `apt-get install log-courier`.
@@ -52,5 +53,20 @@ Courier service to begin shipping.
 
     service log-courier start
 
-**NOTE:** The Ubuntu packages have had limited testing and you are welcome to give
-feedback and raise feature requests or bug reports to help improve them!
+**NOTE:** The Ubuntu packages have had limited testing and you are welcome to
+give feedback and raise feature requests or bug reports to help improve them!
+
+**NOTE:** Packages for Ubuntu `precise` packages are no longer available due to
+limitations on the available Golang versions. However, the old 1.x packages will
+still continue to be available for Ubuntu `precise`.
+
+## Older Version 1.x Packages
+
+If you still require the older version 1.x packages, use the following
+configuration files for CentOS or RedHat.
+
+* **CentOS/RedHat 6.x**: [driskell-log-courier-epel-6.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-6/driskell-log-courier-epel-6.repo)
+* **CentOS/RedHat 7.x**:
+[driskell-log-courier-epel-7.repo](https://copr.fedoraproject.org/coprs/driskell/log-courier/repo/epel-7/driskell-log-courier-epel-7.repo)
+
+For Ubuntu, use `ppa:devel-k/log-courier` instead of `ppa:devel-k/log-courier2`.
