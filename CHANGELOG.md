@@ -1,5 +1,14 @@
 # Change Log
 
+## 2.0.1
+
+*TBC*
+
+* Fix `lc-admin` ignoring -config parameter and not auto-loading the default
+configuration in RPM and DEB packages (#303)
+* Fix `lc-admin` numerical outputs such as file completion percentage showing as
+1.00e2 instead of 100 (#304)
+
 ## 2.0.0
 
 *20th April 2016*
