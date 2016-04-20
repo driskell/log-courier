@@ -36,7 +36,7 @@ instances.
 ## Philosophy
 
 * At-least-once delivery of events to the Logstash pipeline - a Log Courier
-crash should never lose events *[1]*
+crash should never lose events
 * Be efficient, reliable and scalable
 * Keep resource usage low
 * Be easy to use
