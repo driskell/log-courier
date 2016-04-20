@@ -1,8 +1,8 @@
 # Change Log
 
-## 2.0.0-beta
+## 2.0.0
 
-*???*
+*20th April 2016*
 
 Log Courier 2.x is compatible with the 1.x Logstash plugins.
 
