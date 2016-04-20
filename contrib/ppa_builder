@@ -70,7 +70,5 @@ build_package()
 }
 
 build_package upstart trusty
-
-for D in vivid wily; do
-  build_package systemd "$D"
-done
+build_package systemd wily
+build_package systemd xenial
