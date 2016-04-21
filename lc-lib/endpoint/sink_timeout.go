@@ -41,10 +41,7 @@ func (t *Timeout) InitTimeout() {
 
 // RegisterTimeout registers a timeout structure with a timeout and timeout callback
 func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeoutFunc TimeoutFunc) {
-	if timeout.timeoutFunc != nil {
-		// Remove existing entry
-		f.timeoutList.Remove(&timeout.timeoutElement)
-	}
+	f.ClearTimeout(timeout)
 
 	timeoutDue := time.Now().Add(duration)
 	timeout.timeoutDue = timeoutDue
@@ -67,6 +64,16 @@ func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeout
 	}
 
 	f.resetTimeoutTimer()
+}
+
+// ClearTimeout removes a timeout structure
+func (f *Sink) ClearTimeout(timeout *Timeout) {
+	if timeout.timeoutFunc == nil {
+		return
+	}
+
+	// Remove existing entry
+	f.timeoutList.Remove(&timeout.timeoutElement)
 }
 
 // ProcessTimeouts processes all pending timeouts

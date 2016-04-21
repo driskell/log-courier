@@ -8,6 +8,8 @@
 configuration in RPM and DEB packages (#303)
 * Fix `lc-admin` numerical outputs such as file completion percentage showing as
 1.00e2 instead of 100 (#304)
+* Fix hang that could occur when Logstash failed in loadbalance or failover
+network methods (#311)
 * Improve debug logging of backoff calculations
 
 ## 2.0.0

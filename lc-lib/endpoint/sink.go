@@ -148,6 +148,8 @@ func (f *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
 
 	log.Info("[%s] Marking endpoint as failed", endpoint.Server())
 
+	f.ClearTimeout(&endpoint.Timeout)
+
 	if endpoint.IsActive() {
 		f.readyList.Remove(&endpoint.readyElement)
 	}
