@@ -257,7 +257,7 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool 
 		)
 		e.mutex.Unlock()
 
-		log.Debug("[%s] Average latency per event: %f", e.Server(), e.averageLatency)
+		log.Debug("[%s] Average latency per event: %.2f ms", e.Server(), e.averageLatency/float64(time.Millisecond))
 
 		e.updateEstDelTime()
 
