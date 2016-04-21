@@ -70,7 +70,7 @@ type Endpoint struct {
 // the pending payload structures
 func (e *Endpoint) Init() {
 	e.warming = true
-	e.backoff = core.NewExpBackoff(e.sink.config.Backoff, e.sink.config.BackoffMax)
+	e.backoff = core.NewExpBackoff(e.server+" Failure", e.sink.config.Backoff, e.sink.config.BackoffMax)
 
 	e.readyElement.Value = e
 	e.failedElement.Value = e

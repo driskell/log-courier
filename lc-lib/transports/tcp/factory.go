@@ -156,7 +156,7 @@ func (f *TransportTCPFactory) NewTransport(observer transports.Observer, finishO
 		finishOnFail:   finishOnFail,
 		observer:       observer,
 		controllerChan: make(chan int),
-		backoff:        core.NewExpBackoff(f.Reconnect, f.ReconnectMax),
+		backoff:        core.NewExpBackoff(observer.Pool().Server()+" Reconnect", f.Reconnect, f.ReconnectMax),
 	}
 
 	go ret.controller()

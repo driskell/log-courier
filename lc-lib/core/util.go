@@ -32,6 +32,7 @@ const DefaultDelay = 1 * time.Second
 // ExpBackoff implements an exponential backoff helper
 // The default delay is 1 second
 type ExpBackoff struct {
+	name         string
 	requiresInit bool
 	defaultDelay time.Duration
 	maxDelay     time.Duration
@@ -39,8 +40,9 @@ type ExpBackoff struct {
 }
 
 // NewExpBackoff creates a new ExpBackoff structure with the given default delay
-func NewExpBackoff(defaultDelay time.Duration, maxDelay time.Duration) *ExpBackoff {
+func NewExpBackoff(name string, defaultDelay time.Duration, maxDelay time.Duration) *ExpBackoff {
 	return &ExpBackoff{
+		name:         name,
 		requiresInit: false,
 		defaultDelay: defaultDelay,
 		maxDelay:     maxDelay,
@@ -69,7 +71,7 @@ func (e *ExpBackoff) Trigger() time.Duration {
 	// Calculate next delay factor - it starts at 1 due to starting expCount of 0
 	factor := math.Pow(expFactor, e.expCount)
 	nextDelay := time.Duration(float64(delay) * factor)
-	log.Debug("Backoff: %v (factor: %f default: %v)", nextDelay, factor, e.defaultDelay)
+	log.Debug("[%s] Backoff: %v (factor: %f default: %v)", e.name, nextDelay, factor, e.defaultDelay)
 
 	if nextDelay < e.maxDelay {
 		// Increase exponential delay but only if max delay not hit
