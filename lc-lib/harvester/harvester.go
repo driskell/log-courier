@@ -55,29 +55,31 @@ type FinishStatus struct {
 type Harvester struct {
 	mutex sync.RWMutex
 
-	stopChan     chan interface{}
-	returnChan   chan *FinishStatus
-	stream       core.Stream
-	fileinfo     os.FileInfo
-	path         string
-	config       *config.Config
-	streamConfig *config.Stream
-	offset       int64
-	output       chan<- *core.EventDescriptor
-	codec        codecs.Codec
-	codecChain   []codecs.Codec
-	file         *os.File
-	backOffTimer *time.Timer
-	meterTimer   *time.Timer
-	split        bool
-	timezone     string
-	reader       *LineReader
-	staleOffset  int64
-	isStream     bool
+	stopChan        chan interface{}
+	returnChan      chan *FinishStatus
+	stream          core.Stream
+	fileinfo        os.FileInfo
+	path            string
+	config          *config.Config
+	streamConfig    *config.Stream
+	offset          int64
+	output          chan<- *core.EventDescriptor
+	codec           codecs.Codec
+	codecChain      []codecs.Codec
+	file            *os.File
+	backOffTimer    *time.Timer
+	meterTimer      *time.Timer
+	split           bool
+	timezone        string
+	reader          *LineReader
+	staleOffset     int64
+	staleBytes      int64
+	lastStaleOffset int64
+	isStream        bool
 
 	lastReadTime         time.Time
 	lastMeasurement      time.Time
-	lastStatCheck        time.Time
+	lastCheck            time.Time
 	lastLineCount        uint64
 	lastByteCount        uint64
 	secondsWithoutEvents int
@@ -212,7 +214,7 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) 
 	// Prepare internal data
 	h.lastReadTime = time.Now()
 	h.lastMeasurement = h.lastReadTime
-	h.lastStatCheck = h.lastReadTime
+	h.lastCheck = h.lastReadTime
 
 	for {
 		if err := h.performRead(); err != nil {
@@ -233,7 +235,7 @@ func (h *Harvester) performRead() error {
 
 	// Is a measurement due?
 	if duration := time.Since(h.lastMeasurement); duration >= time.Second {
-		measureErr := h.takeMeasurements(duration)
+		measureErr := h.takeMeasurements(duration, false)
 		if measureErr == errFileTruncated {
 			h.handleTruncation()
 			return nil
@@ -290,6 +292,7 @@ func (h *Harvester) handleTruncation() {
 	h.file.Seek(0, os.SEEK_SET)
 	h.offset = 0
 	h.staleOffset = 0
+	h.lastStaleOffset = 0
 
 	// TODO: Should we be allowing truncation to lose buffer data? Or should
 	//       we be flushing what we have?
@@ -302,32 +305,39 @@ func (h *Harvester) handleTruncation() {
 	h.codec.Reset()
 }
 
-func (h *Harvester) takeMeasurements(duration time.Duration) error {
+func (h *Harvester) takeMeasurements(duration time.Duration, isPipelineBlocked bool) error {
 	h.lastMeasurement = time.Now()
 
-	// Check for stale data in the buffer
-	if duration := time.Since(h.lastStatCheck); duration >= 10*time.Second {
-		if h.reader.BufferedLen() != 0 && h.staleOffset != h.offset+int64(h.reader.BufferedLen()) {
-			log.Warningf(
-				"There are %d bytes at the end of %s and no line ending has been written in over 10 seconds, please check the application",
-				h.reader.BufferedLen(),
-				h.path,
-			)
-		}
-		h.staleOffset = h.offset + int64(h.reader.BufferedLen())
+	// Has enough time passed for periodic checks?
+	// TODO: Make time configurable? Bear in mind this does a stale buffer check
+	//       and reports an error saying "stale data for more than 10s"
+	doChecks := false
+	if duration := time.Since(h.lastCheck); duration >= 10*time.Second {
+		h.lastCheck = h.lastMeasurement
+		doChecks = true
 	}
 
-	if !h.isStream {
-		// Has enough time passed for a truncation / deletion check?
-		// TODO: Make time configurable? Bear in mind this does a stale buffer check
-		//       and reports an error saying "stale data for more than 10s"
-		if duration := time.Since(h.lastStatCheck); duration >= 10*time.Second {
-			h.lastStatCheck = h.lastMeasurement
+	// Check for stale data in the buffer
+	if doChecks {
+		if !isPipelineBlocked && h.reader.BufferedLen() != 0 {
+			if h.staleOffset == h.offset && h.lastStaleOffset != h.offset+int64(h.reader.BufferedLen()) {
+				log.Warningf(
+					"%s has had %d stale byte(s) at the end with no line ending for over 10 seconds, please check the application",
+					h.path,
+					h.reader.BufferedLen(),
+				)
 
-			var err error
-			if err = h.statCheck(); err != nil {
-				return err
+				h.lastStaleOffset = h.offset + int64(h.reader.BufferedLen())
 			}
+
+			h.staleOffset = h.offset
+		}
+	}
+
+	if doChecks && !h.isStream {
+		var err error
+		if err = h.statCheck(); err != nil {
+			return err
 		}
 	}
 
@@ -343,6 +353,7 @@ func (h *Harvester) takeMeasurements(duration time.Duration) error {
 	if h.offset > h.lastSize {
 		h.lastSize = h.offset
 	}
+	h.staleBytes = h.lastStaleOffset
 	h.codec.Meter()
 	for _, codec := range h.codecChain {
 		codec.Meter()
@@ -455,7 +466,7 @@ EventLoop:
 
 			// Take measurements if enough time has elapsed since the last measurement
 			if duration := time.Since(h.lastMeasurement); duration >= time.Second {
-				if measureErr := h.takeMeasurements(duration); measureErr == errStopRequested {
+				if measureErr := h.takeMeasurements(duration, true); measureErr == errStopRequested {
 					break EventLoop
 				}
 			}
@@ -549,6 +560,7 @@ func (h *Harvester) APIEncodable() admin.APIEncodable {
 	apiEncodable.SetEntry("speed_bps", admin.APIFloat(h.byteSpeed))
 	apiEncodable.SetEntry("processed_lines", admin.APINumber(h.lineCount))
 	apiEncodable.SetEntry("current_offset", admin.APINumber(h.lastOffset))
+	apiEncodable.SetEntry("stale_bytes", admin.APINumber(h.staleBytes))
 	apiEncodable.SetEntry("last_known_size", admin.APINumber(h.lastSize))
 
 	if h.offset >= h.lastSize {
