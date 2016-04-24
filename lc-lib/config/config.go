@@ -30,6 +30,15 @@ import (
 	"gopkg.in/op/go-logging.v1"
 )
 
+var (
+	// DefaultConfigurationFile is a path to the default configuration file to
+	// load, this can be changed during init()
+	DefaultConfigurationFile = ""
+
+	// DefaultGeneralPersistDir is a path to the default directory to store
+	DefaultGeneralPersistDir = ""
+)
+
 const (
 	defaultGeneralHost               string        = "localhost.localdomain"
 	defaultGeneralLogLevel           logging.Level = logging.INFO
@@ -94,7 +103,7 @@ func (gc *General) InitDefaults() {
 	gc.LogStdout = defaultGeneralLogStdout
 	gc.LogSyslog = defaultGeneralLogSyslog
 	gc.MaxLineBytes = defaultGeneralMaxLineBytes
-	gc.PersistDir = defaultGeneralPersistDir
+	gc.PersistDir = DefaultGeneralPersistDir
 	gc.ProspectInterval = defaultGeneralProspectInterval
 	gc.SpoolSize = defaultGeneralSpoolSize
 	gc.SpoolMaxBytes = defaultGeneralSpoolMaxBytes

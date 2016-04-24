@@ -277,7 +277,9 @@ this.
 
 ### `listen address`
 
-*String. Optional. Default: tcp:127.0.0.1:1234*
+*String. Required when `enabled` is true.  
+Default: tcp:127.0.0.1:1234  
+RPM/DEB Package Default: unix:/var/run/log-courier/admin.socket*
 
 The address the REST interface should listen on in the format
 `transport:address`.
@@ -418,6 +420,7 @@ This setting can not be greater than the `spool max bytes` setting.
 ### `persist directory`
 
 *String. Required  
+RPM/DEB Package Default: /var/lib/log-courier
 Requires restart*
 
 The directory that Log Courier should store its persistence data in.

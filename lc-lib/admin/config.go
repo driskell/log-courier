@@ -22,8 +22,12 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
-const (
-	defaultGeneralAdminEnabled bool = false
+var (
+	defaultAdminEnabled = false
+
+	// DefaultAdminBind is the default bind address to use when admin is enabled
+	// and can be modified during init()
+	DefaultAdminBind = "tcp:127.0.0.1:12345"
 )
 
 // Config holds the admin configuration
@@ -34,6 +38,12 @@ type Config struct {
 	Bind    string `config:"listen address"`
 
 	apiRoot APINavigatable
+}
+
+// InitDefaults initialises default values
+func (c *Config) InitDefaults() {
+	c.Enabled = defaultAdminEnabled
+	c.Bind = DefaultAdminBind
 }
 
 // Validate validates the config structure
@@ -54,9 +64,6 @@ func (c *Config) SetEntry(path string, entry APINavigatable) {
 func init() {
 	config.RegisterConfigSection("admin", func() config.Section {
 		c := &Config{}
-		c.Enabled = defaultGeneralAdminEnabled
-		// TODO: Implement default bind address which is currently stored in config pkg
-		c.Bind = "" //DefaultGeneralAdminBind
 		return c
 	})
 }

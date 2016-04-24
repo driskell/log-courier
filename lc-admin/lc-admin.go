@@ -28,6 +28,9 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
+// Generate platform-specific default configuration values
+//go:generate go run ../lc-lib/config/generate/platform.go main config.DefaultConfigurationFile config.DefaultGeneralPersistDir admin.DefaultAdminBind
+
 type commandProcessor interface {
 	ProcessCommand(string) bool
 }
@@ -86,12 +89,12 @@ func (a *lcAdmin) startUp() {
 
 func (a *lcAdmin) loadConfig() {
 	if a.configFile == "" && a.adminConnect == "" {
-		if config.DefaultGeneralAdminBind == "" {
+		if admin.DefaultAdminBind == "" {
 			fmt.Printf("Either -connect or -config must be specified\n")
 			flag.PrintDefaults()
 			os.Exit(1)
 		} else {
-			a.adminConnect = config.DefaultGeneralAdminBind
+			a.adminConnect = admin.DefaultAdminBind
 		}
 		return
 	}
