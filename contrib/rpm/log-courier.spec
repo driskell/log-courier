@@ -4,7 +4,7 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 1.8
+Version: 1.8.3
 Release: 1%{dist}
 License: Apache
 Group: System Environment/Libraries
