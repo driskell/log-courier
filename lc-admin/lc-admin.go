@@ -55,8 +55,12 @@ func (a *lcAdmin) printHelp() {
 	fmt.Printf("    Get information on prospector state and running harvesters\n")
 	fmt.Printf("  publisher [status | endpoints [id]]\n")
 	fmt.Printf("    Get information on connectivity and endpoints\n")
+	fmt.Printf("  reload\n")
+	fmt.Printf("    Signals Log Courier to reload its configuration\n")
 	fmt.Printf("  version\n")
 	fmt.Printf("    Get the remote version\n")
+	fmt.Printf("  help\n")
+	fmt.Printf("    Show this information\n")
 	fmt.Printf("  exit\n")
 	fmt.Printf("    Exit\n")
 }

@@ -11,6 +11,7 @@ configuration in RPM and DEB packages (#303)
 * Fix hang that could occur when Logstash failed in loadbalance or failover
 network methods (#311)
 * Fix `admin` `listen address` not having a default (#307)
+* Improve documentation for `lc-admin` (#307)
 * Improve debug logging of backoff calculations
 
 ## 2.0.0
