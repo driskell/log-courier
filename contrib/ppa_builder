@@ -76,9 +76,6 @@ build_package()
   dput log-courier-ppa "${PREFIX}-${RELEASE}~${D}${DRELEASE}_source.changes"
 }
 
-for D in precise trusty; do
-  build_package upstart "$D"
-done
-for D in vivid wily; do
-  build_package systemd "$D"
-done
+build_package upstart trusty
+build_package systemd wily
+build_package systemd xenial

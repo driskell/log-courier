@@ -12,6 +12,7 @@
 /pkg
 /spec/tmp
 /src/github.com
+/src/gopkg.in
 /src/lc-lib/core/version.go
 /vendor
 /version.txt

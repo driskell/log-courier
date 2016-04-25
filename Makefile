@@ -95,6 +95,7 @@ clean:
 ifneq ($(implyclean),yes)
 ifneq ($(keepgoget),yes)
 	rm -rf src/github.com
+	rm -rf src/gopkg.in
 endif
 	rm -rf vendor/bundle
 	rm -f Gemfile.lock

@@ -3,21 +3,22 @@
 # Allow 'go get' to see we already have the log-courier packages by setting
 # up a rough Go workspace.
 
+rm -rf src-log-courier
+mkdir -p src-log-courier
 rm -rf src/github.com/driskell/log-courier
+cp -rf src/lc* src-log-courier
+mkdir -p src/github.com/driskell/log-courier
+mv src-log-courier src/github.com/driskell/log-courier/src
 
-if [ "$OS" = "Windows_NT" ]; then
-  # Windows lacks symlinks and MinGW 'ln' fails with 'Permission denied' as it
-  # tries to copy a folder into a subfolder of itself, copying nothing, so 'cp'
-  # manually.
-  mkdir -p src/github.com/driskell/log-courier
-  # 2>devnull to Hide 'cannot copy src into itself'
-  cp -rf {.git,src} src/github.com/driskell/log-courier/ 2>/dev/null
-else
-  mkdir -p src/github.com/driskell
-  ln -nsf ../../.. src/github.com/driskell/log-courier
+# Go get hangs with older git version if it gets a redirect, bypass gopkg.in
+if ! [ -d src/gopkg.in/op/go-logging.v1 ]; then
+  git clone --branch v1 https://github.com/op/go-logging.git src/gopkg.in/op/go-logging.v1
 fi
 
 # Fake a .git folder for downloaded archives to avoid 'go get' 'Stale checkout'
-if [ ! -d src/github.com/driskell/log-courier/.git ]; then
-  mkdir src/github.com/driskell/log-courier/.git
-fi
+(
+  cd src/github.com/driskell/log-courier
+  git init >/dev/null 2>&1
+  git add -A >/dev/null 2>&1
+  git commit -m 'Master' >/dev/null 2>&1
+)

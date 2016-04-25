@@ -4,10 +4,10 @@
 	dh $@
 
 override_dh_auto_clean:
-	$(MAKE) clean keepgoget=yes
+	PATH=$$PATH:/usr/lib/go-1.5/bin $(MAKE) clean keepgoget=yes
 
 override_dh_auto_build:
-	$(MAKE)
+	PATH=$$PATH:/usr/lib/go-1.5/bin $(MAKE)
 
 override_dh_auto_test:
 	# Maybe tests in future - we'd need to download the ffi gem
@@ -15,7 +15,7 @@ override_dh_auto_test:
 override_dh_auto_install:
 	# Install binaries
 	mkdir -p debian/log-courier/usr/sbin
-	install -m 0755 sbin/log-courier debian/log-courier/usr/sbin/log-courier
+	install -m 0755 bin/log-courier debian/log-courier/usr/sbin/log-courier
 	mkdir -p debian/log-courier/usr/bin
 	install -m 0755 bin/lc-admin debian/log-courier/usr/bin/lc-admin
 	install -m 0755 bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
