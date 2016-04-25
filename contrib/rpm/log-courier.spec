@@ -35,7 +35,7 @@ Log Courier is a lightweight tool created to ship log files speedily and
 securely, with low resource usage, to remote Logstash instances.
 
 %prep
-%setup -q -n %{name}-master
+%setup -q -n %{name}-%{version}
 
 %build
 # Build a go workspace
@@ -166,7 +166,7 @@ fi
 * Sun Apr 17 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.0-2
 - Upgrade to v2.0.0 release
 
-* Thu Feb 24 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0-1.beta1
+* Wed Feb 24 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0-1.beta1
 - Upgrade to v2.0 beta1
 
 * Thu Aug 6 2015 Jason Woods <devel@jasonwoods.me.uk> - 1.8-1
