@@ -51,20 +51,22 @@ const platformHeader = `// THIS IS A GO GENERATED FILE
 // configuration location and persist directory.
 // Useful for package maintainers
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatalf("Usage: go run <path-to-lc-lib>/config/generate.go <package-name> <configs>...")
+	if len(os.Args) < 3 {
+		log.Fatalf("Usage: go run <path-to-lc-lib>/config/generate.go -- <target> <package-name> <configs>...")
 	}
 
-	platformFile := platformHeader
-	platformFile += fmt.Sprintf("package %s\n\n", os.Args[1])
+	targetFile := os.Args[1] + ".go"
 
-	config := parseConfigArgs(os.Args[2:])
+	platformFile := platformHeader
+	platformFile += fmt.Sprintf("package %s\n\n", os.Args[2])
+
+	config := parseConfigArgs(os.Args[3:])
 	platformFile += generatePackageImports(config)
 	platformFile += generateInit(config)
 
 	platformFileBytes := []byte(os.ExpandEnv(platformFile))
-	if err := ioutil.WriteFile("platform.go", platformFileBytes, 0644); err != nil {
-		log.Fatalf("Failed to write platform.go: %s", err)
+	if err := ioutil.WriteFile(targetFile, platformFileBytes, 0644); err != nil {
+		log.Fatalf("Failed to write %s: %s", targetFile, err)
 	}
 }
 

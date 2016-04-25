@@ -5,7 +5,7 @@
 Summary: Log Courier
 Name: log-courier
 Version: 2.0.1
-Release: 1%{dist}
+Release: 2%{dist}
 License: Apache
 Group: System Environment/Libraries
 Packager: Jason Woods <packages@jasonwoods.me.uk>
@@ -47,11 +47,11 @@ cd "$GOPATH/src/github.com/driskell/log-courier"
 # Configure platform specific defaults
 export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-courier/log-courier.yaml
 export LC_DEFAULT_GENERAL_PERSIST_DIR=%{_var}/lib/log-courier
-export LC_DEFAULT_GENERAL_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
+export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
 
 # Enable vendor experiment in the event of Go 1.5 then generate and build
 export GO15VENDOREXPERIMENT=1
-go generate ./lc-lib/config ./lc-lib/core
+go generate . ./lc-admin
 go install . ./lc-admin ./lc-tlscert
 
 %install
@@ -157,6 +157,9 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Mon Apr 25 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.1-2
+- Fix platform default configuration values
+
 * Mon Apr 25 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.1-1
 - Upgrade to v2.0.1 release
 

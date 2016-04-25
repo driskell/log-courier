@@ -43,7 +43,9 @@ import _ "github.com/driskell/log-courier/lc-lib/codecs"
 import _ "github.com/driskell/log-courier/lc-lib/transports/tcp"
 
 // Generate platform-specific default configuration values
-//go:generate go run lc-lib/config/generate/platform.go main config.DefaultConfigurationFile config.DefaultGeneralPersistDir admin.DefaultAdminBind
+//go:generate go run lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile config.DefaultGeneralPersistDir admin.DefaultAdminBind
+// TODO: This should be in lc-admin but we can't due to vendor failure on go generate in subpackages
+//go:generate go run lc-lib/config/generate/platform.go lc-admin/platform main config.DefaultConfigurationFile admin.DefaultAdminBind
 
 func main() {
 	newLogCourier().Run()

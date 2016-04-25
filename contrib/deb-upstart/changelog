@@ -1,5 +1,11 @@
 log-courier (2.0.1-1) UNRELEASED; urgency=low
 
+  * Fix platform default configuration values
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Mon, 25 Apr 2016 00:00:00 +0100
+
+log-courier (2.0.1-1) UNRELEASED; urgency=low
+
   * Upgrade to v2.0.1
 
  -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Mon, 25 Apr 2016 00:00:00 +0100

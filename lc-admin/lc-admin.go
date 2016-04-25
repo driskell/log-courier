@@ -28,9 +28,6 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
-// Generate platform-specific default configuration values
-//go:generate go run ../lc-lib/config/generate/platform.go main config.DefaultConfigurationFile config.DefaultGeneralPersistDir admin.DefaultAdminBind
-
 type commandProcessor interface {
 	ProcessCommand(string) bool
 }

@@ -14,6 +14,9 @@ network methods (#311)
 * Improve documentation for `lc-admin` (#307)
 * Improve debug logging of backoff calculations
 
+*NOTE: Please note the building from source step for `go generate` was changed
+in 2.0.1.*
+
 ## 2.0.0
 
 *20th April 2016*
