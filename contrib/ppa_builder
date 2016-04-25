@@ -38,8 +38,10 @@ build_package()
   local D=$2
 
   # Ensure on latest in case we pushed up packaging fixes
+  # And ensure .pc is removed so we don't confuse dpkg with stale quilt patch state
   (
     cd log-courier
+    rm -rf .pc
     git reset --hard
     git pull
   )
