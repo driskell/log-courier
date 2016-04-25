@@ -12,7 +12,11 @@ mv src-log-courier src/github.com/driskell/log-courier/src
 
 # Go get hangs with older git version if it gets a redirect, bypass gopkg.in
 if ! [ -d src/gopkg.in/op/go-logging.v1 ]; then
-  git clone --branch v1 https://github.com/op/go-logging.git src/gopkg.in/op/go-logging.v1
+  git clone -n https://github.com/op/go-logging.git src/gopkg.in/op/go-logging.v1
+  (
+    cd src/gopkg.in/op/go-logging.v1
+    git checkout v1
+  )
 fi
 
 # Fake a .git folder for downloaded archives to avoid 'go get' 'Stale checkout'
