@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set +errexit
+
 # This script is used by the maintainer to push to Log Courier PPA
 # Usage:
 #   git clone https://github.com/driskell/log-courier log-courier
@@ -19,6 +21,13 @@ fi
 
 # Calculate prefix
 PREFIX=log-courier_$(cat log-courier/version_short.txt)
+
+# Ensure `make` has been run so we've stored the `go get` results
+# as the PPA builders do not have internet access so can't get it themselves
+(
+  cd log-courier
+  make
+)
 
 # Archive up the original code if necessary
 if [ ! -f "${PREFIX}.orig.tar.gz" ]; then
