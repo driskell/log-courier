@@ -1,4 +1,4 @@
-log-courier (2.0.1-1) UNRELEASED; urgency=low
+log-courier (2.0.1-2) UNRELEASED; urgency=low
 
   * Fix platform default configuration values
 
