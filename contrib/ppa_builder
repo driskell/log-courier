@@ -24,9 +24,11 @@ PREFIX=log-courier_$(cat log-courier/version_short.txt)
 
 # Ensure `make` has been run so we've stored the `go get` results
 # as the PPA builders do not have internet access so can't get it themselves
+# still do a clean as to ensure we only have the go get results
 (
   cd log-courier
   make
+  make clean keepgoget=yes
 )
 
 # Archive up the original code if necessary
