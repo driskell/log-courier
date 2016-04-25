@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set +errexit
+
 # This script is used by the maintainer to push to Log Courier PPA
 # Usage:
 #   git clone https://github.com/driskell/log-courier log-courier
