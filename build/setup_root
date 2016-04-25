@@ -22,7 +22,8 @@ fi
 # Fake a .git folder for downloaded archives to avoid 'go get' 'Stale checkout'
 (
   cd src/github.com/driskell/log-courier
-  git init >/dev/null 2>&1
-  git add -A >/dev/null 2>&1
-  git commit -m 'Master' >/dev/null 2>&1
-)
+  git init
+  git config user.name Build
+  git add -A
+  git commit -m 'Master'
+) >/dev/null 2>&1
