@@ -2,7 +2,7 @@
 
 ## 2.0.1
 
-*TBC*
+*25th April 2016*
 
 * Fix `lc-admin` ignoring -config parameter and not auto-loading the default
 configuration in RPM and DEB packages (#303)
