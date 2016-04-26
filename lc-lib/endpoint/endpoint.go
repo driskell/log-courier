@@ -201,11 +201,13 @@ func (e *Endpoint) AverageLatency() time.Duration {
 // is used to ensure that really bad endpoints do not get ignored forever, as
 // if events are never sent to it, the latency is never recalculated
 func (e *Endpoint) ReduceLatency() {
+	e.mutex.Lock()
 	e.averageLatency = e.averageLatency * 0.99
+	e.mutex.Unlock()
 }
 
 // updateEstDelTime updates the total expected delivery time based on the number
-// of outstanding events
+// of outstanding events, should be called with the mutex Lock
 func (e *Endpoint) updateEstDelTime() {
 	e.estDelTime = time.Now()
 	for _, payload := range e.pendingPayloads {
@@ -255,11 +257,12 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool 
 			e.averageLatency,
 			float64(time.Since(e.transmissionStart))/float64(payload.Size()),
 		)
+
+		e.updateEstDelTime()
+
 		e.mutex.Unlock()
 
 		log.Debug("[%s] Average latency per event: %.2f ms", e.Server(), e.averageLatency/float64(time.Millisecond))
-
-		e.updateEstDelTime()
 
 		if e.numPayloads > 0 {
 			e.transmissionStart = time.Now()
