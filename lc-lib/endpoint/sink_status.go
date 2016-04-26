@@ -16,60 +16,82 @@
 
 package endpoint
 
-// status holds an Endpoint status
-type status int
-
-// Endpoint statuses
-// Ordering is important due to use of >= etc.
-const (
-	// Not yet used
-	endpointStatusIdle status = iota
-
-	// Active
-	endpointStatusActive
-
-	// Do not use this endpoint, it has failed
-	endpointStatusFailed
-
-	// The endpoint is about to shutdown once pending payloads are complete
-	endpointStatusClosing
-)
-
-func (s status) String() string {
-	switch s {
-	case endpointStatusIdle:
-		return "Idle"
-	case endpointStatusActive:
-		return "Active"
-	case endpointStatusFailed:
-		return "Failed"
-	case endpointStatusClosing:
-		return "Shutting down"
+// markActive marks an idle endpoint as active and puts it on the ready list
+func (s *Sink) markActive(endpoint *Endpoint, observer Observer) {
+	// Ignore if not idle
+	if !endpoint.IsIdle() {
+		return
 	}
-	return "Unknown"
+
+	log.Debug("[%s] Endpoint is ready", endpoint.Server())
+
+	endpoint.mutex.Lock()
+	endpoint.status = endpointStatusActive
+	endpoint.mutex.Unlock()
+
+	f.readyList.PushBack(&endpoint.readyElement)
+
+	observer.OnStarted(endpoint)
 }
 
-// IsIdle returns true if this Endpoint is idle (newly created and unused)
-func (e *Endpoint) IsIdle() bool {
-	return e.status == endpointStatusIdle
+// moveFailed stores the endpoint on the failed list, removing it from the
+// ready list so no more events are sent to it
+func (s *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
+	// Should never get here if we're closing, caller should check IsClosing()
+	if !endpoint.IsAlive() {
+		return
+	}
+
+	log.Info("[%s] Marking endpoint as failed", endpoint.Server())
+
+	f.ClearTimeout(&endpoint.Timeout)
+
+	if endpoint.IsActive() {
+		f.readyList.Remove(&endpoint.readyElement)
+	}
+
+	shutdown := endpoint.IsClosing()
+
+	endpoint.mutex.Lock()
+	endpoint.status = endpointStatusFailed
+	endpoint.averageLatency = 0
+	endpoint.mutex.Unlock()
+
+	f.failedList.PushFront(&endpoint.failedElement)
+
+	// endpoint.ForceFailure has no observer and calls with nil
+	if observer != nil {
+		observer.OnFail(endpoint)
+	}
+
+	// If we're shutting down, give up and complete transport shutdown
+	if shutdown {
+		endpoint.shutdownTransport()
+	}
 }
 
-// IsActive returns true if this Endpoint is active
-func (e *Endpoint) IsActive() bool {
-	return e.status == endpointStatusActive
-}
+// recoverFailed removes an endpoint from the failed list and marks it active
+func (s *Sink) recoverFailed(endpoint *Endpoint, observer Observer) {
+	// Ignore if we haven't failed
+	if !endpoint.IsFailed() {
+		return
+	}
 
-// IsFailed returns true if this endpoint has been marked as failed
-func (e *Endpoint) IsFailed() bool {
-	return e.status == endpointStatusFailed
-}
+	endpoint.mutex.Lock()
+	endpoint.status = endpointStatusIdle
+	endpoint.mutex.Unlock()
 
-// IsClosing returns true if this Endpoint is closing down
-func (e *Endpoint) IsClosing() bool {
-	return e.status == endpointStatusClosing
-}
+	f.failedList.Remove(&endpoint.failedElement)
 
-// IsAlive returns true if this endpoint is not failed or closing
-func (e *Endpoint) IsAlive() bool {
-	return !e.IsIdle() && e.status < endpointStatusFailed
+	backoff := endpoint.backoff.Trigger()
+	log.Info("[%s] Endpoint has recovered - will resume in %v", endpoint.Server(), backoff)
+
+	// Backoff before allowing recovery
+	f.RegisterTimeout(
+		&endpoint.Timeout,
+		backoff,
+		func() {
+			f.markActive(endpoint, observer)
+		},
+	)
 }

@@ -23,14 +23,14 @@ import (
 )
 
 // CanQueue returns true if there are active endpoints ready to receive events
-func (f *Sink) CanQueue() bool {
+func (s *Sink) CanQueue() bool {
 	return f.readyList.Len() > 0
 }
 
 // QueuePayload locates the best endpoint to send the events to, and attempts to
 // queue the events on that endpoint.
 // Returns the best endpoint and any error that occurred sending the events.
-func (f *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
+func (s *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
 	// Single endpoint?
 	if f.readyList.Len() == 1 {
 		endpoint := f.readyList.Front().Value.(*Endpoint)
@@ -75,7 +75,7 @@ func (f *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
 }
 
 // ForceFailure forces an endpoint to fail
-func (f *Sink) ForceFailure(endpoint *Endpoint) {
+func (s *Sink) ForceFailure(endpoint *Endpoint) {
 	if endpoint.IsFailed() {
 		return
 	}

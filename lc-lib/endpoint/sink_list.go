@@ -18,8 +18,21 @@ package endpoint
 
 import "github.com/driskell/log-courier/lc-lib/addresspool"
 
+// Count returns the number of associated endpoints present
+func (s *Sink) Count() int {
+	return len(f.endpoints)
+}
+
+// Front returns the first endpoint currently active
+func (s *Sink) Front() *Endpoint {
+	if f.orderedList.Front() == nil {
+		return nil
+	}
+	return f.orderedList.Front().Value.(*Endpoint)
+}
+
 // addEndpoint initialises a new endpoint
-func (f *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
+func (s *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
 	var initialLatency float64
 
 	if f.readyList.Len() == 0 {
@@ -49,7 +62,7 @@ func (f *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishO
 
 // AddEndpoint initialises a new endpoint for a given server entry and adds it
 // to the back of the list of endpoints
-func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
+func (s *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
 	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
 
 	f.mutex.Lock()
@@ -64,7 +77,7 @@ func (f *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishO
 // AddEndpointAfter initialises a new endpoint for a given server entry and adds
 // it in the list to the position after the given endpoint. If the given
 // endpoint is nil it is added at the front
-func (f *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, finishOnFail bool, after *Endpoint) *Endpoint {
+func (s *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, finishOnFail bool, after *Endpoint) *Endpoint {
 	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
 
 	f.mutex.Lock()
@@ -82,7 +95,7 @@ func (f *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, fi
 
 // FindEndpoint returns the endpoint associated with the given server entry, or
 // nil if no endpoint is associated
-func (f *Sink) FindEndpoint(server string) *Endpoint {
+func (s *Sink) FindEndpoint(server string) *Endpoint {
 	endpoint, ok := f.endpoints[server]
 	if !ok {
 		return nil
@@ -92,7 +105,7 @@ func (f *Sink) FindEndpoint(server string) *Endpoint {
 
 // MoveEndpointAfter ensures the endpoint specified appears directly after the
 // requested endpoint, or at the beginning if nil
-func (f *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
+func (s *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
 	if after == nil {
 		f.mutex.Lock()
 		f.orderedList.PushFront(&endpoint.orderedElement)
@@ -107,7 +120,7 @@ func (f *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
 
 // RemoveEndpoint requests the endpoint associated with the given server to be
 // removed from the sink
-func (f *Sink) removeEndpoint(server string) {
+func (s *Sink) removeEndpoint(server string) {
 	endpoint, ok := f.endpoints[server]
 	if !ok {
 		return
@@ -140,7 +153,7 @@ func (f *Sink) removeEndpoint(server string) {
 
 // ShutdownEndpoint requests the endpoint associated with the given server
 // entry to shutdown, returning false if the endpoint could not be shutdown
-func (f *Sink) ShutdownEndpoint(server string) bool {
+func (s *Sink) ShutdownEndpoint(server string) bool {
 	endpoint := f.FindEndpoint(server)
 	if endpoint == nil || endpoint.IsClosing() {
 		return false

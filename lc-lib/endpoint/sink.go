@@ -61,7 +61,7 @@ func NewSink(config *config.Network) *Sink {
 
 // ReloadConfig loads in a new configuration, endpoints will be shutdown if they
 // are no longer in the configuration
-func (f *Sink) ReloadConfig(config *config.Network) {
+func (s *Sink) ReloadConfig(config *config.Network) {
 EndpointLoop:
 	for endpoint := f.Front(); endpoint != nil; endpoint = endpoint.Next() {
 		var server string
@@ -77,51 +77,14 @@ EndpointLoop:
 }
 
 // Shutdown signals all associated endpoints to begin shutting down
-func (f *Sink) Shutdown() {
+func (s *Sink) Shutdown() {
 	for server := range f.endpoints {
 		f.ShutdownEndpoint(server)
 	}
 }
 
-// Count returns the number of associated endpoints present
-func (f *Sink) Count() int {
-	return len(f.endpoints)
-}
-
-// Front returns the first endpoint currently active
-func (f *Sink) Front() *Endpoint {
-	if f.orderedList.Front() == nil {
-		return nil
-	}
-	return f.orderedList.Front().Value.(*Endpoint)
-}
-
-// EventChan returns the event channel
-// Status events and messages from endpoints pass through here for processing
-func (f *Sink) EventChan() <-chan transports.Event {
-	return f.eventChan
-}
-
-// TimeoutChan returns a channel which will receive the current time when
-// the next endpoint hits its registered timeout
-func (f *Sink) TimeoutChan() <-chan time.Time {
-	return f.timeoutTimer.C
-}
-
-// resetTimeoutTimer resets the TimeoutTimer() channel for the next timeout
-func (f *Sink) resetTimeoutTimer() {
-	if f.timeoutList.Len() == 0 {
-		f.timeoutTimer.Stop()
-		return
-	}
-
-	timeout := f.timeoutList.Front().Value.(*Timeout)
-	log.Debug("Timeout timer reset - due at %v", timeout.timeoutDue)
-	f.timeoutTimer.Reset(timeout.timeoutDue.Sub(time.Now()))
-}
-
 // markActive marks an idle endpoint as active and puts it on the ready list
-func (f *Sink) markActive(endpoint *Endpoint, observer Observer) {
+func (s *Sink) markActive(endpoint *Endpoint, observer Observer) {
 	// Ignore if not idle
 	if !endpoint.IsIdle() {
 		return
@@ -140,7 +103,7 @@ func (f *Sink) markActive(endpoint *Endpoint, observer Observer) {
 
 // moveFailed stores the endpoint on the failed list, removing it from the
 // ready list so no more events are sent to it
-func (f *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
+func (s *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
 	// Should never get here if we're closing, caller should check IsClosing()
 	if !endpoint.IsAlive() {
 		return
@@ -175,7 +138,7 @@ func (f *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
 }
 
 // recoverFailed removes an endpoint from the failed list and marks it active
-func (f *Sink) recoverFailed(endpoint *Endpoint, observer Observer) {
+func (s *Sink) recoverFailed(endpoint *Endpoint, observer Observer) {
 	// Ignore if we haven't failed
 	if !endpoint.IsFailed() {
 		return
@@ -203,7 +166,7 @@ func (f *Sink) recoverFailed(endpoint *Endpoint, observer Observer) {
 // APINavigatable returns an APINavigatable that exposes status information for this sink
 // It should be called BEFORE adding any endpoints as existing endpoints will
 // not automatically become monitored
-func (f *Sink) APINavigatable() admin.APINavigatable {
+func (s *Sink) APINavigatable() admin.APINavigatable {
 	if f.api == nil {
 		f.api = &admin.APIArray{}
 	}

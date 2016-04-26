@@ -39,8 +39,26 @@ func (t *Timeout) InitTimeout() {
 	t.timeoutElement.Value = t
 }
 
+// TimeoutChan returns a channel which will receive the current time when
+// the next endpoint hits its registered timeout
+func (s *Sink) TimeoutChan() <-chan time.Time {
+	return f.timeoutTimer.C
+}
+
+// resetTimeoutTimer resets the TimeoutTimer() channel for the next timeout
+func (s *Sink) resetTimeoutTimer() {
+	if f.timeoutList.Len() == 0 {
+		f.timeoutTimer.Stop()
+		return
+	}
+
+	timeout := f.timeoutList.Front().Value.(*Timeout)
+	log.Debug("Timeout timer reset - due at %v", timeout.timeoutDue)
+	f.timeoutTimer.Reset(timeout.timeoutDue.Sub(time.Now()))
+}
+
 // RegisterTimeout registers a timeout structure with a timeout and timeout callback
-func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeoutFunc TimeoutFunc) {
+func (s *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeoutFunc TimeoutFunc) {
 	f.ClearTimeout(timeout)
 
 	timeoutDue := time.Now().Add(duration)
@@ -67,7 +85,7 @@ func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeout
 }
 
 // ClearTimeout removes a timeout structure
-func (f *Sink) ClearTimeout(timeout *Timeout) {
+func (s *Sink) ClearTimeout(timeout *Timeout) {
 	if timeout.timeoutFunc == nil {
 		return
 	}
@@ -77,7 +95,7 @@ func (f *Sink) ClearTimeout(timeout *Timeout) {
 }
 
 // ProcessTimeouts processes all pending timeouts
-func (f *Sink) ProcessTimeouts() {
+func (s *Sink) ProcessTimeouts() {
 	next := f.timeoutList.Front()
 	if next == nil {
 		return
