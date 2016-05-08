@@ -2,7 +2,7 @@
 
 ## 2.0.2
 
-*???*
+*8th May 2016*
 
 * Fix a rare hang when endpoint failure occurred (#314)
 * Add a new `debug` command to the REST API and `lc-admin` tool which gives a
