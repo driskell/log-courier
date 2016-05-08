@@ -307,6 +307,10 @@ func (t *TransportTCP) disconnect() {
 
 // sender handles socket writes
 func (t *TransportTCP) sender() {
+	defer func() {
+		t.wait.Done()
+	}()
+
 	// Send a started signal to say we're ready to receive events
 	if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Started)) {
 		return
@@ -336,12 +340,14 @@ SenderLoop:
 			}
 		}
 	}
-
-	t.wait.Done()
 }
 
 // receiver handles socket reads
 func (t *TransportTCP) receiver() {
+	defer func() {
+		t.wait.Done()
+	}()
+
 	var err error
 	var shutdown bool
 	var message []byte
@@ -405,8 +411,6 @@ ReceiverLoop:
 			}
 		}
 	}
-
-	t.wait.Done()
 }
 
 // receiverRead will repeatedly read from the socket until the given byte array
