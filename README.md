@@ -11,7 +11,7 @@ instances.
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [Upgrading to 2.0.0](#upgrading-to-200)
+- [Upgrading to 2.x](#upgrading-to-2x)
 - [Features](#features)
 - [Philosophy](#philosophy)
 - [Documentation](#documentation)
@@ -20,10 +20,11 @@ instances.
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## Upgrading to 2.0.0
+## Upgrading to 2.x
 
-There are many breaking changes in the configuration between 1.8 and 2.0. Please
-check carefully the list of breaking changes here: [Change Log](CHANGELOG.md).
+There are many breaking changes in the configuration between 1.8 and 2.x. Please
+check carefully the list of breaking changes here:
+[Change Log](CHANGELOG.md#200).
 
 Packages also now default to using a `log-courier` user. If you require the old
 behaviour of `root`, please be sure to modify the `/etc/sysconfig/log-courier`
