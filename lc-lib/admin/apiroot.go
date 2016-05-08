@@ -30,6 +30,7 @@ func newAPIRoot(reloadFunc func() error) *apiRoot {
 	root := &apiRoot{}
 
 	root.SetEntry("version", NewAPIDataEntry(APIString(core.LogCourierVersion)))
+	root.SetEntry("debug", NewAPIDataEntry(&apiDebug{}))
 	root.SetEntry("reload", NewAPICallbackEntry(func(values url.Values) (string, error) {
 		if err := reloadFunc(); err != nil {
 			return "", err
