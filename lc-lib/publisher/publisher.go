@@ -172,6 +172,8 @@ func (p *Publisher) runOnce() bool {
 	case spool := <-p.ifSpoolChan:
 		if p.numPayloads >= p.config.MaxPendingPayloads {
 			log.Debug("Maximum pending payloads of %d reached, holding %d new events", p.config.MaxPendingPayloads, len(spool))
+		} else if p.resendList.Len() != 0 {
+			log.Debug("Holding %d new events until the resend queue is flushed", len(spool))
 		} else if p.endpointSink.CanQueue() {
 			if _, ok := p.sendEvents(spool); ok {
 				break
@@ -298,11 +300,6 @@ func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 		}
 	}
 
-	if p.resendList.Len() > 0 {
-		// Prevent incoming spools
-		p.ifSpoolChan = nil
-	}
-
 	log.Debug("%d payloads held for resend", p.resendList.Len())
 }
 
@@ -423,17 +420,21 @@ func (p *Publisher) tryQueueHeld() bool {
 	}
 
 	if p.resendList.Len() > 0 {
-		pendingPayload := p.resendList.Front().Value.(*payload.Payload)
+		didSend := false
 
-		// We have a payload to resend, send it now
-		if _, ok := p.sendPayload(pendingPayload); ok {
-			pendingPayload.Resending = false
-			p.resendList.Remove(&pendingPayload.ResendElement)
-			log.Debug("%d payloads remain held for resend", p.resendList.Len())
-			return true
+		for p.resendList.Len() > 0 {
+			pendingPayload := p.resendList.Front().Value.(*payload.Payload)
+
+			// We have a payload to resend, send it now
+			if _, ok := p.sendPayload(pendingPayload); ok {
+				pendingPayload.Resending = false
+				p.resendList.Remove(&pendingPayload.ResendElement)
+				log.Debug("%d payloads remain held for resend", p.resendList.Len())
+				didSend = true
+			}
 		}
 
-		return false
+		return didSend
 	}
 
 	if p.nextSpool != nil {
