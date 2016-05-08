@@ -56,6 +56,8 @@ func (a *lcAdmin) printHelp() {
 	fmt.Printf("    Signals Log Courier to reload its configuration\n")
 	fmt.Printf("  version\n")
 	fmt.Printf("    Get the remote version\n")
+	fmt.Printf("  debug\n")
+	fmt.Printf("    Get a live go routine trace for debugging purposes\n")
 	fmt.Printf("  help\n")
 	fmt.Printf("    Show this information\n")
 	fmt.Printf("  exit\n")

@@ -11,6 +11,7 @@
   - [`publisher [status | endpoints [id]]`](#publisher-status--endpoints-id)
   - [`reload`](#reload)
   - [`version`](#version)
+  - [`debug`](#debug)
 - [Command Line Options](#command-line-options)
   - [`-config`](#-config)
   - [`-connect`](#-connect)
@@ -66,6 +67,11 @@ Requests Log Courier to reload its configuration.
 ### `version`
 
 Displays the version of the connected Log Courier instance.
+
+### `debug`
+
+Displays a live go routine trace of the running Log Courier instance for
+debugging purposes.
 
 ## Command Line Options
 

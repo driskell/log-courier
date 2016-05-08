@@ -1,5 +1,13 @@
 # Change Log
 
+## 2.0.2
+
+*???*
+
+* Fix a rare hang when endpoint failure occurred (#314)
+* Add a new `debug` command to the REST API and `lc-admin` tool which gives a
+live stack trace of the application (#315)
+
 ## 2.0.1
 
 *25th April 2016*
