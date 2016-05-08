@@ -118,9 +118,6 @@ func (t *TransportTCP) controller() {
 				// call observer fail to let it know about it
 				if err == nil {
 					err = transports.ErrForcedFailure
-				} else if t.sendEvent(t.controllerChan, transports.NewStatusEvent(t.observer, transports.Failed)) {
-					t.disconnect()
-					return
 				}
 			}
 		}
