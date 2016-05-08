@@ -29,7 +29,7 @@ func (s *Sink) markActive(endpoint *Endpoint, observer Observer) {
 	endpoint.status = endpointStatusActive
 	endpoint.mutex.Unlock()
 
-	f.readyList.PushBack(&endpoint.readyElement)
+	s.readyList.PushBack(&endpoint.readyElement)
 
 	observer.OnStarted(endpoint)
 }
@@ -44,10 +44,10 @@ func (s *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
 
 	log.Info("[%s] Marking endpoint as failed", endpoint.Server())
 
-	f.ClearTimeout(&endpoint.Timeout)
+	s.ClearTimeout(&endpoint.Timeout)
 
 	if endpoint.IsActive() {
-		f.readyList.Remove(&endpoint.readyElement)
+		s.readyList.Remove(&endpoint.readyElement)
 	}
 
 	shutdown := endpoint.IsClosing()
@@ -57,7 +57,7 @@ func (s *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
 	endpoint.averageLatency = 0
 	endpoint.mutex.Unlock()
 
-	f.failedList.PushFront(&endpoint.failedElement)
+	s.failedList.PushFront(&endpoint.failedElement)
 
 	// endpoint.ForceFailure has no observer and calls with nil
 	if observer != nil {
@@ -81,17 +81,17 @@ func (s *Sink) recoverFailed(endpoint *Endpoint, observer Observer) {
 	endpoint.status = endpointStatusIdle
 	endpoint.mutex.Unlock()
 
-	f.failedList.Remove(&endpoint.failedElement)
+	s.failedList.Remove(&endpoint.failedElement)
 
 	backoff := endpoint.backoff.Trigger()
 	log.Info("[%s] Endpoint has recovered - will resume in %v", endpoint.Server(), backoff)
 
 	// Backoff before allowing recovery
-	f.RegisterTimeout(
+	s.RegisterTimeout(
 		&endpoint.Timeout,
 		backoff,
 		func() {
-			f.markActive(endpoint, observer)
+			s.markActive(endpoint, observer)
 		},
 	)
 }

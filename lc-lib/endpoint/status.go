@@ -22,7 +22,7 @@ type status int
 // Endpoint statuses
 // Ordering is important due to use of >= etc.
 const (
-	// Not yet used
+	// Awaiting startup and initial connection
 	endpointStatusIdle status = iota
 
 	// Active

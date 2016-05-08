@@ -20,34 +20,34 @@ import "github.com/driskell/log-courier/lc-lib/addresspool"
 
 // Count returns the number of associated endpoints present
 func (s *Sink) Count() int {
-	return len(f.endpoints)
+	return len(s.endpoints)
 }
 
 // Front returns the first endpoint currently active
 func (s *Sink) Front() *Endpoint {
-	if f.orderedList.Front() == nil {
+	if s.orderedList.Front() == nil {
 		return nil
 	}
-	return f.orderedList.Front().Value.(*Endpoint)
+	return s.orderedList.Front().Value.(*Endpoint)
 }
 
 // addEndpoint initialises a new endpoint
 func (s *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
 	var initialLatency float64
 
-	if f.readyList.Len() == 0 {
+	if s.readyList.Len() == 0 {
 		// No endpoints ready currently, use initial 0
 		initialLatency = 0
 	} else {
 		// Use slightly over average so we don't slow down the fastest
-		for entry := f.readyList.Front(); entry != nil; entry = entry.Next() {
+		for entry := s.readyList.Front(); entry != nil; entry = entry.Next() {
 			initialLatency = initialLatency + float64(entry.Value.(*Endpoint).AverageLatency())
 		}
-		initialLatency = initialLatency / float64(f.readyList.Len()) * 1.01
+		initialLatency = initialLatency / float64(s.readyList.Len()) * 1.01
 	}
 
 	endpoint := &Endpoint{
-		sink:           f,
+		sink:           s,
 		server:         server,
 		addressPool:    addressPool,
 		finishOnFail:   finishOnFail,
@@ -56,21 +56,21 @@ func (s *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishO
 
 	endpoint.Init()
 
-	f.endpoints[server] = endpoint
+	s.endpoints[server] = endpoint
 	return endpoint
 }
 
 // AddEndpoint initialises a new endpoint for a given server entry and adds it
 // to the back of the list of endpoints
 func (s *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
-	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
+	endpoint := s.addEndpoint(server, addressPool, finishOnFail)
 
-	f.mutex.Lock()
-	f.orderedList.PushBack(&endpoint.orderedElement)
-	if f.api != nil {
-		f.api.AddEntry(server, endpoint.apiEntry())
+	s.mutex.Lock()
+	s.orderedList.PushBack(&endpoint.orderedElement)
+	if s.api != nil {
+		s.api.AddEntry(server, endpoint.apiEntry())
 	}
-	f.mutex.Unlock()
+	s.mutex.Unlock()
 	return endpoint
 }
 
@@ -78,25 +78,25 @@ func (s *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishO
 // it in the list to the position after the given endpoint. If the given
 // endpoint is nil it is added at the front
 func (s *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, finishOnFail bool, after *Endpoint) *Endpoint {
-	endpoint := f.addEndpoint(server, addressPool, finishOnFail)
+	endpoint := s.addEndpoint(server, addressPool, finishOnFail)
 
-	f.mutex.Lock()
+	s.mutex.Lock()
 	if after == nil {
-		f.orderedList.PushFront(&endpoint.orderedElement)
+		s.orderedList.PushFront(&endpoint.orderedElement)
 	} else {
-		f.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
+		s.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
 	}
-	if f.api != nil {
-		f.api.AddEntry(server, endpoint.apiEntry())
+	if s.api != nil {
+		s.api.AddEntry(server, endpoint.apiEntry())
 	}
-	f.mutex.Unlock()
+	s.mutex.Unlock()
 	return endpoint
 }
 
 // FindEndpoint returns the endpoint associated with the given server entry, or
 // nil if no endpoint is associated
 func (s *Sink) FindEndpoint(server string) *Endpoint {
-	endpoint, ok := f.endpoints[server]
+	endpoint, ok := s.endpoints[server]
 	if !ok {
 		return nil
 	}
@@ -107,21 +107,21 @@ func (s *Sink) FindEndpoint(server string) *Endpoint {
 // requested endpoint, or at the beginning if nil
 func (s *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
 	if after == nil {
-		f.mutex.Lock()
-		f.orderedList.PushFront(&endpoint.orderedElement)
-		f.mutex.Unlock()
+		s.mutex.Lock()
+		s.orderedList.PushFront(&endpoint.orderedElement)
+		s.mutex.Unlock()
 		return
 	}
 
-	f.mutex.Lock()
-	f.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
-	f.mutex.Unlock()
+	s.mutex.Lock()
+	s.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
+	s.mutex.Unlock()
 }
 
 // RemoveEndpoint requests the endpoint associated with the given server to be
 // removed from the sink
 func (s *Sink) removeEndpoint(server string) {
-	endpoint, ok := f.endpoints[server]
+	endpoint, ok := s.endpoints[server]
 	if !ok {
 		return
 	}
@@ -130,39 +130,39 @@ func (s *Sink) removeEndpoint(server string) {
 
 	// Ensure we are correctly removed from all lists
 	if endpoint.IsActive() {
-		f.readyList.Remove(&endpoint.readyElement)
+		s.readyList.Remove(&endpoint.readyElement)
 	} else if endpoint.IsFailed() {
-		f.failedList.Remove(&endpoint.failedElement)
+		s.failedList.Remove(&endpoint.failedElement)
 	}
 
 	// Remove any timer entry
 	if endpoint.Timeout.timeoutFunc != nil {
-		f.timeoutList.Remove(&endpoint.Timeout.timeoutElement)
-		f.resetTimeoutTimer()
+		s.timeoutList.Remove(&endpoint.Timeout.timeoutElement)
+		s.resetTimeoutTimer()
 	}
 
-	f.mutex.Lock()
-	f.orderedList.Remove(&endpoint.orderedElement)
-	if f.api != nil {
-		f.api.RemoveEntry(server)
+	s.mutex.Lock()
+	s.orderedList.Remove(&endpoint.orderedElement)
+	if s.api != nil {
+		s.api.RemoveEntry(server)
 	}
-	f.mutex.Unlock()
+	s.mutex.Unlock()
 
-	delete(f.endpoints, server)
+	delete(s.endpoints, server)
 }
 
 // ShutdownEndpoint requests the endpoint associated with the given server
 // entry to shutdown, returning false if the endpoint could not be shutdown
 func (s *Sink) ShutdownEndpoint(server string) bool {
-	endpoint := f.FindEndpoint(server)
+	endpoint := s.FindEndpoint(server)
 	if endpoint == nil || endpoint.IsClosing() {
 		return false
 	}
 
 	if endpoint.IsActive() {
-		f.readyList.Remove(&endpoint.readyElement)
+		s.readyList.Remove(&endpoint.readyElement)
 	} else if endpoint.IsFailed() {
-		f.failedList.Remove(&endpoint.failedElement)
+		s.failedList.Remove(&endpoint.failedElement)
 	}
 
 	endpoint.mutex.Lock()
@@ -175,7 +175,7 @@ func (s *Sink) ShutdownEndpoint(server string) bool {
 	}
 
 	if endpoint.timeoutFunc != nil {
-		f.timeoutList.Remove(&endpoint.timeoutElement)
+		s.timeoutList.Remove(&endpoint.timeoutElement)
 	}
 
 	endpoint.shutdownTransport()

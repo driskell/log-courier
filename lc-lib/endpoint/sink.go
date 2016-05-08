@@ -63,7 +63,7 @@ func NewSink(config *config.Network) *Sink {
 // are no longer in the configuration
 func (s *Sink) ReloadConfig(config *config.Network) {
 EndpointLoop:
-	for endpoint := f.Front(); endpoint != nil; endpoint = endpoint.Next() {
+	for endpoint := s.Front(); endpoint != nil; endpoint = endpoint.Next() {
 		var server string
 		for _, server = range config.Servers {
 			if server == endpoint.Server() {
@@ -72,104 +72,24 @@ EndpointLoop:
 		}
 
 		// Not present in server list anymore, shut down
-		f.ShutdownEndpoint(server)
+		s.ShutdownEndpoint(server)
 	}
 }
 
 // Shutdown signals all associated endpoints to begin shutting down
 func (s *Sink) Shutdown() {
-	for server := range f.endpoints {
-		f.ShutdownEndpoint(server)
+	for server := range s.endpoints {
+		s.ShutdownEndpoint(server)
 	}
-}
-
-// markActive marks an idle endpoint as active and puts it on the ready list
-func (s *Sink) markActive(endpoint *Endpoint, observer Observer) {
-	// Ignore if not idle
-	if !endpoint.IsIdle() {
-		return
-	}
-
-	log.Debug("[%s] Endpoint is ready", endpoint.Server())
-
-	endpoint.mutex.Lock()
-	endpoint.status = endpointStatusActive
-	endpoint.mutex.Unlock()
-
-	f.readyList.PushBack(&endpoint.readyElement)
-
-	observer.OnStarted(endpoint)
-}
-
-// moveFailed stores the endpoint on the failed list, removing it from the
-// ready list so no more events are sent to it
-func (s *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
-	// Should never get here if we're closing, caller should check IsClosing()
-	if !endpoint.IsAlive() {
-		return
-	}
-
-	log.Info("[%s] Marking endpoint as failed", endpoint.Server())
-
-	f.ClearTimeout(&endpoint.Timeout)
-
-	if endpoint.IsActive() {
-		f.readyList.Remove(&endpoint.readyElement)
-	}
-
-	shutdown := endpoint.IsClosing()
-
-	endpoint.mutex.Lock()
-	endpoint.status = endpointStatusFailed
-	endpoint.averageLatency = 0
-	endpoint.mutex.Unlock()
-
-	f.failedList.PushFront(&endpoint.failedElement)
-
-	// endpoint.ForceFailure has no observer and calls with nil
-	if observer != nil {
-		observer.OnFail(endpoint)
-	}
-
-	// If we're shutting down, give up and complete transport shutdown
-	if shutdown {
-		endpoint.shutdownTransport()
-	}
-}
-
-// recoverFailed removes an endpoint from the failed list and marks it active
-func (s *Sink) recoverFailed(endpoint *Endpoint, observer Observer) {
-	// Ignore if we haven't failed
-	if !endpoint.IsFailed() {
-		return
-	}
-
-	endpoint.mutex.Lock()
-	endpoint.status = endpointStatusIdle
-	endpoint.mutex.Unlock()
-
-	f.failedList.Remove(&endpoint.failedElement)
-
-	backoff := endpoint.backoff.Trigger()
-	log.Info("[%s] Endpoint has recovered - will resume in %v", endpoint.Server(), backoff)
-
-	// Backoff before allowing recovery
-	f.RegisterTimeout(
-		&endpoint.Timeout,
-		backoff,
-		func() {
-			f.markActive(endpoint, observer)
-		},
-	)
 }
 
 // APINavigatable returns an APINavigatable that exposes status information for this sink
 // It should be called BEFORE adding any endpoints as existing endpoints will
 // not automatically become monitored
 func (s *Sink) APINavigatable() admin.APINavigatable {
-	if f.api == nil {
-		f.api = &admin.APIArray{}
+	if s.api == nil {
+		s.api = &admin.APIArray{}
 	}
 
-	return f.api
+	return s.api
 }
