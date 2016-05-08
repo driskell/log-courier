@@ -233,7 +233,7 @@ func (p *Publisher) reloadConfig(config *config.Config) {
 func (p *Publisher) OnStarted(endpoint *endpoint.Endpoint) {
 	p.method.onStarted(endpoint)
 
-	if endpoint.NumPending() > 0 {
+	if endpoint.NumPending() != 0 {
 		return
 	}
 
