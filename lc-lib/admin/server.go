@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"gopkg.in/tylerb/graceful.v1"
 )
@@ -34,18 +33,20 @@ type Server struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
 
+	app      *core.App
 	config   *Config
 	listener netListener
 	server   *graceful.Server
 }
 
 // NewServer creates a new admin listener on the pipeline
-func NewServer(pipeline *core.Pipeline, config *config.Config, reloadFunc func() error) (*Server, error) {
+func NewServer(app *core.App) (*Server, error) {
 	ret := &Server{
-		config: config.Get("admin").(*Config),
+		app:    app,
+		config: app.Config().Section("admin").(*Config),
 	}
 
-	ret.config.apiRoot = newAPIRoot(reloadFunc)
+	ret.config.apiRoot = newAPIRoot(app)
 
 	listener, err := ret.listen(ret.config)
 	if err != nil {
@@ -53,8 +54,6 @@ func NewServer(pipeline *core.Pipeline, config *config.Config, reloadFunc func()
 	}
 
 	ret.initServer(listener)
-
-	pipeline.Register(ret)
 
 	return ret, nil
 }
@@ -116,7 +115,7 @@ ListenerLoop:
 			}
 		case config := <-l.OnConfig():
 			// We can't yet disable admin during a reload
-			aconfig := config.Get("admin").(*Config)
+			aconfig := config.Section("admin").(*Config)
 			if aconfig.Enabled {
 				if aconfig.Bind != l.config.Bind {
 					// Delay reload if still waiting for old server to close

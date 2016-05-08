@@ -26,7 +26,7 @@ import (
 )
 
 // loadYAMLFile loads the given YAML format file
-func (c *Config) loadYAMLFile(path string, rawConfig interface{}) (err error) {
+func loadYAMLFile(path string, rawConfig interface{}) (err error) {
 	var data []byte
 
 	// Read the entire file

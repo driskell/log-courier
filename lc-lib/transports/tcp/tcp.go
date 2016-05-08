@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -46,6 +47,7 @@ const (
 // It also can optionally introduce a TLS layer for security
 type TransportTCP struct {
 	config       *TransportTCPFactory
+	netConfig    *config.Network
 	finishOnFail bool
 	socket       net.Conn
 	tlsSocket    *tls.Conn
@@ -69,8 +71,8 @@ type TransportTCP struct {
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-func (t *TransportTCP) ReloadConfig(factoryInterface interface{}, finishOnFail bool) bool {
-	newConfig := factoryInterface.(*TransportTCPFactory)
+func (t *TransportTCP) ReloadConfig(cfg *config.Config, finishOnFail bool) bool {
+	newConfig := cfg.Network().Factory.(*TransportTCPFactory)
 	t.finishOnFail = finishOnFail
 
 	// TODO: Check timestamps of underlying certificate files to detect changes
@@ -80,7 +82,7 @@ func (t *TransportTCP) ReloadConfig(factoryInterface interface{}, finishOnFail b
 
 	// Only copy net config just in case something in the factory did change that
 	// we didn't account for which does require a restart
-	t.config.netConfig = newConfig.netConfig
+	t.netConfig = cfg.Network()
 
 	return false
 }
@@ -184,7 +186,7 @@ func (t *TransportTCP) connect() (bool, error) {
 
 	log.Info("[%s] Attempting to connect to %s", t.observer.Pool().Server(), desc)
 
-	tcpsocket, err := net.DialTimeout("tcp", addr.String(), t.config.netConfig.Timeout)
+	tcpsocket, err := net.DialTimeout("tcp", addr.String(), t.netConfig.Timeout)
 	if err != nil {
 		return false, fmt.Errorf("Failed to connect to %s: %s", desc, err)
 	}
@@ -211,7 +213,7 @@ func (t *TransportTCP) connect() (bool, error) {
 		t.tlsConfig.ServerName = t.observer.Pool().Host()
 
 		t.tlsSocket = tls.Client(&transportTCPWrap{transport: t, tcpsocket: tcpsocket}, &t.tlsConfig)
-		t.tlsSocket.SetDeadline(time.Now().Add(t.config.netConfig.Timeout))
+		t.tlsSocket.SetDeadline(time.Now().Add(t.netConfig.Timeout))
 		err = t.tlsSocket.Handshake()
 		if err != nil {
 			t.tlsSocket.Close()
@@ -230,7 +232,7 @@ func (t *TransportTCP) connect() (bool, error) {
 	// Signal channels
 	t.sendControl = make(chan int, 1)
 	t.recvControl = make(chan int, 1)
-	t.sendChan = make(chan []byte, t.config.netConfig.MaxPendingPayloads)
+	t.sendChan = make(chan []byte, t.netConfig.MaxPendingPayloads)
 
 	// Failure channel - ensure we can fit 2 errors here, one from sender and one
 	// from receive - otherwise if both fail at the same time, disconnect blocks

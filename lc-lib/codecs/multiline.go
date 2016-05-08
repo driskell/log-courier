@@ -67,7 +67,7 @@ type CodecMultiline struct {
 // NewMultilineCodecFactory creates a new MultilineCodecFactory for a codec
 // definition in the configuration file. This factory can be used to create
 // instances of a multiline codec for use by harvesters
-func NewMultilineCodecFactory(config *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
+func NewMultilineCodecFactory(cfg *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	result := &CodecMultilineFactory{}
@@ -88,12 +88,12 @@ func NewMultilineCodecFactory(config *config.Config, configPath string, unused m
 	}
 
 	if result.MaxMultilineBytes == 0 {
-		result.MaxMultilineBytes = config.General.SpoolMaxBytes
+		result.MaxMultilineBytes = cfg.General().SpoolMaxBytes
 	}
 
 	// We conciously allow a line 4 bytes longer what we would normally have as the limit
 	// This 4 bytes is the event header size. It's not worth considering though
-	if result.MaxMultilineBytes > config.General.SpoolMaxBytes {
+	if result.MaxMultilineBytes > cfg.General().SpoolMaxBytes {
 		return nil, fmt.Errorf("max multiline bytes cannot be greater than /general/spool max bytes")
 	}
 

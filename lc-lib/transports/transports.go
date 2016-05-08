@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
@@ -39,7 +40,7 @@ type Observer interface {
 type Transport interface {
 	Fail()
 	Ping() error
-	ReloadConfig(interface{}, bool) bool
+	ReloadConfig(*config.Config, bool) bool
 	Shutdown()
 	Write(string, []*core.EventDescriptor) error
 }

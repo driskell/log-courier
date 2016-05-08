@@ -20,16 +20,19 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
+// EventProcessor is implemented by all register events
 type EventProcessor interface {
 	Process(state map[core.Stream]*FileState)
 }
 
+// EventSpooler is implemented by a registrar event handler
 type EventSpooler interface {
 	Close()
 	Add(EventProcessor)
 	Send()
 }
 
+// EventSpool implements an EventSpooler associated with a Registrar
 type EventSpool struct {
 	registrar *Registrar
 	events    []EventProcessor
@@ -43,18 +46,22 @@ func newEventSpool(r *Registrar) *EventSpool {
 	return ret
 }
 
+// Close disconnects the EventSpooler from the Registrar, allowing it to
+// shutdown
 func (r *EventSpool) Close() {
 	r.registrar.dereferenceSpooler()
 	r.registrar = nil
 }
 
+// Add a registrar event to the spooler
 func (r *EventSpool) Add(event EventProcessor) {
 	r.events = append(r.events, event)
 }
 
+// Send the buffered registrar events to the registrar
 func (r *EventSpool) Send() {
 	if len(r.events) != 0 {
-		r.registrar.registrar_chan <- r.events
+		r.registrar.registrarChan <- r.events
 		r.reset()
 	}
 }

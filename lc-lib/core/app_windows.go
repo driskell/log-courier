@@ -16,7 +16,7 @@
 * limitations under the License.
  */
 
-package main
+package core
 
 import (
 	"os"
@@ -27,15 +27,20 @@ import (
 
 // registerSignals registers platform specific shutdown signals with the shutdown
 // channel and reload signals with the reload channel
-func (lc *logCourier) registerSignals() {
+func (a *App) registerSignals() {
 	// Windows only supports os.Interrupt
-	signal.Notify(lc.shutdownChan, os.Interrupt)
+	signal.Notify(a.shutdownChan, os.Interrupt)
 
 	// No reload signal for Windows - implementation will have to wait
 }
 
+// isShutdownSignal always returns true on windows as we do not support reload
+func isShutdownSignal(signal os.Signal) bool {
+	return true
+}
+
 // configureLoggingPlatform enables platform specific logging backends in the
 // logging configuration
-func (lc *logCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
+func (a *App) configureLoggingPlatform(backends *[]logging.Backend) error {
 	return nil
 }

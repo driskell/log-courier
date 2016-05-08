@@ -62,7 +62,8 @@ type Publisher struct {
 
 	mutex sync.RWMutex
 
-	config       *config.Network
+	config       *config.Config
+	netConfig    *config.Network
 	adminConfig  *admin.Config
 	endpointSink *endpoint.Sink
 	method       method
@@ -88,13 +89,15 @@ type Publisher struct {
 }
 
 // NewPublisher creates a new publisher instance on the given pipeline
-func NewPublisher(pipeline *core.Pipeline, config *config.Config, registrar registrar.Registrator) *Publisher {
+func NewPublisher(app *core.App, registrar registrar.Registrator) *Publisher {
 	ret := &Publisher{
-		config:       &config.Network,
-		adminConfig:  config.Get("admin").(*admin.Config),
-		spoolChan:    make(chan []*core.EventDescriptor, 1),
-		endpointSink: endpoint.NewSink(&config.Network),
+		config:      app.Config(),
+		netConfig:   app.Config().Network(),
+		adminConfig: app.Config().Section("admin").(*admin.Config),
+		spoolChan:   make(chan []*core.EventDescriptor, 1),
 	}
+
+	ret.endpointSink = endpoint.NewSink(ret.netConfig)
 
 	ret.initAPI()
 	ret.initMethod()
@@ -105,8 +108,6 @@ func NewPublisher(pipeline *core.Pipeline, config *config.Config, registrar regi
 		ret.registrarSpool = registrar.Connect()
 	}
 
-	pipeline.Register(ret)
-
 	return ret
 }
 
@@ -114,7 +115,7 @@ func NewPublisher(pipeline *core.Pipeline, config *config.Config, registrar regi
 // endpoints
 func (p *Publisher) initMethod() {
 	// TODO: Factory registration for methods
-	switch p.config.Method {
+	switch p.netConfig.Method {
 	case "random":
 		p.method = newMethodRandom(p.endpointSink, p.config)
 		return
@@ -126,7 +127,7 @@ func (p *Publisher) initMethod() {
 		return
 	}
 
-	panic(fmt.Sprintf("Internal error: Unknown publishing method: %s", p.config.Method))
+	panic(fmt.Sprintf("Internal error: Unknown publishing method: %s", p.netConfig.Method))
 }
 
 // Connect is used by Spooler
@@ -170,8 +171,8 @@ func (p *Publisher) runOnce() bool {
 			return true
 		}
 	case spool := <-p.ifSpoolChan:
-		if p.numPayloads >= p.config.MaxPendingPayloads {
-			log.Debug("Maximum pending payloads of %d reached, holding %d new events", p.config.MaxPendingPayloads, len(spool))
+		if p.numPayloads >= p.netConfig.MaxPendingPayloads {
+			log.Debug("Maximum pending payloads of %d reached, holding %d new events", p.netConfig.MaxPendingPayloads, len(spool))
 		} else if p.resendList.Len() != 0 {
 			log.Debug("Holding %d new events until the resend queue is flushed", len(spool))
 		} else if p.endpointSink.CanQueue() {
@@ -211,19 +212,20 @@ func (p *Publisher) runOnce() bool {
 	return false
 }
 
-func (p *Publisher) reloadConfig(config *config.Config) {
-	oldMethod := p.config.Method
-	p.config = &config.Network
+func (p *Publisher) reloadConfig(cfg *config.Config) {
+	oldMethod := p.netConfig.Method
+	p.config = cfg
+	p.netConfig = cfg.Network()
 
 	// Give sink the new config
-	p.endpointSink.ReloadConfig(&config.Network)
+	p.endpointSink.ReloadConfig(p.netConfig)
 
 	// Has method changed? Init the new method and discard the old one...
-	if p.config.Method != oldMethod {
+	if p.netConfig.Method != oldMethod {
 		p.initMethod()
 	} else {
 		// ...otherwise give the existing method the new configuraton
-		p.method.reloadConfig(p.config)
+		p.method.reloadConfig(cfg)
 	}
 
 	// The sink may have changed the priority endpoint after the reload, making
@@ -313,7 +315,7 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 	if endpoint.NumPending() > 0 {
 		p.endpointSink.RegisterTimeout(
 			&endpoint.Timeout,
-			p.config.Timeout,
+			p.netConfig.Timeout,
 			func() {
 				p.timeoutPending(endpoint)
 			},
@@ -473,7 +475,7 @@ func (p *Publisher) sendPayload(pendingPayload *payload.Payload) (*endpoint.Endp
 	if endpoint.NumPending() == 1 {
 		p.endpointSink.RegisterTimeout(
 			&endpoint.Timeout,
-			p.config.Timeout,
+			p.netConfig.Timeout,
 			func() {
 				p.timeoutPending(endpoint)
 			},
@@ -497,7 +499,7 @@ func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 	log.Debug("[%s] Sending PING and starting pending timeout", endpoint.Server())
 	p.endpointSink.RegisterTimeout(
 		&endpoint.Timeout,
-		p.config.Timeout,
+		p.netConfig.Timeout,
 		func() {
 			p.timeoutPending(endpoint)
 		},

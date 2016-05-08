@@ -33,18 +33,26 @@ import (
 // Any config entries not found in the structure are moved to an "Unused" field if it exists
 // or an error is reported if "Unused" is not available
 // We can then take the unused configuration dynamically at runtime based on another value
-func (c *Config) PopulateConfig(config interface{}, rawConfig interface{}, configPath string) (err error) {
+func PopulateConfig(config interface{}, rawConfig interface{}, configPath string) (err error) {
 	// We allow both map[string]interface{} and map[interface{}]interface{}
 	// so we will work with reflection values on rawConfig as well as the
 	// configuration
 	vRawConfig := reflect.ValueOf(rawConfig)
 	vConfig := reflect.ValueOf(config)
 
-	// Start the process
-	return c.populateStruct(vConfig, vRawConfig, configPath)
+	return populateStruct(vConfig, vRawConfig, configPath)
 }
 
-func (c *Config) populateStruct(vConfig reflect.Value, vRawConfig reflect.Value, configPath string) (err error) {
+// PopulateSlice populates dynamic configuration, like PopulateConfig, but by
+// appending to a slice instead of writing into a structure
+func PopulateSlice(configSlice interface{}, rawConfig []interface{}, configPath string) (err error) {
+	vRawConfig := reflect.ValueOf(rawConfig)
+	vConfig := reflect.ValueOf(configSlice).Elem()
+
+	return populateSlice(vConfig, vRawConfig, configPath)
+}
+
+func populateStruct(vConfig reflect.Value, vRawConfig reflect.Value, configPath string) (err error) {
 	// Does the configuration structure have InitDefaults method? Call it to
 	// pre-populate the default values before we overwrite the ones given by
 	// rawConfig
@@ -88,7 +96,7 @@ FieldLoop:
 				if vField.Kind() != reflect.Struct {
 					panic("Embedded configuration field is not a struct")
 				}
-				if err = c.populateStruct(vField.Addr(), vRawConfig, configPath); err != nil {
+				if err = populateStruct(vField.Addr(), vRawConfig, configPath); err != nil {
 					return
 				}
 				continue FieldLoop
@@ -100,7 +108,7 @@ FieldLoop:
 				dynamicKeys := vField.MapKeys()
 				for _, key := range dynamicKeys {
 					// Unwrap the interface and the pointer
-					if err = c.populateEntry(vField.MapIndex(key).Elem().Elem(), vRawConfig, configPath, key.String()); err != nil {
+					if err = populateEntry(vField.MapIndex(key).Elem().Elem(), vRawConfig, configPath, key.String()); err != nil {
 						return
 					}
 				}
@@ -112,7 +120,7 @@ FieldLoop:
 			continue
 		}
 
-		if err = c.populateEntry(vField, vRawConfig, configPath, tag); err != nil {
+		if err = populateEntry(vField, vRawConfig, configPath, tag); err != nil {
 			return
 		}
 	}
@@ -138,12 +146,12 @@ FieldLoop:
 
 	// Report to the user any unused values if there are any, in case they
 	// misspelled an option
-	return c.reportUnusedConfig(vRawConfig, configPath)
+	return reportUnusedConfig(vRawConfig, configPath)
 }
 
 // populateEntry handles population of a single entry, working out whether it
 // can assign directly or needs to process as a struct
-func (c *Config) populateEntry(vField reflect.Value, vRawConfig reflect.Value, configPath string, tag string) (err error) {
+func populateEntry(vField reflect.Value, vRawConfig reflect.Value, configPath string, tag string) (err error) {
 	var vMapIndex reflect.Value
 
 	if vRawConfig.IsValid() {
@@ -171,7 +179,7 @@ func (c *Config) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		}
 
 		// Recurse with the new structure and values
-		if err := c.populateStruct(vField.Addr(), vMapIndex, fmt.Sprintf("%s%s/", configPath, tag)); err != nil {
+		if err := populateStruct(vField.Addr(), vMapIndex, fmt.Sprintf("%s%s/", configPath, tag)); err != nil {
 			return err
 		}
 
@@ -184,13 +192,13 @@ func (c *Config) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		return
 	}
 
-	err = c.populateValue(vField, vMapIndex, configPath, tag)
+	err = populateValue(vField, vMapIndex, configPath, tag)
 	return
 }
 
 // populateValue handles value to value mappings within a single configuration
 // structure, such as maps, slices, and scalar values
-func (c *Config) populateValue(vField reflect.Value, vValue reflect.Value, configPath string, tag string) (err error) {
+func populateValue(vField reflect.Value, vValue reflect.Value, configPath string, tag string) (err error) {
 	if vValue.Type().AssignableTo(vField.Type()) {
 		vField.Set(vValue)
 		return
@@ -202,7 +210,7 @@ func (c *Config) populateValue(vField reflect.Value, vValue reflect.Value, confi
 			return
 		}
 
-		err = c.populateSlice(vField, vValue, fmt.Sprintf("%s%s/", configPath, tag))
+		err = populateSlice(vField, vValue, fmt.Sprintf("%s%s/", configPath, tag))
 		return
 	}
 
@@ -308,7 +316,7 @@ func (c *Config) populateValue(vField reflect.Value, vValue reflect.Value, confi
 
 // populateSlice is used to populate an array of configuration structures using
 // an array from the configuration file
-func (c *Config) populateSlice(vField reflect.Value, vRawConfig reflect.Value, configPath string) (err error) {
+func populateSlice(vField reflect.Value, vRawConfig reflect.Value, configPath string) (err error) {
 	tElem := vField.Type().Elem()
 	if tElem.Kind() != reflect.Struct {
 		// Simple slice copy
@@ -323,7 +331,7 @@ func (c *Config) populateSlice(vField reflect.Value, vRawConfig reflect.Value, c
 		vItem := reflect.New(tElem)
 
 		// Unwrap vItem from its pointer, and unwrap the map from it's interface{}
-		if err = c.populateStruct(vItem, vRawConfig.Index(i).Elem(), fmt.Sprintf("%s[%d]/", configPath, i)); err != nil {
+		if err = populateStruct(vItem, vRawConfig.Index(i).Elem(), fmt.Sprintf("%s[%d]/", configPath, i)); err != nil {
 			return
 		}
 
@@ -337,13 +345,13 @@ func (c *Config) populateSlice(vField reflect.Value, vRawConfig reflect.Value, c
 // empty. This is used to report unrecognised configuration entries. As each
 // configuration entry is mapped into the configuration it is removed from the
 // configuration map, so it is expected to end up empty.
-func (c *Config) ReportUnusedConfig(rawConfig map[string]interface{}, configPath string) (err error) {
-	return c.reportUnusedConfig(reflect.ValueOf(rawConfig), configPath)
+func ReportUnusedConfig(rawConfig map[string]interface{}, configPath string) (err error) {
+	return reportUnusedConfig(reflect.ValueOf(rawConfig), configPath)
 }
 
 // reportUnusedConfig is the internal representation of ReportUnusedConfig that
 // works with reflection
-func (c *Config) reportUnusedConfig(vRawConfig reflect.Value, configPath string) (err error) {
+func reportUnusedConfig(vRawConfig reflect.Value, configPath string) (err error) {
 	if !vRawConfig.IsValid() {
 		// Zero value, which means there's no data
 		return nil

@@ -22,50 +22,66 @@ package registrar
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"os"
 	"sync"
+
+	"github.com/driskell/log-courier/lc-lib/core"
 )
 
+// LoadPreviousFunc is a callback implemented by a consumer of the Registrar,
+// and is called for each part of a loaded previous state when LoadPrevious is
+// called
 type LoadPreviousFunc func(string, *FileState) (core.Stream, error)
 
+// Registrator is the interface implemented by a Registrar implementation
 type Registrator interface {
+	core.IPipelineSegment
+
+	// Connect returns a connected EventSpooler associated with the Registrar that
+	// collects registrar events and sends them to the registrar. EventSpoolers
+	// are connected to the registrar and the registrar will delay any shutdown
+	// until all connected EventSpoolers have been disconnected
 	Connect() EventSpooler
+
+	// LoadPrevious loads the previous state from the file and calls the
+	// callbackFunc for each entry
 	LoadPrevious(LoadPreviousFunc) (bool, error)
 }
 
+// Registrar persists file offsets to a file that can be read again on startup
+// to resume where we left off
 type Registrar struct {
 	core.PipelineSegment
 
 	sync.Mutex
 
-	registrar_chan chan []EventProcessor
-	references     int
-	persistdir     string
-	statefile      string
-	state          map[core.Stream]*FileState
+	registrarChan chan []EventProcessor
+	references    int
+	persistdir    string
+	statefile     string
+	state         map[core.Stream]*FileState
 }
 
-func NewRegistrar(pipeline *core.Pipeline, persistdir string) *Registrar {
+// NewRegistrar creates a new Registrar associated with a file in a directory
+func NewRegistrar(app *core.App) *Registrar {
 	ret := &Registrar{
-		registrar_chan: make(chan []EventProcessor, 16), // TODO: Make configurable?
-		persistdir:     persistdir,
-		statefile:      ".log-courier",
-		state:          make(map[core.Stream]*FileState),
+		registrarChan: make(chan []EventProcessor, 16), // TODO: Make configurable?
+		persistdir:    app.Config().General().PersistDir,
+		statefile:     ".log-courier",
+		state:         make(map[core.Stream]*FileState),
 	}
-
-	pipeline.Register(ret)
 
 	return ret
 }
 
-func (r *Registrar) LoadPrevious(callback_func LoadPreviousFunc) (have_previous bool, err error) {
+// LoadPrevious loads the previous state from the file
+func (r *Registrar) LoadPrevious(callbackFunc LoadPreviousFunc) (havePrevious bool, err error) {
 	data := make(map[string]*FileState)
 
 	// Load the previous state - opening RDWR ensures we can write too and fail early
 	// c_filename is what we will use to test create capability
 	filename := r.persistdir + string(os.PathSeparator) + ".log-courier"
-	c_filename := r.persistdir + string(os.PathSeparator) + ".log-courier.new"
+	newFilename := r.persistdir + string(os.PathSeparator) + ".log-courier.new"
 
 	var f *os.File
 	f, err = os.OpenFile(filename, os.O_RDWR, 0600)
@@ -76,7 +92,7 @@ func (r *Registrar) LoadPrevious(callback_func LoadPreviousFunc) (have_previous 
 		}
 
 		// Try the .new file - maybe we failed mid-move
-		filename, c_filename = c_filename, filename
+		filename = newFilename
 		f, err = os.OpenFile(filename, os.O_RDWR, 0600)
 	}
 
@@ -90,7 +106,7 @@ func (r *Registrar) LoadPrevious(callback_func LoadPreviousFunc) (have_previous 
 
 	// Parse the data
 	log.Notice("Loading registrar data from %s", filename)
-	have_previous = true
+	havePrevious = true
 
 	decoder := json.NewDecoder(f)
 	decoder.Decode(&data)
@@ -100,7 +116,7 @@ func (r *Registrar) LoadPrevious(callback_func LoadPreviousFunc) (have_previous 
 
 	var stream core.Stream
 	for file, state := range data {
-		if stream, err = callback_func(file, state); err != nil {
+		if stream, err = callbackFunc(file, state); err != nil {
 			return
 		}
 		r.state[stream] = state
@@ -114,6 +130,7 @@ func (r *Registrar) LoadPrevious(callback_func LoadPreviousFunc) (have_previous 
 	return
 }
 
+// Connect returns a connected EventSpooler
 func (r *Registrar) Connect() EventSpooler {
 	r.Lock()
 	defer r.Unlock()
@@ -127,7 +144,7 @@ func (r *Registrar) dereferenceSpooler() {
 	r.references--
 	if r.references == 0 {
 		// Shutdown registrar, all references are closed
-		close(r.registrar_chan)
+		close(r.registrarChan)
 	}
 }
 
@@ -136,13 +153,14 @@ func (r *Registrar) toCanonical() (canonical map[string]*FileState) {
 	for _, value := range r.state {
 		if _, ok := canonical[*value.Source]; ok {
 			// We should never allow this - report an error
-			log.Error("BUG: Unexpected registrar conflict detected for %s", *value.Source)
+			log.Errorf("BUG: Unexpected registrar conflict detected for %s", *value.Source)
 		}
 		canonical[*value.Source] = value
 	}
 	return
 }
 
+// Run starts the registrar - it is called by the pipeline
 func (r *Registrar) Run() {
 	defer func() {
 		r.Done()
@@ -152,7 +170,7 @@ RegistrarLoop:
 	for {
 		// Ignore shutdown channel - wait for registrar to close
 		select {
-		case spool := <-r.registrar_chan:
+		case spool := <-r.registrarChan:
 			if spool == nil {
 				break RegistrarLoop
 			}
@@ -162,7 +180,7 @@ RegistrarLoop:
 			}
 
 			if err := r.writeRegistry(); err != nil {
-				log.Error("Registry write failed: %s", err)
+				log.Errorf("Registry write failed: %s", err)
 			}
 		}
 	}

@@ -60,7 +60,7 @@ type Harvester struct {
 	stream          core.Stream
 	fileinfo        os.FileInfo
 	path            string
-	config          *config.Config
+	genConfig       *config.General
 	streamConfig    *config.Stream
 	offset          int64
 	output          chan<- *core.EventDescriptor
@@ -95,11 +95,11 @@ type Harvester struct {
 }
 
 // NewHarvester creates a new harvester with the given configuration for the given stream identifier
-func NewHarvester(stream core.Stream, config *config.Config, streamConfig *config.Stream, offset int64) *Harvester {
+func NewHarvester(stream core.Stream, app *core.App, streamConfig *config.Stream, offset int64) *Harvester {
 	ret := &Harvester{
 		stopChan:     make(chan interface{}),
 		stream:       stream,
-		config:       config,
+		genConfig:    app.Config().General(),
 		streamConfig: streamConfig,
 		offset:       offset,
 		timezone:     time.Now().Format("-0700 MST"),
@@ -209,7 +209,7 @@ func (h *Harvester) harvest(output chan<- *core.EventDescriptor) (int64, error) 
 	}
 
 	// The buffer size limits the maximum line length we can read, including terminator
-	h.reader = NewLineReader(h.file, int(h.config.General.LineBufferBytes), int(h.config.General.MaxLineBytes))
+	h.reader = NewLineReader(h.file, int(h.genConfig.LineBufferBytes), int(h.genConfig.MaxLineBytes))
 
 	// Prepare internal data
 	h.lastReadTime = time.Now()
@@ -406,7 +406,7 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, text strin
 	}
 
 	if h.streamConfig.AddHostField {
-		event["host"] = h.config.General.Host
+		event["host"] = h.genConfig.Host
 	}
 	if h.streamConfig.AddPathField {
 		event["path"] = h.path
@@ -418,8 +418,8 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, text strin
 		event["timezone"] = h.timezone
 	}
 
-	for k := range h.config.General.GlobalFields {
-		event[k] = h.config.General.GlobalFields[k]
+	for k := range h.genConfig.GlobalFields {
+		event[k] = h.genConfig.GlobalFields[k]
 	}
 
 	for k := range h.streamConfig.Fields {

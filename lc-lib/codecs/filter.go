@@ -45,7 +45,7 @@ type CodecFilter struct {
 // NewFilterCodecFactory creates a new FilterCodecFactory for a codec definition
 // in the configuration file. This factory can be used to create instances of a
 // filter codec for use by harvesters
-func NewFilterCodecFactory(config *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
+func NewFilterCodecFactory(cfg *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	result := &CodecFilterFactory{}

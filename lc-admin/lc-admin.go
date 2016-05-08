@@ -112,7 +112,7 @@ func (a *lcAdmin) loadConfig() {
 			os.Exit(1)
 		}
 
-		a.adminConnect = config.Get("admin").(*admin.Config).Bind
+		a.adminConnect = config.Section("admin").(*admin.Config).Bind
 	}
 }
 
