@@ -7,6 +7,8 @@
 * Fix issue where pending payload limit is exceeded when Logstash is overloaded
 (#315)
 * Fix incorrect stale bytes count in API / `lc-admin`
+* Fix the harvester status not updating correctly when reaching end of file in
+API / `lc-admin`
 * Reintroduce full `status` command into `lc-admin`
 
 ## 2.0.2

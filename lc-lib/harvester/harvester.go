@@ -235,12 +235,13 @@ func (h *Harvester) performRead() error {
 
 	// Is a measurement due?
 	if duration := time.Since(h.lastMeasurement); duration >= time.Second {
-		measureErr := h.takeMeasurements(duration, false)
-		if measureErr == errFileTruncated {
-			h.handleTruncation()
-			return nil
+		if measureErr := h.takeMeasurements(duration, false); measureErr != nil {
+			if measureErr == errFileTruncated {
+				h.handleTruncation()
+				return nil
+			}
+			return measureErr
 		}
-		return measureErr
 	}
 
 	if err == nil {
