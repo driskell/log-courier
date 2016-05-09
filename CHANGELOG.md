@@ -2,7 +2,7 @@
 
 ## 2.0.3
 
-*???*
+*9th May 2016*
 
 * Fix issue where pending payload limit is exceeded when Logstash is overloaded
 (#315)
