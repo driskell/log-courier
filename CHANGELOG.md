@@ -1,5 +1,13 @@
 # Change Log
 
+## 2.0.3
+
+*???*
+
+* Fix issue where pending payload limit is exceeded when Logstash is overloaded
+(#315)
+* Reintroduce full `status` command into `lc-admin`
+
 ## 2.0.2
 
 *8th May 2016*
