@@ -353,7 +353,11 @@ func (h *Harvester) takeMeasurements(duration time.Duration, isPipelineBlocked b
 	if h.offset > h.lastSize {
 		h.lastSize = h.offset
 	}
-	h.staleBytes = h.lastStaleOffset
+	if h.lastStaleOffset > h.offset {
+		h.staleBytes = h.lastStaleOffset - h.offset
+	} else {
+		h.staleBytes = 0
+	}
 	h.codec.Meter()
 	for _, codec := range h.codecChain {
 		codec.Meter()
