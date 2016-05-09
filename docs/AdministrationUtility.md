@@ -7,6 +7,7 @@
 - [Overview](#overview)
 - [Available Commands](#available-commands)
   - [`help`](#help)
+  - [`status`](#status)
   - [`prospector [status | files [id]]`](#prospector-status--files-id)
   - [`publisher [status | endpoints [id]]`](#publisher-status--endpoints-id)
   - [`reload`](#reload)
@@ -40,6 +41,10 @@ Courier instances.*
 ### `help`
 
 Displays a list of available commands.
+
+### `status`
+
+Displays a full status snapshot of all Log Courier internals.
 
 ### `prospector [status | files [id]]`
 

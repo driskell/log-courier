@@ -48,6 +48,10 @@ func main() {
 
 func (a *lcAdmin) printHelp() {
 	fmt.Printf("Available commands:\n")
+	fmt.Printf("  help\n")
+	fmt.Printf("    Show this information\n")
+	fmt.Printf("  status\n")
+	fmt.Printf("    Get a full status snapshot of all Log Courier internals\n")
 	fmt.Printf("  prospector [status | files [id]]\n")
 	fmt.Printf("    Get information on prospector state and running harvesters\n")
 	fmt.Printf("  publisher [status | endpoints [id]]\n")
@@ -57,9 +61,7 @@ func (a *lcAdmin) printHelp() {
 	fmt.Printf("  version\n")
 	fmt.Printf("    Get the remote version\n")
 	fmt.Printf("  debug\n")
-	fmt.Printf("    Get a live go routine trace for debugging purposes\n")
-	fmt.Printf("  help\n")
-	fmt.Printf("    Show this information\n")
+	fmt.Printf("    Get a live goroutine trace for debugging purposes\n")
 	fmt.Printf("  exit\n")
 	fmt.Printf("    Exit\n")
 }
@@ -177,6 +179,11 @@ func (a *lcAdmin) ProcessCommand(command string) bool {
 	if command == "help" {
 		a.printHelp()
 		return true
+	}
+
+	if command == "status" {
+		// Simulate empty command so we grab full status
+		command = ""
 	}
 
 	command = url.QueryEscape(command)
