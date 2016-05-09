@@ -568,10 +568,10 @@ func (h *Harvester) APIEncodable() admin.APIEncodable {
 	apiEncodable.SetEntry("stale_bytes", admin.APINumber(h.staleBytes))
 	apiEncodable.SetEntry("last_known_size", admin.APINumber(h.lastSize))
 
-	if h.offset >= h.lastSize {
+	if h.lastOffset >= h.lastSize {
 		apiEncodable.SetEntry("completion", admin.APIFloat(100.))
 	} else {
-		completion := float64(h.offset) * 100 / float64(h.lastSize)
+		completion := float64(h.lastOffset) * 100 / float64(h.lastSize)
 		apiEncodable.SetEntry("completion", admin.APIFloat(completion))
 	}
 	if h.lastEOFOff == nil {
