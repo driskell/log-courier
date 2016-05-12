@@ -20,10 +20,11 @@
 package spooler
 
 import (
+	"time"
+
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/publisher"
-	"time"
 )
 
 const (
@@ -35,7 +36,7 @@ type Spooler struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
 
-	config      *config.General
+	genConfig   *config.General
 	spool       []*core.EventDescriptor
 	spool_size  int
 	input       chan *core.EventDescriptor
@@ -44,15 +45,13 @@ type Spooler struct {
 	timer       *time.Timer
 }
 
-func NewSpooler(pipeline *core.Pipeline, config *config.General, publisher_imp *publisher.Publisher) *Spooler {
+func NewSpooler(app *core.App, publisherImpl *publisher.Publisher) *Spooler {
 	ret := &Spooler{
-		config: config,
-		spool:  make([]*core.EventDescriptor, 0, config.SpoolSize),
-		input:  make(chan *core.EventDescriptor, 16), // TODO: Make configurable?
-		output: publisher_imp.Connect(),
+		genConfig: app.Config().General(),
+		spool:     make([]*core.EventDescriptor, 0, app.Config().General().SpoolSize),
+		input:     make(chan *core.EventDescriptor, 16), // TODO: Make configurable?
+		output:    publisherImpl.Connect(),
 	}
-
-	pipeline.Register(ret)
 
 	return ret
 }
@@ -62,7 +61,10 @@ func (s *Spooler) Connect() chan<- *core.EventDescriptor {
 }
 
 func (s *Spooler) Flush() {
-	s.input <- nil
+	select {
+	case s.input <- nil:
+	case <-s.OnShutdown():
+	}
 }
 
 func (s *Spooler) Run() {
@@ -71,7 +73,7 @@ func (s *Spooler) Run() {
 	}()
 
 	s.timer_start = time.Now()
-	s.timer = time.NewTimer(s.config.SpoolTimeout)
+	s.timer = time.NewTimer(s.genConfig.SpoolTimeout)
 
 SpoolerLoop:
 	for {
@@ -90,8 +92,8 @@ SpoolerLoop:
 				continue
 			}
 
-			if len(s.spool) > 0 && int64(s.spool_size)+int64(len(event.Event))+event_header_size >= s.config.SpoolMaxBytes {
-				log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spool_size, s.config.SpoolMaxBytes, len(event.Event)+4)
+			if len(s.spool) > 0 && int64(s.spool_size)+int64(len(event.Event))+event_header_size >= s.genConfig.SpoolMaxBytes {
+				log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spool_size, s.genConfig.SpoolMaxBytes, len(event.Event)+4)
 
 				// Can't fit this event in the spool - flush and then queue
 				if !s.sendSpool() {
@@ -152,7 +154,7 @@ func (s *Spooler) sendSpool() bool {
 	case s.output <- s.spool:
 	}
 
-	s.spool = make([]*core.EventDescriptor, 0, s.config.SpoolSize)
+	s.spool = make([]*core.EventDescriptor, 0, s.genConfig.SpoolSize)
 	s.spool_size = 0
 
 	return true
@@ -167,22 +169,22 @@ func (s *Spooler) resetTimer() {
 	case <-s.timer.C:
 	default:
 	}
-	s.timer.Reset(s.config.SpoolTimeout)
+	s.timer.Reset(s.genConfig.SpoolTimeout)
 }
 
-func (s *Spooler) reloadConfig(config *config.Config) bool {
-	s.config = &config.General
+func (s *Spooler) reloadConfig(cfg *config.Config) bool {
+	s.genConfig = cfg.General()
 
 	// Immediate flush?
 	passed := time.Now().Sub(s.timer_start)
-	if passed >= s.config.SpoolTimeout || len(s.spool) >= int(s.config.SpoolSize) {
+	if passed >= s.genConfig.SpoolTimeout || len(s.spool) >= int(s.genConfig.SpoolSize) {
 		if !s.sendSpool() {
 			return false
 		}
 		s.timer_start = time.Now()
-		s.timer.Reset(s.config.SpoolTimeout)
+		s.timer.Reset(s.genConfig.SpoolTimeout)
 	} else {
-		s.timer.Reset(passed - s.config.SpoolTimeout)
+		s.timer.Reset(passed - s.genConfig.SpoolTimeout)
 	}
 
 	return true

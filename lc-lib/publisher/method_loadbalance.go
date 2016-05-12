@@ -26,17 +26,17 @@ import (
 )
 
 type methodLoadbalance struct {
-	sink   *endpoint.Sink
-	config *config.Network
+	sink      *endpoint.Sink
+	netConfig *config.Network
 }
 
-func newMethodLoadbalance(sink *endpoint.Sink, config *config.Network) *methodLoadbalance {
+func newMethodLoadbalance(sink *endpoint.Sink, cfg *config.Config) *methodLoadbalance {
 	ret := &methodLoadbalance{
 		sink: sink,
 	}
 
 	// Reload configuration to ensure all servers are present in the sink
-	ret.reloadConfig(config)
+	ret.reloadConfig(cfg)
 
 	return ret
 }
@@ -56,12 +56,12 @@ func (m *methodLoadbalance) onStarted(endpoint *endpoint.Endpoint) {
 	return
 }
 
-func (m *methodLoadbalance) reloadConfig(config *config.Network) {
-	m.config = config
+func (m *methodLoadbalance) reloadConfig(cfg *config.Config) {
+	m.netConfig = cfg.Network()
 
 	// Verify all servers are present and reload them
 	var last, foundEndpoint *endpoint.Endpoint
-	for _, server := range config.Servers {
+	for _, server := range m.netConfig.Servers {
 		if foundEndpoint = m.sink.FindEndpoint(server); foundEndpoint == nil {
 			// Add a new endpoint
 			last = m.sink.AddEndpointAfter(server, addresspool.NewPool(server), false, last)
@@ -71,7 +71,7 @@ func (m *methodLoadbalance) reloadConfig(config *config.Network) {
 
 		// Ensure ordering
 		m.sink.MoveEndpointAfter(foundEndpoint, last)
-		foundEndpoint.ReloadConfig(config, false)
+		foundEndpoint.ReloadConfig(cfg, false)
 		last = foundEndpoint
 	}
 }

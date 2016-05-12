@@ -41,6 +41,12 @@ type Observer interface {
 	OnStarted(*Endpoint)
 }
 
+// EventChan returns the event channel
+// Status events and messages from endpoints pass through here for processing
+func (s *Sink) EventChan() <-chan transports.Event {
+	return s.eventChan
+}
+
 // ProcessEvent performs the necessary processing of events
 func (s *Sink) ProcessEvent(event transports.Event, observer Observer) {
 	endpoint := event.Observer().(*Endpoint)

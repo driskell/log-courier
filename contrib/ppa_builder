@@ -1,9 +1,11 @@
 #!/bin/bash
 
+set +errexit
+
 # This script is used by the maintainer to push to Log Courier PPA
 # Usage:
 #   git clone https://github.com/driskell/log-courier log-courier
-#   ./log-courier/contrib/ppa_builder.sh
+#   ./log-courier/contrib/ppa_builder
 
 # Grab the release if specified
 RELEASE="$1"
@@ -17,9 +19,13 @@ if [ -z "$DRELEASE" ]; then
   DRELEASE=1
 fi
 
+# Grab version from nearest tag
+VERSION=$(cd log-courier || exit 1; git describe --abbrev=0)
+VERSION=${VERSION#v}
+
 # Remove hyphens from version and replace with dot for deb as hyphens aren't
 # allowed and are used to separate the upstream from the debian version
-FIXEDVERSION=$(cat log-courier/version.txt | tr '-' '.')
+FIXEDVERSION=$(echo "$VERSION" | tr '-' '.' | sed 's/^v//')
 
 # Calculate prefix
 PREFIX=log-courier_$FIXEDVERSION
@@ -36,8 +42,10 @@ build_package()
   local D=$2
 
   # Ensure on latest in case we pushed up packaging fixes
+  # And ensure .pc is removed so we don't confuse dpkg with stale quilt patch state
   (
     cd log-courier
+    rm -rf .pc
     git reset --hard
     git pull
   )
@@ -55,7 +63,7 @@ build_package()
       --controlmaint \
       --distribution "$D" \
       -b \
-      --newversion "$(cat version.txt)-${RELEASE}~${D}${DRELEASE}" \
+      --newversion "${VERSION}-${RELEASE}~${D}${DRELEASE}" \
       "Package for ${D}"
 
     # Commit any packaging fixes
@@ -66,12 +74,9 @@ build_package()
   )
 
   # Dput
-  dput log-courier-ppa "${PREFIX}-${RELEASE}~${D}${DRELEASE}_source.changes"
+  dput log-courier2-ppa "${PREFIX}-${RELEASE}~${D}${DRELEASE}_source.changes"
 }
 
-for D in precise trusty; do
-  build_package upstart "$D"
-done
-for D in vivid wily; do
-  build_package systemd "$D"
-done
+build_package upstart trusty
+build_package systemd wily
+build_package systemd xenial

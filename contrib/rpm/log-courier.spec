@@ -4,8 +4,8 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 2.0.0
-Release: 3%{dist}
+Version: 2.0.2
+Release: 1%{dist}
 License: Apache
 Group: System Environment/Libraries
 Packager: Jason Woods <packages@jasonwoods.me.uk>
@@ -35,7 +35,7 @@ Log Courier is a lightweight tool created to ship log files speedily and
 securely, with low resource usage, to remote Logstash instances.
 
 %prep
-%setup -q -n %{name}-master
+%setup -q -n %{name}-%{version}
 
 %build
 # Build a go workspace
@@ -47,11 +47,11 @@ cd "$GOPATH/src/github.com/driskell/log-courier"
 # Configure platform specific defaults
 export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-courier/log-courier.yaml
 export LC_DEFAULT_GENERAL_PERSIST_DIR=%{_var}/lib/log-courier
-export LC_DEFAULT_GENERAL_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
+export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
 
 # Enable vendor experiment in the event of Go 1.5 then generate and build
 export GO15VENDOREXPERIMENT=1
-go generate ./lc-lib/config ./lc-lib/core
+go generate . ./lc-admin
 go install . ./lc-admin ./lc-tlscert
 
 %install
@@ -157,13 +157,25 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Sun May 8 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.2-1
+- Upgrade to 2.0.2
+
+* Mon Apr 25 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.1-3
+- Fix lc-admin
+
+* Mon Apr 25 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.1-2
+- Fix platform default configuration values
+
+* Mon Apr 25 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.1-1
+- Upgrade to v2.0.1 release
+
 * Sun Apr 17 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.0-3
 - Init script updates
 
 * Sun Apr 17 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.0-2
 - Upgrade to v2.0.0 release
 
-* Thu Feb 24 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0-1.beta1
+* Wed Feb 24 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0-1.beta1
 - Upgrade to v2.0 beta1
 
 * Thu Aug 6 2015 Jason Woods <devel@jasonwoods.me.uk> - 1.8-1

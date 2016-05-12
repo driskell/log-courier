@@ -20,9 +20,10 @@
 package main
 
 import (
+	"sync"
+
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/registrar"
-	"sync"
 )
 
 type StdinRegistrar struct {
@@ -38,15 +39,13 @@ type StdinRegistrar struct {
 	last_offset    int64
 }
 
-func newStdinRegistrar(pipeline *core.Pipeline) *StdinRegistrar {
+func newStdinRegistrar(app *core.App) *StdinRegistrar {
 	ret := &StdinRegistrar{
 		registrar_chan: make(chan []registrar.EventProcessor, 16),
 		signal_chan:    make(chan int64, 1),
 	}
 
 	ret.group.Add(1)
-
-	pipeline.Register(ret)
 
 	return ret
 }

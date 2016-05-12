@@ -205,7 +205,7 @@ func (d *APIDataEntry) Update() error {
 	return nil
 }
 
-// APICallbackFunc is a functionthat can be called by the API
+// APICallbackFunc is a function that can be called by the API
 type APICallbackFunc func(url.Values) (string, error)
 
 // APICallbackEntry is an entry that provides an API callback

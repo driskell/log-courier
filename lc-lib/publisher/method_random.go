@@ -31,7 +31,7 @@ import (
 
 type methodRandom struct {
 	sink         *endpoint.Sink
-	config       *config.Network
+	netConfig    *config.Network
 	activeServer int
 	generator    *rand.Rand
 	backoff      *core.ExpBackoff
@@ -39,14 +39,15 @@ type methodRandom struct {
 	endpoint.Timeout
 }
 
-func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom {
+func newMethodRandom(sink *endpoint.Sink, cfg *config.Config) *methodRandom {
 	ret := &methodRandom{
 		sink:         sink,
-		config:       config,
+		netConfig:    cfg.Network(),
 		activeServer: -1,
 		generator:    rand.New(rand.NewSource(int64(time.Now().Nanosecond()))),
-		backoff:      core.NewExpBackoff(config.Backoff, config.BackoffMax),
 	}
+
+	ret.backoff = core.NewExpBackoff("Random", ret.netConfig.Backoff, ret.netConfig.BackoffMax)
 
 	ret.InitTimeout()
 
@@ -71,7 +72,7 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 		}
 
 		// Suitable endpoint, update activeServer
-		for k, server := range config.Servers {
+		for k, server := range ret.netConfig.Servers {
 			if server == endpoint.Server() {
 				ret.activeServer = k
 				foundAcceptable = true
@@ -79,7 +80,7 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 				log.Debug("[Random] Utilising existing endpoint connection: %s", server)
 
 				// Reload it
-				endpoint.ReloadConfig(config, true)
+				endpoint.ReloadConfig(cfg, true)
 				break
 			}
 		}
@@ -98,23 +99,23 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 
 func (m *methodRandom) connectRandom() {
 	var server string
-	if len(m.config.Servers) == 1 {
+	if len(m.netConfig.Servers) == 1 {
 		// Only one entry
-		server = m.config.Servers[0]
+		server = m.netConfig.Servers[0]
 		m.activeServer = 0
-	} else if len(m.config.Servers) == 2 && m.activeServer != -1 {
+	} else if len(m.netConfig.Servers) == 2 && m.activeServer != -1 {
 		m.activeServer = (m.activeServer + 1) % 2
-		server = m.config.Servers[m.activeServer]
+		server = m.netConfig.Servers[m.activeServer]
 	} else {
 		for {
-			selected := m.generator.Intn(len(m.config.Servers))
+			selected := m.generator.Intn(len(m.netConfig.Servers))
 			if selected == m.activeServer {
 				// Same server, try again
 				continue
 			}
 
 			m.activeServer = selected
-			server = m.config.Servers[selected]
+			server = m.netConfig.Servers[selected]
 			break
 		}
 	}
@@ -148,9 +149,9 @@ func (m *methodRandom) onStarted(endpoint *endpoint.Endpoint) {
 	return
 }
 
-func (m *methodRandom) reloadConfig(config *config.Network) {
-	currentServer := m.config.Servers[m.activeServer]
-	m.config = config
+func (m *methodRandom) reloadConfig(cfg *config.Config) {
+	currentServer := m.netConfig.Servers[m.activeServer]
+	m.netConfig = cfg.Network()
 
 	front := m.sink.Front()
 	if front == nil {
@@ -160,10 +161,10 @@ func (m *methodRandom) reloadConfig(config *config.Network) {
 
 	// If the current active endpoint is no longer present, shut it down
 	// onFinish will trigger a new endpoint connection
-	for _, server := range config.Servers {
+	for _, server := range m.netConfig.Servers {
 		if server == currentServer {
 			// Still present, all good, pass through the reload
-			front.ReloadConfig(config, true)
+			front.ReloadConfig(cfg, true)
 			return
 		}
 	}

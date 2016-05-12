@@ -20,16 +20,20 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
+// AckEvent is a registrar ack event which triggers an update to the saved
+// resume offsets for a file
 type AckEvent struct {
 	events []*core.EventDescriptor
 }
 
+// NewAckEvent creates a new registrar ack event
 func NewAckEvent(events []*core.EventDescriptor) *AckEvent {
 	return &AckEvent{
 		events: events,
 	}
 }
 
+// Process persists the ack event into the registrar state by storing the offset
 func (e *AckEvent) Process(state map[core.Stream]*FileState) {
 	if len(e.events) == 1 {
 		log.Debug("Registrar received offsets for %d log entries", len(e.events))
@@ -38,10 +42,14 @@ func (e *AckEvent) Process(state map[core.Stream]*FileState) {
 	}
 
 	for _, event := range e.events {
-		_, is_found := state[event.Stream]
-		if !is_found {
+		_, isFound := state[event.Stream]
+		if !isFound {
 			// This is probably stdin then or a deleted file we can't resume
 			continue
+		}
+
+		if state[event.Stream].Offset > event.Offset {
+			log.Debug("Registrar is reverting the offset for %s from %d to %d", *state[event.Stream].Source, state[event.Stream].Offset, event.Offset)
 		}
 
 		state[event.Stream].Offset = event.Offset

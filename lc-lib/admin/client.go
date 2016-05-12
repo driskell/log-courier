@@ -93,7 +93,7 @@ func (c *Client) Request(path string) (string, error) {
 		return c.Call(path, url.Values{})
 	}
 
-	resp, err := c.client.Get("http://log-courier/" + path + "?w=pretty")
+	resp, err := c.client.Get("http://log-courier-address/" + path + "?w=pretty")
 	if err != nil {
 		return "", err
 	}
@@ -103,7 +103,7 @@ func (c *Client) Request(path string) (string, error) {
 
 // Call performs a remote action and returns the result
 func (c *Client) Call(path string, values url.Values) (string, error) {
-	resp, err := c.client.PostForm("http://log-courier/"+path+"?w=pretty", values)
+	resp, err := c.client.PostForm("http://log-courier-address/"+path+"?w=pretty", values)
 	if err != nil {
 		return "", err
 	}

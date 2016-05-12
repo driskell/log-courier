@@ -27,12 +27,12 @@ import (
 
 type methodFailover struct {
 	sink             *endpoint.Sink
-	config           *config.Network
+	netConfig        *config.Network
 	currentEndpoint  *endpoint.Endpoint
 	failoverPosition int
 }
 
-func newMethodFailover(sink *endpoint.Sink, config *config.Network) *methodFailover {
+func newMethodFailover(sink *endpoint.Sink, cfg *config.Config) *methodFailover {
 	ret := &methodFailover{
 		sink:             sink,
 		failoverPosition: 0,
@@ -40,7 +40,7 @@ func newMethodFailover(sink *endpoint.Sink, config *config.Network) *methodFailo
 
 	// reloadConfig will fix up existing endpoints in the sink as well as setting
 	// up the failover method and reloading endpoint configurations
-	ret.reloadConfig(config)
+	ret.reloadConfig(cfg)
 
 	return ret
 }
@@ -52,14 +52,14 @@ func (m *methodFailover) onFail(endpoint *endpoint.Endpoint) {
 	}
 
 	// Current endpoint failed, are all failed? We'd have to ignore
-	if m.sink.Count() == len(m.config.Servers) {
+	if m.sink.Count() == len(m.netConfig.Servers) {
 		log.Warning("[Failover] All endpoints have failed, awaiting recovery")
 		return
 	}
 
 	// Add on extra endpoints
 	m.failoverPosition++
-	newServer := m.config.Servers[m.failoverPosition]
+	newServer := m.netConfig.Servers[m.failoverPosition]
 	log.Warning("[Failover] Initiating failover to: %s", newServer)
 
 	// Check it's not already there (it may be still shutting down from a previous
@@ -110,15 +110,15 @@ func (m *methodFailover) onStarted(endpoint *endpoint.Endpoint) {
 	}
 }
 
-func (m *methodFailover) reloadConfig(config *config.Network) {
-	m.config = config
+func (m *methodFailover) reloadConfig(cfg *config.Config) {
+	m.netConfig = cfg.Network()
 
 	// Verify server ordering and if any better current server now available
 	// We also use reloadConfig on first load of this method to cleanup what any
 	// other method may have left behind
 	var last, foundEndpoint *endpoint.Endpoint
 	foundCurrent := false
-	for _, server := range config.Servers {
+	for _, server := range m.netConfig.Servers {
 		if m.currentEndpoint != nil && m.currentEndpoint.Server() == server {
 			foundCurrent = true
 		}
@@ -149,7 +149,7 @@ func (m *methodFailover) reloadConfig(config *config.Network) {
 
 		// Ensure ordering and reload the configuration
 		m.sink.MoveEndpointAfter(foundEndpoint, last)
-		foundEndpoint.ReloadConfig(config, false)
+		foundEndpoint.ReloadConfig(cfg, false)
 		last = foundEndpoint
 	}
 }

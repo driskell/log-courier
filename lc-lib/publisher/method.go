@@ -25,5 +25,5 @@ type method interface {
 	onFail(*endpoint.Endpoint)
 	onFinish(*endpoint.Endpoint) bool
 	onStarted(*endpoint.Endpoint)
-	reloadConfig(*config.Network)
+	reloadConfig(*config.Config)
 }

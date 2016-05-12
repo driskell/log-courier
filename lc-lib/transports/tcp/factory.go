@@ -58,7 +58,6 @@ type TransportTCPFactory struct {
 	SSLCA          string        `config:"ssl ca"`
 
 	hostportRegexp  *regexp.Regexp
-	netConfig       *config.Network
 	certificate     *tls.Certificate
 	certificateList []*x509.Certificate
 	caList          []*x509.Certificate
@@ -66,13 +65,12 @@ type TransportTCPFactory struct {
 
 // NewTransportTCPFactory create a new TransportTCPFactory from the provided
 // configuration data, reporting back any configuration errors it discovers.
-func NewTransportTCPFactory(config *config.Config, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
+func NewTransportTCPFactory(cfg *config.Config, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	ret := &TransportTCPFactory{
 		transport:      name,
 		hostportRegexp: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
-		netConfig:      &config.Network,
 	}
 
 	// Only allow SSL configurations if using TLS
@@ -156,7 +154,7 @@ func (f *TransportTCPFactory) NewTransport(observer transports.Observer, finishO
 		finishOnFail:   finishOnFail,
 		observer:       observer,
 		controllerChan: make(chan int),
-		backoff:        core.NewExpBackoff(f.Reconnect, f.ReconnectMax),
+		backoff:        core.NewExpBackoff(observer.Pool().Server()+" Reconnect", f.Reconnect, f.ReconnectMax),
 	}
 
 	go ret.controller()

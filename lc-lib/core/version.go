@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Jason Woods.
+ * Copyright 2014-2016 Jason Woods.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package config
+package core
 
-// Generate the platform-specific defaults
-//go:generate go run platform_generate.go
+// LogCourierVersion is the library version number
+const LogCourierVersion string = "2.0.2"

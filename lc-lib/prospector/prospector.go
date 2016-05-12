@@ -41,8 +41,10 @@ type Prospector struct {
 
 	mutex sync.RWMutex
 
+	app             *core.App
 	config          *config.Config
-	adminConfig     *admin.Config
+	genConfig       *config.General
+	fileConfigs     Config
 	prospectorindex map[string]*prospectorInfo
 	prospectors     map[*prospectorInfo]*prospectorInfo
 	fromBeginning   bool
@@ -58,10 +60,12 @@ type Prospector struct {
 // If fromBeginning is true and registrar reports no state was loaded, all new
 // files on the FIRST scan will be started from the beginning, as opposed to
 // from the end
-func NewProspector(pipeline *core.Pipeline, config *config.Config, fromBeginning bool, registrarImp registrar.Registrator, spoolerImp *spooler.Spooler) (*Prospector, error) {
+func NewProspector(app *core.App, fromBeginning bool, registrarImp registrar.Registrator, spoolerImp *spooler.Spooler) (*Prospector, error) {
 	ret := &Prospector{
-		config:          config,
-		adminConfig:     config.Get("admin").(*admin.Config),
+		app:             app,
+		config:          app.Config(),
+		genConfig:       app.Config().General(),
+		fileConfigs:     app.Config().Section("files").(Config),
 		prospectorindex: make(map[string]*prospectorInfo),
 		prospectors:     make(map[*prospectorInfo]*prospectorInfo),
 		fromBeginning:   fromBeginning,
@@ -75,8 +79,6 @@ func NewProspector(pipeline *core.Pipeline, config *config.Config, fromBeginning
 	if err := ret.init(); err != nil {
 		return nil, err
 	}
-
-	pipeline.Register(ret)
 
 	return ret, nil
 }
@@ -140,9 +142,9 @@ func (p *Prospector) runOnce() bool {
 	newlastscan := time.Now()
 	p.iteration++ // Overflow is allowed
 
-	for configKey, config := range p.config.Files {
+	for configKey, config := range p.fileConfigs {
 		for _, path := range config.Paths {
-			p.scan(path, &p.config.Files[configKey])
+			p.scan(path, &p.fileConfigs[configKey])
 		}
 	}
 
@@ -178,7 +180,7 @@ func (p *Prospector) runOnce() bool {
 
 	// Defer next scan for a bit
 	now := time.Now()
-	scanDeadline := now.Add(p.config.General.ProspectInterval)
+	scanDeadline := now.Add(p.genConfig.ProspectInterval)
 
 DelayLoop:
 	for {
@@ -187,8 +189,9 @@ DelayLoop:
 			break DelayLoop
 		case <-p.OnShutdown():
 			return true
-		case config := <-p.OnConfig():
-			p.config = config
+		case cfg := <-p.OnConfig():
+			p.genConfig = cfg.General()
+			p.fileConfigs = cfg.Section("files").(Config)
 		}
 
 		now = time.Now()
@@ -201,22 +204,22 @@ DelayLoop:
 }
 
 // scan crawls a path for file movements
-func (p *Prospector) scan(path string, config *config.File) {
+func (p *Prospector) scan(path string, cfg *FileConfig) {
 	// Evaluate the path as a wildcards/shell glob
 	matches, err := filepath.Glob(path)
 	if err != nil {
-		log.Error("glob(%s) failed: %v", path, err)
+		log.Errorf("glob(%s) failed: %v", path, err)
 		return
 	}
 
 	// Check any matched files to see if we need to start a harvester
 	for _, file := range matches {
-		p.processFile(file, config)
+		p.processFile(file, cfg)
 	}
 }
 
 // processFile works out if a single discovered file has moved or is new etc.
-func (p *Prospector) processFile(file string, config *config.File) {
+func (p *Prospector) processFile(file string, cfg *FileConfig) {
 	defer func() {
 		p.mutex.Unlock()
 	}()
@@ -258,7 +261,7 @@ func (p *Prospector) processFile(file string, config *config.File) {
 		if _, ok := err.(*ProspectorSkipError); ok {
 			log.Info("Skipping %s: %s", file, err)
 		} else {
-			log.Error("Error prospecting %s: %s", file, err)
+			log.Errorf("Error prospecting %s: %s", file, err)
 		}
 
 		p.prospectors[info] = info
@@ -294,9 +297,9 @@ func (p *Prospector) processFile(file string, config *config.File) {
 
 			// Check for dead time, but only if the file modification time is before the last scan started
 			// This ensures we don't skip genuine creations with dead times less than 10s
-			if fileinfo.ModTime().Before(p.lastscan) && time.Since(fileinfo.ModTime()) > config.DeadTime {
+			if fileinfo.ModTime().Before(p.lastscan) && time.Since(fileinfo.ModTime()) > cfg.DeadTime {
 				// Old file, skip it, but push offset of file size so we start from the end if this file changes and needs picking up
-				log.Info("Skipping file (older than dead time of %v): %s", config.DeadTime, file)
+				log.Info("Skipping file (older than dead time of %v): %s", cfg.DeadTime, file)
 
 				// Store the offset that we should resume from if we notice a modification
 				info.finishOffset = fileinfo.Size()
@@ -304,7 +307,7 @@ func (p *Prospector) processFile(file string, config *config.File) {
 			} else {
 				// Process new file
 				log.Info("Launching harvester on new file: %s", file)
-				p.startHarvester(info, config)
+				p.startHarvester(info, cfg)
 			}
 		}
 
@@ -336,7 +339,7 @@ func (p *Prospector) processFile(file string, config *config.File) {
 				info = newProspectorInfoFromFileInfo(file, fileinfo)
 
 				// Process new file
-				p.startHarvester(info, config)
+				p.startHarvester(info, cfg)
 			}
 
 			// Store it
@@ -348,9 +351,9 @@ func (p *Prospector) processFile(file string, config *config.File) {
 	resume := !info.isRunning()
 	if resume {
 		if info.status == statusResume {
-			if info.finishOffset == fileinfo.Size() && time.Since(fileinfo.ModTime()) > config.DeadTime {
+			if info.finishOffset == fileinfo.Size() && time.Since(fileinfo.ModTime()) > cfg.DeadTime {
 				// Old file with an unchanged offset, skip it
-				log.Info("Skipping file (older than dead time of %v): %s", config.DeadTime, file)
+				log.Info("Skipping file (older than dead time of %v): %s", cfg.DeadTime, file)
 				info.status = statusOk
 				resume = false
 			} else {
@@ -371,7 +374,7 @@ func (p *Prospector) processFile(file string, config *config.File) {
 	info.update(fileinfo, p.iteration)
 
 	if resume {
-		p.startHarvesterWithOffset(info, config, info.finishOffset)
+		p.startHarvesterWithOffset(info, cfg, info.finishOffset)
 	}
 
 	p.prospectorindex[file] = info
@@ -397,7 +400,7 @@ func (p *Prospector) flagDuplicateError(file string, info *prospectorInfo) {
 }
 
 // startHarvester starts a new harvester against a file
-func (p *Prospector) startHarvester(info *prospectorInfo, fileconfig *config.File) {
+func (p *Prospector) startHarvester(info *prospectorInfo, fileConfig *FileConfig) {
 	var offset int64
 
 	if p.fromBeginning {
@@ -409,14 +412,14 @@ func (p *Prospector) startHarvester(info *prospectorInfo, fileconfig *config.Fil
 	// Send a new file event to allow registrar to begin persisting for this harvester
 	p.registrarSpool.Add(registrar.NewDiscoverEvent(info, info.file, offset, info.identity.Stat()))
 
-	p.startHarvesterWithOffset(info, fileconfig, offset)
+	p.startHarvesterWithOffset(info, fileConfig, offset)
 }
 
 // startHarvesterWithOffset starts a new harvester against a file starting at
 // the given offset
-func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileconfig *config.File, offset int64) {
+func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileConfig *FileConfig, offset int64) {
 	// TODO - hook in a shutdown channel
-	info.harvester = harvester.NewHarvester(info, p.config, &fileconfig.Stream, offset)
+	info.harvester = harvester.NewHarvester(info, p.app, &fileConfig.Stream, offset)
 	info.running = true
 	info.status = statusOk
 	info.harvester.Start(p.output)
@@ -456,13 +459,15 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *pros
 
 // initAPI sets up admin connectivity
 func (p *Prospector) initAPI() {
+	adminConfig := admin.ConfigFromApp(p.app)
+
 	// Is admin loaded into the pipeline?
-	if !p.adminConfig.Enabled {
+	if !adminConfig.Enabled {
 		return
 	}
 
 	prospectorAPI := &api{p: p}
 	prospectorAPI.SetEntry("status", &apiStatus{p: p})
 
-	p.adminConfig.SetEntry("prospector", prospectorAPI)
+	adminConfig.SetEntry("prospector", prospectorAPI)
 }

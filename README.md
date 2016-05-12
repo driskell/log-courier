@@ -11,14 +11,24 @@ instances.
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
+- [Upgrading to 2.x](#upgrading-to-2x)
 - [Features](#features)
 - [Philosophy](#philosophy)
 - [Documentation](#documentation)
   - [Installation](#installation)
   - [Reference](#reference)
-  - [Change Log](#change-log)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Upgrading to 2.x
+
+There are many breaking changes in the configuration between 1.8 and 2.x. Please
+check carefully the list of breaking changes here:
+[Change Log](CHANGELOG.md#200).
+
+Packages also now default to using a `log-courier` user. If you require the old
+behaviour of `root`, please be sure to modify the `/etc/sysconfig/log-courier`
+(CentOS/RedHat) or `/etc/default/log-courier` (Ubuntu) file.
 
 ## Features
 
@@ -36,7 +46,7 @@ instances.
 ## Philosophy
 
 * At-least-once delivery of events to the Logstash pipeline - a Log Courier
-crash should never lose events *[1]*
+crash should never lose events
 * Be efficient, reliable and scalable
 * Keep resource usage low
 * Be easy to use
@@ -55,7 +65,4 @@ crash should never lose events *[1]*
 * [Configuration](docs/Configuration.md)
 * [Logstash Integration](docs/LogstashIntegration.md)
 * [SSL Certificate Utility](docs/SSLCertificateUtility.md)
-
-### Change Log
-
 * [Change Log](CHANGELOG.md)

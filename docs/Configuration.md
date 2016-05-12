@@ -5,8 +5,10 @@
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Overview](#overview)
-- [Reloading](#reloading)
+- [YAML Format](#yaml-format)
+- [JSON Format](#json-format)
 - [Examples](#examples)
+- [Reloading](#reloading)
 - [Field Types](#field-types)
   - [String, Number, Boolean, Array, Dictionary](#string-number-boolean-array-dictionary)
   - [Duration](#duration)
@@ -60,8 +62,68 @@
 
 ## Overview
 
-The Log Courier configuration is currently stored in standard JSON format with
-the exception that comments are allowed.
+The Log Courier configuration file is in YAML format. It can also be in JSON
+format is desired.
+
+When loading a configuration file, the format is determined by the file
+extension. If the file extension is not recognised, Log Courier reports an
+error.
+
+* `.yaml` - YAML
+* `.json` - JSON
+* `.conf` - JSON
+
+## YAML Format
+
+YAML format is the preferred format for Log Courier configuration files as it
+tends to be easier to read and write than most other formats, such as JSON. It
+is also easier to manage by scripts as it is line-based.
+
+Entries start with their name followed by a colon. A value then follows it, with
+optional quoting, on the same line, or a block of names and values follow it on
+the next line with indentation.
+
+Lists can be specified by starting each line with `-`. To place a block in a
+list, prefix the first name and value pair with `-` and then indent the rest
+accordingly.
+
+It is best explained with an example:
+
+```
+network:
+  servers:
+    - "10.0.0.1:12345"
+    - "10.0.0.2:12345"
+  transport: tcp
+files:
+  - paths: [ "/var/log/nginx/access.log", "/var/log/nginx/error.log" ]
+    fields:
+      type: nginx_logs
+```
+
+## JSON Format
+
+If in doubt, it is best to use YAML configuration as it tends to be easier to
+read and write than JSON format.
+
+Blocks are wrapped in `{` and `}` and within those is a comma-separate list of
+name and value pairs. Names are always double-quoted strings
+(e.g. `"hello world"`) and the values can be numbers, double-quoted strings,
+another block, or a list of something. Lists are comma-separated lists of these
+and are wrapped in `[` and `]`. The configuration file is formed by a
+single block, as shown below.
+
+```
+{
+  "network": {
+    "servers": [ "10.0.0.1:12345", "10.0.0.2:12345" ],
+    "transport": "tcp"
+  },
+  "files": [ {
+    "paths": [ "/var/log/nginx/access.log", "/var/log/nginx/error.log" ]
+  } ]
+}
+```
 
 End-of-line comments start with a pound sign outside of a string, and cause all
 characters until the end of the line to be ignored. Block comments start with
@@ -76,12 +138,29 @@ to be ignored until an asterisk followed by a forwarder slash is encountered.
     "network": {
         # Network configuration here
     }, # (these are end-of-line comments)
-    "files": {
+    "files": [
         /* File configuration here
         (this is a block comment) */
-    }
+    ]
 }
 ```
+
+## Examples
+
+Several configuration examples are available for perusal in the
+[examples folder](examples). Examples use the preferred format of YAML.
+
+* [Ship a single log file](examples/example-single.yaml)
+* [Ship a folder of log files](examples/example-folder.yaml)
+* [Ship from STDIN](examples/example-stdin.yaml)
+* [Ship logs with extra field information](examples/example-fields.yaml)
+* [Multiline log processing](examples/example-multiline.yaml)
+* [Multiple codecs](examples/example-multiple-codecs.yaml)
+
+An example [JSON configuration](examples/example-json.conf) is also available
+that follows a single log file.
+
+The configuration is documented in full below.
 
 ## Reloading
 
@@ -106,18 +185,6 @@ reconnect as required at the earliest opportunity.
 
 *Configuration reload is not currently available on Windows builds of Log
 Courier.*
-
-## Examples
-
-Several configuration examples are available for you perusal.
-
-* [Ship a single log file](examples/example-single.conf)
-* [Ship a folder of log files](examples/example-folder.conf)
-* [Ship from STDIN](examples/example-stdin.conf)
-* [Ship logs with extra field information](examples/example-fields.conf)
-* [Multiline log processing](examples/example-multiline.conf)
-
-The configuration is documented in full below.
 
 ## Field Types
 
@@ -277,9 +344,11 @@ this.
 
 ### `listen address`
 
-*String. Optional. Default: tcp:127.0.0.1:1234*
+*String. Required when `enabled` is true.  
+Default: tcp:127.0.0.1:1234  
+RPM/DEB Package Default: unix:/var/run/log-courier/admin.socket*
 
-The address the REST interface should listen on in the format
+The address the REST interface should listen on must be in the format
 `transport:address`.
 
 Allowed transports are "tcp", "tcp4", "tcp6" (Windows and *nix) and "unix"
@@ -418,6 +487,7 @@ This setting can not be greater than the `spool max bytes` setting.
 ### `persist directory`
 
 *String. Required  
+RPM/DEB Package Default: /var/lib/log-courier
 Requires restart*
 
 The directory that Log Courier should store its persistence data in.

@@ -52,8 +52,14 @@ func (a *lcAdmin) printHelp() {
 	fmt.Printf("    Get information on prospector state and running harvesters\n")
 	fmt.Printf("  publisher [status | endpoints [id]]\n")
 	fmt.Printf("    Get information on connectivity and endpoints\n")
+	fmt.Printf("  reload\n")
+	fmt.Printf("    Signals Log Courier to reload its configuration\n")
 	fmt.Printf("  version\n")
 	fmt.Printf("    Get the remote version\n")
+	fmt.Printf("  debug\n")
+	fmt.Printf("    Get a live go routine trace for debugging purposes\n")
+	fmt.Printf("  help\n")
+	fmt.Printf("    Show this information\n")
 	fmt.Printf("  exit\n")
 	fmt.Printf("    Exit\n")
 }
@@ -86,12 +92,12 @@ func (a *lcAdmin) startUp() {
 
 func (a *lcAdmin) loadConfig() {
 	if a.configFile == "" && a.adminConnect == "" {
-		if config.DefaultGeneralAdminBind == "" {
+		if admin.DefaultAdminBind == "" {
 			fmt.Printf("Either -connect or -config must be specified\n")
 			flag.PrintDefaults()
 			os.Exit(1)
 		} else {
-			a.adminConnect = config.DefaultGeneralAdminBind
+			a.adminConnect = admin.DefaultAdminBind
 		}
 		return
 	}
@@ -106,7 +112,7 @@ func (a *lcAdmin) loadConfig() {
 			os.Exit(1)
 		}
 
-		a.adminConnect = config.Get("admin").(*admin.Config).Bind
+		a.adminConnect = config.Section("admin").(*admin.Config).Bind
 	}
 }
 

@@ -70,7 +70,7 @@ type Endpoint struct {
 // the pending payload structures
 func (e *Endpoint) Init() {
 	e.warming = true
-	e.backoff = core.NewExpBackoff(e.sink.config.Backoff, e.sink.config.BackoffMax)
+	e.backoff = core.NewExpBackoff(e.server+" Failure", e.sink.config.Backoff, e.sink.config.BackoffMax)
 
 	e.readyElement.Value = e
 	e.failedElement.Value = e
@@ -201,11 +201,13 @@ func (e *Endpoint) AverageLatency() time.Duration {
 // is used to ensure that really bad endpoints do not get ignored forever, as
 // if events are never sent to it, the latency is never recalculated
 func (e *Endpoint) ReduceLatency() {
+	e.mutex.Lock()
 	e.averageLatency = e.averageLatency * 0.99
+	e.mutex.Unlock()
 }
 
 // updateEstDelTime updates the total expected delivery time based on the number
-// of outstanding events
+// of outstanding events, should be called with the mutex Lock
 func (e *Endpoint) updateEstDelTime() {
 	e.estDelTime = time.Now()
 	for _, payload := range e.pendingPayloads {
@@ -255,11 +257,12 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool 
 			e.averageLatency,
 			float64(time.Since(e.transmissionStart))/float64(payload.Size()),
 		)
-		e.mutex.Unlock()
-
-		log.Debug("[%s] Average latency per event: %f", e.Server(), e.averageLatency)
 
 		e.updateEstDelTime()
+
+		e.mutex.Unlock()
+
+		log.Debug("[%s] Average latency per event: %.2f ms", e.Server(), e.averageLatency/float64(time.Millisecond))
 
 		if e.numPayloads > 0 {
 			e.transmissionStart = time.Now()
@@ -315,8 +318,8 @@ func (e *Endpoint) PullBackPending() []*payload.Payload {
 // ReloadConfig submits a new configuration to the transport, and returns true
 // if the transports requested that it be restarted in order for the
 // configuration to take effect
-func (e *Endpoint) ReloadConfig(config *config.Network, finishOnFail bool) bool {
-	return e.transport.ReloadConfig(config.Factory, finishOnFail)
+func (e *Endpoint) ReloadConfig(cfg *config.Config, finishOnFail bool) bool {
+	return e.transport.ReloadConfig(cfg, finishOnFail)
 }
 
 // resetPayloads resets the internal state for pending payloads

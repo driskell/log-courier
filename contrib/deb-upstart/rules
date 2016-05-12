@@ -1,5 +1,13 @@
 #!/usr/bin/make -f
 
+# Configure platform specific defaults
+export LC_DEFAULT_CONFIGURATION_FILE=/etc/log-courier/log-courier.yaml
+export LC_DEFAULT_GENERAL_PERSIST_DIR=/var/lib/log-courier
+export LC_DEFAULT_ADMIN_BIND=unix:/var/run/log-courier/admin.socket
+
+# Enable vendor experiment in the event of Go 1.5 then generate and build
+export GO15VENDOREXPERIMENT=1
+
 %:
 	dh $@
 
@@ -7,15 +15,11 @@ override_dh_auto_clean:
 	# Nothing to do
 
 override_dh_auto_build:
-	# Configure platform specific defaults
-	export LC_DEFAULT_CONFIGURATION_FILE=/etc/log-courier/log-courier.yaml
-	export LC_DEFAULT_GENERAL_PERSIST_DIR=/var/lib/log-courier
-	export LC_DEFAULT_GENERAL_ADMIN_BIND=unix:/var/run/log-courier/admin.socket
-
-	# Enable vendor experiment in the event of Go 1.5 then generate and build
-	export GO15VENDOREXPERIMENT=1
-	go generate ./lc-lib/config ./lc-lib/core
-	go install . ./lc-admin ./lc-tlscert
+	mkdir -p _workspace/src/github.com/driskell
+	ln -nsf $$(pwd) _workspace/src/github.com/driskell/log-courier
+	cd "_workspace/src/github.com/driskell/log-courier"; \
+		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go generate . ./lc-admin; \
+		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go install . ./lc-admin ./lc-tlscert
 
 override_dh_auto_test:
 	# Maybe tests in future
@@ -23,10 +27,10 @@ override_dh_auto_test:
 override_dh_auto_install:
 	# Install binaries
 	mkdir -p debian/log-courier/usr/sbin
-	install -m 0755 sbin/log-courier debian/log-courier/usr/sbin/log-courier
+	install -m 0755 _workspace/bin/log-courier debian/log-courier/usr/sbin/log-courier
 	mkdir -p debian/log-courier/usr/bin
-	install -m 0755 bin/lc-admin debian/log-courier/usr/bin/lc-admin
-	install -m 0755 bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
+	install -m 0755 _workspace/bin/lc-admin debian/log-courier/usr/bin/lc-admin
+	install -m 0755 _workspace/bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
 
 	# Install example configuration
 	mkdir -p debian/log-courier/etc/log-courier/examples
@@ -35,6 +39,7 @@ override_dh_auto_install:
 	# Install upstart script
 	mkdir -p debian/log-courier/etc/init.d
 	install -m 0755 contrib/initscripts/debian-upstart.init debian/log-courier/etc/init.d/log-courier
+	mkdir -p debian/log-courier/etc/default
 	install -m 0644 contrib/initscripts/log-courier.env debian/log-courier/etc/default/log-courier
 
 	# Make the run dir

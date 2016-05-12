@@ -1,8 +1,33 @@
 # Change Log
 
-## 2.0.0-beta
+## 2.0.2
 
-*???*
+*8th May 2016*
+
+* Fix a rare hang when endpoint failure occurred (#314)
+* Add a new `debug` command to the REST API and `lc-admin` tool which gives a
+live stack trace of the application (#315)
+
+## 2.0.1
+
+*25th April 2016*
+
+* Fix `lc-admin` ignoring -config parameter and not auto-loading the default
+configuration in RPM and DEB packages (#303)
+* Fix `lc-admin` numerical outputs such as file completion percentage showing as
+1.00e2 instead of 100 (#304)
+* Fix hang that could occur when Logstash failed in loadbalance or failover
+network methods (#311)
+* Fix `admin` `listen address` not having a default (#307)
+* Improve documentation for `lc-admin` (#307)
+* Improve debug logging of backoff calculations
+
+*NOTE: Please note the building from source step for `go generate` was changed
+in 2.0.1.*
+
+## 2.0.0
+
+*20th April 2016*
 
 Log Courier 2.x is compatible with the 1.x Logstash plugins.
 

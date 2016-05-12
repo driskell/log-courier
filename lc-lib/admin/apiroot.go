@@ -26,12 +26,13 @@ type apiRoot struct {
 	APINode
 }
 
-func newAPIRoot(reloadFunc func() error) *apiRoot {
+func newAPIRoot(app *core.App) *apiRoot {
 	root := &apiRoot{}
 
 	root.SetEntry("version", NewAPIDataEntry(APIString(core.LogCourierVersion)))
+	root.SetEntry("debug", NewAPIDataEntry(&apiDebug{}))
 	root.SetEntry("reload", NewAPICallbackEntry(func(values url.Values) (string, error) {
-		if err := reloadFunc(); err != nil {
+		if err := app.ReloadConfig(); err != nil {
 			return "", err
 		}
 		return "Successfully reloaded configuration", nil

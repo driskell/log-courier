@@ -16,7 +16,7 @@
 * limitations under the License.
  */
 
-package main
+package core
 
 import (
 	"fmt"
@@ -30,25 +30,34 @@ import (
 
 // registerSignals registers platform specific shutdown signals with the shutdown
 // channel and reload signals with the reload channel
-func (lc *logCourier) registerSignals() {
+func (a *App) registerSignals() {
 	// *nix systems support SIGTERM so handle shutdown on that too
-	signal.Notify(lc.shutdownChan, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(a.signalChan, os.Interrupt, syscall.SIGTERM)
 
 	// *nix has SIGHUP for reload
-	signal.Notify(lc.reloadChan, syscall.SIGHUP)
+	signal.Notify(a.signalChan, syscall.SIGHUP)
+}
+
+// isShutdownSignal returns true if the signal provided is a shutdown signal
+func isShutdownSignal(signal os.Signal) bool {
+	if signal == syscall.SIGHUP {
+		return false
+	}
+
+	return true
 }
 
 // configureLoggingPlatform enables platform specific logging backends in the
 // logging configuration
-func (lc *logCourier) configureLoggingPlatform(backends *[]logging.Backend) error {
+func (a *App) configureLoggingPlatform(backends *[]logging.Backend) error {
 	// Make it color if it's a TTY
 	// TODO: This could be prone to problems when updating logging in future
-	if lc.isatty(os.Stdout) && lc.config.General.LogStdout {
+	if isatty(os.Stdout) && a.config.General().LogStdout {
 		(*backends)[0].(*logging.LogBackend).Color = true
 	}
 
-	if lc.config.General.LogSyslog {
-		syslogBackend, err := logging.NewSyslogBackend("log-courier")
+	if a.config.General().LogSyslog {
+		syslogBackend, err := logging.NewSyslogBackend(a.binName)
 		if err != nil {
 			return fmt.Errorf("Failed to open syslog: %s", err)
 		}
@@ -61,7 +70,7 @@ func (lc *logCourier) configureLoggingPlatform(backends *[]logging.Backend) erro
 
 // isatty is used to detect a console terminal so that coloured logging can be
 // enabled
-func (lc *logCourier) isatty(f *os.File) bool {
+func isatty(f *os.File) bool {
 	var pgrp int64
 	// NOTE(Driskell): Most real isatty implementations use TIOCGETA
 	// However, TIOCGPRGP is easier than TIOCGETA as it only requires an int and not a termios struct

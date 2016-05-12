@@ -4,9 +4,14 @@
 	"Packages": [
 		".",
 		"./lc-admin",
-		"./lc-tlscert"
+		"./lc-tlscert",
+		"./lc-lib/config/generate"
 	],
 	"Deps": [
+		{
+			"ImportPath": "github.com/fatih/camelcase",
+			"Rev": "f6a740d52f961c60348ebb109adde9f4635d7540"
+		},
 		{
 			"ImportPath": "golang.org/x/net/netutil",
 			"Rev": "08f168e593b5aab61849054b77981de812666697"

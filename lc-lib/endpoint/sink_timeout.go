@@ -39,12 +39,27 @@ func (t *Timeout) InitTimeout() {
 	t.timeoutElement.Value = t
 }
 
-// RegisterTimeout registers a timeout structure with a timeout and timeout callback
-func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeoutFunc TimeoutFunc) {
-	if timeout.timeoutFunc != nil {
-		// Remove existing entry
-		f.timeoutList.Remove(&timeout.timeoutElement)
+// TimeoutChan returns a channel which will receive the current time when
+// the next endpoint hits its registered timeout
+func (s *Sink) TimeoutChan() <-chan time.Time {
+	return s.timeoutTimer.C
+}
+
+// resetTimeoutTimer resets the TimeoutTimer() channel for the next timeout
+func (s *Sink) resetTimeoutTimer() {
+	if s.timeoutList.Len() == 0 {
+		s.timeoutTimer.Stop()
+		return
 	}
+
+	timeout := s.timeoutList.Front().Value.(*Timeout)
+	log.Debug("Timeout timer reset - due at %v", timeout.timeoutDue)
+	s.timeoutTimer.Reset(timeout.timeoutDue.Sub(time.Now()))
+}
+
+// RegisterTimeout registers a timeout structure with a timeout and timeout callback
+func (s *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeoutFunc TimeoutFunc) {
+	s.ClearTimeout(timeout)
 
 	timeoutDue := time.Now().Add(duration)
 	timeout.timeoutDue = timeoutDue
@@ -53,7 +68,7 @@ func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeout
 	// Add to the list in time order
 	// TODO: Need a sorted set to simplify this
 	var existing, previous *internallist.Element
-	for existing = f.timeoutList.Front(); existing != nil; existing = existing.Next() {
+	for existing = s.timeoutList.Front(); existing != nil; existing = existing.Next() {
 		if existing.Value.(*Timeout).timeoutDue.After(timeoutDue) {
 			break
 		}
@@ -61,34 +76,44 @@ func (f *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeout
 	}
 
 	if previous == nil {
-		f.timeoutList.PushFront(&timeout.timeoutElement)
+		s.timeoutList.PushFront(&timeout.timeoutElement)
 	} else {
-		f.timeoutList.InsertAfter(&timeout.timeoutElement, previous)
+		s.timeoutList.InsertAfter(&timeout.timeoutElement, previous)
 	}
 
-	f.resetTimeoutTimer()
+	s.resetTimeoutTimer()
+}
+
+// ClearTimeout removes a timeout structure
+func (s *Sink) ClearTimeout(timeout *Timeout) {
+	if timeout.timeoutFunc == nil {
+		return
+	}
+
+	// Remove existing entry
+	s.timeoutList.Remove(&timeout.timeoutElement)
 }
 
 // ProcessTimeouts processes all pending timeouts
-func (f *Sink) ProcessTimeouts() {
-	next := f.timeoutList.Front()
+func (s *Sink) ProcessTimeouts() {
+	next := s.timeoutList.Front()
 	if next == nil {
 		return
 	}
 
 	for {
-		timeout := f.timeoutList.Remove(next).(*Timeout)
+		timeout := s.timeoutList.Remove(next).(*Timeout)
 		if callback := timeout.timeoutFunc; callback != nil {
 			timeout.timeoutFunc = nil
 			callback()
 		}
 
-		next = f.timeoutList.Front()
+		next = s.timeoutList.Front()
 		if next == nil || next.Value.(*Timeout).timeoutDue.After(time.Now()) {
 			// No more due
 			break
 		}
 	}
 
-	f.resetTimeoutTimer()
+	s.resetTimeoutTimer()
 }

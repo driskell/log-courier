@@ -37,7 +37,7 @@ func (d *unixDialer) Dial(network string, addr string) (net.Conn, error) {
 }
 
 func (d *unixDialer) Host() string {
-	return "log-courier"
+	return "log-courier-address"
 }
 
 func connectUnix(transport, path string) (netDialer, error) {

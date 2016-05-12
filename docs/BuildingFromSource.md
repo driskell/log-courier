@@ -52,7 +52,7 @@ Courier. Ensure you run all commands in the same session to maintain the
 export GO15VENDOREXPERIMENT=1
 go get -d github.com/driskell/log-courier
 cd $GOPATH/src/github.com/driskell/log-courier
-go generate ./lc-lib/config ./lc-lib/core
+go generate . ./lc-admin
 go install . ./lc-admin ./lc-tlscert
 ```
 

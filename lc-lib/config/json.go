@@ -29,7 +29,7 @@ import (
 
 // loadJSONFile loads the given JSON format file, stripping out our custom
 // comments syntax before it does so
-func (c *Config) loadJSONFile(path string, rawConfig interface{}) (err error) {
+func loadJSONFile(path string, rawConfig interface{}) (err error) {
 	stripped := new(bytes.Buffer)
 
 	file, err := os.Open(path)
@@ -137,7 +137,7 @@ func (c *Config) loadJSONFile(path string, rawConfig interface{}) (err error) {
 
 	// Pull the entire structure into rawConfig
 	if err = json.Unmarshal(stripped.Bytes(), rawConfig); err != nil {
-		err = c.parseJSONSyntaxError(stripped.Bytes(), err)
+		err = parseJSONSyntaxError(stripped.Bytes(), err)
 		return
 	}
 
@@ -146,7 +146,7 @@ func (c *Config) loadJSONFile(path string, rawConfig interface{}) (err error) {
 
 // parseSyntaxError parses a JSON Unmarshal error into a pretty error message
 // when given the original JSON data and the received error
-func (c *Config) parseJSONSyntaxError(js []byte, err error) error {
+func parseJSONSyntaxError(js []byte, err error) error {
 	jsonErr, ok := err.(*json.SyntaxError)
 	if !ok {
 		return err

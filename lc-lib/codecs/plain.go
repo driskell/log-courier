@@ -34,7 +34,7 @@ type CodecPlain struct {
 
 // NewPlainCodecFactory creates a new factory structure from the configuration
 // data in the configuration file.
-func NewPlainCodecFactory(config *config.Config, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
+func NewPlainCodecFactory(cfg *config.Config, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
 	// At this point the Log Courier configuration only knows the name of the
 	// codec and that is has (or does not have) a set of key-value configuration
 	// options. The factory should use config.PopulateConfig to populate its
