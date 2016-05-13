@@ -23,34 +23,31 @@ var (
 )
 
 type MuninRunner struct {
-	scriptPath   string
-	name         string
-	user         string
-	group        string
-	command      exec.Cmd
-	commandTimer *time.Timer
-	stdoutPipe   io.ReadCloser
-	outputChan   chan interface{}
-	waitGroup    sync.WaitGroup
-	output       []byte
+	scriptPath    string
+	name          string
+	user          string
+	group         string
+	additionalEnv map[string]string
+	commandTimer  *time.Timer
+	outputChan    chan interface{}
+	waitGroup     sync.WaitGroup
+	output        []byte
 }
 
 func NewMuninRunner(scriptPath, name string) *MuninRunner {
 	m := &MuninRunner{
-		scriptPath:   scriptPath,
-		name:         name,
-		user:         "nobody",
-		group:        "nobody",
-		commandTimer: time.NewTimer(time.Second),
+		scriptPath:    scriptPath,
+		name:          name,
+		user:          "nobody",
+		group:         "nobody",
+		commandTimer:  time.NewTimer(time.Second),
+		additionalEnv: map[string]string{},
 	}
 
-	m.command.Path = path.Join(scriptPath, name)
-	m.command.SysProcAttr = &syscall.SysProcAttr{}
-	m.command.SysProcAttr.Credential = &syscall.Credential{}
-	m.applyEnv("MUNIN_MASTER_IP", "-")
-	m.applyEnv("MUNIN_CAP_MULTIGRAPH", "1")
-	m.applyPluginStateEnv()
-	m.commandTimer.Stop()
+	// Stop timer and be sure to clear stale entry
+	if !m.commandTimer.Stop() {
+		<-m.commandTimer.C
+	}
 
 	return m
 }
@@ -59,7 +56,6 @@ func (m *MuninRunner) ApplySection(section map[string]string) error {
 	for k, v := range section {
 		if k == "user" {
 			m.user = v
-			m.applyPluginStateEnv()
 			continue
 		}
 
@@ -69,7 +65,7 @@ func (m *MuninRunner) ApplySection(section map[string]string) error {
 		}
 
 		if strings.HasPrefix(k, environmentConfigPrefix) {
-			m.applyEnv(k[len(environmentConfigPrefix):], v)
+			m.additionalEnv[k[len(environmentConfigPrefix):]] = v
 			continue
 		}
 
@@ -84,54 +80,63 @@ func (m *MuninRunner) Name() string {
 }
 
 func (m *MuninRunner) Collect(cache *CredentialCache) (map[string]interface{}, error) {
-	var err error
+	command := &exec.Cmd{}
 
-	if m.updateCredentials(cache); err != nil {
-		return nil, err
-	}
-
-	m.stdoutPipe, err = m.command.StdoutPipe()
+	stdoutPipe, err := command.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
 
-	log.Debug("ENV: %v\n", m.command.Env)
-	log.Debug("Credential: %v\n", m.command.SysProcAttr.Credential)
-
-	if err = m.command.Start(); err != nil {
+	command.SysProcAttr = &syscall.SysProcAttr{}
+	command.SysProcAttr.Credential = &syscall.Credential{}
+	if err := m.setCredentials(command, cache); err != nil {
 		return nil, err
 	}
 
-	m.commandTimer.Reset(10 * time.Second)
+	command.Path = path.Join(m.scriptPath, m.name)
+
+	m.applyEnv(command, "MUNIN_MASTER_IP", "-")
+	m.applyEnv(command, "MUNIN_CAP_MULTIGRAPH", "1")
+	m.applyEnv(command, "MUNIN_LIBDIR", "/usr/share/munin")
+	m.applyAdditionalEnv(command)
+	m.applyPluginStateEnv(command)
+
+	log.Debug("ENV: %v", command.Env)
+	log.Debug("Credential: %v", command.SysProcAttr.Credential)
+
+	if err := command.Start(); err != nil {
+		return nil, err
+	}
+
 	m.outputChan = make(chan interface{}, 1)
 	m.waitGroup.Add(2)
 
-	go m.stdoutReader()
-	go m.processHandler()
+	go m.stdoutReader(stdoutPipe)
+	go m.processHandler(command)
 
 	m.waitGroup.Wait()
 
 	return m.processOutput()
 }
 
-func (m *MuninRunner) updateCredentials(cache *CredentialCache) error {
-	if err := m.applyCommandUser(m.user, cache); err != nil {
+func (m *MuninRunner) setCredentials(command *exec.Cmd, cache *CredentialCache) error {
+	if err := m.applyCommandUser(command, m.user, cache); err != nil {
 		return err
 	}
 
-	if err := m.applyCommandGroup(m.group, cache); err != nil {
+	if err := m.applyCommandGroup(command, m.group, cache); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (m *MuninRunner) stdoutReader() {
+func (m *MuninRunner) stdoutReader(stdoutPipe io.ReadCloser) {
 	defer func() {
 		m.waitGroup.Done()
 	}()
 
-	output, err := ioutil.ReadAll(m.stdoutPipe)
+	output, err := ioutil.ReadAll(stdoutPipe)
 	if err != nil {
 		m.outputChan <- err
 		return
@@ -140,12 +145,16 @@ func (m *MuninRunner) stdoutReader() {
 	m.outputChan <- output
 }
 
-func (m *MuninRunner) processHandler() {
+func (m *MuninRunner) processHandler(command *exec.Cmd) {
 	defer func() {
 		m.waitGroup.Done()
 	}()
 
 	var err error
+
+	// Reset the timer
+	sawTimeout := false
+	m.commandTimer.Reset(10 * time.Second)
 
 	select {
 	case output := <-m.outputChan:
@@ -157,29 +166,41 @@ func (m *MuninRunner) processHandler() {
 		}
 	case <-m.commandTimer.C:
 		err = ErrCommandTimeout
+		sawTimeout = true
 		break
 	}
 
-	if err != nil {
-		log.Errorf("Error: %s\n", err)
-		m.command.Process.Kill()
+	// Stop and clear any stale trigger
+	if !m.commandTimer.Stop() && !sawTimeout {
+		<-m.commandTimer.C
 	}
 
-	m.command.Wait()
+	if err != nil {
+		log.Errorf("Error: %s", err)
+		command.Process.Kill()
+	}
+
+	command.Wait()
 }
 
-func (m *MuninRunner) applyEnv(name string, value string) {
+func (m *MuninRunner) applyEnv(command *exec.Cmd, name string, value string) {
 	// Validate. This needs checking
 	// I'm guessing here from some things I read about IEEE Std 1003.1-2001
 	name = strings.Replace(name, "\x00", "", -1)
 	name = strings.Replace(name, "=", "", -1)
 
-	m.command.Env = append(m.command.Env, name+"="+value)
+	command.Env = append(command.Env, name+"="+value)
 }
 
-func (m *MuninRunner) applyPluginStateEnv() {
-	m.applyEnv("MUNIN_PLUGSTATE", "/var/lib/munin/plugin-state/"+m.user)
-	m.applyEnv("MUNIN_STATEFILE", "/var/lib/munin/plugin-state/"+m.user+"/"+m.name+"-")
+func (m *MuninRunner) applyAdditionalEnv(command *exec.Cmd) {
+	for k, v := range m.additionalEnv {
+		m.applyEnv(command, k, v)
+	}
+}
+
+func (m *MuninRunner) applyPluginStateEnv(command *exec.Cmd) {
+	m.applyEnv(command, "MUNIN_PLUGSTATE", "/var/lib/munin/plugin-state/"+m.user)
+	m.applyEnv(command, "MUNIN_STATEFILE", "/var/lib/munin/plugin-state/"+m.user+"/"+m.name+"-")
 }
 
 func (m *MuninRunner) processOutput() (map[string]interface{}, error) {
@@ -203,7 +224,7 @@ func (m *MuninRunner) processOutput() (map[string]interface{}, error) {
 }
 
 func (m *MuninRunner) processOutputLine(line []byte, multigraph *string, result map[string]interface{}) error {
-	log.Debug("LINE: %s\n", line)
+	log.Debug("LINE: %s", line)
 	if len(line) == 0 {
 		return nil
 	}

@@ -52,7 +52,7 @@ func setupPipeline() {
 	publisherImpl := publisher.NewPublisher(app, registrarImpl)
 	app.AddToPipeline(publisherImpl)
 
-	collector, err := NewMuninCollector(publisherImpl)
+	collector, err := NewMuninCollector(app, publisherImpl)
 	if err != nil {
 		log.Fatalf("Failed to initialise: %s", err)
 	}

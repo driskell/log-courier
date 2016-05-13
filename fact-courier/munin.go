@@ -7,12 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/publisher"
 )
 
 type MuninCollector struct {
 	core.PipelineSegment
+
+	app       *core.App
+	genConfig *config.General
 
 	config   *MuninConfig
 	sections []string
@@ -23,8 +27,10 @@ type MuninCollector struct {
 	output          chan<- []*core.EventDescriptor
 }
 
-func NewMuninCollector(publisher *publisher.Publisher) (*MuninCollector, error) {
+func NewMuninCollector(app *core.App, publisher *publisher.Publisher) (*MuninCollector, error) {
 	ret := &MuninCollector{
+		app:             app,
+		genConfig:       app.Config().General(),
 		publisher:       publisher,
 		output:          publisher.Connect(),
 		credentialCache: NewCredentialCache(),
@@ -54,11 +60,16 @@ func (m *MuninCollector) Run() {
 
 	for m.runOnce() {
 	}
+
+	log.Info("Munin collector exiting")
 }
 
 func (m *MuninCollector) runOnce() bool {
-	if !m.sendEvents(m.collect()) {
-		return false
+	events := m.collect()
+	if len(events) != 0 {
+		if !m.sendEvents(events) {
+			return false
+		}
 	}
 
 	select {
@@ -82,15 +93,23 @@ func (m *MuninCollector) collect() []*core.EventDescriptor {
 }
 
 func (m *MuninCollector) collectRunner(runner *MuninRunner) *core.EventDescriptor {
-	log.Debug("[%s] Collecting\n", runner.Name())
+	log.Debug("[%s] Collecting", runner.Name())
 
 	result, err := runner.Collect(m.credentialCache)
 	if err != nil {
-		log.Warning("[%s] Collect error: %s\n", runner.Name(), err)
+		log.Warning("[%s] Collect error: %s", runner.Name(), err)
 		return nil
 	}
 
-	event, err := core.Event(result).Encode()
+	event := core.Event(result)
+
+	event["plugin"] = runner.Name()
+
+	for k := range m.genConfig.GlobalFields {
+		event[k] = m.genConfig.GlobalFields[k]
+	}
+
+	encodedEvent, err := event.Encode()
 	if err != nil {
 		log.Warning("[%s] Skipping data due to encoding error: %s", runner.Name(), err)
 		return nil
@@ -99,7 +118,7 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner) *core.EventDescripto
 	return &core.EventDescriptor{
 		Stream: nil,
 		Offset: 0,
-		Event:  event,
+		Event:  encodedEvent,
 	}
 }
 
@@ -147,13 +166,13 @@ func (m *MuninCollector) loadConfig() error {
 	confPath := "/etc/munin/plugin-conf.d"
 	m.scanFolder(confPath, func(name string, err error) {
 		if err != nil {
-			log.Errorf("Config scan error: %s\n", err)
+			log.Errorf("Config scan error: %s", err)
 			return
 		}
 
 		err = config.Append(filepath.Join(confPath, name))
 		if err != nil {
-			log.Errorf("Config append error: %s\n", err)
+			log.Errorf("Config append error: %s", err)
 			return
 		}
 	})
@@ -161,9 +180,9 @@ func (m *MuninCollector) loadConfig() error {
 	m.config = config
 	m.sections = m.config.Sections()
 
-	log.Debug("Sections: %v\n", m.sections)
+	log.Debug("Sections: %v", m.sections)
 	for _, section := range m.sections {
-		log.Debug("[%s]: %v\n", section, m.config.Section(section))
+		log.Debug("[%s]: %v", section, m.config.Section(section))
 	}
 
 	return nil
@@ -173,13 +192,13 @@ func (m *MuninCollector) loadScripts() {
 	scriptPath := "/etc/munin/plugins"
 	m.scanFolder(scriptPath, func(name string, err error) {
 		if err != nil {
-			log.Errorf("Scan error: %s\n", err)
+			log.Errorf("Scan error: %s", err)
 			return
 		}
 
 		runner, err := m.createRunner(scriptPath, name)
 		if err != nil {
-			log.Errorf("Create runner error: %s\n", err)
+			log.Errorf("Create runner error: %s", err)
 			return
 		}
 
@@ -190,11 +209,11 @@ func (m *MuninCollector) loadScripts() {
 func (m *MuninCollector) createRunner(scriptPath, name string) (*MuninRunner, error) {
 	var applySections []string
 
-	log.Debug("Creating runner %s\n", name)
+	log.Debug("Creating runner %s", name)
 
 	// Search sections and match against name
 	for _, section := range m.sections {
-		log.Debug("Considering %s\n", section)
+		log.Debug("Considering %s", section)
 		sectionLen := len(section)
 		if section[sectionLen-1] == '*' {
 			if !strings.HasPrefix(name, section[:sectionLen-1]) {
@@ -204,7 +223,7 @@ func (m *MuninCollector) createRunner(scriptPath, name string) (*MuninRunner, er
 			continue
 		}
 
-		log.Debug("Using %s\n", section)
+		log.Debug("Using %s", section)
 
 		applySections = append(applySections, section)
 	}
@@ -215,7 +234,7 @@ func (m *MuninCollector) createRunner(scriptPath, name string) (*MuninRunner, er
 func (m *MuninCollector) createRunnerFromSections(scriptPath, name string, sections []string) (*MuninRunner, error) {
 	runner := NewMuninRunner(scriptPath, name)
 	for _, section := range sections {
-		log.Debug("Applying %s to %s\n", section, name)
+		log.Debug("Applying %s to %s", section, name)
 		if err := runner.ApplySection(m.config.Section(section)); err != nil {
 			return nil, err
 		}
