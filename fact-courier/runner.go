@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os/exec"
@@ -80,6 +79,10 @@ func (m *MuninRunner) ApplySection(section map[string]string) error {
 	return nil
 }
 
+func (m *MuninRunner) Name() string {
+	return m.name
+}
+
 func (m *MuninRunner) Collect(cache *CredentialCache) (map[string]interface{}, error) {
 	var err error
 
@@ -92,8 +95,8 @@ func (m *MuninRunner) Collect(cache *CredentialCache) (map[string]interface{}, e
 		return nil, err
 	}
 
-	fmt.Printf("ENV: %v\n", m.command.Env)
-	fmt.Printf("Credential: %v\n", m.command.SysProcAttr.Credential)
+	log.Debug("ENV: %v\n", m.command.Env)
+	log.Debug("Credential: %v\n", m.command.SysProcAttr.Credential)
 
 	if err = m.command.Start(); err != nil {
 		return nil, err
@@ -158,7 +161,7 @@ func (m *MuninRunner) processHandler() {
 	}
 
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
+		log.Errorf("Error: %s\n", err)
 		m.command.Process.Kill()
 	}
 
@@ -200,7 +203,7 @@ func (m *MuninRunner) processOutput() (map[string]interface{}, error) {
 }
 
 func (m *MuninRunner) processOutputLine(line []byte, multigraph *string, result map[string]interface{}) error {
-	fmt.Printf("LINE: %s\n", line)
+	log.Debug("LINE: %s\n", line)
 	if len(line) == 0 {
 		return nil
 	}

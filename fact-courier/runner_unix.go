@@ -1,3 +1,5 @@
+// +build darwin dragonfly freebsd !android,linux netbsd openbsd solaris
+
 package main
 
 import "strconv"
