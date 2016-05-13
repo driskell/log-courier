@@ -12,6 +12,10 @@ import (
 	"github.com/driskell/log-courier/lc-lib/publisher"
 )
 
+const (
+	collectionInterval = time.Minute
+)
+
 type MuninCollector struct {
 	core.PipelineSegment
 
@@ -65,26 +69,36 @@ func (m *MuninCollector) Run() {
 }
 
 func (m *MuninCollector) runOnce() bool {
-	events := m.collect()
+	nextCollection := time.Now().Truncate(collectionInterval).Add(collectionInterval)
+	delay := nextCollection.Sub(time.Now())
+	if delay > collectionInterval {
+		delay = collectionInterval
+	} else if delay <= 0 {
+		delay = 0
+	}
+
+	log.Debug("Next collection at %s in %s", nextCollection, delay)
+
+	select {
+	case <-m.OnShutdown():
+		return false
+	case <-time.After(delay):
+	}
+
+	events := m.collect(nextCollection)
 	if len(events) != 0 {
 		if !m.sendEvents(events) {
 			return false
 		}
 	}
 
-	select {
-	case <-m.OnShutdown():
-		return false
-	case <-time.After(60 * time.Second):
-	}
-
 	return true
 }
 
-func (m *MuninCollector) collect() []*core.EventDescriptor {
+func (m *MuninCollector) collect(timestamp time.Time) []*core.EventDescriptor {
 	events := make([]*core.EventDescriptor, 0, len(m.runners))
 	for _, runner := range m.runners {
-		result := m.collectRunner(runner)
+		result := m.collectRunner(runner, timestamp)
 		if result != nil {
 			events = append(events, result)
 		}
@@ -92,16 +106,18 @@ func (m *MuninCollector) collect() []*core.EventDescriptor {
 	return events
 }
 
-func (m *MuninCollector) collectRunner(runner *MuninRunner) *core.EventDescriptor {
+func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time) *core.EventDescriptor {
 	log.Debug("[%s] Collecting", runner.Name())
 
-	result, err := runner.Collect(m.credentialCache)
+	result, err := runner.Collect(m.credentialCache, timestamp)
 	if err != nil {
 		log.Warning("[%s] Collect error: %s", runner.Name(), err)
 		return nil
 	}
 
 	event := core.Event(result)
+
+	event["@timestamp"] = timestamp.Format(time.RFC3339)
 
 	event["plugin"] = runner.Name()
 

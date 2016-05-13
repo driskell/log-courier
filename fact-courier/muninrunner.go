@@ -30,6 +30,13 @@ var (
 	ErrCommandTimeout = errors.New("Command timeout")
 )
 
+type MuninState struct {
+	typeHandler   MuninType
+	hasPrevious   bool
+	previousValue float64
+	previousTime  time.Time
+}
+
 type MuninRunner struct {
 	scriptPath    string
 	name          string
@@ -39,10 +46,10 @@ type MuninRunner struct {
 	additionalEnv map[string]string
 	commandTimer  *time.Timer
 
-	multigraph   *string
-	types        map[string]MuninType
-	data         map[string]interface{}
-	previousData map[string]float64
+	multigraph     *string
+	collectionTime time.Time
+	state          map[string]*MuninState
+	data           map[string]interface{}
 }
 
 func NewMuninRunner(scriptPath, name string) *MuninRunner {
@@ -54,8 +61,7 @@ func NewMuninRunner(scriptPath, name string) *MuninRunner {
 		additionalEnv: map[string]string{},
 		commandTimer:  time.NewTimer(time.Second),
 
-		types:        map[string]MuninType{},
-		previousData: map[string]float64{},
+		state: map[string]*MuninState{},
 	}
 
 	// Stop timer and be sure to clear stale entry
@@ -100,12 +106,19 @@ func (m *MuninRunner) Configure(cache *CredentialCache) error {
 		return err
 	}
 
+	if log.IsEnabledFor(logging.DEBUG) {
+		for field, state := range m.state {
+			log.Debug("[%s] Field %s has type %s", m.name, field, state.typeHandler.Name())
+		}
+	}
+
 	return nil
 }
 
-func (m *MuninRunner) Collect(cache *CredentialCache) (map[string]interface{}, error) {
-	m.data = make(map[string]interface{})
+func (m *MuninRunner) Collect(cache *CredentialCache, collectionTime time.Time) (map[string]interface{}, error) {
 	m.multigraph = &noMultigraph
+	m.collectionTime = collectionTime
+	m.data = make(map[string]interface{})
 
 	if err := m.runScript(cache, "", (*MuninRunner).handleOutputLine); err != nil {
 		return nil, err
@@ -276,11 +289,15 @@ func (m *MuninRunner) handleConfigLine(line []byte) error {
 
 	idx := m.getFieldIdx(names[0])
 
+	if _, hasState := m.state[idx]; !hasState {
+		m.state[idx] = &MuninState{}
+	}
+
 	// Ignore anything but .type entries
 	if len(names) != 2 || names[1] != "type" {
 		// Default to using GAUGE if we don't have an entry for this field yet
-		if _, hasType := m.types[idx]; !hasType {
-			m.types[idx] = registeredTypes[defaultType]
+		if m.state[idx].typeHandler == nil {
+			m.state[idx].typeHandler = registeredTypes[defaultType]
 		}
 		return nil
 	}
@@ -289,13 +306,10 @@ func (m *MuninRunner) handleConfigLine(line []byte) error {
 	if !ok {
 		// Skip unsupported types
 		log.Warning("[%s] Field %s has unsupported field type %s", m.name, idx, value)
-
 		return nil
 	}
 
-	log.Debug("[%s] Field %s has type %s", m.name, idx, value)
-	m.types[idx] = typeHandler
-
+	m.state[idx].typeHandler = typeHandler
 	return nil
 }
 
@@ -329,18 +343,32 @@ func (m *MuninRunner) handleOutputLine(line []byte) error {
 		idx = *m.multigraph + "." + names[0]
 	}
 
-	typeHandler, ok := m.types[idx]
+	state, ok := m.state[idx]
 	if !ok {
 		return fmt.Errorf("Unknown field: %s", idx)
 	}
 
-	previousValue, hasPrevious := m.previousData[idx]
-	m.previousData[idx] = floatValue
-	if !hasPrevious && typeHandler.RequiresPrevious() {
+	var duration float64
+	hasPrevious := state.hasPrevious
+	previousValue := state.previousValue
+
+	if hasPrevious {
+		duration = float64(m.collectionTime.Sub(state.previousTime))
+	}
+
+	state.hasPrevious = true
+	state.previousValue = floatValue
+	state.previousTime = m.collectionTime
+	if !hasPrevious {
+		if state.typeHandler.RequiresPrevious() {
+			log.Debug("[%s] Field %s skipped this once as its type requires a previous value", m.name, idx)
+			return nil
+		}
+	} else if duration <= 0 {
 		return nil
 	}
 
-	m.data["value_"+idx] = typeHandler.Calculate(floatValue, previousValue)
+	m.data["value_"+idx] = state.typeHandler.Calculate(floatValue, previousValue, duration)
 	log.Debug("[%s] Field %s: %f", m.name, idx, m.data["value_"+idx])
 
 	return nil
