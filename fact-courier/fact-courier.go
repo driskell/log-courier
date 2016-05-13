@@ -48,6 +48,7 @@ func setupPipeline() {
 
 	// No registrar
 	registrarImpl = newStdinRegistrar(app)
+	app.AddToPipeline(registrarImpl)
 
 	publisherImpl := publisher.NewPublisher(app, registrarImpl)
 	app.AddToPipeline(publisherImpl)

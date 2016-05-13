@@ -233,11 +233,17 @@ func (m *MuninCollector) createRunner(scriptPath, name string) (*MuninRunner, er
 
 func (m *MuninCollector) createRunnerFromSections(scriptPath, name string, sections []string) (*MuninRunner, error) {
 	runner := NewMuninRunner(scriptPath, name)
+
 	for _, section := range sections {
 		log.Debug("Applying %s to %s", section, name)
 		if err := runner.ApplySection(m.config.Section(section)); err != nil {
 			return nil, err
 		}
+	}
+
+	log.Debug("Configuring %s", name)
+	if err := runner.Configure(m.credentialCache); err != nil {
+		return nil, err
 	}
 
 	return runner, nil

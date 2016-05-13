@@ -16,6 +16,8 @@ func (m *MuninRunner) applyCommandUser(command *exec.Cmd, username string, cache
 	uidInt, _ := strconv.Atoi(uid)
 	command.SysProcAttr.Credential.Uid = uint32(uidInt)
 
+	log.Debug("[%s] Uid: %d", m.name, uint32(uidInt))
+
 	return nil
 }
 
@@ -27,6 +29,8 @@ func (m *MuninRunner) applyCommandGroup(command *exec.Cmd, groupname string, cac
 
 	gidInt, _ := strconv.Atoi(gid)
 	command.SysProcAttr.Credential.Gid = uint32(gidInt)
+
+	log.Debug("[%s] Gid: %d", m.name, uint32(gidInt))
 
 	return nil
 }
