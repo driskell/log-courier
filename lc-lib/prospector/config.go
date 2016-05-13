@@ -23,6 +23,11 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
+var (
+	validationReady = 0
+	validationWait  = 2
+)
+
 // FileConfig holds the configuration for a set of paths that share the same
 // stream configuration
 type FileConfig struct {
@@ -55,17 +60,34 @@ func (ic IncludeConfig) Validate(cfg *config.Config, buildMetadata bool) (err er
 			}
 
 			// Append to files configuration
-			if err = config.PopulateSlice(cfg.Section("files").([]FileConfig), rawInclude, fmt.Sprintf("%s/", include)); err != nil {
+			if err = config.PopulateSlice(cfg.Section("files").(*Config), rawInclude, fmt.Sprintf("%s/", include)); err != nil {
 				return
 			}
 		}
 	}
 
+	// Wait for Config to be processed
+	validationReady++
+	if validationReady == validationWait {
+		err = validateFileConfigs(*cfg.Section("files").(*Config), cfg, buildMetadata)
+	}
+
 	return
 }
 
-// Validate validates the config structure
+// Validate the Config structure
 func (c Config) Validate(cfg *config.Config, buildMetadata bool) (err error) {
+	// Wait for Includes to be processed
+	validationReady++
+	if validationReady == validationWait {
+		err = validateFileConfigs(c, cfg, buildMetadata)
+	}
+
+	return
+}
+
+// Validate validates all config structures and initialises streams
+func validateFileConfigs(c Config, cfg *config.Config, buildMetadata bool) (err error) {
 	for k := range c {
 		if len(c[k].Paths) == 0 {
 			err = fmt.Errorf("No paths specified for /files[%d]/", k)
@@ -82,7 +104,7 @@ func (c Config) Validate(cfg *config.Config, buildMetadata bool) (err error) {
 
 func init() {
 	config.RegisterConfigSection("files", func() config.Section {
-		return Config{}
+		return &Config{}
 	})
 
 	config.RegisterConfigSection("includes", func() config.Section {

@@ -65,7 +65,7 @@ func NewProspector(app *core.App, fromBeginning bool, registrarImp registrar.Reg
 		app:             app,
 		config:          app.Config(),
 		genConfig:       app.Config().General(),
-		fileConfigs:     app.Config().Section("files").(Config),
+		fileConfigs:     *app.Config().Section("files").(*Config),
 		prospectorindex: make(map[string]*prospectorInfo),
 		prospectors:     make(map[*prospectorInfo]*prospectorInfo),
 		fromBeginning:   fromBeginning,

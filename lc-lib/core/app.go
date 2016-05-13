@@ -130,6 +130,8 @@ func (a *App) StartUp() {
 
 // Run the application
 func (a *App) Run() {
+	a.pipeline.Start()
+
 	log.Notice("Pipeline ready")
 
 	a.signalChan = make(chan os.Signal, 1)

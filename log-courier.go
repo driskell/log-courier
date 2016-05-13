@@ -61,7 +61,7 @@ func startUp() {
 
 	app.StartUp()
 
-	if !stdin && len(app.Config().Section("files").(prospector.Config)) == 0 {
+	if !stdin && len(*app.Config().Section("files").(*prospector.Config)) == 0 {
 		log.Warning("No file groups were found in the configuration.")
 	}
 }

@@ -51,6 +51,8 @@ const (
 type TransportTCPFactory struct {
 	transport string
 
+	config *config.Config
+
 	Reconnect      time.Duration `config:"reconnect backoff"`
 	ReconnectMax   time.Duration `config:"reconnect backoff max"`
 	SSLCertificate string        `config:"ssl certificate"`
@@ -69,6 +71,7 @@ func NewTransportTCPFactory(cfg *config.Config, configPath string, unUsed map[st
 	var err error
 
 	ret := &TransportTCPFactory{
+		config:         cfg,
 		transport:      name,
 		hostportRegexp: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
 	}
@@ -151,6 +154,7 @@ func (f *TransportTCPFactory) InitDefaults() {
 func (f *TransportTCPFactory) NewTransport(observer transports.Observer, finishOnFail bool) transports.Transport {
 	ret := &TransportTCP{
 		config:         f,
+		netConfig:      f.config.Network(),
 		finishOnFail:   finishOnFail,
 		observer:       observer,
 		controllerChan: make(chan int),
