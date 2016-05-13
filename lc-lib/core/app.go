@@ -44,8 +44,9 @@ type App struct {
 // NewApp creates a new courier application
 func NewApp(name, binName, version string) *App {
 	return &App{
-		name:    name,
-		version: version,
+		name:     name,
+		version:  version,
+		pipeline: NewPipeline(),
 	}
 }
 
@@ -129,6 +130,8 @@ func (a *App) StartUp() {
 
 // Run the application
 func (a *App) Run() {
+	a.pipeline.Start()
+
 	log.Notice("Pipeline ready")
 
 	a.signalChan = make(chan os.Signal, 1)
