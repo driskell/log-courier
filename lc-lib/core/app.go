@@ -44,8 +44,9 @@ type App struct {
 // NewApp creates a new courier application
 func NewApp(name, binName, version string) *App {
 	return &App{
-		name:    name,
-		version: version,
+		name:     name,
+		version:  version,
+		pipeline: NewPipeline(),
 	}
 }
 
