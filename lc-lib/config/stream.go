@@ -45,6 +45,8 @@ type CodecStub struct {
 // Stream holds the configuration for a log stream
 // TODO: Currently this is controlled by harvester but we should take it out
 //       into a stream library along with Codecs
+//       Some fields are also Log Courier specific so maybe it needs some
+//       dynamicness as otherwise we'd be breaking compatibility too early
 type Stream struct {
 	AddHostField     bool                   `config:"add host field"`
 	AddOffsetField   bool                   `config:"add offset field"`
