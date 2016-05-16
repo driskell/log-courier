@@ -53,6 +53,7 @@ func setupPipeline() {
 	publisherImpl := publisher.NewPublisher(app, registrarImpl)
 	app.AddToPipeline(publisherImpl)
 
+	// TODO: Support arbitary scripts, not just Munin
 	collector, err := NewMuninCollector(app, publisherImpl)
 	if err != nil {
 		log.Fatalf("Failed to initialise: %s", err)

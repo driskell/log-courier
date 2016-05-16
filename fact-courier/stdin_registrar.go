@@ -26,6 +26,15 @@ import (
 	"github.com/driskell/log-courier/lc-lib/registrar"
 )
 
+// TODO: This is copied verbatim from Log Courier which uses this as simple
+// reporting for Stdin processing and for allowing us to shutdown only once
+// the event buffers have emptied
+// It needs a name change to reflect better what it does in both Fact Courier
+// and Log Courier
+// Additionally - the real registrar need a name change too and should be tied
+// into the prospector package as the file-based registrar is essentially a
+// backend for prospector state
+
 type StdinRegistrar struct {
 	core.PipelineSegment
 

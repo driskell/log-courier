@@ -7,6 +7,7 @@ import (
 	"strconv"
 )
 
+// applyCommandUser sets the run user for the given command
 func (m *MuninRunner) applyCommandUser(command *exec.Cmd, username string, cache *CredentialCache) error {
 	uid, err := cache.LookupUser(username)
 	if err != nil {
@@ -21,6 +22,7 @@ func (m *MuninRunner) applyCommandUser(command *exec.Cmd, username string, cache
 	return nil
 }
 
+// applyCommandGroup sets the run group for the given command
 func (m *MuninRunner) applyCommandGroup(command *exec.Cmd, groupname string, cache *CredentialCache) error {
 	gid, err := cache.LookupGroup(groupname)
 	if err != nil {

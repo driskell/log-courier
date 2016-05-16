@@ -26,10 +26,16 @@ var (
 
 	noMultigraph = ""
 
-	ErrSkippedOutput  = errors.New("Skipped output")
+	// ErrSkippedOutput is reported when output was skipped (such as blank lines)
+	// It should never reach code outside of this package
+	ErrSkippedOutput = errors.New("Skipped output")
+
+	// ErrCommandTimeout occurrs when a command took too long to run and had to be
+	// killed
 	ErrCommandTimeout = errors.New("Command timeout")
 )
 
+// MuninState holds the current state of a munin plugin
 type MuninState struct {
 	typeHandler   MuninType
 	hasPrevious   bool
@@ -37,6 +43,7 @@ type MuninState struct {
 	previousTime  time.Time
 }
 
+// MuninRunner holds the necessary information to run a munin plugin
 type MuninRunner struct {
 	scriptPath    string
 	name          string
@@ -46,12 +53,14 @@ type MuninRunner struct {
 	additionalEnv map[string]string
 	commandTimer  *time.Timer
 
+	isConfigured   bool
 	multigraph     *string
 	collectionTime time.Time
 	state          map[string]*MuninState
 	data           map[string]interface{}
 }
 
+// NewMuninRunner creates a new runner for the given munin plugin script
 func NewMuninRunner(scriptPath, name string) *MuninRunner {
 	m := &MuninRunner{
 		scriptPath:    scriptPath,
@@ -72,7 +81,14 @@ func NewMuninRunner(scriptPath, name string) *MuninRunner {
 	return m
 }
 
+// ApplySection applies a configuration file section to the runner so it can set
+// up necessary run user/group and environment variables
+// This must be called BEFORE Configure or a panic occurs
 func (m *MuninRunner) ApplySection(section map[string]string) error {
+	if m.isConfigured {
+		panic("ApplySection was called after Configure was completed")
+	}
+
 	for k, v := range section {
 		if k == "user" {
 			m.user = v
@@ -95,10 +111,15 @@ func (m *MuninRunner) ApplySection(section map[string]string) error {
 	return nil
 }
 
+// Name returns the munin plugin name
 func (m *MuninRunner) Name() string {
 	return m.name
 }
 
+// Configure runs the munin plugin config command in order to setup recognised
+// fields and types
+// After Configure is called, ApplySection can no longer be run, and Collect can
+// now be run
 func (m *MuninRunner) Configure(cache *CredentialCache) error {
 	// Run config param to grab the types
 	m.multigraph = &noMultigraph
@@ -112,10 +133,18 @@ func (m *MuninRunner) Configure(cache *CredentialCache) error {
 		}
 	}
 
+	m.isConfigured = true
+
 	return nil
 }
 
+// Collect runs the munin plugin and collects the results
+// Configure must have completed before running Collect
 func (m *MuninRunner) Collect(cache *CredentialCache, collectionTime time.Time) (map[string]interface{}, error) {
+	if !m.isConfigured {
+		panic("Runner was not Configured")
+	}
+
 	m.multigraph = &noMultigraph
 	m.collectionTime = collectionTime
 	m.data = make(map[string]interface{})
@@ -127,6 +156,8 @@ func (m *MuninRunner) Collect(cache *CredentialCache, collectionTime time.Time) 
 	return m.data, nil
 }
 
+// runScript runs the munin plugin with the given parameters and passes each
+// output line to the given callback
 func (m *MuninRunner) runScript(cache *CredentialCache, param string, callback func(*MuninRunner, []byte) error) error {
 	command, err := m.initCommand(cache, param)
 	if err != nil {
@@ -172,6 +203,7 @@ func (m *MuninRunner) runScript(cache *CredentialCache, param string, callback f
 	return nil
 }
 
+// initCommand initialises a new exec.Cmd structure to run the munin plugin with
 func (m *MuninRunner) initCommand(cache *CredentialCache, param string) (*exec.Cmd, error) {
 	command := &exec.Cmd{}
 
@@ -189,11 +221,8 @@ func (m *MuninRunner) initCommand(cache *CredentialCache, param string) (*exec.C
 	log.Debug("[%s] Path: %s", m.name, command.Path)
 	log.Debug("[%s] Args: %v", m.name, command.Args)
 
-	m.applyEnv(command, "MUNIN_MASTER_IP", "-")
-	m.applyEnv(command, "MUNIN_CAP_MULTIGRAPH", "1")
-	m.applyEnv(command, "MUNIN_LIBDIR", "/usr/share/munin")
 	m.applyAdditionalEnv(command)
-	m.applyPluginStateEnv(command)
+	m.applyPluginEnv(command)
 
 	if log.IsEnabledFor(logging.DEBUG) {
 		for _, v := range command.Env {
@@ -204,6 +233,7 @@ func (m *MuninRunner) initCommand(cache *CredentialCache, param string) (*exec.C
 	return command, nil
 }
 
+// setCredentials sets the run user and group for the given exec.Cmd
 func (m *MuninRunner) setCredentials(command *exec.Cmd, cache *CredentialCache) error {
 	if err := m.applyCommandUser(command, m.user, cache); err != nil {
 		return err
@@ -216,9 +246,12 @@ func (m *MuninRunner) setCredentials(command *exec.Cmd, cache *CredentialCache) 
 	return nil
 }
 
+// processHandler monitors the exec.Cmd and applies a timeout to it, killing the
+// process if it does not complete in the given time
 func (m *MuninRunner) processHandler(command *exec.Cmd, finishChan <-chan error) (err error) {
 	// Reset the timer
 	sawTimeout := false
+	// TODO: Make configurable?
 	m.commandTimer.Reset(10 * time.Second)
 
 	c := 0
@@ -246,6 +279,7 @@ FinishLoop:
 	return
 }
 
+// applyEnv adds an environment variable to the command
 func (m *MuninRunner) applyEnv(command *exec.Cmd, name string, value string) {
 	// Validate. This needs checking
 	// I'm guessing here from some things I read about IEEE Std 1003.1-2001
@@ -255,17 +289,30 @@ func (m *MuninRunner) applyEnv(command *exec.Cmd, name string, value string) {
 	command.Env = append(command.Env, name+"="+value)
 }
 
+// applyAdditionalEnv adds additional environment variables set in the munin
+// plugin configuration to the command
 func (m *MuninRunner) applyAdditionalEnv(command *exec.Cmd) {
 	for k, v := range m.additionalEnv {
 		m.applyEnv(command, k, v)
 	}
 }
 
-func (m *MuninRunner) applyPluginStateEnv(command *exec.Cmd) {
+// applyPluginEnv sets environment variables for the munin plugin in the same
+// way that munin-node does
+// This includes the plugin state paths and other munin variabels
+func (m *MuninRunner) applyPluginEnv(command *exec.Cmd) {
+	m.applyEnv(command, "MUNIN_MASTER_IP", "-")
+	m.applyEnv(command, "MUNIN_CAP_MULTIGRAPH", "1")
+
+	// TODO: Determine this from the munin-node.conf? Can it be changed there?
+	m.applyEnv(command, "MUNIN_LIBDIR", "/usr/share/munin")
+
 	m.applyEnv(command, "MUNIN_PLUGSTATE", "/var/lib/munin/plugin-state/"+m.user)
 	m.applyEnv(command, "MUNIN_STATEFILE", "/var/lib/munin/plugin-state/"+m.user+"/"+m.name+"-")
 }
 
+// getFieldIdx calculates our internal unique name for a field, as multigraph
+// functionality means we can have multiple with the same field name
 func (m *MuninRunner) getFieldIdx(field string) string {
 	if m.multigraph == &noMultigraph {
 		return field
@@ -274,6 +321,7 @@ func (m *MuninRunner) getFieldIdx(field string) string {
 	return *m.multigraph + "." + field
 }
 
+// handleConfigLine processes a single line of the plugin config output
 func (m *MuninRunner) handleConfigLine(line []byte) error {
 	names, value, err := m.parseLine(line)
 	if err == ErrSkippedOutput {
@@ -313,6 +361,7 @@ func (m *MuninRunner) handleConfigLine(line []byte) error {
 	return nil
 }
 
+// handleOutputLine process a single line of the plugin output
 func (m *MuninRunner) handleOutputLine(line []byte) error {
 	names, value, err := m.parseLine(line)
 	if err == ErrSkippedOutput {
@@ -374,11 +423,15 @@ func (m *MuninRunner) handleOutputLine(line []byte) error {
 	return nil
 }
 
+// handleErrorLine processes the stderr pipe for processes and reports all
+// output on this pipe to the logs
 func (m *MuninRunner) handleErrorLine(line []byte) error {
 	log.Warning("[%s] Stderr: %s", m.name, line)
 	return nil
 }
 
+// lineReader reads lines from the given reader and calls the given callback
+// for each line
 func (m *MuninRunner) lineReader(reader io.ReadCloser, finishChan chan<- error, callback func(*MuninRunner, []byte) error) {
 	defer func() {
 		m.waitGroup.Done()
@@ -397,6 +450,8 @@ func (m *MuninRunner) lineReader(reader io.ReadCloser, finishChan chan<- error, 
 	finishChan <- nil
 }
 
+// parseLine parses a line of plugin output into a slice of dot-separate names
+// and a value
 func (m *MuninRunner) parseLine(line []byte) ([]string, string, error) {
 	if len(line) == 0 {
 		return nil, "", ErrSkippedOutput

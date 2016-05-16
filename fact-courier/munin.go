@@ -16,6 +16,8 @@ const (
 	collectionInterval = time.Minute
 )
 
+// MuninCollector facilitates the collection of statistics from a local
+// munin-node installation
 type MuninCollector struct {
 	core.PipelineSegment
 
@@ -31,6 +33,8 @@ type MuninCollector struct {
 	output          chan<- []*core.EventDescriptor
 }
 
+// NewMuninCollector creates a new MuninCollector for the given app with the
+// given publisher as the output for events
 func NewMuninCollector(app *core.App, publisher *publisher.Publisher) (*MuninCollector, error) {
 	ret := &MuninCollector{
 		app:             app,
@@ -47,6 +51,8 @@ func NewMuninCollector(app *core.App, publisher *publisher.Publisher) (*MuninCol
 	return ret, nil
 }
 
+// init loads the munin-node configuration and detects the plugins to use, and
+// creates a MuninRunner for each one
 func (m *MuninCollector) init() error {
 	if err := m.loadConfig(); err != nil {
 		return err
@@ -57,6 +63,7 @@ func (m *MuninCollector) init() error {
 	return nil
 }
 
+// Run the MuninCollector - loops until shutdown
 func (m *MuninCollector) Run() {
 	defer func() {
 		m.Done()
@@ -68,6 +75,12 @@ func (m *MuninCollector) Run() {
 	log.Info("Munin collector exiting")
 }
 
+// runOnce performs a single collection of data
+// It will wait until the next collectionInterval boundary (such as 1 minute
+// boundary) so that all collections happen at the same boundary regardless of
+// when Fact Courier was started
+// This also ensures that every collection result has a single round timestamp
+// to ensure that Kibana graphing is neat with no gaps
 func (m *MuninCollector) runOnce() bool {
 	nextCollection := time.Now().Truncate(collectionInterval).Add(collectionInterval)
 	delay := nextCollection.Sub(time.Now())
@@ -85,6 +98,7 @@ func (m *MuninCollector) runOnce() bool {
 	case <-time.After(delay):
 	}
 
+	// TODO: What if too many events? Bundle could get too big...
 	events := m.collect(nextCollection)
 	if len(events) != 0 {
 		if !m.sendEvents(events) {
@@ -95,6 +109,8 @@ func (m *MuninCollector) runOnce() bool {
 	return true
 }
 
+// collect performs a collection from all discovered munin plugins by collecting
+// from each MuninRunner we created
 func (m *MuninCollector) collect(timestamp time.Time) []*core.EventDescriptor {
 	events := make([]*core.EventDescriptor, 0, len(m.runners))
 	for _, runner := range m.runners {
@@ -106,6 +122,8 @@ func (m *MuninCollector) collect(timestamp time.Time) []*core.EventDescriptor {
 	return events
 }
 
+// collectRunner performs a collection from a single MuninRunner, and generates
+// the necessary event structure from the result
 func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time) *core.EventDescriptor {
 	log.Debug("[%s] Collecting", runner.Name())
 
@@ -115,7 +133,18 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 		return nil
 	}
 
+	// TODO: event.New() and even event.NewStream() then stream.Submit() to
+	// encapsulate codecs
 	event := core.Event(result)
+
+	// TODO: Stream configuration for Fact Courier
+	//if m.streamConfig.AddHostField {
+	//	event["host"] = m.genConfig.Host
+	//}
+	// TODO: Timezone should be in the stream configuration?
+	//if m.streamConfig.AddTimezoneField {
+	//	event["timezone"] = m.timezone
+	//}
 
 	event["@timestamp"] = timestamp.Format(time.RFC3339)
 
@@ -133,11 +162,15 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 
 	return &core.EventDescriptor{
 		Stream: nil,
+		// TODO: Offset only make senses in Log Courier: event.Ack() interface?
 		Offset: 0,
-		Event:  encodedEvent,
+		// TODO: Encoding should be part of publishing as it is protocol specific
+		Event: encodedEvent,
 	}
 }
 
+// sendEvents passes a bundle of events to the publisher, waiting on shutdown
+// as well in case of a slow pipeline
 func (m *MuninCollector) sendEvents(events []*core.EventDescriptor) bool {
 	select {
 	case m.output <- events:
@@ -147,6 +180,8 @@ func (m *MuninCollector) sendEvents(events []*core.EventDescriptor) bool {
 	return false
 }
 
+// scanFolder scans the requested folder and calls the callback for each file
+// within it
 func (m *MuninCollector) scanFolder(path string, cb func(string, error)) error {
 	dir, err := os.Open(path)
 	if err != nil {
@@ -173,12 +208,17 @@ func (m *MuninCollector) scanFolder(path string, cb func(string, error)) error {
 	return nil
 }
 
+// loadConfig loads the requested munin-node configuration for parsing, it also
+// scans the plugin-conf.d folder for plugin configurations so we can ensure
+// we run plugins as the correct user and group
 func (m *MuninCollector) loadConfig() error {
+	// TODO: Configuration for this
 	config, err := NewMuninConfig("/etc/munin/munin-node.conf")
 	if err != nil {
 		return err
 	}
 
+	// TODO: Determine this from the munin-node.conf? Can it be changed there?
 	confPath := "/etc/munin/plugin-conf.d"
 	m.scanFolder(confPath, func(name string, err error) {
 		if err != nil {
@@ -204,7 +244,9 @@ func (m *MuninCollector) loadConfig() error {
 	return nil
 }
 
+// loadScripts performs munin-node plugin discovery
 func (m *MuninCollector) loadScripts() {
+	// TODO: Determine this from the munin-node.conf? Can it be changed there?
 	scriptPath := "/etc/munin/plugins"
 	m.scanFolder(scriptPath, func(name string, err error) {
 		if err != nil {
@@ -222,6 +264,10 @@ func (m *MuninCollector) loadScripts() {
 	})
 }
 
+// createRunner scans the loaded plugin configurations to produce a list of
+// those that need to be provided to the MuninRunner so that it can update its
+// user/group and environment configurations
+// It then passes these to createRunnerFromSections and returns the MuninRunner
 func (m *MuninCollector) createRunner(scriptPath, name string) (*MuninRunner, error) {
 	var applySections []string
 
@@ -247,6 +293,8 @@ func (m *MuninCollector) createRunner(scriptPath, name string) (*MuninRunner, er
 	return m.createRunnerFromSections(scriptPath, name, applySections)
 }
 
+// createRunnerFromSections creates a MuninRunner from the given set of plugin
+// configurations
 func (m *MuninCollector) createRunnerFromSections(scriptPath, name string, sections []string) (*MuninRunner, error) {
 	runner := NewMuninRunner(scriptPath, name)
 
