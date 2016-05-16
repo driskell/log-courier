@@ -47,19 +47,22 @@ const (
 
 // General holds the general configuration
 type General struct {
-	GlobalFields     map[string]interface{} `config:"global fields"`
-	Host             string                 `config:"host"`
-	LineBufferBytes  int64                  `config:"line buffer bytes"`
-	LogFile          string                 `config:"log file"`
-	LogLevel         logging.Level          `config:"log level"`
-	LogStdout        bool                   `config:"log stdout"`
-	LogSyslog        bool                   `config:"log syslog"`
-	MaxLineBytes     int64                  `config:"max line bytes"`
-	PersistDir       string                 `config:"persist directory"`
-	ProspectInterval time.Duration          `config:"prospect interval"`
-	SpoolSize        int64                  `config:"spool size"`
-	SpoolMaxBytes    int64                  `config:"spool max bytes"`
-	SpoolTimeout     time.Duration          `config:"spool timeout"`
+	GlobalFields  map[string]interface{} `config:"global fields"`
+	Host          string                 `config:"host"`
+	LogFile       string                 `config:"log file"`
+	LogLevel      logging.Level          `config:"log level"`
+	LogStdout     bool                   `config:"log stdout"`
+	LogSyslog     bool                   `config:"log syslog"`
+	SpoolSize     int64                  `config:"spool size"`
+	SpoolMaxBytes int64                  `config:"spool max bytes"`
+	SpoolTimeout  time.Duration          `config:"spool timeout"`
+
+	// TODO: Log Courier specific fields - have a dynamic area to General? Or do
+	// they deserve their own section? Own section would break compatibility though
+	LineBufferBytes  int64         `config:"line buffer bytes"`
+	MaxLineBytes     int64         `config:"max line bytes"`
+	PersistDir       string        `config:"persist directory"`
+	ProspectInterval time.Duration `config:"prospect interval"`
 }
 
 // InitDefaults initialises default values for the general configuration

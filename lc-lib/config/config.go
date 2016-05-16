@@ -45,9 +45,9 @@ var registeredSectionCreators = make(map[string]SectionCreator)
 
 // Config holds the configuration
 type Config struct {
+	// TODO: Needs shifting into Log Courier
 	Stdin Stream `config:"stdin"`
-	// Dynamic sections
-	// TODO: All top level sections to use this
+
 	Sections map[string]Section `config:",dynamic"`
 }
 
