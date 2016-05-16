@@ -112,6 +112,7 @@ FieldLoop:
 						return
 					}
 				}
+				continue
 			}
 		}
 
