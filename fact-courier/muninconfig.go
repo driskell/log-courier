@@ -9,6 +9,10 @@ import (
 )
 
 var (
+	globalSection = "global"
+
+	noActiveContinuation = ""
+
 	// ErrInvalidSection is reported when a corrupted section line is encountered
 	ErrInvalidSection = errors.New("Invalid section")
 	// ErrInvalidVariable is reported when a corrupted variable line is encountered
@@ -84,9 +88,8 @@ func (m *MuninConfig) Sections() []string {
 
 // ingestReader reads the configuration from the given reader and parses it
 func (m *MuninConfig) ingestReader(reader io.Reader) error {
-	globalSection := "global"
 	activeSection := &globalSection
-	var activeContinuation *string
+	activeContinuation := &noActiveContinuation
 	scanner := bufio.NewScanner(reader)
 
 	for scanner.Scan() {
@@ -125,11 +128,11 @@ func (m *MuninConfig) processLine(line []byte, activeSection *string, activeCont
 		return nil
 	}
 
-	if activeContinuation != nil {
+	if *activeContinuation != noActiveContinuation {
 		if line[lenLine-1] == '\\' {
 			line = line[:lenLine-1]
 		} else {
-			activeContinuation = nil
+			*activeContinuation = ""
 		}
 
 		m.sections[*activeSection][*activeContinuation] = m.sections[*activeSection][*activeContinuation] + string(line)
@@ -147,7 +150,7 @@ func (m *MuninConfig) processLine(line []byte, activeSection *string, activeCont
 
 	if line[lenLine-1] == '\\' {
 		line = line[:lenLine-1]
-		activeContinuation = &name
+		*activeContinuation = name
 	}
 
 	m.sections[*activeSection][name] = string(line)
