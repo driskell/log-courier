@@ -20,15 +20,19 @@
 package main
 
 import (
-	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/registrar"
 	"testing"
 	"time"
+
+	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/registrar"
 )
 
 func newTestStdinRegistrar() (*core.Pipeline, *StdinRegistrar) {
 	pipeline := core.NewPipeline()
-	return pipeline, newStdinRegistrar(pipeline)
+	// TODO: Exposing pipeline from a testing app or implementing stop/wait
+	registrarImpl := newStdinRegistrar(nil)
+	pipeline.Add(registrarImpl)
+	return pipeline, registrarImpl
 }
 
 func newEventSpool(offset int64) []*core.EventDescriptor {
@@ -37,7 +41,7 @@ func newEventSpool(offset int64) []*core.EventDescriptor {
 		&core.EventDescriptor{
 			Stream: nil,
 			Offset: offset,
-			Event: []byte{},
+			Event:  []byte{},
 		},
 	}
 }
