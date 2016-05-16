@@ -11,8 +11,8 @@ import (
 
 func createMultilineCodec(unused map[string]interface{}, callback CallbackFunc, t *testing.T) Codec {
 	config := config.NewConfig()
-	config.General.MaxLineBytes = 1048576
-	config.General.SpoolMaxBytes = 10485760
+	config.General().MaxLineBytes = 1048576
+	config.General().SpoolMaxBytes = 10485760
 
 	factory, err := NewMultilineCodecFactory(config, "", unused, "multiline")
 	if err != nil {

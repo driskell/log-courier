@@ -24,13 +24,24 @@ import (
 
 type apiRoot struct {
 	APINode
+	debug APINavigatable
+}
+
+func (r *apiRoot) Get(path string) (APINavigatable, error) {
+	// Debug is only available via direct request
+	if path == "debug" {
+		return r.debug, nil
+	}
+
+	return r.APINode.Get(path)
 }
 
 func newAPIRoot(app *core.App) *apiRoot {
-	root := &apiRoot{}
+	root := &apiRoot{
+		debug: NewAPIDataEntry(&apiDebug{}),
+	}
 
 	root.SetEntry("version", NewAPIDataEntry(APIString(core.LogCourierVersion)))
-	root.SetEntry("debug", NewAPIDataEntry(&apiDebug{}))
 	root.SetEntry("reload", NewAPICallbackEntry(func(values url.Values) (string, error) {
 		if err := app.ReloadConfig(); err != nil {
 			return "", err

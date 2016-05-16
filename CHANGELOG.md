@@ -1,5 +1,16 @@
 # Change Log
 
+## 2.0.3
+
+*9th May 2016*
+
+* Fix issue where pending payload limit is exceeded when Logstash is overloaded
+(#315)
+* Fix incorrect stale bytes count in API / `lc-admin`
+* Fix the harvester status not updating correctly when reaching end of file in
+API / `lc-admin`
+* Reintroduce full `status` command into `lc-admin`
+
 ## 2.0.2
 
 *8th May 2016*
@@ -24,6 +35,28 @@ network methods (#311)
 
 *NOTE: Please note the building from source step for `go generate` was changed
 in 2.0.1.*
+
+## 1.8.3
+
+*21st April 2016*
+
+***Log Courier***
+
+* Do not open dead files on startup (which causes excessive memory usage if
+there are many of them) if their size has not changed since they were last
+opened (#242)
+* When a long line was split, the "splitline" tag was not being appended if the
+fields configuration already contained tags
+
+***RPM Packaging***
+
+* Fix broken systemd configuration (#237)
+* Fix non-fatal %postun script failure, and fix starting of Log Courier during
+package upgrade even if it was not originally started (#228)
+
+***DEB Packaging***
+
+* Fix broken systemd configuration (#237)
 
 ## 2.0.0
 
@@ -117,6 +150,41 @@ to set platform specific defaults
 cross-platform building significantly easier, especially on Windows
 * Discarded Ruby test framework in favour of developing a Go test framework over
 time
+
+## 1.8.2
+
+*30th October 2015*
+
+***Log Courier***
+
+No Changes
+
+***RPM Packaging***
+
+* Fixed incorrect license specification - the spec file specified GPL which was
+incorrect - the license is Apache. The spec file has been updated.
+
+***Logstash Plugins***
+
+* Introduce compatibility with Logstash 2.0.0 (#245)
+
+## 1.8.1
+
+*7th August 2015*
+
+***Log Courier***
+
+No Changes
+
+***DEB Packaging***
+
+* Fix a regression in the upstart script due to the addition of a configtest
+(#217 - Thanks to @eliecharra)
+
+***Logstash Plugins***
+
+* Fix a regression with `ssl_verify_ca` (#214)
+* Fix a regression with the output plugin `hosts` setting (#215)
 
 ## 1.8
 

@@ -330,10 +330,12 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 		)
 	}
 
+	complete := pendingPayload.Complete()
+
 	// If we're on the resend queue and just completed, remove it
 	// This prevents a condition occurring where the endpoint incorrectly reports
 	// a failure but then afterwards reports an acknowledgement
-	if pendingPayload.Resending && pendingPayload.Complete() {
+	if pendingPayload.Resending && complete {
 		p.resendList.Remove(&pendingPayload.ResendElement)
 	}
 
@@ -384,8 +386,10 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 	p.lineCount += int64(lineCount)
 	p.mutex.Unlock()
 
-	// Resume sending if we stopped due to excessive pending payload count
-	p.tryQueueHeld()
+	if complete {
+		// Resume sending if we stopped due to excessive pending payload count
+		p.tryQueueHeld()
+	}
 }
 
 // OnPong handles when endpoints receive a pong message
