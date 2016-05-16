@@ -235,12 +235,13 @@ func (h *Harvester) performRead() error {
 
 	// Is a measurement due?
 	if duration := time.Since(h.lastMeasurement); duration >= time.Second {
-		measureErr := h.takeMeasurements(duration, false)
-		if measureErr == errFileTruncated {
-			h.handleTruncation()
-			return nil
+		if measureErr := h.takeMeasurements(duration, false); measureErr != nil {
+			if measureErr == errFileTruncated {
+				h.handleTruncation()
+				return nil
+			}
+			return measureErr
 		}
-		return measureErr
 	}
 
 	if err == nil {
@@ -353,7 +354,11 @@ func (h *Harvester) takeMeasurements(duration time.Duration, isPipelineBlocked b
 	if h.offset > h.lastSize {
 		h.lastSize = h.offset
 	}
-	h.staleBytes = h.lastStaleOffset
+	if h.lastStaleOffset > h.offset {
+		h.staleBytes = h.lastStaleOffset - h.offset
+	} else {
+		h.staleBytes = 0
+	}
 	h.codec.Meter()
 	for _, codec := range h.codecChain {
 		codec.Meter()
@@ -563,10 +568,10 @@ func (h *Harvester) APIEncodable() admin.APIEncodable {
 	apiEncodable.SetEntry("stale_bytes", admin.APINumber(h.staleBytes))
 	apiEncodable.SetEntry("last_known_size", admin.APINumber(h.lastSize))
 
-	if h.offset >= h.lastSize {
+	if h.lastOffset >= h.lastSize {
 		apiEncodable.SetEntry("completion", admin.APIFloat(100.))
 	} else {
-		completion := float64(h.offset) * 100 / float64(h.lastSize)
+		completion := float64(h.lastOffset) * 100 / float64(h.lastSize)
 		apiEncodable.SetEntry("completion", admin.APIFloat(completion))
 	}
 	if h.lastEOFOff == nil {

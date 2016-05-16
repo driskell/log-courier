@@ -4,7 +4,7 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 2.0.2
+Version: 2.0.3
 Release: 1%{dist}
 License: Apache
 Group: System Environment/Libraries
@@ -157,6 +157,9 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Mon May 9 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.3-1
+- Upgrade to 2.0.3
+
 * Sun May 8 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.2-1
 - Upgrade to 2.0.2
 
