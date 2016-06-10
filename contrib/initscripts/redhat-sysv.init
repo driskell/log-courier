@@ -25,6 +25,7 @@ PID_FILE=/var/run/log-courier/${NAME}.pid
 # Defaults
 LOG_COURIER_ARGS=""
 LOG_COURIER_USER="root"
+LOG_COURIER_GROUP="root"
 
 # Override defaults from sysconfig
 # shellcheck source=/dev/null
@@ -38,13 +39,13 @@ do_start()
 	if [ $RC -eq 0 ]; then
 		success
 	else
-		if [ "$LOG_COURIER_USER" = "root" ]; then
+		if [ "${LOG_COURIER_USER}:${LOG_COURIER_GROUP}" = "root:root" ]; then
 			nohup "$DAEMON" $LOG_COURIER_ARGS </dev/null &>/dev/null &
 			RC=$?
 			echo "$!" > "$PID_FILE"
 		else
 			# shellcheck disable=SC2086
-			nohup runuser -s /bin/bash "$LOG_COURIER_USER" -c "$(printf '%q' "$DAEMON") $LOG_COURIER_ARGS </dev/null &>/dev/null & echo \"\$!\" > $(printf '%q' $PID_FILE)" &>/dev/null
+			nohup runuser -s /bin/bash "$LOG_COURIER_USER" -g "${LOG_COURIER_GROUP}" -c "$(printf '%q' "$DAEMON") $LOG_COURIER_ARGS </dev/null &>/dev/null & echo \"\$!\" > $(printf '%q' $PID_FILE)" &>/dev/null
 			RC=$?
 		fi
 		if [ $RC -eq 0 ]; then

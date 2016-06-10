@@ -24,14 +24,22 @@ PIDFILE=/var/run/log-courier/${NAME}.pid
 # Defaults
 LOG_COURIER_ARGS=""
 LOG_COURIER_USER="root"
+LOG_COURIER_GROUP="root"
 
 # Override defaults from default
 # shellcheck source=/dev/null
 [ -f "/etc/default/${NAME}" ] && . "/etc/default/${NAME}"
 
 do_start_daemon() {
-  start-stop-daemon --start --quiet --pidfile "$PIDFILE" --user "${LOG_COURIER_USER}" --chuid "${LOG_COURIER_USER}" --exec /bin/sh --test > /dev/null || return 1
-  start-stop-daemon --start --quiet --make-pidfile --background --pidfile "$PIDFILE" --user "${LOG_COURIER_USER}" --chuid "${LOG_COURIER_USER}" --exec "$DAEMON" -- $LOG_COURIER_ARGS || return 2
+  # Sometimes /var/run is tmpfs - ensure our folder exists
+  mkdir -p /var/run
+  # (warning about -m and -p only deepest - we use -p to ignore if already exists)
+  # shellcheck disable=SC2174
+  mkdir -m 0700 -p /var/run/log-courier
+  chown "${LOG_COURIER_USER}:${LOG_COURIER_GROUP}" /var/run/log-courier
+
+  start-stop-daemon --start --quiet --pidfile "$PIDFILE" --user "${LOG_COURIER_USER}" --chuid "${LOG_COURIER_USER}:${LOG_COURIER_GROUP}" --exec /bin/sh --test > /dev/null || return 1
+  start-stop-daemon --start --quiet --make-pidfile --background --pidfile "$PIDFILE" --user "${LOG_COURIER_USER}" --chuid "${LOG_COURIER_USER}:${LOG_COURIER_GROUP}" --exec "$DAEMON" -- $LOG_COURIER_ARGS || return 2
 }
 
 do_start() {
