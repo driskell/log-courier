@@ -1,5 +1,19 @@
 # Change Log
 
+## 2.0.4
+
+*???*
+
+* Fix random recovery failure when Logstash is unavailable (#324)
+* Fix systemd unit files User= declaration that does not support variables. In
+order to change the user that Log Courier runs as, edit the unit file directly
+after updating to 2.0.4 (#322)
+* Fix max pending payloads exceeded when configuration is reloaded or when there
+are multiple Logstash connections and one of the connections recovers
+* Fix service start failure after a reboot on systems where /var/run is tmpfs
+(#321)
+* Add the ability to set the group that log-courier runs as
+
 ## 2.0.3
 
 *9th May 2016*
