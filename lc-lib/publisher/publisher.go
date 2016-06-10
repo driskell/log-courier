@@ -437,7 +437,8 @@ func (p *Publisher) tryQueueHeld() bool {
 		return didSend
 	}
 
-	if p.nextSpool != nil {
+	// Only take from nextSpool if we have space below the limit
+	if p.numPayloads < p.config.MaxPendingPayloads && p.nextSpool != nil {
 		// We have events, send it to the endpoint and wait for more
 		if _, ok := p.sendEvents(p.nextSpool); ok {
 			p.nextSpool = nil
