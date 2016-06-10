@@ -286,19 +286,12 @@ func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 	// Pull back pending payloads so we can requeue them onto other endpoints
 	for _, pendingPayload := range endpoint.PullBackPending() {
 		pendingPayload.Resending = true
+		pendingPayload.ResetSequence()
 		p.resendList.PushBack(&pendingPayload.ResendElement)
 	}
 
 	// If any ready now, requeue immediately
-	for p.resendList.Len() != 0 && p.endpointSink.CanQueue() {
-		// We have ready endpoints, send the spool
-		pendingPayload := p.resendList.Front().Value.(*payload.Payload)
-
-		if _, ok := p.sendPayload(pendingPayload); ok {
-			pendingPayload.Resending = false
-			p.resendList.Remove(&pendingPayload.ResendElement)
-		}
-	}
+	p.tryQueueHeld()
 
 	log.Debug("%d payloads held for resend", p.resendList.Len())
 }
@@ -331,9 +324,11 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 	complete := pendingPayload.Complete()
 
 	// If we're on the resend queue and just completed, remove it
-	// This prevents a condition occurring where the endpoint incorrectly reports
-	// a failure but then afterwards reports an acknowledgement
+	// Handle the condition occurring where the endpoint incorrectly reports a
+	// failure but then afterwards reports an acknowledgement, which means we're
+	// acknowledging a payload still on the resendList
 	if pendingPayload.Resending && complete {
+		pendingPayload.Resending = false
 		p.resendList.Remove(&pendingPayload.ResendElement)
 	}
 
@@ -408,7 +403,7 @@ func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 // forceEndpointFailure is called by Publisher to force an endpoint to enter
 // the failed status. It reports the error and then processes the failure.
 func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
-	log.Error("[%s] Failing endpoint: %s", endpoint.Server(), err)
+	log.Errorf("[%s] Failing endpoint: %s", endpoint.Server(), err)
 	p.endpointSink.ForceFailure(endpoint)
 }
 
@@ -432,6 +427,7 @@ func (p *Publisher) tryQueueHeld() bool {
 			// We have a payload to resend, send it now
 			if _, ok := p.sendPayload(pendingPayload); ok {
 				pendingPayload.Resending = false
+				pendingPayload.ResetSequence()
 				p.resendList.Remove(&pendingPayload.ResendElement)
 				log.Debug("%d payloads remain held for resend", p.resendList.Len())
 				didSend = true
