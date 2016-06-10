@@ -4,7 +4,7 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 2.0.3
+Version: 2.0.4
 Release: 1%{dist}
 License: Apache
 Group: System Environment/Libraries
@@ -77,17 +77,17 @@ mkdir -p %{buildroot}%{_var}/lib/log-courier
 touch %{buildroot}%{_var}/lib/log-courier/.log-courier
 
 # Install init script and related paraphernalia
+mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
-# No systemd script in log-courier release yet
 install -m 0644 contrib/initscripts/redhat-systemd.service %{buildroot}%{_unitdir}/log-courier.service
+install -m 0644 contrib/initscripts/log-courier-systemd.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
 %else
 mkdir -p %{buildroot}%{_sysconfdir}/init.d
 install -m 0755 contrib/initscripts/redhat-sysv.init %{buildroot}%{_sysconfdir}/init.d/log-courier
+install -m 0644 contrib/initscripts/log-courier.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
 touch %{buildroot}%{_var}/run/log-courier/log-courier.pid
 %endif
-mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
-install -m 0644 contrib/initscripts/log-courier.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
 
 %pre
 if ! getent group log-courier >/dev/null; then
@@ -150,13 +150,16 @@ fi
 %defattr(0644,log-courier,log-courier,0755)
 %if 0%{?rhel} < 7
 %ghost %{_var}/run/log-courier/log-courier.pid
-%endif
 %dir %attr(0700,log-courier,log-courier) %{_var}/run/log-courier
 %ghost %{_var}/run/log-courier/admin.socket
+%endif
 %dir %{_var}/lib/log-courier
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Mon Jun 10 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.4-1
+- Upgrade to 2.0.4
+
 * Mon May 9 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.3-1
 - Upgrade to 2.0.3
 

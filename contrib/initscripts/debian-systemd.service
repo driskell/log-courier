@@ -4,7 +4,6 @@ After=syslog.target network.target remote-fs.target nss-lookup.target
 
 [Service]
 Type=simple
-Environment="LOG_COURIER_USER=root"
 EnvironmentFile=/etc/default/log-courier
 ExecStartPre=/usr/sbin/log-courier $LOG_COURIER_ARGS -config-test
 ExecStart=/usr/sbin/log-courier $LOG_COURIER_ARGS
@@ -12,7 +11,9 @@ ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s TERM $MAINPID
 PrivateTmp=true
 StandardError=syslog
-User=$LOG_COURIER_USER
+User=log-courier
+Group=log-courier
+RuntimeDirectory=log-courier
 
 [Install]
 WantedBy=multi-user.target
