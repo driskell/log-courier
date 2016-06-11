@@ -90,12 +90,13 @@ func (gc *General) Validate(p *Parser, path string) (err error) {
 	}
 
 	if gc.Host == "" {
-		ret, err := os.Hostname()
-		if err == nil {
+		ret, hostErr := os.Hostname()
+		if hostErr == nil {
 			gc.Host = ret
 		} else {
 			gc.Host = defaultGeneralHost
-			log.Warning("Failed to determine the FQDN; using '%s'.", gc.Host)
+			log.Warning("Failed to determine the FQDN: %s", hostErr)
+			log.Warning("Falling back to using default hostname: %s", gc.Host)
 		}
 	}
 
