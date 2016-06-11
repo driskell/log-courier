@@ -17,6 +17,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-root
 #   https://copr.fedorainfracloud.org/coprs/jasonbrooks/docker/package/golang/
 # We could also get from a RedHat dev, but currently broken and leaking out 1.6:
 #   https://copr.fedorainfracloud.org/coprs/jcajka/golang1.5/package/golang/
+# For RHEL6, 1.5.1 can be obtained from EPEL, but it is not available to RHEL7
 BuildRequires: golang >= 1.5
 BuildRequires: git
 
@@ -27,7 +28,6 @@ Requires(postun): systemd
 BuildRequires: systemd
 %endif
 
-Requires: zeromq3
 Requires: logrotate
 
 %description
@@ -68,10 +68,6 @@ install -m 0755 "$GOPATH/bin/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
 mkdir -p %{buildroot}%{_sysconfdir}/log-courier %{buildroot}%{_sysconfdir}/log-courier/examples/
 install -m 0644 docs/examples/* %{buildroot}%{_sysconfdir}/log-courier/examples/
 
-# Make the run dir
-mkdir -p %{buildroot}%{_var}/run %{buildroot}%{_var}/run/log-courier
-touch %{buildroot}%{_var}/run/log-courier/admin.socket
-
 # Make the state dir
 mkdir -p %{buildroot}%{_var}/lib/log-courier
 touch %{buildroot}%{_var}/lib/log-courier/.log-courier
@@ -83,6 +79,10 @@ mkdir -p %{buildroot}%{_unitdir}
 install -m 0644 contrib/initscripts/redhat-systemd.service %{buildroot}%{_unitdir}/log-courier.service
 install -m 0644 contrib/initscripts/log-courier-systemd.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
 %else
+# Make the run dir
+mkdir -p %{buildroot}%{_var}/run %{buildroot}%{_var}/run/log-courier
+touch %{buildroot}%{_var}/run/log-courier/admin.socket
+
 mkdir -p %{buildroot}%{_sysconfdir}/init.d
 install -m 0755 contrib/initscripts/redhat-sysv.init %{buildroot}%{_sysconfdir}/init.d/log-courier
 install -m 0644 contrib/initscripts/log-courier.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
@@ -157,7 +157,7 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
-* Mon Jun 10 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.4-1
+* Fri Jun 10 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.4-1
 - Upgrade to 2.0.4
 
 * Mon May 9 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.3-1
