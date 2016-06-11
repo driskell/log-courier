@@ -279,12 +279,13 @@ func (c *Config) Load(path string, initFactories bool) (err error) {
 	}
 
 	if c.General.Host == "" {
-		ret, err := os.Hostname()
-		if err == nil {
+		ret, hostErr := os.Hostname()
+		if hostErr == nil {
 			c.General.Host = ret
 		} else {
 			c.General.Host = defaultGeneralHost
-			log.Warning("Failed to determine the FQDN; using '%s'.", c.General.Host)
+			log.Warning("Failed to determine the FQDN: %s", hostErr)
+			log.Warning("Falling back to using default hostname: %s", c.General.Host)
 		}
 	}
 
@@ -310,7 +311,6 @@ func (c *Config) Load(path string, initFactories bool) (err error) {
 		}
 		servers[server] = true
 	}
-	servers = nil
 
 	if initFactories {
 		if registrarFunc, ok := registeredTransports[c.Network.Transport]; ok {
