@@ -2,7 +2,9 @@
 
 ## 2.0.4
 
-*???*
+*11th June 2016*
+
+***Log Courier***
 
 * Fix random recovery failure when Logstash is unavailable (#324)
 * Fix systemd unit files User= declaration that does not support variables. In
@@ -15,6 +17,11 @@ are multiple Logstash connections and one of the connections recovers
 * Fix shipping encoding error when configuration file is YAML and global fields
 or per-file declaration fields contain nested maps (#325)
 * Add the ability to set the group that log-courier runs as
+
+***RPM Packaging***
+
+* Removed the dependency on ZeroMQ 3 as this was deprecated in 2.x of Log
+Courier
 
 ## 2.0.3
 
