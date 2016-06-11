@@ -36,7 +36,7 @@ do_start_daemon() {
   # (warning about -m and -p only deepest - we use -p to ignore if already exists)
   # shellcheck disable=SC2174
   mkdir -m 0700 -p /var/run/log-courier
-  chown "${LOG_COURIER_USER}:${LOG_COURIER_GROUP}" /var/run/log-courier
+  chown -R "${LOG_COURIER_USER}:${LOG_COURIER_GROUP}" /var/run/log-courier
 
   start-stop-daemon --start --quiet --pidfile "$PIDFILE" --user "${LOG_COURIER_USER}" --chuid "${LOG_COURIER_USER}:${LOG_COURIER_GROUP}" --exec /bin/sh --test > /dev/null || return 1
   start-stop-daemon --start --quiet --make-pidfile --background --pidfile "$PIDFILE" --user "${LOG_COURIER_USER}" --chuid "${LOG_COURIER_USER}:${LOG_COURIER_GROUP}" --exec "$DAEMON" -- $LOG_COURIER_ARGS || return 2
