@@ -12,6 +12,8 @@ after updating to 2.0.4 (#322)
 are multiple Logstash connections and one of the connections recovers
 * Fix service start failure after a reboot on systems where /var/run is tmpfs
 (#321)
+* Fix shipping encoding error when configuration file is YAML and global fields
+or per-file declaration fields contain nested maps (#325)
 * Add the ability to set the group that log-courier runs as
 
 ## 2.0.3
