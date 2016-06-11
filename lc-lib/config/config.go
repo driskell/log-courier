@@ -289,6 +289,11 @@ func (c *Config) Load(path string, initFactories bool) (err error) {
 		}
 	}
 
+	// Ensure all GlobalFields are map[string]interface{}
+	if err = c.fixMapKeys("/general/global fields", c.General.GlobalFields); err != nil {
+		return
+	}
+
 	// TODO: Network method factory in publisher
 	if c.Network.Method == "" {
 		c.Network.Method = defaultNetworkMethod
@@ -371,6 +376,11 @@ func (c *Config) initStreamConfig(path string, streamConfig *Stream, initFactori
 		}
 	}
 
+	// Ensure all Fields are map[string]interface{}
+	if err = c.fixMapKeys(path+"/fields", streamConfig.Fields); err != nil {
+		return
+	}
+
 	// TODO: EDGE CASE: Event transmit length is uint32, if fields length is rediculous we will fail
 
 	return nil
@@ -384,6 +394,60 @@ func (c *Config) Get(name string) interface{} {
 	}
 
 	return ret
+}
+
+// fixMapKeys converts any map entries where the keys are interface{} values
+// into map entries where the key is a string. It returns an error if any key is
+// found that is not a string.
+// This is important as json.Encode will not encode a map where the keys are not
+// concrete strings.
+func (c *Config) fixMapKeys(path string, value map[string]interface{}) error {
+	for k, v := range value {
+		switch vt := v.(type) {
+		case map[string]interface{}:
+			if err := c.fixMapKeys(path+"/"+k, vt); err != nil {
+				return err
+			}
+		case map[interface{}]interface{}:
+			fixedValue, err := c.fixMapInterfaceKeys(path+"/"+k, vt)
+			if err != nil {
+				return err
+			}
+
+			value[k] = fixedValue
+		}
+	}
+
+	return nil
+}
+
+func (c *Config) fixMapInterfaceKeys(path string, value map[interface{}]interface{}) (map[string]interface{}, error) {
+	fixedMap := make(map[string]interface{})
+
+	for k, v := range value {
+		ks, ok := k.(string)
+		if !ok {
+			return nil, fmt.Errorf("Invalid non-string key at %s", path)
+		}
+
+		switch vt := v.(type) {
+		case map[string]interface{}:
+			if err := c.fixMapKeys(path+"/"+ks, vt); err != nil {
+				return nil, err
+			}
+
+			fixedMap[ks] = vt
+		case map[interface{}]interface{}:
+			fixedValue, err := c.fixMapInterfaceKeys(path+"/"+ks, vt)
+			if err != nil {
+				return nil, err
+			}
+
+			fixedMap[ks] = fixedValue
+		}
+	}
+
+	return fixedMap, nil
 }
 
 // RegisterConfigSection registers a new Section creator which will be used to
