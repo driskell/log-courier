@@ -50,8 +50,14 @@ func (sc *StreamConfig) Defaults() {
 
 // Validate validates the stream configuration and also stores a copy of the
 // root configuration so we can access global fields etc
-func (sc *StreamConfig) Validate(p *config.Parser, path string) error {
+func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 	sc.genConfig = p.Config().General()
+
+	// Ensure all Fields are map[string]interface{}
+	if err = p.FixMapKeys(path+"/fields", sc.Fields); err != nil {
+		return
+	}
+
 	return nil
 }
 

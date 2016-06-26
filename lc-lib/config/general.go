@@ -100,6 +100,11 @@ func (gc *General) Validate(p *Parser, path string) (err error) {
 		}
 	}
 
+	// Ensure all GlobalFields are map[string]interface{}
+	if err = p.FixMapKeys(path+"/global fields", gc.GlobalFields); err != nil {
+		return
+	}
+
 	return
 }
 

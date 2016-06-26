@@ -488,3 +488,57 @@ func (p *Parser) reportUnusedConfig(vRawConfig reflect.Value, configPath string)
 	}
 	return
 }
+
+// FixMapKeys converts any map entries where the keys are interface{} values
+// into map entries where the key is a string. It returns an error if any key is
+// found that is not a string.
+// This is important as json.Encode will not encode a map where the keys are not
+// concrete strings.
+func (p *Parser) FixMapKeys(path string, value map[string]interface{}) error {
+	for k, v := range value {
+		switch vt := v.(type) {
+		case map[string]interface{}:
+			if err := p.FixMapKeys(path+"/"+k, vt); err != nil {
+				return err
+			}
+		case map[interface{}]interface{}:
+			fixedValue, err := p.fixMapInterfaceKeys(path+"/"+k, vt)
+			if err != nil {
+				return err
+			}
+
+			value[k] = fixedValue
+		}
+	}
+
+	return nil
+}
+
+func (p *Parser) fixMapInterfaceKeys(path string, value map[interface{}]interface{}) (map[string]interface{}, error) {
+	fixedMap := make(map[string]interface{})
+
+	for k, v := range value {
+		ks, ok := k.(string)
+		if !ok {
+			return nil, fmt.Errorf("Invalid non-string key at %s", path)
+		}
+
+		switch vt := v.(type) {
+		case map[string]interface{}:
+			if err := p.FixMapKeys(path+"/"+ks, vt); err != nil {
+				return nil, err
+			}
+
+			fixedMap[ks] = vt
+		case map[interface{}]interface{}:
+			fixedValue, err := p.fixMapInterfaceKeys(path+"/"+ks, vt)
+			if err != nil {
+				return nil, err
+			}
+
+			fixedMap[ks] = fixedValue
+		}
+	}
+
+	return fixedMap, nil
+}
