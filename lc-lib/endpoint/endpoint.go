@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
-	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
@@ -348,7 +348,7 @@ func (e *Endpoint) forceFailure() {
 }
 
 // apiEntry returns an APINavigatable that can be used to monitor this endpoint
-func (e *Endpoint) apiEntry() admin.APINavigatable {
+func (e *Endpoint) apiEntry() api.Navigatable {
 	if e.api == nil {
 		e.api = &apiEndpoint{
 			e: e,

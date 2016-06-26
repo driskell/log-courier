@@ -17,8 +17,9 @@
 package payload
 
 import (
-	"github.com/driskell/log-courier/lc-lib/core"
 	"testing"
+
+	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 const (
@@ -26,9 +27,9 @@ const (
 )
 
 func createTestPayload(t *testing.T, numEvents int) *Payload {
-	testEvents := make([]*core.EventDescriptor, numEvents)
+	testEvents := make([]*event.Descriptor, numEvents)
 	for idx := range testEvents {
-		testEvents[idx] = &core.EventDescriptor{
+		testEvents[idx] = &event.Descriptor{
 			Stream: nil,
 			Offset: int64(idx),
 			Event:  []byte(""),

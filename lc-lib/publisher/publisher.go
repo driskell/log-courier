@@ -26,12 +26,14 @@ import (
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/payload"
-	"github.com/driskell/log-courier/lc-lib/registrar"
+	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 var (
@@ -45,7 +47,7 @@ const (
 )
 
 // Publisher handles payloads and is responsible for passing ordered
-// acknowledgements to the Registrar
+// acknowledgements to the acknowledgement handlers
 // It makes all the load balancing and distribution decisions, leaving
 // transport state management to the EndpointSink
 // We have always used a Push mechanism for load balancing, in the sense that
@@ -63,17 +65,16 @@ type Publisher struct {
 	mutex sync.RWMutex
 
 	config       *config.Config
-	netConfig    *config.Network
+	netConfig    *transports.Config
 	adminConfig  *admin.Config
 	endpointSink *endpoint.Sink
 	method       method
 
-	payloadList    internallist.List
-	numPayloads    int64
-	outOfSync      int
-	spoolChan      chan []*core.EventDescriptor
-	registrarSpool registrar.EventSpooler
-	shuttingDown   bool
+	payloadList  internallist.List
+	numPayloads  int64
+	outOfSync    int
+	spoolChan    chan []*event.Event
+	shuttingDown bool
 
 	lineCount       int64
 	lineSpeed       float64
@@ -81,20 +82,22 @@ type Publisher struct {
 	lastMeasurement time.Time
 	secondsNoAck    int
 
-	measurementTimer *time.Timer
-	onShutdown       <-chan interface{}
-	ifSpoolChan      <-chan []*core.EventDescriptor
-	nextSpool        []*core.EventDescriptor
-	resendList       internallist.List
+	measurementTimer  *time.Timer
+	onShutdown        <-chan interface{}
+	ifSpoolChan       <-chan []*event.Event
+	nextSpool         []*event.Event
+	resendList        internallist.List
+	shutdownCompleted chan struct{}
 }
 
 // NewPublisher creates a new publisher instance on the given pipeline
-func NewPublisher(app *core.App, registrar registrar.Registrator) *Publisher {
+func NewPublisher(app *core.App) *Publisher {
 	ret := &Publisher{
-		config:      app.Config(),
-		netConfig:   app.Config().Network(),
-		adminConfig: app.Config().Section("admin").(*admin.Config),
-		spoolChan:   make(chan []*core.EventDescriptor, 1),
+		config:            app.Config(),
+		netConfig:         transports.FetchConfig(app.Config()),
+		adminConfig:       app.Config().Section("admin").(*admin.Config),
+		spoolChan:         make(chan []*event.Event, 1),
+		shutdownCompleted: make(chan struct{}),
 	}
 
 	ret.endpointSink = endpoint.NewSink(ret.netConfig)
@@ -102,11 +105,7 @@ func NewPublisher(app *core.App, registrar registrar.Registrator) *Publisher {
 	ret.initAPI()
 	ret.initMethod()
 
-	if registrar == nil {
-		ret.registrarSpool = newNullEventSpool()
-	} else {
-		ret.registrarSpool = registrar.Connect()
-	}
+	app.AddToPipeline(ret)
 
 	return ret
 }
@@ -132,8 +131,15 @@ func (p *Publisher) initMethod() {
 
 // Connect is used by Spooler
 // TODO: Spooler doesn't need to know of publisher, only of events
-func (p *Publisher) Connect() chan<- []*core.EventDescriptor {
+func (p *Publisher) Connect() chan<- []*event.Event {
 	return p.spoolChan
+}
+
+// Wait for the publisher to finish
+// Useful for other pipeline segments so they can wait for all acknowledgement
+// calls to complete or fail
+func (p *Publisher) Wait() {
+	<-p.shutdownCompleted
 }
 
 // Run starts the publisher, it handles endpoint status changes send from the
@@ -149,11 +155,10 @@ func (p *Publisher) Run() {
 		}
 	}
 
-	p.registrarSpool.Close()
-
 	log.Info("Publisher exiting")
 
 	p.Done()
+	close(p.shutdownCompleted)
 }
 
 // runOnce runs a single iteration of the Publisher loop
@@ -215,7 +220,7 @@ func (p *Publisher) runOnce() bool {
 func (p *Publisher) reloadConfig(cfg *config.Config) {
 	oldMethod := p.netConfig.Method
 	p.config = cfg
-	p.netConfig = cfg.Network()
+	p.netConfig = transports.FetchConfig(cfg)
 
 	// Give sink the new config
 	p.endpointSink.ReloadConfig(p.netConfig)
@@ -308,8 +313,8 @@ func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 // OnAck handles acknowledgements from endpoints
 // It keeps track of how many out of sync acknowldgements have been made so
 // shutdown can be postponed if we've received Acks for newer events before
-// older events. It also serialises the Ack offsets for correct registrar
-// storage to ensure the registrar offsets are always sequential
+// older events. It also serialises the Ack offsets for correct handling
+// so events are always acknowledged sequentially
 func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool, lineCount int) {
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.NumPending() > 0 {
@@ -342,7 +347,7 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 	numComplete := int64(0)
 
 	// We potentially receive out-of-order ACKs due to payloads distributed across servers
-	// This is where we enforce ordering again to ensure registrar receives ACK in order
+	// This is where we enforce ordering again to ensure the handlers receive ACKs in order
 	if pendingPayload == p.payloadList.Front().Value.(*payload.Payload) {
 		// The out of sync count we have will never include the first payload, so
 		// take the value +1
@@ -353,7 +358,7 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 		// payloads are the out of sync ones - so if we mark them off we decrease
 		// the out of sync count
 		for pendingPayload.HasAck() {
-			p.registrarSpool.Add(registrar.NewAckEvent(pendingPayload.Rollup()))
+			event.DispatchAck(pendingPayload.Rollup())
 
 			if !pendingPayload.Complete() {
 				break
@@ -371,8 +376,6 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 
 			pendingPayload = p.payloadList.Front().Value.(*payload.Payload)
 		}
-
-		p.registrarSpool.Send()
 	} else if firstAck {
 		// If this is NOT the first payload, and this is the first acknowledgement
 		// for this payload, then increase out of sync payload count
@@ -455,7 +458,7 @@ func (p *Publisher) tryQueueHeld() bool {
 	return false
 }
 
-func (p *Publisher) sendEvents(events []*core.EventDescriptor) (*endpoint.Endpoint, bool) {
+func (p *Publisher) sendEvents(events []*event.Event) (*endpoint.Endpoint, bool) {
 	pendingPayload := payload.NewPayload(events)
 
 	p.payloadList.PushBack(&pendingPayload.Element)
@@ -529,7 +532,7 @@ func (p *Publisher) initAPI() {
 		return
 	}
 
-	publisherAPI := &admin.APINode{}
+	publisherAPI := &api.Node{}
 	publisherAPI.SetEntry("endpoints", p.endpointSink.APINavigatable())
 	publisherAPI.SetEntry("status", &apiStatus{p: p})
 

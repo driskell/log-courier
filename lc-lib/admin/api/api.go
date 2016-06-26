@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package admin
+package api
 
 import (
 	"bytes"
@@ -24,9 +24,9 @@ import (
 	"sort"
 )
 
-// APIIndentation is a single indentation to be used in HumanReadable calls on
+// Indentation is a single indentation to be used in HumanReadable calls on
 // API entries
-const APIIndentation = "  "
+const Indentation = "  "
 
 var (
 	// ErrNotImplemented is an API error when the call is not implemented
@@ -34,37 +34,30 @@ var (
 
 	// ErrNotFound is an API error when the requested information was not found
 	ErrNotFound = errors.New("Not Found")
-
-	// callMap is a list of commands known to be Call only, and the Client uses
-	// this to automatically translate Request calls into Call calls to simplify
-	// logic in clients
-	callMap = map[string]interface{}{
-		"reload": nil,
-	}
 )
 
 // ErrUnknown represents a successful request where Log Courier returned an
 // error, as opposed to an error processing a request
 type ErrUnknown error
 
-// APIEncodable is an encodable entry in the API, which can be a navigatable
+// Encodable is an encodable entry in the API, which can be a navigatable
 // entry or just a piece of data
-type APIEncodable interface {
+type Encodable interface {
 	// HumanReadable returns the entry as a string in human-readable form
 	// If it contains multiple lines, it should prefix each line with the indent
 	// string passes to it. If the call to HumanReadable needs to recurse into
-	// another HumanReadable call it should add APIIndentation to the indent
+	// another HumanReadable call it should add Indentation to the indent
 	// string, and check the returned string for new lines and render accordingly
 	HumanReadable(indent string) ([]byte, error)
 }
 
-// APINavigatable is a navigatable entry in the API
-type APINavigatable interface {
-	APIEncodable
+// Navigatable is a navigatable entry in the API
+type Navigatable interface {
+	Encodable
 
 	// Get returns the child entry with the requested name, or nil there are no
 	// children
-	Get(name string) (APINavigatable, error)
+	Get(name string) (Navigatable, error)
 
 	// Call happens in response to a POST request
 	Call(params url.Values) (string, error)
@@ -73,23 +66,23 @@ type APINavigatable interface {
 	Update() error
 }
 
-// APINode acts like a directory in the API, containing mappings from names to
+// Node acts like a directory in the API, containing mappings from names to
 // status information of various types
-type APINode struct {
-	children map[string]APINavigatable
+type Node struct {
+	children map[string]Navigatable
 }
 
 // SetEntry adds a new path entry with the given name
-func (n *APINode) SetEntry(path string, entry APINavigatable) {
+func (n *Node) SetEntry(path string, entry Navigatable) {
 	if n.children == nil {
-		n.children = make(map[string]APINavigatable)
+		n.children = make(map[string]Navigatable)
 	}
 
 	n.children[path] = entry
 }
 
 // RemoveEntry removes a path entry
-func (n *APINode) RemoveEntry(path string) {
+func (n *Node) RemoveEntry(path string) {
 	if n.children == nil {
 		return
 	}
@@ -98,7 +91,7 @@ func (n *APINode) RemoveEntry(path string) {
 }
 
 // Get the child entry with the specified name
-func (n *APINode) Get(path string) (APINavigatable, error) {
+func (n *Node) Get(path string) (Navigatable, error) {
 	entry, ok := n.children[path]
 	if !ok {
 		return nil, nil
@@ -107,23 +100,23 @@ func (n *APINode) Get(path string) (APINavigatable, error) {
 }
 
 // Call an API
-func (n *APINode) Call(url.Values) (string, error) {
+func (n *Node) Call(url.Values) (string, error) {
 	return "", ErrNotImplemented
 }
 
 // MarshalJSON returns the entire path structures in JSON form
-func (n *APINode) MarshalJSON() ([]byte, error) {
+func (n *Node) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n.children)
 }
 
 // HumanReadable returns the entire path structures in human-readable form
-func (n *APINode) HumanReadable(indent string) ([]byte, error) {
+func (n *Node) HumanReadable(indent string) ([]byte, error) {
 	if n.children == nil || len(n.children) == 0 {
 		return []byte("none"), nil
 	}
 
 	var result bytes.Buffer
-	newIndent := indent + APIIndentation
+	newIndent := indent + Indentation
 
 	mapOrder := make([]string, 0, len(n.children))
 	for key := range n.children {
@@ -159,7 +152,7 @@ func (n *APINode) HumanReadable(indent string) ([]byte, error) {
 // Update ensures the data we have is up to date - should be overriden by users
 // if required to keep the contents up to date on each request
 // Default behaviour is to update each of the navigatable entries
-func (n *APINode) Update() error {
+func (n *Node) Update() error {
 	for _, entry := range n.children {
 		if err := entry.Update(); err != nil {
 			return err
@@ -169,76 +162,76 @@ func (n *APINode) Update() error {
 	return nil
 }
 
-// APIDataEntry wraps an APIEncodable so it can be used as an APINavigatable
+// DataEntry wraps an Encodable so it can be used as an Navigatable
 // It stubs the navigation methods so they are no-ops
-type APIDataEntry struct {
-	a APIEncodable
+type DataEntry struct {
+	a Encodable
 }
 
-// NewAPIDataEntry creates a new APIDataEntry from an APIEncodable
-func NewAPIDataEntry(a APIEncodable) *APIDataEntry {
-	return &APIDataEntry{a: a}
+// NewDataEntry creates a new DataEntry from an Encodable
+func NewDataEntry(a Encodable) *DataEntry {
+	return &DataEntry{a: a}
 }
 
-// MarshalJSON returns the APIDataEntry in JSON form
-func (d *APIDataEntry) MarshalJSON() ([]byte, error) {
+// MarshalJSON returns the DataEntry in JSON form
+func (d *DataEntry) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.a)
 }
 
-// HumanReadable returns the APIDataEntry as a string
-func (d *APIDataEntry) HumanReadable(indent string) ([]byte, error) {
+// HumanReadable returns the DataEntry as a string
+func (d *DataEntry) HumanReadable(indent string) ([]byte, error) {
 	return d.a.HumanReadable(indent)
 }
 
-// Get always returns nil for an APIDataEntry
-func (d *APIDataEntry) Get(path string) (APINavigatable, error) {
+// Get always returns nil for an DataEntry
+func (d *DataEntry) Get(path string) (Navigatable, error) {
 	return nil, nil
 }
 
-// Call always returns ErrNotImplemented for an APIDataEntry
-func (d *APIDataEntry) Call(url.Values) (string, error) {
+// Call always returns ErrNotImplemented for an DataEntry
+func (d *DataEntry) Call(url.Values) (string, error) {
 	return "", ErrNotImplemented
 }
 
-// Update does nothing for an APIDataEntry
-func (d *APIDataEntry) Update() error {
+// Update does nothing for an DataEntry
+func (d *DataEntry) Update() error {
 	return nil
 }
 
-// APICallbackFunc is a function that can be called by the API
-type APICallbackFunc func(url.Values) (string, error)
+// CallbackFunc is a function that can be called by the API
+type CallbackFunc func(url.Values) (string, error)
 
-// APICallbackEntry is an entry that provides an API callback
-type APICallbackEntry struct {
-	f APICallbackFunc
+// CallbackEntry is an entry that provides an API callback
+type CallbackEntry struct {
+	f CallbackFunc
 }
 
-// NewAPICallbackEntry creates a new APICallbackEntry from an APICallbackFunc
-func NewAPICallbackEntry(f APICallbackFunc) *APICallbackEntry {
-	return &APICallbackEntry{f: f}
+// NewCallbackEntry creates a new CallbackEntry from an CallbackFunc
+func NewCallbackEntry(f CallbackFunc) *CallbackEntry {
+	return &CallbackEntry{f: f}
 }
 
-// MarshalJSON returns the APICallbackEntry in JSON form
-func (c *APICallbackEntry) MarshalJSON() ([]byte, error) {
+// MarshalJSON returns the CallbackEntry in JSON form
+func (c *CallbackEntry) MarshalJSON() ([]byte, error) {
 	return []byte("null"), nil
 }
 
-// HumanReadable returns the APICallbackEntry as a string
-func (c *APICallbackEntry) HumanReadable(indent string) ([]byte, error) {
+// HumanReadable returns the CallbackEntry as a string
+func (c *CallbackEntry) HumanReadable(indent string) ([]byte, error) {
 	return []byte("callback"), nil
 }
 
-// Get always returns nil for an APICallbackEntry
-func (c *APICallbackEntry) Get(path string) (APINavigatable, error) {
+// Get always returns nil for an CallbackEntry
+func (c *CallbackEntry) Get(path string) (Navigatable, error) {
 	return nil, nil
 }
 
 // Call runs the callback function
-func (c *APICallbackEntry) Call(values url.Values) (string, error) {
+func (c *CallbackEntry) Call(values url.Values) (string, error) {
 	return c.f(values)
 }
 
-// Update does nothing for an APICallbackEntry
-func (c *APICallbackEntry) Update() error {
+// Update does nothing for an CallbackEntry
+func (c *CallbackEntry) Update() error {
 	return nil
 }

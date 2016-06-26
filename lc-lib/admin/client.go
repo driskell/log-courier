@@ -24,6 +24,17 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+
+	"github.com/driskell/log-courier/lc-lib/admin/api"
+)
+
+var (
+	// callMap is a list of commands known to be Call only, and the Client uses
+	// this to automatically translate Request calls into Call calls to simplify
+	// logic in clients
+	callMap = map[string]interface{}{
+		"reload": nil,
+	}
 )
 
 // Client provides an interface for accessing the REST API with pretty responses
@@ -133,7 +144,7 @@ func (c *Client) handleError(resp *http.Response, body []byte) (string, error) {
 	// Return friendly Not Found as Unknown command
 	switch resp.StatusCode {
 	case http.StatusNotFound:
-		return "", ErrNotFound
+		return "", api.ErrNotFound
 	}
 
 	data := make(map[string]interface{})
@@ -142,7 +153,7 @@ func (c *Client) handleError(resp *http.Response, body []byte) (string, error) {
 	}
 
 	if dataErr, ok := data["error"].(string); ok {
-		return "", ErrUnknown(errors.New(dataErr))
+		return "", api.ErrUnknown(errors.New(dataErr))
 	}
 
 	return string(body), nil

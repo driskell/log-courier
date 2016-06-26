@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2015 Jason Woods.
+ * Copyright 2014-2016 Jason Woods.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,20 @@
  * limitations under the License.
  */
 
-package core
+package main
 
-import "os"
+import (
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/event"
+)
 
-// A stream should be a pointer object that uniquely identified a file stream
-type Stream interface {
-	Info() (string, os.FileInfo)
+// Config holds the Fact Courier configuration, and the Stream configuration
+type Config struct {
+	event.Stream `config:",embed"`
+}
+
+func init() {
+	config.RegisterConfigSection("facts", func() config.Section {
+		return &Config{}
+	})
 }

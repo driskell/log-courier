@@ -17,7 +17,8 @@
 package codecs
 
 import (
-	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
+	"github.com/driskell/log-courier/lc-lib/config"
 )
 
 // Codec is the generic interface that all codecs implement
@@ -26,7 +27,7 @@ type Codec interface {
 	Reset()
 	Event(int64, int64, string)
 	Meter()
-	APIEncodable() admin.APIEncodable
+	APIEncodable() api.Encodable
 }
 
 // CallbackFunc is a callback function that a codec will call for each of its
@@ -44,4 +45,25 @@ type codecFactory interface {
 // NewCodec returns a Codec interface initialised from the given Factory
 func NewCodec(factory interface{}, callbackFunc CallbackFunc, offset int64) Codec {
 	return factory.(codecFactory).NewCodec(callbackFunc, offset)
+}
+
+// CodecRegistrarFunc is a callback that can be registered that will validate
+// the configuration settings for a codec registered via RegisterCodec
+type CodecRegistrarFunc func(*config.Parser, string, map[string]interface{}, string) (interface{}, error)
+
+var registeredCodecs = make(map[string]CodecRegistrarFunc)
+
+// Register registers a new codec with the configuration module, with a callback
+// that can be used to validate its configuration
+func Register(codec string, registrarFunc CodecRegistrarFunc) {
+	registeredCodecs[codec] = registrarFunc
+}
+
+// Available returns the list of registered codecs available for use
+func Available() (ret []string) {
+	ret = make([]string, 0, len(registeredCodecs))
+	for k := range registeredCodecs {
+		ret = append(ret, k)
+	}
+	return
 }

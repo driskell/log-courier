@@ -21,7 +21,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 // ErrForcedFailure is an error a Transport can use to represent a forced
@@ -42,7 +42,7 @@ type Transport interface {
 	Ping() error
 	ReloadConfig(*config.Config, bool) bool
 	Shutdown()
-	Write(string, []*core.EventDescriptor) error
+	Write(string, []*event.Event) error
 }
 
 // transportFactory is the interface that all transport factories implement. The
@@ -56,4 +56,25 @@ type transportFactory interface {
 // NewTransport returns a Transport interface initialised from the given Factory
 func NewTransport(factory interface{}, observer Observer, finishOnFail bool) Transport {
 	return factory.(transportFactory).NewTransport(observer, finishOnFail)
+}
+
+// TransportRegistrarFunc is a callback that validates the configuration for
+// a transport that was registered vua RegisterTransport
+type TransportRegistrarFunc func(*config.Parser, string, map[string]interface{}, string) (interface{}, error)
+
+var registeredTransports = make(map[string]TransportRegistrarFunc)
+
+// Register registered a transport with the configuration module by providing a
+// callback that can be used to validate the configuration
+func Register(transport string, registrarFunc TransportRegistrarFunc) {
+	registeredTransports[transport] = registrarFunc
+}
+
+// Available returns the list of registered transports available for use
+func Available() (ret []string) {
+	ret = make([]string, 0, len(registeredTransports))
+	for k := range registeredTransports {
+		ret = append(ret, k)
+	}
+	return
 }

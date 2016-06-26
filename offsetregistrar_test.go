@@ -24,40 +24,40 @@ import (
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/registrar"
+	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/harvester"
 )
 
-func newTestStdinRegistrar() (*core.Pipeline, *StdinRegistrar) {
+func newTestOffsetRegistrar() (*core.Pipeline, *OffsetRegistrar) {
 	pipeline := core.NewPipeline()
 	// TODO: Exposing pipeline from a testing app or implementing stop/wait
-	registrarImpl := newStdinRegistrar(nil)
+	registrarImpl := newOffsetRegistrar(nil)
 	pipeline.Add(registrarImpl)
 	return pipeline, registrarImpl
 }
 
-func newEventSpool(offset int64) []*core.EventDescriptor {
+func newEventSpool(offset int64) []*event.Event {
 	// Prepare an event spool with single event of specified offset
-	return []*core.EventDescriptor{
-		&core.EventDescriptor{
-			Stream: nil,
-			Offset: offset,
-			Event:  []byte{},
-		},
+	return []*event.Event{
+		event.NewEvent(
+			"stdin",
+			map[string]interface{}{},
+			&harvester.EventContext{
+				Offset: offset,
+			},
+		),
 	}
 }
 
-func TestStdinRegistrarWait(t *testing.T) {
-	p, r := newTestStdinRegistrar()
+func TestOffsetRegistrarWait(t *testing.T) {
+	p, r := newTestOffsetRegistrar()
 
 	// Start the stdin registrar
 	go func() {
 		r.Run()
 	}()
 
-	c := r.Connect()
-	c.Add(registrar.NewAckEvent(newEventSpool(13)))
-	c.Send()
-
+	r.ackFunc(newEventSpool(13))
 	r.Wait(13)
 
 	wait := make(chan int)
@@ -74,9 +74,9 @@ func TestStdinRegistrarWait(t *testing.T) {
 		return
 	}
 
-	if r.last_offset != 13 {
-		t.Error("Last offset was incorrect: ", r.last_offset)
-	} else if r.wait_offset == nil || *r.wait_offset != 13 {
-		t.Error("Wait offset was incorrect: ", r.wait_offset)
+	if r.lastOffset != 13 {
+		t.Error("Last offset was incorrect: ", r.lastOffset)
+	} else if r.waitOffset == nil || *r.waitOffset != 13 {
+		t.Error("Wait offset was incorrect: ", r.waitOffset)
 	}
 }

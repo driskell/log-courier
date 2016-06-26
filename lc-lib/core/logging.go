@@ -27,6 +27,9 @@ import (
 var log *logging.Logger
 
 func init() {
+	// Default to INFO loggin
+	logging.SetLevel(logging.INFO, "")
+
 	log = logging.MustGetLogger("core")
 }
 

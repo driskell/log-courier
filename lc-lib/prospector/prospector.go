@@ -28,7 +28,8 @@ import (
 	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/harvester"
+	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/publisher"
 	"github.com/driskell/log-courier/lc-lib/registrar"
 	"github.com/driskell/log-courier/lc-lib/spooler"
 )
@@ -50,17 +51,20 @@ type Prospector struct {
 	fromBeginning   bool
 	iteration       uint32
 	lastscan        time.Time
-	registrar       registrar.Registrator
+	registrar       *registrar.Registrar
+	publisher       *publisher.Publisher
 	registrarSpool  registrar.EventSpooler
 
-	output chan<- *core.EventDescriptor
+	output chan<- *event.Event
 }
 
 // NewProspector creates a new path crawler with the given configuration
 // If fromBeginning is true and registrar reports no state was loaded, all new
 // files on the FIRST scan will be started from the beginning, as opposed to
 // from the end
-func NewProspector(app *core.App, fromBeginning bool, registrarImp registrar.Registrator, spoolerImp *spooler.Spooler) (*Prospector, error) {
+func NewProspector(app *core.App, fromBeginning bool, spoolerImpl *spooler.Spooler, publisherImpl *publisher.Publisher) (*Prospector, error) {
+	registrarImpl := registrar.NewRegistrar(app)
+
 	ret := &Prospector{
 		app:             app,
 		config:          app.Config(),
@@ -69,16 +73,19 @@ func NewProspector(app *core.App, fromBeginning bool, registrarImp registrar.Reg
 		prospectorindex: make(map[string]*prospectorInfo),
 		prospectors:     make(map[*prospectorInfo]*prospectorInfo),
 		fromBeginning:   fromBeginning,
-		registrar:       registrarImp,
-		registrarSpool:  registrarImp.Connect(),
-		output:          spoolerImp.Connect(),
+		registrar:       registrarImpl,
+		publisher:       publisherImpl,
+		registrarSpool:  registrarImpl.Connect(),
+		output:          spoolerImpl.Connect(),
 	}
-
-	ret.initAPI()
 
 	if err := ret.init(); err != nil {
 		return nil, err
 	}
+
+	ret.initAPI()
+
+	app.AddToPipeline(ret)
 
 	return ret, nil
 }
@@ -130,7 +137,11 @@ func (p *Prospector) Run() {
 	}
 	p.mutex.Unlock()
 
-	// Disconnect from the registrar
+	// Wait for the publisher to complete before disconnecting the registrar to
+	// ensure all acknowledgements have been submitted
+	p.publisher.Wait()
+
+	// Disconnect spool from the registrar - this will allow it to shutdown
 	p.registrarSpool.Close()
 
 	log.Info("Prospector exiting")
@@ -144,6 +155,7 @@ func (p *Prospector) runOnce() bool {
 
 	for configKey, config := range p.fileConfigs {
 		for _, path := range config.Paths {
+			log.Debug("Scanning %s", path)
 			p.scan(path, &p.fileConfigs[configKey])
 		}
 	}
@@ -419,7 +431,7 @@ func (p *Prospector) startHarvester(info *prospectorInfo, fileConfig *FileConfig
 // the given offset
 func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileConfig *FileConfig, offset int64) {
 	// TODO - hook in a shutdown channel
-	info.harvester = harvester.NewHarvester(info, p.app, &fileConfig.Stream, offset)
+	info.harvester = fileConfig.StreamConfig.NewHarvester(p.app, info, offset)
 	info.running = true
 	info.status = statusOk
 	info.harvester.Start(p.output)
@@ -466,7 +478,7 @@ func (p *Prospector) initAPI() {
 		return
 	}
 
-	prospectorAPI := &api{p: p}
+	prospectorAPI := &apiNode{p: p}
 	prospectorAPI.SetEntry("status", &apiStatus{p: p})
 
 	adminConfig.SetEntry("prospector", prospectorAPI)

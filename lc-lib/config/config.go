@@ -30,14 +30,10 @@ var (
 	DefaultConfigurationFile = ""
 )
 
-// Section is implemented by external config structures that will be
-// registered with the config package
-type Section interface {
-	Validate(config *Config, buildMetadata bool) error
-}
-
-// SectionCreator creates new Section structures
-type SectionCreator func() Section
+// SectionCreator creates new structures to hold configuration
+// When a configuration section is registered a creator is provided that should
+// return an empty structure with default values
+type SectionCreator func() interface{}
 
 // registeredSectionCreators contains a list of registered external Section
 // creators that should be processed in all new Config structures
@@ -45,16 +41,13 @@ var registeredSectionCreators = make(map[string]SectionCreator)
 
 // Config holds the configuration
 type Config struct {
-	// TODO: Needs shifting into Log Courier
-	Stdin Stream `config:"stdin"`
-
-	Sections map[string]Section `config:",dynamic"`
+	Sections map[string]interface{} `config:",dynamic"`
 }
 
 // NewConfig creates a new, empty, configuration structure
 func NewConfig() *Config {
 	c := &Config{
-		Sections: make(map[string]Section),
+		Sections: make(map[string]interface{}),
 	}
 
 	for name, creator := range registeredSectionCreators {
@@ -65,9 +58,9 @@ func NewConfig() *Config {
 }
 
 // Load the configuration from the given file
-// If buildMetadata is false, factories (such as codec names or transport
-// names) and other metadata are not initialised
-func (c *Config) Load(path string, buildMetadata bool) (err error) {
+// If reportUnused is false, unknown top level sections will be ignored and will
+// not raise a configuration error
+func (c *Config) Load(path string, reportUnused bool) (err error) {
 	// Read the main config file
 	rawConfig := make(map[string]interface{})
 	if err = LoadFile(path, &rawConfig); err != nil {
@@ -75,19 +68,8 @@ func (c *Config) Load(path string, buildMetadata bool) (err error) {
 	}
 
 	// Populate configuration - reporting errors on spelling mistakes etc.
-	if err = PopulateConfig(c, rawConfig, "/"); err != nil {
+	if err = parseConfiguration(c, rawConfig, reportUnused); err != nil {
 		return
-	}
-
-	if err = c.Stdin.Init(c, "/stdin", buildMetadata); err != nil {
-		return
-	}
-
-	// Validate the registered configurables
-	for _, section := range c.Sections {
-		if err = section.Validate(c, buildMetadata); err != nil {
-			return
-		}
 	}
 
 	return
@@ -120,9 +102,26 @@ func LoadFile(filePath string, rawConfig interface{}) error {
 	return fmt.Errorf("File extension '%s' is not within the known extensions: conf, json, yaml", ext)
 }
 
-// RegisterConfigSection registers a new Section creator which will be used to
-// create new sections that will be available via Get() in all created Config
-// structures
-func RegisterConfigSection(name string, creator SectionCreator) {
+// RegisterSection registers a new configuration section with a SectionCreator
+// function, that should return a new structure containing defaults only when
+// called. The structure returned can implement several methods to aid in
+// configuration building and validation:
+//
+//   Init(p *Parser, path string)
+//     This is called during configuration population and can be used to
+//     population dynamic sub-structures. This is used for network transports
+//     so that the options available can be changed depending on what the
+//     transport field is set to. As long as you have a field called Unused of
+//     type map[string]interface{} any not yet parsed options are kept there.
+//     This can then be passed to p.Populate() to populate another structure.
+//   Validate(p *Parser, path string)
+//     This is called after the entire configuration is populated. It can be
+//     used to compare values between different sections for validity. Call
+//     p.Config() to get the full completed configuration.
+//   Defaults()
+//     Called before the structure is populated so it can set up defaults.
+//     This is helpful for child structures within a section. The defaults
+//     for a section itself can be set by the section creator.
+func RegisterSection(name string, creator SectionCreator) {
 	registeredSectionCreators[name] = creator
 }

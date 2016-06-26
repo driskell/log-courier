@@ -17,7 +17,8 @@
 package codecs
 
 import (
-	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
+	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
@@ -29,26 +30,26 @@ type CodecPlainFactory struct {
 // CodecPlain is an instance of this codec, in use by a single harvester
 type CodecPlain struct {
 	lastOffset   int64
-	callbackFunc CallbackFunc
+	callbackFunc codecs.CallbackFunc
 }
 
 // NewPlainCodecFactory creates a new factory structure from the configuration
 // data in the configuration file.
-func NewPlainCodecFactory(cfg *config.Config, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
+func NewPlainCodecFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
 	// At this point the Log Courier configuration only knows the name of the
 	// codec and that is has (or does not have) a set of key-value configuration
 	// options. The factory should use config.PopulateConfig to populate its
 	// structure from those options (see Multiline for a good example), and it
 	// should use ReportUnusedConfig to flag errors if not all of the
 	// configuration data was used. This helps tell the user when they made a typo
-	if err := config.ReportUnusedConfig(unUsed, configPath); err != nil {
+	if err := p.ReportUnusedConfig(unUsed, configPath); err != nil {
 		return nil, err
 	}
 	return &CodecPlainFactory{}, nil
 }
 
 // NewCodec creates a new codec instance starting at the given offset
-func (f *CodecPlainFactory) NewCodec(callbackFunc CallbackFunc, offset int64) Codec {
+func (f *CodecPlainFactory) NewCodec(callbackFunc codecs.CallbackFunc, offset int64) codecs.Codec {
 	return &CodecPlain{
 		lastOffset:   offset,
 		callbackFunc: callbackFunc,
@@ -83,11 +84,11 @@ func (c *CodecPlain) Meter() {
 // APIEncodable is called to get the status for the API
 // Meter and APIEncodable are already synchronised by the Harvester, so you
 // do not need to worry about race conditions between them
-func (c *CodecPlain) APIEncodable() admin.APIEncodable {
+func (c *CodecPlain) APIEncodable() api.Encodable {
 	return nil
 }
 
 // Register the codec with Log Courier
 func init() {
-	config.RegisterCodec("plain", NewPlainCodecFactory)
+	codecs.Register("plain", NewPlainCodecFactory)
 }

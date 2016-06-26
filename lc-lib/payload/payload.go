@@ -17,7 +17,7 @@
 package payload
 
 import (
-	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 )
 
@@ -25,7 +25,7 @@ import (
 // and provides methods for processing acknowledgements so that a future resend
 // of the payload does not resend acknowledged events
 type Payload struct {
-	events       []*core.EventDescriptor
+	events       []*event.Event
 	lastSequence int
 	sequenceLen  int
 	ackEvents    int
@@ -39,7 +39,7 @@ type Payload struct {
 }
 
 // NewPayload initialises a new payload structure from the given spool of events
-func NewPayload(events []*core.EventDescriptor) *Payload {
+func NewPayload(events []*event.Event) *Payload {
 	ret := &Payload{
 		events:      events,
 		sequenceLen: len(events),
@@ -63,7 +63,7 @@ func (pp *Payload) Size() int {
 }
 
 // Events returns the unacknowledged set of events in the payload
-func (pp *Payload) Events() []*core.EventDescriptor {
+func (pp *Payload) Events() []*event.Event {
 	return pp.events[pp.ackEvents:]
 }
 
@@ -112,7 +112,7 @@ func (pp *Payload) Complete() bool {
 
 // Rollup removes acknowledged events from the payload and returns them so they
 // may be passed onto the Registrar
-func (pp *Payload) Rollup() []*core.EventDescriptor {
+func (pp *Payload) Rollup() []*event.Event {
 	pp.processed += pp.ackEvents
 	rollup := pp.events[:pp.ackEvents]
 	pp.events = pp.events[pp.ackEvents:]

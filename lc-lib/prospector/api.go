@@ -22,11 +22,11 @@ package prospector
 import (
 	"fmt"
 
-	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 )
 
 type apiStatus struct {
-	admin.APIKeyValue
+	api.KeyValue
 
 	p *Prospector
 }
@@ -35,25 +35,25 @@ type apiStatus struct {
 func (a *apiStatus) Update() error {
 	// Update the values and pass through to node
 	a.p.mutex.RLock()
-	a.SetEntry("watchedFiles", admin.APINumber(len(a.p.prospectorindex)))
-	a.SetEntry("activeStates", admin.APINumber(len(a.p.prospectors)))
+	a.SetEntry("watchedFiles", api.Number(len(a.p.prospectorindex)))
+	a.SetEntry("activeStates", api.Number(len(a.p.prospectors)))
 	a.p.mutex.RUnlock()
 
 	return nil
 }
 
 type apiFiles struct {
-	admin.APIArray
+	api.Array
 
 	p *Prospector
 }
 
-func (a *apiFiles) Get(path string) (admin.APINavigatable, error) {
+func (a *apiFiles) Get(path string) (api.Navigatable, error) {
 	if err := a.Update(); err != nil {
 		return nil, err
 	}
 
-	return a.APIArray.Get(path)
+	return a.Array.Get(path)
 }
 
 func (a *apiFiles) Update() error {
@@ -78,8 +78,8 @@ func (a *apiFiles) Update() error {
 
 // processEntry generates the status information for a single watched file
 func (a *apiFiles) processEntry(info *prospectorInfo) {
-	var fileType, orphaned, status admin.APIString
-	var errString admin.APIEncodable
+	var fileType, orphaned, status api.String
+	var errString api.Encodable
 
 	if info.file == "-" {
 		fileType = "stdin"
@@ -103,26 +103,26 @@ func (a *apiFiles) processEntry(info *prospectorInfo) {
 		} else {
 			status = "dead"
 		}
-		errString = admin.APINull
+		errString = api.Null
 	case statusResume:
 		status = "resuming"
-		errString = admin.APINull
+		errString = api.Null
 	case statusFailed:
 		status = "failed"
-		errString = admin.APIString(info.err.Error())
+		errString = api.String(info.err.Error())
 	case statusInvalid:
 		if _, ok := info.err.(*ProspectorSkipError); ok {
 			status = "skipped"
 		} else {
 			status = "error"
 		}
-		errString = admin.APIString(info.err.Error())
+		errString = api.String(info.err.Error())
 	}
 
-	apiEntry := &admin.APIKeyValue{}
+	apiEntry := &api.KeyValue{}
 	key := fmt.Sprintf("%p", info)
-	apiEntry.SetEntry("id", admin.APIString(key))
-	apiEntry.SetEntry("path", admin.APIString(info.file))
+	apiEntry.SetEntry("id", api.String(key))
+	apiEntry.SetEntry("path", api.String(info.file))
 	apiEntry.SetEntry("type", fileType)
 	apiEntry.SetEntry("orphaned", orphaned)
 	apiEntry.SetEntry("status", status)
@@ -135,24 +135,24 @@ func (a *apiFiles) processEntry(info *prospectorInfo) {
 	a.AddEntry(key, apiEntry)
 }
 
-type api struct {
-	admin.APINode
+type apiNode struct {
+	api.Node
 
 	p *Prospector
 }
 
 // Get processes a prospector API path
-func (a *api) Get(path string) (admin.APINavigatable, error) {
+func (a *apiNode) Get(path string) (api.Navigatable, error) {
 	if path == "files" {
 		// Return a new apiFiles with empty array
 		return &apiFiles{p: a.p}, nil
 	}
 
-	return a.APINode.Get(path)
+	return a.Node.Get(path)
 }
 
 // MarshalJSON encodes the status in json form
-func (a *api) MarshalJSON() ([]byte, error) {
+func (a *apiNode) MarshalJSON() ([]byte, error) {
 	// Add on the ephemeral files entry
 	// TODO: This should be managed as part of adding/removing file tracking
 	files := &apiFiles{p: a.p}
@@ -161,13 +161,13 @@ func (a *api) MarshalJSON() ([]byte, error) {
 	}
 
 	a.SetEntry("files", files)
-	result, err := a.APINode.MarshalJSON()
+	result, err := a.Node.MarshalJSON()
 	a.RemoveEntry("files")
 	return result, err
 }
 
 // HumanReadable encodes the status as a readable string
-func (a *api) HumanReadable(indent string) ([]byte, error) {
+func (a *apiNode) HumanReadable(indent string) ([]byte, error) {
 	// Add on the ephemeral files entry
 	// TODO: This should be managed as part of adding/removing file tracking
 	files := &apiFiles{p: a.p}
@@ -176,7 +176,7 @@ func (a *api) HumanReadable(indent string) ([]byte, error) {
 	}
 
 	a.SetEntry("files", files)
-	result, err := a.APINode.HumanReadable(indent)
+	result, err := a.Node.HumanReadable(indent)
 	a.RemoveEntry("files")
 	return result, err
 }

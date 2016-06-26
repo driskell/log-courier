@@ -19,6 +19,7 @@ package admin
 import (
 	"fmt"
 
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 )
@@ -38,11 +39,11 @@ type Config struct {
 	Enabled bool   `config:"enabled"`
 	Bind    string `config:"listen address"`
 
-	apiRoot APINavigatable
+	apiRoot api.Navigatable
 }
 
 // Validate validates the config structure
-func (c *Config) Validate(config *config.Config, buildMetadata bool) (err error) {
+func (c *Config) Validate(p *config.Parser, path string) (err error) {
 	if c.Enabled && c.Bind == "" {
 		err = fmt.Errorf("/admin/listen address must be specified if /admin/enabled is true")
 		return
@@ -52,7 +53,7 @@ func (c *Config) Validate(config *config.Config, buildMetadata bool) (err error)
 }
 
 // SetEntry sets a new root API entry
-func (c *Config) SetEntry(path string, entry APINavigatable) {
+func (c *Config) SetEntry(path string, entry api.Navigatable) {
 	c.apiRoot.(*apiRoot).SetEntry(path, entry)
 }
 
@@ -62,7 +63,7 @@ func ConfigFromApp(app *core.App) *Config {
 }
 
 func init() {
-	config.RegisterConfigSection("admin", func() config.Section {
+	config.RegisterSection("admin", func() interface{} {
 		return &Config{
 			Enabled: defaultAdminEnabled,
 			Bind:    DefaultAdminBind,

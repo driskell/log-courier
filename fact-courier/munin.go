@@ -21,12 +21,13 @@ const (
 type MuninCollector struct {
 	core.PipelineSegment
 
-	app       *core.App
-	genConfig *config.General
+	app        *core.App
+	factConfig *Config
+	genConfig  *config.General
 
-	config   *MuninConfig
-	sections []string
-	runners  []*MuninRunner
+	muninConfig *MuninConfig
+	sections    []string
+	runners     []*MuninRunner
 
 	credentialCache *CredentialCache
 	publisher       *publisher.Publisher
@@ -38,6 +39,7 @@ type MuninCollector struct {
 func NewMuninCollector(app *core.App, publisher *publisher.Publisher) (*MuninCollector, error) {
 	ret := &MuninCollector{
 		app:             app,
+		factConfig:      app.Config().Section("facts").(*Config),
 		genConfig:       app.Config().General(),
 		publisher:       publisher,
 		output:          publisher.Connect(),
@@ -137,18 +139,18 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 	// encapsulate codecs
 	event := core.Event(result)
 
-	// TODO: Stream configuration for Fact Courier
-	//if m.streamConfig.AddHostField {
-	//	event["host"] = m.genConfig.Host
-	//}
-	// TODO: Timezone should be in the stream configuration?
-	//if m.streamConfig.AddTimezoneField {
-	//	event["timezone"] = m.timezone
-	//}
+	// TODO: Full stream configuration for Fact Courier with codecs etc
+	if m.factConfig.AddHostField {
+		event["host"] = m.genConfig.Host
+	}
+
+	if m.factConfig.AddTimezoneField {
+		event["timezone"] = m.timezone
+	}
 
 	event["@timestamp"] = timestamp.Format(time.RFC3339)
 
-	event["plugin"] = runner.Name()
+	event["munin_plugin"] = runner.Name()
 
 	for k := range m.genConfig.GlobalFields {
 		event[k] = m.genConfig.GlobalFields[k]
@@ -213,7 +215,7 @@ func (m *MuninCollector) scanFolder(path string, cb func(string, error)) error {
 // we run plugins as the correct user and group
 func (m *MuninCollector) loadConfig() error {
 	// TODO: Configuration for this
-	config, err := NewMuninConfig("/etc/munin/munin-node.conf")
+	muninConfig, err := NewMuninConfig("/etc/munin/munin-node.conf")
 	if err != nil {
 		return err
 	}
@@ -226,19 +228,19 @@ func (m *MuninCollector) loadConfig() error {
 			return
 		}
 
-		err = config.Append(filepath.Join(confPath, name))
+		err = muninConfig.Append(filepath.Join(confPath, name))
 		if err != nil {
 			log.Errorf("Config append error: %s", err)
 			return
 		}
 	})
 
-	m.config = config
-	m.sections = m.config.Sections()
+	m.muninConfig = muninConfig
+	m.sections = m.muninConfig.Sections()
 
 	log.Debug("Sections: %v", m.sections)
 	for _, section := range m.sections {
-		log.Debug("[%s]: %v", section, m.config.Section(section))
+		log.Debug("[%s]: %v", section, m.muninConfig.Section(section))
 	}
 
 	return nil

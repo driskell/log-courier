@@ -65,42 +65,27 @@ type General struct {
 	ProspectInterval time.Duration `config:"prospect interval"`
 }
 
-// InitDefaults initialises default values for the general configuration
-func (gc *General) InitDefaults() {
-	gc.LineBufferBytes = defaultGeneralLineBufferBytes
-	gc.LogLevel = defaultGeneralLogLevel
-	gc.LogStdout = defaultGeneralLogStdout
-	gc.LogSyslog = defaultGeneralLogSyslog
-	gc.MaxLineBytes = defaultGeneralMaxLineBytes
-	gc.PersistDir = DefaultGeneralPersistDir
-	gc.ProspectInterval = defaultGeneralProspectInterval
-	gc.SpoolSize = defaultGeneralSpoolSize
-	gc.SpoolMaxBytes = defaultGeneralSpoolMaxBytes
-	gc.SpoolTimeout = defaultGeneralSpoolTimeout
-	// NOTE: Empty string for Host means calculate it automatically, so leave it
-}
-
 // Validate the configuration
-func (gc *General) Validate(config *Config, buildMetadata bool) (err error) {
+func (gc *General) Validate(p *Parser, path string) (err error) {
 	if gc.PersistDir == "" {
-		err = fmt.Errorf("/general/persist directory must be specified")
+		err = fmt.Errorf("%s/persist directory must be specified", path)
 		return
 	}
 
 	// Enforce maximum of 2 GB since event transmit length is uint32
 	if gc.SpoolMaxBytes > 2*1024*1024*1024 {
-		err = fmt.Errorf("/general/spool max bytes can not be greater than 2 GiB")
+		err = fmt.Errorf("%s/spool max bytes can not be greater than 2 GiB", path)
 		return
 	}
 
 	if gc.LineBufferBytes < 1 {
-		err = fmt.Errorf("/general/line buffer bytes must be greater than 1")
+		err = fmt.Errorf("%s/line buffer bytes must be greater than 1", path)
 		return
 	}
 
 	// Max line bytes can not be larger than spool max bytes
 	if gc.MaxLineBytes > gc.SpoolMaxBytes {
-		err = fmt.Errorf("/general/max line bytes can not be greater than /general/spool max bytes")
+		err = fmt.Errorf("%s/max line bytes can not be greater than %s/spool max bytes", path, path)
 		return
 	}
 
@@ -123,7 +108,18 @@ func (c *Config) General() *General {
 }
 
 func init() {
-	RegisterConfigSection("general", func() Section {
-		return &General{}
+	RegisterSection("general", func() interface{} {
+		return &General{
+			LineBufferBytes:  defaultGeneralLineBufferBytes,
+			LogLevel:         defaultGeneralLogLevel,
+			LogStdout:        defaultGeneralLogStdout,
+			LogSyslog:        defaultGeneralLogSyslog,
+			MaxLineBytes:     defaultGeneralMaxLineBytes,
+			PersistDir:       DefaultGeneralPersistDir,
+			ProspectInterval: defaultGeneralProspectInterval,
+			SpoolSize:        defaultGeneralSpoolSize,
+			SpoolMaxBytes:    defaultGeneralSpoolMaxBytes,
+			SpoolTimeout:     defaultGeneralSpoolTimeout,
+		}
 	})
 }

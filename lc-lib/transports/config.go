@@ -17,11 +17,13 @@
  * limitations under the License.
  */
 
-package config
+package transports
 
 import (
 	"fmt"
 	"time"
+
+	"github.com/driskell/log-courier/lc-lib/config"
 )
 
 const (
@@ -35,8 +37,8 @@ const (
 	defaultNetworkTransport          string        = "tls"
 )
 
-// Network holds network related configuration
-type Network struct {
+// Config holds network related configuration
+type Config struct {
 	Factory interface{}
 
 	Backoff            time.Duration `config:"failure backoff"`
@@ -52,63 +54,61 @@ type Network struct {
 	Unused map[string]interface{}
 }
 
-// InitDefaults initiases default values for the network configuration
-func (nc *Network) InitDefaults() {
-	nc.Backoff = defaultNetworkBackoff
-	nc.BackoffMax = defaultNetworkBackoffMax
-	nc.MaxPendingPayloads = defaultNetworkMaxPendingPayloads
-	nc.Method = defaultNetworkMethod
-	nc.Rfc2782Service = defaultNetworkRfc2782Service
-	nc.Rfc2782Srv = defaultNetworkRfc2782Srv
-	nc.Timeout = defaultNetworkTimeout
-	nc.Transport = defaultNetworkTransport
+// Init the transport configuration based on which was chosen
+func (nc *Config) Init(p *config.Parser, path string) (err error) {
+	registrarFunc, ok := registeredTransports[nc.Transport]
+	if !ok {
+		err = fmt.Errorf("Unrecognised transport '%s'", nc.Transport)
+		return
+	}
+
+	nc.Factory, err = registrarFunc(p, path+"/", nc.Unused, nc.Transport)
+	return
 }
 
 // Validate configuration
-func (nc *Network) Validate(cfg *Config, buildMetadata bool) (err error) {
+func (nc *Config) Validate(p *config.Parser, path string) (err error) {
 	if nc.Method == "" {
 		nc.Method = defaultNetworkMethod
 	}
 	if nc.Method != "random" && nc.Method != "failover" && nc.Method != "loadbalance" {
-		err = fmt.Errorf("The network method (/network/method) is not recognised: %s", nc.Method)
+		err = fmt.Errorf("The network method (%s/method) is not recognised: %s", path, nc.Method)
 		return
 	}
 
 	if len(nc.Servers) == 0 {
-		err = fmt.Errorf("No network servers were specified (/network/servers)")
+		err = fmt.Errorf("No network servers were specified (%s/servers)", path)
 		return
 	}
 
 	servers := make(map[string]bool)
 	for _, server := range nc.Servers {
 		if _, exists := servers[server]; exists {
-			err = fmt.Errorf("The list of network servers (/network/servers) must be unique: %s appears multiple times", server)
+			err = fmt.Errorf("The list of network servers (%s/servers) must be unique: %s appears multiple times", path, server)
 			return
 		}
 		servers[server] = true
 	}
 
-	if buildMetadata {
-		if registrarFunc, ok := registeredTransports[nc.Transport]; ok {
-			if nc.Factory, err = registrarFunc(cfg, "/network/", nc.Unused, nc.Transport); err != nil {
-				return
-			}
-		} else {
-			err = fmt.Errorf("Unrecognised transport '%s'", nc.Transport)
-			return
-		}
-	}
-
 	return
 }
 
-// Network returns the network configuration
-func (c *Config) Network() *Network {
-	return c.Sections["network"].(*Network)
+// FetchConfig returns the network configuration from a Config structure
+func FetchConfig(cfg *config.Config) *Config {
+	return cfg.Sections["network"].(*Config)
 }
 
 func init() {
-	RegisterConfigSection("network", func() Section {
-		return &Network{}
+	config.RegisterSection("network", func() interface{} {
+		return &Config{
+			Backoff:            defaultNetworkBackoff,
+			BackoffMax:         defaultNetworkBackoffMax,
+			MaxPendingPayloads: defaultNetworkMaxPendingPayloads,
+			Method:             defaultNetworkMethod,
+			Rfc2782Service:     defaultNetworkRfc2782Service,
+			Rfc2782Srv:         defaultNetworkRfc2782Srv,
+			Timeout:            defaultNetworkTimeout,
+			Transport:          defaultNetworkTransport,
+		}
 	})
 }

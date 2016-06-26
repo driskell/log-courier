@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 )
@@ -198,14 +199,14 @@ func (a *lcAdmin) ProcessCommand(command string) bool {
 	resp, err := a.client.Request(path)
 	if err != nil {
 		switch err {
-		case admin.ErrNotFound:
+		case api.ErrNotFound:
 			fmt.Printf("Unknown command\n")
 			return false
 		}
 
 		switch err.(type) {
-		case admin.ErrUnknown:
-			fmt.Printf("Log Courier returned an error: %s\n", err.(admin.ErrUnknown).Error())
+		case api.ErrUnknown:
+			fmt.Printf("Log Courier returned an error: %s\n", err.(api.ErrUnknown).Error())
 			return false
 		}
 

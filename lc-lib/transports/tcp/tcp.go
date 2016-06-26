@@ -32,6 +32,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -47,7 +48,7 @@ const (
 // It also can optionally introduce a TLS layer for security
 type TransportTCP struct {
 	config       *TransportTCPFactory
-	netConfig    *config.Network
+	netConfig    *transports.Config
 	finishOnFail bool
 	socket       net.Conn
 	tlsSocket    *tls.Conn
@@ -72,7 +73,8 @@ type TransportTCP struct {
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
 func (t *TransportTCP) ReloadConfig(cfg *config.Config, finishOnFail bool) bool {
-	newConfig := cfg.Network().Factory.(*TransportTCPFactory)
+	newNetConfig := transports.FetchConfig(cfg)
+	newConfig := newNetConfig.Factory.(*TransportTCPFactory)
 	t.finishOnFail = finishOnFail
 
 	// TODO: Check timestamps of underlying certificate files to detect changes
@@ -82,7 +84,7 @@ func (t *TransportTCP) ReloadConfig(cfg *config.Config, finishOnFail bool) bool 
 
 	// Only copy net config just in case something in the factory did change that
 	// we didn't account for which does require a restart
-	t.netConfig = cfg.Network()
+	t.netConfig = newNetConfig
 
 	return false
 }
@@ -455,17 +457,17 @@ ReceiverReadLoop:
 
 // sendEvent ships an event structure to the observer whilst also monitoring for
 // any shutdown signal. Returns true if shutdown was signalled
-func (t *TransportTCP) sendEvent(controlChan <-chan int, event transports.Event) bool {
+func (t *TransportTCP) sendEvent(controlChan <-chan int, transportEvent transports.Event) bool {
 	select {
 	case <-controlChan:
 		return true
-	case t.observer.EventChan() <- event:
+	case t.observer.EventChan() <- transportEvent:
 	}
 	return false
 }
 
 // Write a message to the transport
-func (t *TransportTCP) Write(nonce string, events []*core.EventDescriptor) error {
+func (t *TransportTCP) Write(nonce string, events []*event.Event) error {
 	var messageBuffer bytes.Buffer
 
 	// Encapsulate the data into the message
@@ -494,12 +496,12 @@ func (t *TransportTCP) Write(nonce string, events []*core.EventDescriptor) error
 		return err
 	}
 
-	for _, event := range events {
-		if err := binary.Write(compressor, binary.BigEndian, uint32(len(event.Event))); err != nil {
+	for _, singleEvent := range events {
+		if err := binary.Write(compressor, binary.BigEndian, uint32(len(singleEvent.Bytes()))); err != nil {
 			return err
 		}
 
-		if _, err := compressor.Write(event.Event); err != nil {
+		if _, err := compressor.Write(singleEvent.Bytes()); err != nil {
 			return err
 		}
 	}

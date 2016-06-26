@@ -27,11 +27,12 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
+	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 type methodRandom struct {
 	sink         *endpoint.Sink
-	netConfig    *config.Network
+	netConfig    *transports.Config
 	activeServer int
 	generator    *rand.Rand
 	backoff      *core.ExpBackoff
@@ -42,7 +43,7 @@ type methodRandom struct {
 func newMethodRandom(sink *endpoint.Sink, cfg *config.Config) *methodRandom {
 	ret := &methodRandom{
 		sink:         sink,
-		netConfig:    cfg.Network(),
+		netConfig:    transports.FetchConfig(cfg),
 		activeServer: -1,
 		generator:    rand.New(rand.NewSource(int64(time.Now().Nanosecond()))),
 	}
@@ -151,7 +152,7 @@ func (m *methodRandom) onStarted(endpoint *endpoint.Endpoint) {
 
 func (m *methodRandom) reloadConfig(cfg *config.Config) {
 	currentServer := m.netConfig.Servers[m.activeServer]
-	m.netConfig = cfg.Network()
+	m.netConfig = transports.FetchConfig(cfg)
 
 	front := m.sink.Front()
 	if front == nil {

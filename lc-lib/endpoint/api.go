@@ -19,11 +19,11 @@ package endpoint
 import (
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 )
 
 type apiEndpoint struct {
-	admin.APIKeyValue
+	api.KeyValue
 
 	e *Endpoint
 }
@@ -31,11 +31,11 @@ type apiEndpoint struct {
 // Update the status information for an endpoint
 func (a *apiEndpoint) Update() error {
 	a.e.mutex.RLock()
-	a.SetEntry("server", admin.APIString(a.e.server))
-	a.SetEntry("status", admin.APIString(a.e.status.String()))
-	a.SetEntry("pendingPayloads", admin.APINumber(a.e.NumPending()))
-	a.SetEntry("publishedLines", admin.APINumber(a.e.LineCount()))
-	a.SetEntry("averageLatency", admin.APIFloat(a.e.AverageLatency()/time.Millisecond))
+	a.SetEntry("server", api.String(a.e.server))
+	a.SetEntry("status", api.String(a.e.status.String()))
+	a.SetEntry("pendingPayloads", api.Number(a.e.NumPending()))
+	a.SetEntry("publishedLines", api.Number(a.e.LineCount()))
+	a.SetEntry("averageLatency", api.Float(a.e.AverageLatency()/time.Millisecond))
 	a.e.mutex.RUnlock()
 
 	return nil

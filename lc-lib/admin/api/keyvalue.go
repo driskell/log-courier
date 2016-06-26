@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package admin
+package api
 
 import (
 	"bytes"
@@ -23,32 +23,32 @@ import (
 	"sort"
 )
 
-// APIKeyValue represents a set of data
-type APIKeyValue struct {
-	entryMap map[string]APIEncodable
+// KeyValue represents a set of data
+type KeyValue struct {
+	entryMap map[string]Encodable
 }
 
-// Get always returns nil for an APIKeyValue as it is not navigatable
-func (d *APIKeyValue) Get(string) (APINavigatable, error) {
+// Get always returns nil for an KeyValue as it is not navigatable
+func (d *KeyValue) Get(string) (Navigatable, error) {
 	return nil, nil
 }
 
 // Call an API
-func (d *APIKeyValue) Call(params url.Values) (string, error) {
+func (d *KeyValue) Call(params url.Values) (string, error) {
 	return "", ErrNotImplemented
 }
 
 // SetEntry sets a new data entry
-func (d *APIKeyValue) SetEntry(key string, entry APIEncodable) {
+func (d *KeyValue) SetEntry(key string, entry Encodable) {
 	if d.entryMap == nil {
-		d.entryMap = make(map[string]APIEncodable)
+		d.entryMap = make(map[string]Encodable)
 	}
 
 	d.entryMap[key] = entry
 }
 
 // RemoveEntry removes a data entry
-func (d *APIKeyValue) RemoveEntry(key string, entry APIEncodable) {
+func (d *KeyValue) RemoveEntry(key string, entry Encodable) {
 	if _, ok := d.entryMap[key]; !ok {
 		return
 	}
@@ -56,19 +56,19 @@ func (d *APIKeyValue) RemoveEntry(key string, entry APIEncodable) {
 	delete(d.entryMap, key)
 }
 
-// MarshalJSON returns the APIKeyValue data in JSON form
-func (d *APIKeyValue) MarshalJSON() ([]byte, error) {
+// MarshalJSON returns the KeyValue data in JSON form
+func (d *KeyValue) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.entryMap)
 }
 
-// HumanReadable returns the APIKeyValue as a string
-func (d *APIKeyValue) HumanReadable(indent string) ([]byte, error) {
+// HumanReadable returns the KeyValue as a string
+func (d *KeyValue) HumanReadable(indent string) ([]byte, error) {
 	if d.entryMap == nil || len(d.entryMap) == 0 {
 		return []byte("none"), nil
 	}
 
 	var result bytes.Buffer
-	newIndent := indent + APIIndentation
+	newIndent := indent + Indentation
 
 	mapOrder := make([]string, 0, len(d.entryMap))
 	for key := range d.entryMap {
@@ -103,6 +103,6 @@ func (d *APIKeyValue) HumanReadable(indent string) ([]byte, error) {
 
 // Update ensures the data we have is up to date - should be overriden by users
 // if required to keep the contents up to date on each request
-func (d *APIKeyValue) Update() error {
+func (d *KeyValue) Update() error {
 	return nil
 }

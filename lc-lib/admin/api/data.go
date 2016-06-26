@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package admin
+package api
 
 import (
 	"encoding/json"
@@ -33,29 +33,29 @@ func (n apiNull) HumanReadable(string) ([]byte, error) {
 	return []byte("n/a"), nil
 }
 
-// APINull represents a null value
-var APINull = apiNull{}
+// Null represents a null value
+var Null = apiNull{}
 
-// APINumber represents an integer number in the API
-type APINumber int64
+// Number represents an integer number in the API
+type Number int64
 
-// HumanReadable returns the APINumber as a string
-func (n APINumber) HumanReadable(string) ([]byte, error) {
+// HumanReadable returns the Number as a string
+func (n Number) HumanReadable(string) ([]byte, error) {
 	return []byte(strconv.FormatInt(int64(n), 10)), nil
 }
 
-// APIFloat represents a floating point number in the API
-type APIFloat float64
+// Float represents a floating point number in the API
+type Float float64
 
-// HumanReadable returns the APIFloat as a string
-func (f APIFloat) HumanReadable(string) ([]byte, error) {
+// HumanReadable returns the Float as a string
+func (f Float) HumanReadable(string) ([]byte, error) {
 	return []byte(strconv.FormatFloat(float64(f), 'g', -1, 64)), nil
 }
 
-// APIString represents a string in the API
-type APIString string
+// String represents a string in the API
+type String string
 
-// HumanReadable returns the APIString as a string
-func (s APIString) HumanReadable(string) ([]byte, error) {
+// HumanReadable returns the String as a string
+func (s String) HumanReadable(string) ([]byte, error) {
 	return []byte(s), nil
 }

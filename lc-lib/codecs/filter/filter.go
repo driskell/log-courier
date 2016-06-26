@@ -19,7 +19,8 @@ package codecs
 import (
 	"errors"
 
-	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
+	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
@@ -28,7 +29,7 @@ type CodecFilterFactory struct {
 	Patterns []string `config:"patterns"`
 	Match    string   `config:"match"`
 
-	patterns        PatternCollection
+	patterns        codecs.PatternCollection
 	requiredMatches int
 }
 
@@ -38,18 +39,18 @@ type CodecFilter struct {
 	config        *CodecFilterFactory
 	lastOffset    int64
 	filteredLines uint64
-	callbackFunc  CallbackFunc
+	callbackFunc  codecs.CallbackFunc
 	meterFiltered uint64
 }
 
 // NewFilterCodecFactory creates a new FilterCodecFactory for a codec definition
 // in the configuration file. This factory can be used to create instances of a
 // filter codec for use by harvesters
-func NewFilterCodecFactory(cfg *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
+func NewFilterCodecFactory(p *config.Parser, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	result := &CodecFilterFactory{}
-	if err = config.PopulateConfig(result, unused, configPath); err != nil {
+	if err = p.Populate(result, unused, configPath, true); err != nil {
 		return nil, err
 	}
 
@@ -66,7 +67,7 @@ func NewFilterCodecFactory(cfg *config.Config, configPath string, unused map[str
 
 // NewCodec returns a new codec instance that will send events to the callback
 // function provided upon completion of processing
-func (f *CodecFilterFactory) NewCodec(callbackFunc CallbackFunc, offset int64) Codec {
+func (f *CodecFilterFactory) NewCodec(callbackFunc codecs.CallbackFunc, offset int64) codecs.Codec {
 	return &CodecFilter{
 		config:       f,
 		lastOffset:   offset,
@@ -105,13 +106,13 @@ func (c *CodecFilter) Meter() {
 }
 
 // APIEncodable is called to get the codec status for the API
-func (c *CodecFilter) APIEncodable() admin.APIEncodable {
-	api := &admin.APIKeyValue{}
-	api.SetEntry("filtered_lines", admin.APINumber(c.meterFiltered))
-	return api
+func (c *CodecFilter) APIEncodable() api.Encodable {
+	apiKV := &api.KeyValue{}
+	apiKV.SetEntry("filtered_lines", api.Number(c.meterFiltered))
+	return apiKV
 }
 
 // Register the codec
 func init() {
-	config.RegisterCodec("filter", NewFilterCodecFactory)
+	codecs.Register("filter", NewFilterCodecFactory)
 }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package admin
+package api
 
 import (
 	"bytes"
@@ -26,18 +26,18 @@ import (
 
 type apiArrayEntry struct {
 	row   int
-	entry APINavigatable
+	entry Navigatable
 }
 
-// APIArray represents an array of entries in the API accessible through a
+// Array represents an array of entries in the API accessible through a
 // primary key
-type APIArray struct {
+type Array struct {
 	entryMap map[string]*apiArrayEntry
-	entries  []APINavigatable
+	entries  []Navigatable
 }
 
 // AddEntry a new array entry
-func (a *APIArray) AddEntry(key string, entry APINavigatable) {
+func (a *Array) AddEntry(key string, entry Navigatable) {
 	if a.entryMap == nil {
 		a.entryMap = make(map[string]*apiArrayEntry)
 	} else {
@@ -57,7 +57,7 @@ func (a *APIArray) AddEntry(key string, entry APINavigatable) {
 }
 
 // RemoveEntry removes an array entry
-func (a *APIArray) RemoveEntry(key string) {
+func (a *Array) RemoveEntry(key string) {
 	if a.entryMap == nil {
 		panic("Array has no entries")
 	}
@@ -75,7 +75,7 @@ func (a *APIArray) RemoveEntry(key string) {
 }
 
 // Get returns an entry using it's primary key name or row number
-func (a *APIArray) Get(path string) (APINavigatable, error) {
+func (a *Array) Get(path string) (Navigatable, error) {
 	if a.entryMap == nil {
 		return nil, nil
 	}
@@ -98,23 +98,23 @@ func (a *APIArray) Get(path string) (APINavigatable, error) {
 }
 
 // Call an API
-func (a *APIArray) Call(params url.Values) (string, error) {
+func (a *Array) Call(params url.Values) (string, error) {
 	return "", ErrNotImplemented
 }
 
-// MarshalJSON returns the APIArray in JSON form
-func (a *APIArray) MarshalJSON() ([]byte, error) {
+// MarshalJSON returns the Array in JSON form
+func (a *Array) MarshalJSON() ([]byte, error) {
 	return json.Marshal(a.entries)
 }
 
-// HumanReadable returns the APIArray as a string
-func (a *APIArray) HumanReadable(indent string) ([]byte, error) {
+// HumanReadable returns the Array as a string
+func (a *Array) HumanReadable(indent string) ([]byte, error) {
 	if a.entryMap == nil || len(a.entryMap) == 0 {
 		return []byte("none"), nil
 	}
 
 	var result bytes.Buffer
-	newIndent := indent + APIIndentation
+	newIndent := indent + Indentation
 
 	mapOrder := make([]string, 0, len(a.entryMap))
 	for key := range a.entryMap {
@@ -150,7 +150,7 @@ func (a *APIArray) HumanReadable(indent string) ([]byte, error) {
 // Update ensures the data we have is up to date - should be overriden by users
 // if required to keep the contents up to date on each request
 // Default behaviour is to update each of the array entries
-func (a *APIArray) Update() error {
+func (a *Array) Update() error {
 	for _, entry := range a.entries {
 		if err := entry.Update(); err != nil {
 			return err

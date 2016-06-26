@@ -25,7 +25,9 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/transports"
 	"gopkg.in/op/go-logging.v1"
 )
 
@@ -53,11 +55,13 @@ func NewApp(name, binName, version string) *App {
 // StartUp processes the command line arguments and sets up logging
 func (a *App) StartUp() {
 	var version bool
+	var configDebug bool
 	var listSupported bool
 	var configTest bool
 	var cpuProfile string
 
 	flag.BoolVar(&version, "version", false, "show version information")
+	flag.BoolVar(&configDebug, "config-debug", false, "enable config parsing debug logs to console")
 	flag.BoolVar(&listSupported, "list-supported", false, "List supported transports and codecs")
 	flag.BoolVar(&configTest, "config-test", false, "Test the configuration specified by -config and exit")
 	flag.StringVar(&cpuProfile, "cpuprofile", "", "write cpu profile to file")
@@ -73,12 +77,12 @@ func (a *App) StartUp() {
 
 	if listSupported {
 		fmt.Printf("Available transports:\n")
-		for _, transport := range config.AvailableTransports() {
+		for _, transport := range transports.Available() {
 			fmt.Printf("  %s\n", transport)
 		}
 
 		fmt.Printf("Available codecs:\n")
-		for _, codec := range config.AvailableCodecs() {
+		for _, codec := range codecs.Available() {
 			fmt.Printf("  %s\n", codec)
 		}
 		os.Exit(0)
@@ -88,6 +92,11 @@ func (a *App) StartUp() {
 		fmt.Fprintf(os.Stderr, "Please specify a configuration file with -config.\n\n")
 		flag.PrintDefaults()
 		os.Exit(1)
+	}
+
+	// Enable config logging if requested
+	if configDebug {
+		logging.SetLevel(logging.DEBUG, "config")
 	}
 
 	err := a.loadConfig()

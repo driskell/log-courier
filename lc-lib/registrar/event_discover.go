@@ -17,8 +17,9 @@
 package registrar
 
 import (
-	"github.com/driskell/log-courier/lc-lib/core"
 	"os"
+
+	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 type DiscoverEvent struct {

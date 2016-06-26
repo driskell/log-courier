@@ -20,8 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/admin"
-	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -32,11 +31,11 @@ type Sink struct {
 	mutex sync.RWMutex
 
 	endpoints    map[string]*Endpoint
-	config       *config.Network
+	config       *transports.Config
 	eventChan    chan transports.Event
 	timeoutTimer *time.Timer
 
-	api *admin.APIArray
+	api *api.Array
 
 	timeoutList internallist.List
 	readyList   internallist.List
@@ -45,7 +44,7 @@ type Sink struct {
 }
 
 // NewSink initialises a new message sink for endpoints
-func NewSink(config *config.Network) *Sink {
+func NewSink(config *transports.Config) *Sink {
 	// TODO: Make channel sizes configurable?
 	ret := &Sink{
 		endpoints:    make(map[string]*Endpoint),
@@ -61,7 +60,7 @@ func NewSink(config *config.Network) *Sink {
 
 // ReloadConfig loads in a new configuration, endpoints will be shutdown if they
 // are no longer in the configuration
-func (s *Sink) ReloadConfig(config *config.Network) {
+func (s *Sink) ReloadConfig(config *transports.Config) {
 EndpointLoop:
 	for endpoint := s.Front(); endpoint != nil; endpoint = endpoint.Next() {
 		var server string
@@ -86,9 +85,9 @@ func (s *Sink) Shutdown() {
 // APINavigatable returns an APINavigatable that exposes status information for this sink
 // It should be called BEFORE adding any endpoints as existing endpoints will
 // not automatically become monitored
-func (s *Sink) APINavigatable() admin.APINavigatable {
+func (s *Sink) APINavigatable() api.Navigatable {
 	if s.api == nil {
-		s.api = &admin.APIArray{}
+		s.api = &api.Array{}
 	}
 
 	return s.api

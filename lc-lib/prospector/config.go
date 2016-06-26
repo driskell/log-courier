@@ -19,8 +19,16 @@ package prospector
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/harvester"
+)
+
+const (
+	defaultStreamAddOffsetField bool          = true
+	defaultStreamAddPathField   bool          = true
+	defaultStreamDeadTime       time.Duration = 1 * time.Hour
 )
 
 var (
@@ -31,8 +39,10 @@ var (
 // FileConfig holds the configuration for a set of paths that share the same
 // stream configuration
 type FileConfig struct {
-	Paths         []string `config:"paths"`
-	config.Stream `config:",embed"`
+	harvester.StreamConfig `config:",embed"`
+
+	DeadTime time.Duration `config:"dead time"`
+	Paths    []string      `config:"paths"`
 }
 
 // IncludeConfig holds additional files that need to be loaded into the
@@ -42,8 +52,22 @@ type IncludeConfig []string
 // Config holds the prospector files configuration
 type Config []FileConfig
 
+// Defaults sets up the FileConfig defaults prior to population
+func (fc FileConfig) Defaults() {
+	fc.AddOffsetField = defaultStreamAddOffsetField
+	fc.AddPathField = defaultStreamAddPathField
+	fc.DeadTime = defaultStreamDeadTime
+}
+
+// Validate does nothing for a prospector stream
+// This is here to prevent double validation of event.StreamConfig whose
+// validation function would otherwise be inherited
+func (fc FileConfig) Validate(p *config.Parser, path string) (err error) {
+	return nil
+}
+
 // Validate the configuration and process the includes
-func (ic IncludeConfig) Validate(cfg *config.Config, buildMetadata bool) (err error) {
+func (ic IncludeConfig) Validate(p *config.Parser, path string) (err error) {
 	// Iterate includes
 	for _, glob := range ic {
 		// Glob the path
@@ -60,7 +84,7 @@ func (ic IncludeConfig) Validate(cfg *config.Config, buildMetadata bool) (err er
 			}
 
 			// Append to files configuration
-			if err = config.PopulateSlice(cfg.Section("files").(*Config), rawInclude, fmt.Sprintf("%s/", include)); err != nil {
+			if err = p.PopulateSlice(p.Config().Section("files").(*Config), rawInclude, fmt.Sprintf("%s/%s", path, include)); err != nil {
 				return
 			}
 		}
@@ -69,32 +93,34 @@ func (ic IncludeConfig) Validate(cfg *config.Config, buildMetadata bool) (err er
 	// Wait for Config to be processed
 	validationReady++
 	if validationReady == validationWait {
-		err = validateFileConfigs(*cfg.Section("files").(*Config), cfg, buildMetadata)
+		err = validateFileConfigs(p)
 	}
 
 	return
 }
 
 // Validate the Config structure
-func (c Config) Validate(cfg *config.Config, buildMetadata bool) (err error) {
+func (c Config) Validate(p *config.Parser, path string) (err error) {
 	// Wait for Includes to be processed
 	validationReady++
 	if validationReady == validationWait {
-		err = validateFileConfigs(c, cfg, buildMetadata)
+		err = validateFileConfigs(p)
 	}
 
 	return
 }
 
 // Validate validates all config structures and initialises streams
-func validateFileConfigs(c Config, cfg *config.Config, buildMetadata bool) (err error) {
+func validateFileConfigs(p *config.Parser) (err error) {
+	c := *p.Config().Section("files").(*Config)
 	for k := range c {
 		if len(c[k].Paths) == 0 {
 			err = fmt.Errorf("No paths specified for /files[%d]/", k)
 			return
 		}
 
-		if err = c[k].Stream.Init(cfg, fmt.Sprintf("/files[%d]", k), buildMetadata); err != nil {
+		// Init the harvester config
+		if err = c[k].Init(p, fmt.Sprintf("/files[%d]", k)); err != nil {
 			return
 		}
 	}
@@ -103,11 +129,11 @@ func validateFileConfigs(c Config, cfg *config.Config, buildMetadata bool) (err 
 }
 
 func init() {
-	config.RegisterConfigSection("files", func() config.Section {
+	config.RegisterSection("files", func() interface{} {
 		return &Config{}
 	})
 
-	config.RegisterConfigSection("includes", func() config.Section {
+	config.RegisterSection("includes", func() interface{} {
 		return &IncludeConfig{}
 	})
 }

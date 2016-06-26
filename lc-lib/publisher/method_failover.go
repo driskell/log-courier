@@ -23,11 +23,12 @@ import (
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
+	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 type methodFailover struct {
 	sink             *endpoint.Sink
-	netConfig        *config.Network
+	netConfig        *transports.Config
 	currentEndpoint  *endpoint.Endpoint
 	failoverPosition int
 }
@@ -111,7 +112,7 @@ func (m *methodFailover) onStarted(endpoint *endpoint.Endpoint) {
 }
 
 func (m *methodFailover) reloadConfig(cfg *config.Config) {
-	m.netConfig = cfg.Network()
+	m.netConfig = transports.FetchConfig(cfg)
 
 	// Verify server ordering and if any better current server now available
 	// We also use reloadConfig on first load of this method to cleanup what any

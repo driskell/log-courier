@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"gopkg.in/tylerb/graceful.v1"
 )
@@ -187,7 +188,7 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	// Check for leading forward slash
 	if len(r.URL.Path) == 0 || r.URL.Path[0] != '/' {
-		panic(ErrNotFound)
+		panic(api.ErrNotFound)
 	}
 
 	parts := strings.Split(r.URL.Path[1:], "/")
@@ -202,7 +203,7 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 		}
 		if newRoot == nil {
-			panic(ErrNotFound)
+			panic(api.ErrNotFound)
 		}
 
 		root = newRoot
@@ -222,7 +223,7 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	l.handleRequest(w, r, root)
 }
 
-func (l *Server) handleRequest(w http.ResponseWriter, r *http.Request, root APINavigatable) {
+func (l *Server) handleRequest(w http.ResponseWriter, r *http.Request, root api.Navigatable) {
 	var err error
 	var contentType string
 	var response []byte
@@ -244,7 +245,7 @@ func (l *Server) handleRequest(w http.ResponseWriter, r *http.Request, root APIN
 	w.Write(response)
 }
 
-func (l *Server) handleCall(w http.ResponseWriter, r *http.Request, root APINavigatable) {
+func (l *Server) handleCall(w http.ResponseWriter, r *http.Request, root api.Navigatable) {
 	var err error
 
 	err = r.ParseForm()
@@ -294,9 +295,9 @@ func (l *Server) handlePanic(w http.ResponseWriter, r *http.Request, panicArg in
 
 	var code int
 	switch err {
-	case ErrNotFound:
+	case api.ErrNotFound:
 		code = http.StatusNotFound
-	case ErrNotImplemented:
+	case api.ErrNotImplemented:
 		code = http.StatusNotImplemented
 	default:
 		code = http.StatusInternalServerError

@@ -23,11 +23,12 @@ import (
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
+	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 type methodLoadbalance struct {
 	sink      *endpoint.Sink
-	netConfig *config.Network
+	netConfig *transports.Config
 }
 
 func newMethodLoadbalance(sink *endpoint.Sink, cfg *config.Config) *methodLoadbalance {
@@ -57,7 +58,7 @@ func (m *methodLoadbalance) onStarted(endpoint *endpoint.Endpoint) {
 }
 
 func (m *methodLoadbalance) reloadConfig(cfg *config.Config) {
-	m.netConfig = cfg.Network()
+	m.netConfig = transports.FetchConfig(cfg)
 
 	// Verify all servers are present and reload them
 	var last, foundEndpoint *endpoint.Endpoint

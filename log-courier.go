@@ -27,12 +27,13 @@ import (
 	"github.com/driskell/log-courier/lc-lib/harvester"
 	"github.com/driskell/log-courier/lc-lib/prospector"
 	"github.com/driskell/log-courier/lc-lib/publisher"
-	"github.com/driskell/log-courier/lc-lib/registrar"
 	"github.com/driskell/log-courier/lc-lib/spooler"
 	"gopkg.in/op/go-logging.v1"
 )
 
-import _ "github.com/driskell/log-courier/lc-lib/codecs"
+import _ "github.com/driskell/log-courier/lc-lib/codecs/filter"
+import _ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
+import _ "github.com/driskell/log-courier/lc-lib/codecs/plain"
 import _ "github.com/driskell/log-courier/lc-lib/transports/tcp"
 
 // Generate platform-specific default configuration values
@@ -67,37 +68,27 @@ func startUp() {
 }
 
 func setupPipeline() {
-	var registrarImpl registrar.Registrator
-
 	log.Info("Configuring Log Courier version %s pipeline", core.LogCourierVersion)
 
-	// If reading from stdin, skip admin, and set up a null registrar
-	if stdin {
-		registrarImpl = newStdinRegistrar(app)
-	} else {
+	// Skip admin if reading from stdin
+	if !stdin {
 		setupAdmin()
-		registrarImpl = registrar.NewRegistrar(app)
 	}
-	app.AddToPipeline(registrarImpl)
 
-	publisherImpl := publisher.NewPublisher(app, registrarImpl)
-	app.AddToPipeline(publisherImpl)
-
+	// Publisher and spooler
+	publisherImpl := publisher.NewPublisher(app)
 	spoolerImpl := spooler.NewSpooler(app, publisherImpl)
-	app.AddToPipeline(spoolerImpl)
 
 	// If reading from stdin, don't start prospector, directly start a harvester
 	if stdin {
-		stdinHarvester := harvester.NewHarvester(nil, app, &app.Config().Stdin, 0)
-		stdinHarvester.Start(spoolerImpl.Connect())
-		go waitOnStdin(stdinHarvester, spoolerImpl, registrarImpl)
-	} else {
-		prospectorImpl, err := prospector.NewProspector(app, fromBeginning, registrarImpl, spoolerImpl)
-		if err != nil {
-			log.Fatalf("Failed to initialise: %s", err)
-		}
+		setupStdin(spoolerImpl)
+		return
+	}
 
-		app.AddToPipeline(prospectorImpl)
+	// Prospector will handle new files, start harvesters, and own the registrar
+	_, err := prospector.NewProspector(app, fromBeginning, spoolerImpl, publisherImpl)
+	if err != nil {
+		log.Fatalf("Failed to initialise: %s", err)
 	}
 }
 
@@ -114,7 +105,21 @@ func setupAdmin() {
 	app.AddToPipeline(server)
 }
 
-func waitOnStdin(stdinHarvester *harvester.Harvester, spoolerImpl *spooler.Spooler, registrarImpl registrar.Registrator) {
+func setupStdin(spoolerImpl *spooler.Spooler) {
+	// Create an offset registrar which will wait for acknowledgements before we
+	// shutdown
+	registrarImpl := newOffsetRegistrar(app)
+
+	// Create the harvester on Stdin
+	streamConfig := app.Config().Section("stdin").(*harvester.StreamConfig)
+	stdinHarvester := streamConfig.NewHarvester(app, nil, 0)
+	stdinHarvester.Start(spoolerImpl.Connect())
+
+	// Start the routine
+	go waitOnStdin(stdinHarvester, spoolerImpl, registrarImpl)
+}
+
+func waitOnStdin(stdinHarvester *harvester.Harvester, spoolerImpl *spooler.Spooler, registrarImpl *OffsetRegistrar) {
 	finished := <-stdinHarvester.OnFinish()
 
 	if finished.Error != nil {
@@ -126,9 +131,9 @@ func waitOnStdin(stdinHarvester *harvester.Harvester, spoolerImpl *spooler.Spool
 	// Flush the spooler in case it is still running and buffering
 	spoolerImpl.Flush()
 
-	// Wait for StdinRegistrar to receive ACK for the last event we sent or for it
-	// to shutdown
-	registrarImpl.(*StdinRegistrar).Wait(finished.LastEventOffset)
+	// Wait for OffsetRegistrar to receive ACK for the last event we sent or for
+	// it to shutdown
+	registrarImpl.Wait(finished.LastEventOffset)
 
 	app.Stop()
 }

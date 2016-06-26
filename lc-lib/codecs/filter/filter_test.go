@@ -3,21 +3,21 @@ package codecs
 import (
 	"testing"
 
+	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
 var filterLines []string
 
-func createFilterCodec(unused map[string]interface{}, callback CallbackFunc, t *testing.T) Codec {
-	config := config.NewConfig()
-
-	factory, err := NewFilterCodecFactory(config, "", unused, "filter")
+func createFilterCodec(unused map[string]interface{}, callback codecs.CallbackFunc, t *testing.T) codecs.Codec {
+	cfg := config.NewConfig()
+	factory, err := NewFilterCodecFactory(config.NewParser(cfg), "", unused, "filter")
 	if err != nil {
 		t.Logf("Failed to create filter codec: %s", err)
 		t.FailNow()
 	}
 
-	return NewCodec(factory, callback, 0)
+	return codecs.NewCodec(factory, callback, 0)
 }
 
 func checkFilter(startOffset int64, endOffset int64, text string) {

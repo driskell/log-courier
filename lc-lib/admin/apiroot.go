@@ -19,30 +19,31 @@ package admin
 import (
 	"net/url"
 
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 type apiRoot struct {
-	APINode
-	debug APINavigatable
+	api.Node
+	debug api.Navigatable
 }
 
-func (r *apiRoot) Get(path string) (APINavigatable, error) {
+func (r *apiRoot) Get(path string) (api.Navigatable, error) {
 	// Debug is only available via direct request
 	if path == "debug" {
 		return r.debug, nil
 	}
 
-	return r.APINode.Get(path)
+	return r.Node.Get(path)
 }
 
 func newAPIRoot(app *core.App) *apiRoot {
 	root := &apiRoot{
-		debug: NewAPIDataEntry(&apiDebug{}),
+		debug: api.NewDataEntry(&apiDebug{}),
 	}
 
-	root.SetEntry("version", NewAPIDataEntry(APIString(core.LogCourierVersion)))
-	root.SetEntry("reload", NewAPICallbackEntry(func(values url.Values) (string, error) {
+	root.SetEntry("version", api.NewDataEntry(api.String(core.LogCourierVersion)))
+	root.SetEntry("reload", api.NewCallbackEntry(func(values url.Values) (string, error) {
 		if err := app.ReloadConfig(); err != nil {
 			return "", err
 		}

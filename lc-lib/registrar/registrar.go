@@ -26,27 +26,14 @@ import (
 	"sync"
 
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/harvester"
 )
 
 // LoadPreviousFunc is a callback implemented by a consumer of the Registrar,
 // and is called for each part of a loaded previous state when LoadPrevious is
 // called
 type LoadPreviousFunc func(string, *FileState) (core.Stream, error)
-
-// Registrator is the interface implemented by a Registrar implementation
-type Registrator interface {
-	core.IPipelineSegment
-
-	// Connect returns a connected EventSpooler associated with the Registrar that
-	// collects registrar events and sends them to the registrar. EventSpoolers
-	// are connected to the registrar and the registrar will delay any shutdown
-	// until all connected EventSpoolers have been disconnected
-	Connect() EventSpooler
-
-	// LoadPrevious loads the previous state from the file and calls the
-	// callbackFunc for each entry
-	LoadPrevious(LoadPreviousFunc) (bool, error)
-}
 
 // Registrar persists file offsets to a file that can be read again on startup
 // to resume where we left off
@@ -71,7 +58,16 @@ func NewRegistrar(app *core.App) *Registrar {
 		state:         make(map[core.Stream]*FileState),
 	}
 
+	event.RegisterForAck(harvester.EventType, ret.ackFunc)
+
+	app.AddToPipeline(ret)
+
 	return ret
+}
+
+// ackFunc is called when an acknowledgement is made by the publisher
+func (r *Registrar) ackFunc(events []*event.Event) {
+	r.registrarChan <- []EventProcessor{NewAckEvent(events)}
 }
 
 // LoadPrevious loads the previous state from the file

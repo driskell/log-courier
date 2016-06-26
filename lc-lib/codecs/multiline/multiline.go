@@ -22,7 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
+	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
@@ -39,7 +40,7 @@ type CodecMultilineFactory struct {
 	PreviousTimeout   time.Duration `config:"previous timeout"`
 	MaxMultilineBytes int64         `config:"max multiline bytes"`
 
-	patterns PatternCollection
+	patterns codecs.PatternCollection
 	what     int
 }
 
@@ -48,7 +49,7 @@ type CodecMultilineFactory struct {
 type CodecMultiline struct {
 	config       *CodecMultilineFactory
 	lastOffset   int64
-	callbackFunc CallbackFunc
+	callbackFunc codecs.CallbackFunc
 
 	endOffset     int64
 	startOffset   int64
@@ -67,11 +68,11 @@ type CodecMultiline struct {
 // NewMultilineCodecFactory creates a new MultilineCodecFactory for a codec
 // definition in the configuration file. This factory can be used to create
 // instances of a multiline codec for use by harvesters
-func NewMultilineCodecFactory(cfg *config.Config, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
+func NewMultilineCodecFactory(p *config.Parser, configPath string, unused map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	result := &CodecMultilineFactory{}
-	if err = config.PopulateConfig(result, unused, configPath); err != nil {
+	if err = p.Populate(result, unused, configPath, true); err != nil {
 		return nil, err
 	}
 
@@ -88,12 +89,12 @@ func NewMultilineCodecFactory(cfg *config.Config, configPath string, unused map[
 	}
 
 	if result.MaxMultilineBytes == 0 {
-		result.MaxMultilineBytes = cfg.General().SpoolMaxBytes
+		result.MaxMultilineBytes = p.Config().General().SpoolMaxBytes
 	}
 
 	// We conciously allow a line 4 bytes longer what we would normally have as the limit
 	// This 4 bytes is the event header size. It's not worth considering though
-	if result.MaxMultilineBytes > cfg.General().SpoolMaxBytes {
+	if result.MaxMultilineBytes > p.Config().General().SpoolMaxBytes {
 		return nil, fmt.Errorf("max multiline bytes cannot be greater than /general/spool max bytes")
 	}
 
@@ -102,7 +103,7 @@ func NewMultilineCodecFactory(cfg *config.Config, configPath string, unused map[
 
 // NewCodec returns a new codec instance that will send events to the callback
 // function provided upon completion of processing
-func (f *CodecMultilineFactory) NewCodec(callbackFunc CallbackFunc, offset int64) Codec {
+func (f *CodecMultilineFactory) NewCodec(callbackFunc codecs.CallbackFunc, offset int64) codecs.Codec {
 	c := &CodecMultiline{
 		config:       f,
 		endOffset:    offset,
@@ -237,11 +238,11 @@ func (c *CodecMultiline) Meter() {
 }
 
 // APIEncodable is called to get the codec status for the API
-func (c *CodecMultiline) APIEncodable() admin.APIEncodable {
-	api := &admin.APIKeyValue{}
-	api.SetEntry("pending_lines", admin.APINumber(c.meterLines))
-	api.SetEntry("pending_bytes", admin.APINumber(c.meterBytes))
-	return api
+func (c *CodecMultiline) APIEncodable() api.Encodable {
+	apiKV := &api.KeyValue{}
+	apiKV.SetEntry("pending_lines", api.Number(c.meterLines))
+	apiKV.SetEntry("pending_bytes", api.Number(c.meterBytes))
+	return apiKV
 }
 
 func (c *CodecMultiline) deadlineRoutine() {
@@ -277,5 +278,5 @@ DeadlineLoop:
 
 // Register the codec
 func init() {
-	config.RegisterCodec("multiline", NewMultilineCodecFactory)
+	codecs.Register("multiline", NewMultilineCodecFactory)
 }

@@ -24,42 +24,49 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/publisher"
 )
 
 const (
 	// Event header is just uint32 at the moment
-	event_header_size = 4
+	eventHeaderSize = 4
 )
 
+// Spooler gathers events into groups and sends them to the publisher in bulk
 type Spooler struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
 
-	genConfig   *config.General
-	spool       []*core.EventDescriptor
-	spool_size  int
-	input       chan *core.EventDescriptor
-	output      chan<- []*core.EventDescriptor
-	timer_start time.Time
-	timer       *time.Timer
+	genConfig  *config.General
+	spool      []*event.Event
+	spoolSize  int
+	input      chan *event.Event
+	output     chan<- []*event.Event
+	timerStart time.Time
+	timer      *time.Timer
 }
 
+// NewSpooler creates a new event spooler
 func NewSpooler(app *core.App, publisherImpl *publisher.Publisher) *Spooler {
 	ret := &Spooler{
 		genConfig: app.Config().General(),
-		spool:     make([]*core.EventDescriptor, 0, app.Config().General().SpoolSize),
-		input:     make(chan *core.EventDescriptor, 16), // TODO: Make configurable?
+		spool:     make([]*event.Event, 0, app.Config().General().SpoolSize),
+		input:     make(chan *event.Event, 16), // TODO: Make configurable?
 		output:    publisherImpl.Connect(),
 	}
+
+	app.AddToPipeline(ret)
 
 	return ret
 }
 
-func (s *Spooler) Connect() chan<- *core.EventDescriptor {
+// Connect returns the channel to send events to the spooler with
+func (s *Spooler) Connect() chan<- *event.Event {
 	return s.input
 }
 
+// Flush requests the spooler to flush its events immediately
 func (s *Spooler) Flush() {
 	select {
 	case s.input <- nil:
@@ -67,12 +74,13 @@ func (s *Spooler) Flush() {
 	}
 }
 
+// Run starts the spooling routine
 func (s *Spooler) Run() {
 	defer func() {
 		s.Done()
 	}()
 
-	s.timer_start = time.Now()
+	s.timerStart = time.Now()
 	s.timer = time.NewTimer(s.genConfig.SpoolTimeout)
 
 SpoolerLoop:
@@ -92,8 +100,8 @@ SpoolerLoop:
 				continue
 			}
 
-			if len(s.spool) > 0 && int64(s.spool_size)+int64(len(event.Event))+event_header_size >= s.genConfig.SpoolMaxBytes {
-				log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spool_size, s.genConfig.SpoolMaxBytes, len(event.Event)+4)
+			if len(s.spool) > 0 && int64(s.spoolSize)+int64(len(event.Bytes()))+eventHeaderSize >= s.genConfig.SpoolMaxBytes {
+				log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spoolSize, s.genConfig.SpoolMaxBytes, len(event.Bytes())+4)
 
 				// Can't fit this event in the spool - flush and then queue
 				if !s.sendSpool() {
@@ -101,13 +109,13 @@ SpoolerLoop:
 				}
 
 				s.resetTimer()
-				s.spool_size += len(event.Event) + event_header_size
+				s.spoolSize += len(event.Bytes()) + eventHeaderSize
 				s.spool = append(s.spool, event)
 
 				continue
 			}
 
-			s.spool_size += len(event.Event) + event_header_size
+			s.spoolSize += len(event.Bytes()) + eventHeaderSize
 			s.spool = append(s.spool, event)
 
 			// Flush if full
@@ -143,6 +151,7 @@ SpoolerLoop:
 	log.Info("Spooler exiting")
 }
 
+// sendSpool flushes the current spool of events to the publisher
 func (s *Spooler) sendSpool() bool {
 	select {
 	case <-s.OnShutdown():
@@ -154,14 +163,15 @@ func (s *Spooler) sendSpool() bool {
 	case s.output <- s.spool:
 	}
 
-	s.spool = make([]*core.EventDescriptor, 0, s.genConfig.SpoolSize)
-	s.spool_size = 0
+	s.spool = make([]*event.Event, 0, s.genConfig.SpoolSize)
+	s.spoolSize = 0
 
 	return true
 }
 
+// resetTimer resets the time needed to wait before automatically flushing
 func (s *Spooler) resetTimer() {
-	s.timer_start = time.Now()
+	s.timerStart = time.Now()
 
 	// Stop the timer, and ensure the channel is empty before restarting it
 	s.timer.Stop()
@@ -172,16 +182,17 @@ func (s *Spooler) resetTimer() {
 	s.timer.Reset(s.genConfig.SpoolTimeout)
 }
 
+// reloadConfig updates the spooler configuration after a reload
 func (s *Spooler) reloadConfig(cfg *config.Config) bool {
 	s.genConfig = cfg.General()
 
 	// Immediate flush?
-	passed := time.Now().Sub(s.timer_start)
+	passed := time.Now().Sub(s.timerStart)
 	if passed >= s.genConfig.SpoolTimeout || len(s.spool) >= int(s.genConfig.SpoolSize) {
 		if !s.sendSpool() {
 			return false
 		}
-		s.timer_start = time.Now()
+		s.timerStart = time.Now()
 		s.timer.Reset(s.genConfig.SpoolTimeout)
 	} else {
 		s.timer.Reset(passed - s.genConfig.SpoolTimeout)

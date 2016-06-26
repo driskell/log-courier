@@ -18,8 +18,15 @@ package core
 
 import (
 	"math"
+	"os"
 	"time"
 )
+
+// Stream represents a unique event stream
+// TODO: Get rid of this
+type Stream interface {
+	Info() (string, os.FileInfo)
+}
 
 // expFactor is the factor for expontential backoff
 const expFactor = 2

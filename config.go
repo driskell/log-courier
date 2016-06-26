@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2015 Jason Woods.
+ * Copyright 2014-2016 Jason Woods.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,25 @@
  * limitations under the License.
  */
 
-package core
+package main
 
-import "encoding/json"
+import (
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/harvester"
+)
 
-// Event holds a key-value map that represents a single log event
-type Event map[string]interface{}
-
-// EventDescriptor describes an Event, such as it's source and offset, which can
-// be used in order to resume log files
-type EventDescriptor struct {
-	Stream Stream
-	Offset int64
-	Event  []byte
+// StdinStreamConfig is the stream configuration for the stdin stream
+type StdinStreamConfig struct {
+	harvester.StreamConfig `config:",embed"`
 }
 
-// Encode returns the Event in JSON format
-func (e Event) Encode() ([]byte, error) {
-	return json.Marshal(e)
+// Validate initialises the stdin stream configuration
+func (ssc *StdinStreamConfig) Validate(p *config.Parser, path string) error {
+	return ssc.Init(p, path)
+}
+
+func init() {
+	config.RegisterSection("stdin", func() interface{} {
+		return &StdinStreamConfig{}
+	})
 }

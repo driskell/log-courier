@@ -6,21 +6,22 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
-func createMultilineCodec(unused map[string]interface{}, callback CallbackFunc, t *testing.T) Codec {
-	config := config.NewConfig()
-	config.General().MaxLineBytes = 1048576
-	config.General().SpoolMaxBytes = 10485760
+func createMultilineCodec(unused map[string]interface{}, callback codecs.CallbackFunc, t *testing.T) codecs.Codec {
+	cfg := config.NewConfig()
+	cfg.General().MaxLineBytes = 1048576
+	cfg.General().SpoolMaxBytes = 10485760
 
-	factory, err := NewMultilineCodecFactory(config, "", unused, "multiline")
+	factory, err := NewMultilineCodecFactory(config.NewParser(cfg), "", unused, "multiline")
 	if err != nil {
 		t.Errorf("Failed to create multiline codec: %s", err)
 		t.FailNow()
 	}
 
-	return NewCodec(factory, callback, 0)
+	return codecs.NewCodec(factory, callback, 0)
 }
 
 type checkMultilineExpect struct {

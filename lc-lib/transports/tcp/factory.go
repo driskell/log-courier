@@ -67,18 +67,18 @@ type TransportTCPFactory struct {
 
 // NewTransportTCPFactory create a new TransportTCPFactory from the provided
 // configuration data, reporting back any configuration errors it discovers.
-func NewTransportTCPFactory(cfg *config.Config, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
+func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
 	ret := &TransportTCPFactory{
-		config:         cfg,
+		config:         p.Config(),
 		transport:      name,
 		hostportRegexp: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
 	}
 
 	// Only allow SSL configurations if using TLS
 	if name == TransportTCPTLS {
-		if err = config.PopulateConfig(ret, unUsed, configPath); err != nil {
+		if err = p.Populate(ret, unUsed, configPath, true); err != nil {
 			return nil, err
 		}
 
@@ -135,7 +135,7 @@ func NewTransportTCPFactory(cfg *config.Config, configPath string, unUsed map[st
 			}
 		}
 	} else {
-		if err := config.ReportUnusedConfig(unUsed, configPath); err != nil {
+		if err := p.ReportUnusedConfig(unUsed, configPath); err != nil {
 			return nil, err
 		}
 	}
@@ -143,8 +143,8 @@ func NewTransportTCPFactory(cfg *config.Config, configPath string, unUsed map[st
 	return ret, nil
 }
 
-// InitDefaults sets the default configuration values
-func (f *TransportTCPFactory) InitDefaults() {
+// Defaults sets the default configuration values
+func (f *TransportTCPFactory) Defaults() {
 	f.Reconnect = defaultNetworkReconnect
 	f.ReconnectMax = defaultNetworkReconnectMax
 }
@@ -154,7 +154,7 @@ func (f *TransportTCPFactory) InitDefaults() {
 func (f *TransportTCPFactory) NewTransport(observer transports.Observer, finishOnFail bool) transports.Transport {
 	ret := &TransportTCP{
 		config:         f,
-		netConfig:      f.config.Network(),
+		netConfig:      transports.FetchConfig(f.config),
 		finishOnFail:   finishOnFail,
 		observer:       observer,
 		controllerChan: make(chan int),
@@ -168,6 +168,6 @@ func (f *TransportTCPFactory) NewTransport(observer transports.Observer, finishO
 
 // Register the transports
 func init() {
-	config.RegisterTransport(TransportTCPTCP, NewTransportTCPFactory)
-	config.RegisterTransport(TransportTCPTLS, NewTransportTCPFactory)
+	transports.Register(TransportTCPTCP, NewTransportTCPFactory)
+	transports.Register(TransportTCPTLS, NewTransportTCPFactory)
 }

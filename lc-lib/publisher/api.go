@@ -20,11 +20,11 @@
 package publisher
 
 import (
-	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 )
 
 type apiStatus struct {
-	admin.APIKeyValue
+	api.KeyValue
 
 	p *Publisher
 }
@@ -33,9 +33,9 @@ type apiStatus struct {
 func (a *apiStatus) Update() error {
 	// Update the values and pass through to node
 	a.p.mutex.RLock()
-	a.SetEntry("speed", admin.APIFloat(a.p.lineSpeed))
-	a.SetEntry("publishedLines", admin.APINumber(a.p.lastLineCount))
-	a.SetEntry("pendingPayloads", admin.APINumber(a.p.numPayloads))
+	a.SetEntry("speed", api.Float(a.p.lineSpeed))
+	a.SetEntry("publishedLines", api.Number(a.p.lastLineCount))
+	a.SetEntry("pendingPayloads", api.Number(a.p.numPayloads))
 	a.p.mutex.RUnlock()
 
 	return nil
