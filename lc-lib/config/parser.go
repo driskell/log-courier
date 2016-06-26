@@ -537,6 +537,8 @@ func (p *Parser) fixMapInterfaceKeys(path string, value map[interface{}]interfac
 			}
 
 			fixedMap[ks] = fixedValue
+		default:
+			fixedMap[ks] = vt
 		}
 	}
 
