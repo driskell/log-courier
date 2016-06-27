@@ -14,7 +14,7 @@
 * limitations under the License.
  */
 
-package transports
+package tcp
 
 import (
 	"net"

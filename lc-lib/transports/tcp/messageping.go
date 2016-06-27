@@ -16,10 +16,14 @@
 
 package tcp
 
-import "gopkg.in/op/go-logging.v1"
+type protocolPING struct {
+}
 
-var log *logging.Logger
-
-func init() {
-	log = logging.MustGetLogger("transports/tcp")
+// writeEvents writes a payload to the socket
+func (p *protocolPING) write(t *TransportTCP) error {
+	// Encapsulate the ping into a message
+	// 4-byte message header (PING)
+	// 4-byte uint32 data length (0 length for PING)
+	_, err := t.socket.Write([]byte{'P', 'I', 'N', 'G', 0, 0, 0, 0})
+	return err
 }

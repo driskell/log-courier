@@ -155,7 +155,7 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 		log.Debug("[%s] Sending payload %x (%d events)", e.Server(), payload.Nonce, payload.Size())
 	}
 
-	if err := e.transport.Write(payload.Nonce, payload.Events()); err != nil {
+	if err := e.transport.Write(payload); err != nil {
 		return err
 	}
 

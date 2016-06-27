@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package transports
+package tcp
 
 import (
 	"bytes"
@@ -32,7 +32,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -44,6 +44,10 @@ const (
 	socketIntervalSeconds = 1
 )
 
+type protocolMessage interface {
+	write(*TransportTCP) error
+}
+
 // TransportTCP implements a transport that sends over TCP
 // It also can optionally introduce a TLS layer for security
 type TransportTCP struct {
@@ -54,6 +58,8 @@ type TransportTCP struct {
 	tlsSocket    *tls.Conn
 	tlsConfig    tls.Config
 	backoff      *core.ExpBackoff
+	buffer       bytes.Buffer
+	compressor   *zlib.Writer
 
 	controllerChan chan int
 	observer       transports.Observer
@@ -63,7 +69,7 @@ type TransportTCP struct {
 	sendControl chan int
 	recvControl chan int
 
-	sendChan chan []byte
+	sendChan chan protocolMessage
 
 	// Use in receiver routine only
 	pongPending bool
@@ -234,7 +240,7 @@ func (t *TransportTCP) connect() (bool, error) {
 	// Signal channels
 	t.sendControl = make(chan int, 1)
 	t.recvControl = make(chan int, 1)
-	t.sendChan = make(chan []byte, t.netConfig.MaxPendingPayloads)
+	t.sendChan = make(chan protocolMessage, t.netConfig.MaxPendingPayloads)
 
 	// Failure channel - ensure we can fit 2 errors here, one from sender and one
 	// from receive - otherwise if both fail at the same time, disconnect blocks
@@ -309,6 +315,9 @@ func (t *TransportTCP) disconnect() {
 // sender handles socket writes
 func (t *TransportTCP) sender() {
 	defer func() {
+		if t.compressor != nil {
+			t.compressor.Close()
+		}
 		t.wait.Done()
 	}()
 
@@ -326,19 +335,23 @@ SenderLoop:
 		case msg := <-t.sendChan:
 			// Write deadline is managed by our net.Conn wrapper that TLS will call
 			// into and keeps retrying writes until timeout or error
-			_, err := t.socket.Write(msg)
-			if err != nil {
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					// Shutdown will have been received by the wrapper
-					break SenderLoop
-				}
-				// Fail the transport
-				select {
-				case <-t.sendControl:
-				case t.failChan <- err:
-				}
+			err := msg.write(t)
+			if err == nil {
+				continue
+			}
+
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				// Shutdown will have been received by the wrapper
 				break SenderLoop
 			}
+
+			// Fail the transport
+			select {
+			case <-t.sendControl:
+			case t.failChan <- err:
+			}
+
+			break SenderLoop
 		}
 	}
 }
@@ -467,63 +480,14 @@ func (t *TransportTCP) sendEvent(controlChan <-chan int, transportEvent transpor
 }
 
 // Write a message to the transport
-func (t *TransportTCP) Write(nonce string, events []*event.Event) error {
-	var messageBuffer bytes.Buffer
-
-	// Encapsulate the data into the message
-	// 4-byte message header (JDAT = JSON Data, Compressed)
-	// 4-byte uint32 data length
-	// Then the data
-	if _, err := messageBuffer.Write([]byte("JDAT")); err != nil {
-		return err
-	}
-
-	// False length as we don't know it yet
-	if _, err := messageBuffer.Write([]byte("----")); err != nil {
-		return err
-	}
-
-	// Create the compressed data payload
-	// 16-byte Nonce, followed by the compressed event data
-	// The event data is each event, prefixed with a 4-byte uint32 length, one
-	// after the other
-	if _, err := messageBuffer.Write([]byte(nonce)); err != nil {
-		return err
-	}
-
-	compressor, err := zlib.NewWriterLevel(&messageBuffer, 3)
-	if err != nil {
-		return err
-	}
-
-	for _, singleEvent := range events {
-		if err := binary.Write(compressor, binary.BigEndian, uint32(len(singleEvent.Bytes()))); err != nil {
-			return err
-		}
-
-		if _, err := compressor.Write(singleEvent.Bytes()); err != nil {
-			return err
-		}
-	}
-
-	compressor.Close()
-
-	// Fill in the size
-	// TODO: This prevents us bypassing buffer and just sending...
-	//       New JDA2? With FFFF size? Means stream message?
-	messageBytes := messageBuffer.Bytes()
-	binary.BigEndian.PutUint32(messageBytes[4:8], uint32(messageBuffer.Len()-8))
-
-	t.sendChan <- messageBytes
+func (t *TransportTCP) Write(payload *payload.Payload) error {
+	t.sendChan <- &protocolJDAT{payload: payload}
 	return nil
 }
 
 // Ping the remote server
 func (t *TransportTCP) Ping() error {
-	// Encapsulate the ping into a message
-	// 4-byte message header (PING)
-	// 4-byte uint32 data length (0 length for PING)
-	t.sendChan <- []byte{'P', 'I', 'N', 'G', 0, 0, 0, 0}
+	t.sendChan <- &protocolPING{}
 	return nil
 }
 
