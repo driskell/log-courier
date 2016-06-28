@@ -4,7 +4,7 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 2.0.4
+Version: 2.5.0
 Release: 1%{dist}
 License: Apache
 Group: System Environment/Libraries
@@ -34,6 +34,17 @@ Requires: logrotate
 Log Courier is a lightweight tool created to ship log files speedily and
 securely, with low resource usage, to remote Logstash instances.
 
+%package -n fact-courier
+Summary: Fact Courier
+
+Requires: munin-node
+
+%description -n fact-courier
+Fact Courier is a lightweight tool created to ship the results of munin-node
+scripts speedily and securely, with low resource usage, to remote Logstash
+instances. The munin-node service does not even need to be running - the scripts
+are called directly.
+
 %prep
 %setup -q -n %{name}-%{version}
 
@@ -51,8 +62,8 @@ export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
 
 # Enable vendor experiment in the event of Go 1.5 then generate and build
 export GO15VENDOREXPERIMENT=1
-go generate . ./lc-admin
-go install . ./lc-admin ./lc-tlscert
+go generate . ./lc-admin ./fact-courier
+go install . ./lc-admin ./lc-tlscert ./fact-courier
 
 %install
 export GOPATH=$(pwd)/_workspace
@@ -157,6 +168,10 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Fri Jun 28 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.5.0-1
+- Upgrade to 2.5.0
+- Create Fact Courier package
+
 * Fri Jun 10 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.4-1
 - Upgrade to 2.0.4
 
