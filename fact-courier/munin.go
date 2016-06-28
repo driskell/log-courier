@@ -9,6 +9,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/publisher"
 )
 
@@ -31,7 +32,7 @@ type MuninCollector struct {
 
 	credentialCache *CredentialCache
 	publisher       *publisher.Publisher
-	output          chan<- []*core.EventDescriptor
+	output          chan<- []*event.Event
 }
 
 // NewMuninCollector creates a new MuninCollector for the given app with the
@@ -113,8 +114,8 @@ func (m *MuninCollector) runOnce() bool {
 
 // collect performs a collection from all discovered munin plugins by collecting
 // from each MuninRunner we created
-func (m *MuninCollector) collect(timestamp time.Time) []*core.EventDescriptor {
-	events := make([]*core.EventDescriptor, 0, len(m.runners))
+func (m *MuninCollector) collect(timestamp time.Time) []*event.Event {
+	events := make([]*event.Event, 0, len(m.runners))
 	for _, runner := range m.runners {
 		result := m.collectRunner(runner, timestamp)
 		if result != nil {
@@ -126,7 +127,7 @@ func (m *MuninCollector) collect(timestamp time.Time) []*core.EventDescriptor {
 
 // collectRunner performs a collection from a single MuninRunner, and generates
 // the necessary event structure from the result
-func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time) *core.EventDescriptor {
+func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time) *event.Event {
 	log.Debug("[%s] Collecting", runner.Name())
 
 	result, err := runner.Collect(m.credentialCache, timestamp)
@@ -135,45 +136,26 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 		return nil
 	}
 
-	// TODO: event.New() and even event.NewStream() then stream.Submit() to
-	// encapsulate codecs
-	event := core.Event(result)
+	// Set timestamp, plugin name and other fields
+	result["@timestamp"] = timestamp.Format(time.RFC3339)
+	result["munin_plugin"] = runner.Name()
 
-	// TODO: Full stream configuration for Fact Courier with codecs etc
-	if m.factConfig.AddHostField {
-		event["host"] = m.genConfig.Host
-	}
+	// Create a new munin event with nil context
+	event := m.factConfig.NewEvent("munin", result, nil)
 
-	if m.factConfig.AddTimezoneField {
-		event["timezone"] = m.timezone
-	}
-
-	event["@timestamp"] = timestamp.Format(time.RFC3339)
-
-	event["munin_plugin"] = runner.Name()
-
-	for k := range m.genConfig.GlobalFields {
-		event[k] = m.genConfig.GlobalFields[k]
-	}
-
-	encodedEvent, err := event.Encode()
+	// Pre-encode it for transmission
+	err = event.Encode()
 	if err != nil {
 		log.Warning("[%s] Skipping data due to encoding error: %s", runner.Name(), err)
 		return nil
 	}
 
-	return &core.EventDescriptor{
-		Stream: nil,
-		// TODO: Offset only make senses in Log Courier: event.Ack() interface?
-		Offset: 0,
-		// TODO: Encoding should be part of publishing as it is protocol specific
-		Event: encodedEvent,
-	}
+	return event
 }
 
 // sendEvents passes a bundle of events to the publisher, waiting on shutdown
 // as well in case of a slow pipeline
-func (m *MuninCollector) sendEvents(events []*core.EventDescriptor) bool {
+func (m *MuninCollector) sendEvents(events []*event.Event) bool {
 	select {
 	case m.output <- events:
 		return true
@@ -302,7 +284,7 @@ func (m *MuninCollector) createRunnerFromSections(scriptPath, name string, secti
 
 	for _, section := range sections {
 		log.Debug("Applying %s to %s", section, name)
-		if err := runner.ApplySection(m.config.Section(section)); err != nil {
+		if err := runner.ApplySection(m.muninConfig.Section(section)); err != nil {
 			return nil, err
 		}
 	}

@@ -1,10 +1,12 @@
 {
 	"ImportPath": "github.com/driskell/log-courier",
 	"GoVersion": "go1.5.1",
+	"GodepVersion": "v74",
 	"Packages": [
 		".",
 		"./lc-admin",
 		"./lc-tlscert",
+		"./fact-courier",
 		"./lc-lib/config/generate"
 	],
 	"Deps": [

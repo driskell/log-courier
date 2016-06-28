@@ -23,11 +23,22 @@ import (
 
 // Config holds the Fact Courier configuration, and the Stream configuration
 type Config struct {
-	event.Stream `config:",embed"`
+	event.StreamConfig `config:",embed"`
+}
+
+// Defaults populates any default configurations
+func (c *Config) Defaults() {
+}
+
+// Validate does nothing for a fact-courier stream
+// This is here to prevent double validation of event.StreamConfig whose
+// validation function would otherwise be inherited
+func (c *Config) Validate(p *config.Parser, path string) (err error) {
+	return nil
 }
 
 func init() {
-	config.RegisterConfigSection("facts", func() config.Section {
+	config.RegisterSection("facts", func() interface{} {
 		return &Config{}
 	})
 }

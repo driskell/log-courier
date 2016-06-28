@@ -22,7 +22,6 @@ package main
 import (
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/publisher"
-	"github.com/driskell/log-courier/lc-lib/registrar"
 	"gopkg.in/op/go-logging.v1"
 )
 
@@ -42,15 +41,9 @@ func main() {
 }
 
 func setupPipeline() {
-	var registrarImpl registrar.Registrator
-
 	log.Info("Configuring Fact Courier version %s pipeline", core.LogCourierVersion)
 
-	// No registrar
-	registrarImpl = newStdinRegistrar(app)
-	app.AddToPipeline(registrarImpl)
-
-	publisherImpl := publisher.NewPublisher(app, registrarImpl)
+	publisherImpl := publisher.NewPublisher(app)
 	app.AddToPipeline(publisherImpl)
 
 	// TODO: Support arbitary scripts, not just Munin

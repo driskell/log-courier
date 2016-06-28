@@ -417,8 +417,7 @@ func (m *MuninRunner) handleOutputLine(line []byte) error {
 		return nil
 	}
 
-	eventFieldPrefix = "munin_" + m.name + "_"
-
+	eventFieldPrefix := "munin_" + m.name + "_"
 	m.data[eventFieldPrefix+idx] = state.typeHandler.Calculate(floatValue, previousValue, duration)
 	log.Debug("[%s] Field %s: %f", m.name, idx, m.data[eventFieldPrefix+idx])
 
