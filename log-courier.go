@@ -40,6 +40,8 @@ import _ "github.com/driskell/log-courier/lc-lib/transports/tcp"
 //go:generate go run lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile config.DefaultGeneralPersistDir admin.DefaultAdminBind
 // TODO: This should be in lc-admin but we can't due to vendor failure on go generate in subpackages
 //go:generate go run lc-lib/config/generate/platform.go lc-admin/platform main config.DefaultConfigurationFile config.DefaultGeneralPersistDir admin.DefaultAdminBind
+// TODO: This should be in fact-courier but we can't due to vendor failure on go generate in subpackages
+//go:generate go run lc-lib/config/generate/platform.go fact-courier/platform main config.DefaultConfigurationFile:LC_FACT_DEFAULT_CONFIGURATION_FILE
 
 var (
 	log *logging.Logger

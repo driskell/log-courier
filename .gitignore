@@ -2,6 +2,7 @@
 /.vagrant
 /*.gem
 /bin
+/fact-courier/platform.go
 /lc-admin/platform.go
 /node_modules
 /platform.go

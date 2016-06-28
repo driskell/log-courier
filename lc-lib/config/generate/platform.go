@@ -112,13 +112,20 @@ func generateInit(config map[string][]string) string {
 }
 
 func generateInitSegment(pkg, name string) string {
-	envArr := camelcase.Split(name)
-	for i := range envArr {
-		envArr[i] = strings.ToUpper(envArr[i])
+	var envName string
+
+	nameSplit := strings.SplitN(name, ":", 2)
+	if len(nameSplit) != 2 {
+		envArr := camelcase.Split(name)
+		for i := range envArr {
+			envArr[i] = strings.ToUpper(envArr[i])
+		}
+		envName = "LC_" + strings.Join(envArr, "_")
+	} else {
+		envName = nameSplit[1]
 	}
 
-	envName := "LC_" + strings.Join(envArr, "_")
 	platformFile := fmt.Sprintf("\t// %s\n", envName)
-	platformFile += fmt.Sprintf("\t%s.%s = \"${%s}\"\n", pkg, name, envName)
+	platformFile += fmt.Sprintf("\t%s.%s = \"${%s}\"\n", pkg, nameSplit[0], envName)
 	return platformFile
 }
