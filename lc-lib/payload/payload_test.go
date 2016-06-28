@@ -27,16 +27,14 @@ const (
 )
 
 func createTestPayload(t *testing.T, numEvents int) *Payload {
-	testEvents := make([]*event.Descriptor, numEvents)
+	testEvents := make([]*event.Event, numEvents)
 	for idx := range testEvents {
-		testEvents[idx] = &event.Descriptor{
-			Stream: nil,
-			Offset: int64(idx),
-			Event:  []byte(""),
-		}
+		testEvents[idx] = event.NewEvent("test", map[string]interface{}{}, idx)
 	}
 
-	return NewPayload(testEvents)
+	ret := NewPayload(testEvents)
+	ret.Cache = []byte("Dummy")
+	return ret
 }
 
 func verifyAck(t *testing.T, payload *Payload, n int, expLines int, expFull bool) {
@@ -54,6 +52,10 @@ func verifyPayload(t *testing.T, payload *Payload, ack bool, complete bool, numE
 		t.Errorf("Payload has ack flag wrong, got: %t, expected: %t", got, ack)
 	}
 
+	if ack && payload.Cache != nil {
+		t.Errorf("Payload has ack but cache was not cleared")
+	}
+
 	if got := payload.Complete(); got != complete {
 		t.Errorf("Payload has completed flag wrong, got: %t, expected: %t", got, complete)
 	}
@@ -69,8 +71,8 @@ func verifyPayload(t *testing.T, payload *Payload, ack bool, complete bool, numE
 	}
 
 	for _, event := range events {
-		if event.Offset != int64(startEvent) {
-			t.Errorf("Payload rollup event offset wrong, got: %d, expected: %d", event.Offset, startEvent)
+		if event.Context().(int) != startEvent {
+			t.Errorf("Payload rollup event offset wrong, got: %d, expected: %d", event.Context().(int), startEvent)
 		}
 		startEvent++
 	}

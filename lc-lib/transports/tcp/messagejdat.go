@@ -23,12 +23,20 @@ import (
 	"github.com/driskell/log-courier/lc-lib/payload"
 )
 
+type cachedJDAT []byte
+
 type protocolJDAT struct {
 	payload *payload.Payload
 }
 
 // writeEvents writes a payload to the socket
 func (p *protocolJDAT) write(t *TransportTCP) error {
+	// Cached?
+	if cached, ok := p.payload.Cache.(cachedJDAT); ok && cached != nil {
+		_, err := t.socket.Write(cached)
+		return err
+	}
+
 	t.buffer.Reset()
 
 	// Encapsulate the data into the message
@@ -81,6 +89,9 @@ func (p *protocolJDAT) write(t *TransportTCP) error {
 	//       New JDA2? With FFFF size? Means stream message?
 	messageBytes := t.buffer.Bytes()
 	binary.BigEndian.PutUint32(messageBytes[4:8], uint32(t.buffer.Len()-8))
+
+	// Cache the payload data
+	p.payload.Cache = messageBytes
 
 	_, err := t.socket.Write(messageBytes)
 	return err

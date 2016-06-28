@@ -30,12 +30,12 @@ type Payload struct {
 	sequenceLen  int
 	ackEvents    int
 	processed    int
-	payload      []byte
 
 	Nonce         string
 	Resending     bool
 	Element       internallist.Element
 	ResendElement internallist.Element
+	Cache         interface{}
 }
 
 // NewPayload initialises a new payload structure from the given spool of events
@@ -80,14 +80,14 @@ func (pp *Payload) Ack(sequence int) (int, bool) {
 		lines := pp.sequenceLen - pp.lastSequence
 		pp.ackEvents = len(pp.events)
 		pp.lastSequence = sequence
-		pp.payload = nil
+		pp.Cache = nil
 		return lines, true
 	}
 
 	lines := sequence - pp.lastSequence
 	pp.ackEvents += lines
 	pp.lastSequence = sequence
-	pp.payload = nil
+	pp.Cache = nil
 	return lines, false
 }
 
