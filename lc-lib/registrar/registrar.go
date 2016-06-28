@@ -23,7 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"sync"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
@@ -43,9 +45,11 @@ type Registrar struct {
 	sync.Mutex
 
 	registrarChan chan []EventProcessor
+	writeTimer    *time.Timer
 	references    int
 	persistdir    string
 	statefile     string
+	statepath     string
 	state         map[core.Stream]*FileState
 }
 
@@ -53,10 +57,14 @@ type Registrar struct {
 func NewRegistrar(app *core.App) *Registrar {
 	ret := &Registrar{
 		registrarChan: make(chan []EventProcessor, 16), // TODO: Make configurable?
+		writeTimer:    time.NewTimer(0),
 		persistdir:    app.Config().General().PersistDir,
 		statefile:     ".log-courier",
 		state:         make(map[core.Stream]*FileState),
 	}
+
+	ret.statepath = path.Join(ret.persistdir, ret.statefile)
+	ret.writeTimer.Stop()
 
 	event.RegisterForAck(harvester.EventType, ret.ackFunc)
 
@@ -162,6 +170,10 @@ func (r *Registrar) Run() {
 		r.Done()
 	}()
 
+	pendingWrite := false
+	// TODO: Make configurable?
+	r.writeTimer.Reset(time.Second)
+
 RegistrarLoop:
 	for {
 		// Ignore shutdown channel - wait for registrar to close
@@ -175,11 +187,31 @@ RegistrarLoop:
 				event.Process(r.state)
 			}
 
-			if err := r.writeRegistry(); err != nil {
-				log.Errorf("Registry write failed: %s", err)
+			pendingWrite = true
+		case <-r.writeTimer.C:
+			// TODO: Make configurable?
+			r.writeTimer.Reset(time.Second)
+
+			if !pendingWrite {
+				continue
 			}
+
+			r.tryWriteRegistry()
 		}
 	}
 
+	if pendingWrite {
+		r.tryWriteRegistry()
+	}
+
 	log.Info("Registrar exiting")
+}
+
+// tryWriteRegistry attempts to write the state file and logs any problems
+func (r *Registrar) tryWriteRegistry() {
+	if err := r.writeRegistry(); err != nil {
+		log.Errorf("Registry write failed: %s", err)
+	}
+
+	log.Debug("Written registry file to %s", r.statepath)
 }

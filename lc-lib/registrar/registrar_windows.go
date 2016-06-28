@@ -23,12 +23,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 )
 
 func (r *Registrar) writeRegistry() error {
-	fname := path.Join(r.persistdir, r.statefile)
-	tname := fname + ".new"
+	tname := r.statepath + ".new"
 	file, err := os.Create(tname)
 	if err != nil {
 		return err
@@ -38,14 +36,14 @@ func (r *Registrar) writeRegistry() error {
 	encoder.Encode(r.toCanonical())
 	file.Close()
 
-	var d_err error
-	if _, err = os.Stat(fname); err == nil || !os.IsNotExist(err) {
-		d_err = os.Remove(fname)
+	var dErr error
+	if _, err = os.Stat(r.statepath); err == nil || !os.IsNotExist(err) {
+		dErr = os.Remove(r.statepath)
 	}
 
-	err = os.Rename(tname, fname)
+	err = os.Rename(tname, r.statepath)
 	if err != nil {
-		return fmt.Errorf("%s -> %s", d_err, err)
+		return fmt.Errorf("%s -> %s", dErr, err)
 	}
 
 	return nil
