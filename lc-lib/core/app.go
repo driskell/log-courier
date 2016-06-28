@@ -60,13 +60,12 @@ func (a *App) StartUp() {
 	var configTest bool
 	var cpuProfile string
 
-	flag.BoolVar(&version, "version", false, "show version information")
-	flag.BoolVar(&configDebug, "config-debug", false, "enable config parsing debug logs to console")
-	flag.BoolVar(&listSupported, "list-supported", false, "List supported transports and codecs")
-	flag.BoolVar(&configTest, "config-test", false, "Test the configuration specified by -config and exit")
-	flag.StringVar(&cpuProfile, "cpuprofile", "", "write cpu profile to file")
-
-	flag.StringVar(&a.configFile, "config", config.DefaultConfigurationFile, "The config file to load")
+	flag.BoolVar(&version, "version", false, "Show version information")
+	flag.BoolVar(&configDebug, "config-debug", false, "Enable configuration parsing debug logs on the console")
+	flag.BoolVar(&listSupported, "list-supported", false, "List the supported transports and codecs")
+	flag.BoolVar(&configTest, "config-test", false, "Test the configuration specified by -config")
+	flag.StringVar(&cpuProfile, "cpuprofile", "", "Write a cpu profile to the specified file")
+	flag.StringVar(&a.configFile, "config", config.DefaultConfigurationFile, "The configuration file to load")
 
 	flag.Parse()
 

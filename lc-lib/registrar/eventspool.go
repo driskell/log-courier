@@ -22,7 +22,7 @@ import (
 
 // EventProcessor is implemented by all register events
 type EventProcessor interface {
-	Process(state map[core.Stream]*FileState)
+	process(state map[core.Stream]*FileState)
 }
 
 // EventSpooler is implemented by a registrar event handler

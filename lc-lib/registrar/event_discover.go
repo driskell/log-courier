@@ -22,6 +22,8 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
+// DiscoverEvent informs the registrar of a new file whose state needs to be
+// persisted to the state file
 type DiscoverEvent struct {
 	stream   core.Stream
 	source   string
@@ -29,6 +31,7 @@ type DiscoverEvent struct {
 	fileinfo os.FileInfo
 }
 
+// NewDiscoverEvent creates a new discovery event
 func NewDiscoverEvent(stream core.Stream, source string, offset int64, fileinfo os.FileInfo) *DiscoverEvent {
 	return &DiscoverEvent{
 		stream:   stream,
@@ -38,7 +41,7 @@ func NewDiscoverEvent(stream core.Stream, source string, offset int64, fileinfo 
 	}
 }
 
-func (e *DiscoverEvent) Process(state map[core.Stream]*FileState) {
+func (e *DiscoverEvent) process(state map[core.Stream]*FileState) {
 	log.Debug("Registrar received a new file event for %s", e.source)
 
 	// A new file we need to save offset information for so we can resume

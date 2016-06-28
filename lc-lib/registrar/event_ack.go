@@ -35,8 +35,8 @@ func NewAckEvent(events []*event.Event) *AckEvent {
 	}
 }
 
-// Process persists the ack event into the registrar state by storing the offset
-func (e *AckEvent) Process(state map[core.Stream]*FileState) {
+// process persists the ack event into the registrar state by storing the offset
+func (e *AckEvent) process(state map[core.Stream]*FileState) {
 	if len(e.events) == 1 {
 		log.Debug("Registrar received offsets for %d log entries", len(e.events))
 	} else {

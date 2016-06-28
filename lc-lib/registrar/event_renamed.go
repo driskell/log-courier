@@ -20,11 +20,14 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
+// RenamedEvent informs the registrar of a file rename that needs to be
+// reflected within the state file
 type RenamedEvent struct {
 	stream core.Stream
 	source string
 }
 
+// NewRenamedEvent creates a new rename event
 func NewRenamedEvent(stream core.Stream, source string) *RenamedEvent {
 	return &RenamedEvent{
 		stream: stream,
@@ -32,9 +35,9 @@ func NewRenamedEvent(stream core.Stream, source string) *RenamedEvent {
 	}
 }
 
-func (e *RenamedEvent) Process(state map[core.Stream]*FileState) {
-	_, is_found := state[e.stream]
-	if !is_found {
+func (e *RenamedEvent) process(state map[core.Stream]*FileState) {
+	_, isFound := state[e.stream]
+	if !isFound {
 		// This is probably stdin or a deleted file we can't resume
 		return
 	}

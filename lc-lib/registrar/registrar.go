@@ -184,7 +184,7 @@ RegistrarLoop:
 			}
 
 			for _, event := range spool {
-				event.Process(r.state)
+				event.process(r.state)
 			}
 
 			pendingWrite = true

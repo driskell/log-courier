@@ -20,17 +20,21 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
+// DeletedEvent informs the registrar of a file deletion so it can remove
+// unnecessary states from the state file
 type DeletedEvent struct {
 	stream core.Stream
 }
 
+// NewDeletedEvent creates a new deletion event
 func NewDeletedEvent(stream core.Stream) *DeletedEvent {
 	return &DeletedEvent{
 		stream: stream,
 	}
 }
 
-func (e *DeletedEvent) Process(state map[core.Stream]*FileState) {
+// process persists the deletion event into the state
+func (e *DeletedEvent) process(state map[core.Stream]*FileState) {
 	if _, ok := state[e.stream]; ok {
 		log.Debug("Registrar received a deletion event for %s", *state[e.stream].Source)
 	} else {
