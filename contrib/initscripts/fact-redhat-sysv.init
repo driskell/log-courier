@@ -1,0 +1,123 @@
+#!/bin/bash
+#
+# fact-courier Fact Courier, a lightweight munin-node runner with Logstash integration.
+#
+# chkconfig: 2345 90 10
+# description: Controls the Fact Courier daemon
+#
+### BEGIN INIT INFO
+# Provides:          fact-courier
+# Required-Start:    $local_fs $remote_fs $syslog
+# Required-Stop:     $local_fs $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Fact Courier, a lightweight munin-node runner with Logstash integration.
+### END INIT INFO
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+NAME=fact-courier
+DESC="Fact Courier"
+DAEMON=/usr/sbin/fact-courier
+PID_FILE=/var/run/fact-courier/${NAME}.pid
+
+# Defaults
+FACT_COURIER_ARGS=""
+FACT_COURIER_USER="root"
+FACT_COURIER_GROUP="root"
+
+# Override defaults from sysconfig
+# shellcheck source=/dev/null
+[ -f "/etc/sysconfig/${NAME}" ] && . "/etc/sysconfig/${NAME}"
+
+do_start()
+{
+	echo -n "Starting ${DESC}: "
+	status -p $PID_FILE $DAEMON &>/dev/null
+	RC=$?
+	if [ $RC -eq 0 ]; then
+		success
+	else
+		if [ "${FACT_COURIER_USER}:${FACT_COURIER_GROUP}" = "root:root" ]; then
+			nohup "$DAEMON" $FACT_COURIER_ARGS </dev/null &>/dev/null &
+			RC=$?
+			echo "$!" > "$PID_FILE"
+		else
+			# shellcheck disable=SC2086
+			nohup runuser -s /bin/bash "$FACT_COURIER_USER" -g "${FACT_COURIER_GROUP}" -c "$(printf '%q' "$DAEMON") $FACT_COURIER_ARGS </dev/null &>/dev/null & echo \"\$!\" > $(printf '%q' $PID_FILE)" &>/dev/null
+			RC=$?
+		fi
+		if [ $RC -eq 0 ]; then
+			success
+		else
+			failure
+		fi
+	fi
+	echo
+	return $?
+}
+
+do_reload() {
+	echo -n "Reloading ${DESC}: "
+	killproc -p $PID_FILE $DAEMON -HUP
+	RC=$?
+	echo
+}
+
+case "$1" in
+	start)
+		$0 configtest && do_start
+		RC=$?
+	;;
+	stop)
+		echo -n "Stopping ${DESC}: "
+		killproc -p $PID_FILE -d 30 $DAEMON
+		RC=$?
+		echo
+	;;
+	status)
+		echo "${DESC} status:"
+		status -p $PID_FILE $DAEMON
+		RC=$?
+	;;
+	reload)
+		$0 configtest && do_reload
+	;;
+	restart)
+		$0 configtest
+		RC=$?
+		if [ $RC -eq 0 ]; then
+			$0 stop
+			do_start
+			RC=$?
+		fi
+	;;
+	condrestart|try-restart)
+		status -p $PID_FILE $DAEMON
+		RC=$?
+		if [ $RC -eq 0 ]; then
+			$0 restart
+			RC=$?
+		fi
+	;;
+	configtest)
+		echo -n "Configuration test: "
+		TESTRESULT=$( su --login -s /bin/bash "$FACT_COURIER_USER" -c "$(printf '%q' "$DAEMON") $FACT_COURIER_ARGS -config-test" )
+		RC=$?
+		if [ $RC -ne 0 ]; then
+			failure
+			echo
+			echo "${TESTRESULT}"
+		else
+			success
+			echo
+		fi
+	;;
+	*)
+		echo "Usage: $0 start|stop|status|reload|restart|condrestart|try-restart|configtest"
+		exit 1
+	;;
+esac
+
+exit $RC

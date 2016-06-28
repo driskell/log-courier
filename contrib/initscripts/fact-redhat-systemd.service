@@ -1,0 +1,18 @@
+[Unit]
+Description=Fact Courier, a lightweight munin-node runner with Logstash integration.
+After=syslog.target network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/sysconfig/fact-courier
+ExecStartPre=/usr/sbin/fact-courier $FACT_COURIER_ARGS -config-test
+ExecStart=/usr/sbin/fact-courier $FACT_COURIER_ARGS
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s TERM $MAINPID
+PrivateTmp=true
+StandardError=syslog
+User=fact-courier
+Group=fact-courier
+
+[Install]
+WantedBy=multi-user.target
