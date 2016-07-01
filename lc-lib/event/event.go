@@ -16,7 +16,9 @@
 
 package event
 
-import "encoding/json"
+import (
+	"github.com/driskell/log-courier/lc-lib/simplejson"
+)
 
 // AckCallback is a function to a call when events have been acknowledged
 type AckCallback func([]*Event)
@@ -52,7 +54,7 @@ func (e *Event) Encode() (err error) {
 		panic("event is already encoded")
 	}
 
-	e.encoded, err = json.Marshal(e.data)
+	e.encoded, err = simplejson.Marshal(e.data)
 	if err != nil {
 		e.data = nil
 	}
