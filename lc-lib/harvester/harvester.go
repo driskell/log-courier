@@ -29,7 +29,6 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/codecs"
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
 )
@@ -71,7 +70,7 @@ type Harvester struct {
 	stream          core.Stream
 	fileinfo        os.FileInfo
 	path            string
-	genConfig       *config.General
+	genConfig       *General
 	streamConfig    *StreamConfig
 	eventStream     *codecs.Stream
 	offset          int64

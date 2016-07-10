@@ -38,7 +38,7 @@ type Spooler struct {
 	core.PipelineSegment
 	core.PipelineConfigReceiver
 
-	genConfig  *config.General
+	genConfig  *General
 	spool      []*event.Event
 	spoolSize  int
 	input      chan *event.Event
@@ -49,9 +49,10 @@ type Spooler struct {
 
 // NewSpooler creates a new event spooler
 func NewSpooler(app *core.App, publisherImpl *publisher.Publisher) *Spooler {
+	genConfig := app.Config().GeneralPart("spooler").(*General)
 	ret := &Spooler{
-		genConfig: app.Config().General(),
-		spool:     make([]*event.Event, 0, app.Config().General().SpoolSize),
+		genConfig: genConfig,
+		spool:     make([]*event.Event, 0, genConfig.SpoolSize),
 		input:     make(chan *event.Event, 16), // TODO: Make configurable?
 		output:    publisherImpl.Connect(),
 	}
@@ -184,7 +185,7 @@ func (s *Spooler) resetTimer() {
 
 // reloadConfig updates the spooler configuration after a reload
 func (s *Spooler) reloadConfig(cfg *config.Config) bool {
-	s.genConfig = cfg.General()
+	s.genConfig = cfg.GeneralPart("spooler").(*General)
 
 	// Immediate flush?
 	passed := time.Now().Sub(s.timerStart)

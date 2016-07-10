@@ -54,11 +54,11 @@ type Registrar struct {
 }
 
 // NewRegistrar creates a new Registrar associated with a file in a directory
-func NewRegistrar(app *core.App) *Registrar {
+func NewRegistrar(app *core.App, persistDir string) *Registrar {
 	ret := &Registrar{
 		registrarChan: make(chan []EventProcessor, 16), // TODO: Make configurable?
 		writeTimer:    time.NewTimer(0),
-		persistdir:    app.Config().General().PersistDir,
+		persistdir:    persistDir,
 		statefile:     ".log-courier",
 		state:         make(map[core.Stream]*FileState),
 	}

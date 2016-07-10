@@ -25,6 +25,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/spooler"
 )
 
 const (
@@ -88,13 +89,15 @@ func NewMultilineCodecFactory(p *config.Parser, configPath string, unused map[st
 		return nil, fmt.Errorf("Unknown \"what\" value for multiline codec, '%s'.", result.What)
 	}
 
+	spoolMaxBytes := p.Config().GeneralPart("spooler").(*spooler.General).SpoolMaxBytes
+
 	if result.MaxMultilineBytes == 0 {
-		result.MaxMultilineBytes = p.Config().General().SpoolMaxBytes
+		result.MaxMultilineBytes = spoolMaxBytes
 	}
 
 	// We conciously allow a line 4 bytes longer what we would normally have as the limit
 	// This 4 bytes is the event header size. It's not worth considering though
-	if result.MaxMultilineBytes > p.Config().General().SpoolMaxBytes {
+	if result.MaxMultilineBytes > spoolMaxBytes {
 		return nil, fmt.Errorf("max multiline bytes cannot be greater than /general/spool max bytes")
 	}
 

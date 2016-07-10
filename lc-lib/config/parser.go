@@ -141,16 +141,12 @@ FieldLoop:
 		for _, mod := range mods {
 			switch mod {
 			case "embed":
-				// Embedded field must be public
-				if !vField.CanSet() {
-					continue
-				}
-
 				// Embed means we recurse into the field, but pull it's values from the
 				// same level within the configuration file we loaded
 				if vField.Kind() != reflect.Struct {
 					panic("Embedded configuration field is not a struct")
 				}
+
 				if err = p.populateStruct(vField.Addr(), vRawConfig, configPath, false); err != nil {
 					return
 				}
@@ -160,6 +156,10 @@ FieldLoop:
 				// populated with configuration structures at run-time, with the config
 				// file key being the map key
 				// This is generally not exported so don't check that
+				if vField.Kind() != reflect.Map {
+					panic("Dynamic configuration field is not a map")
+				}
+
 				dynamicKeys := vField.MapKeys()
 				for _, key := range dynamicKeys {
 					// Unwrap the interface and the pointer
@@ -168,6 +168,22 @@ FieldLoop:
 					}
 				}
 				continue
+			case "embed_dynamic":
+				// Embed dynamic is the same as dynamic, except we ignore the keys and
+				// dynamically populate each entry as if it were embedded. Used by
+				// General to allow packages to add extra general configuration entries
+				// without needing to create new configuration sections
+				if vField.Kind() != reflect.Map {
+					panic("Embedded dynamic configuration field is not a map")
+				}
+
+				dynamicKeys := vField.MapKeys()
+				for _, key := range dynamicKeys {
+					// Unwrap the interface but leave the pointer
+					if err = p.populateStruct(vField.MapIndex(key).Elem(), vRawConfig, configPath, false); err != nil {
+						return
+					}
+				}
 			}
 		}
 

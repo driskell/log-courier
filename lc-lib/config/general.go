@@ -20,75 +20,36 @@
 package config
 
 import (
-	"fmt"
 	"os"
-	"time"
 
 	"gopkg.in/op/go-logging.v1"
 )
 
-var (
-	// DefaultGeneralPersistDir is a path to the default directory to store
-	DefaultGeneralPersistDir = ""
-)
+// registeredGeneralCreators contains a list of registered external Section
+// creators that should be processed in all new General structures
+var registeredGeneralCreators = make(map[string]SectionCreator)
 
 const (
-	defaultGeneralHost             string        = "localhost.localdomain"
-	defaultGeneralLogLevel         logging.Level = logging.INFO
-	defaultGeneralLogStdout        bool          = true
-	defaultGeneralLogSyslog        bool          = false
-	defaultGeneralLineBufferBytes  int64         = 16384
-	defaultGeneralMaxLineBytes     int64         = 1048576
-	defaultGeneralProspectInterval time.Duration = 10 * time.Second
-	defaultGeneralSpoolMaxBytes    int64         = 10485760
-	defaultGeneralSpoolSize        int64         = 1024
-	defaultGeneralSpoolTimeout     time.Duration = 5 * time.Second
+	defaultGeneralHost      string        = "localhost.localdomain"
+	defaultGeneralLogLevel  logging.Level = logging.INFO
+	defaultGeneralLogStdout bool          = true
+	defaultGeneralLogSyslog bool          = false
 )
 
 // General holds the general configuration
 type General struct {
-	GlobalFields  map[string]interface{} `config:"global fields"`
-	Host          string                 `config:"host"`
-	LogFile       string                 `config:"log file"`
-	LogLevel      logging.Level          `config:"log level"`
-	LogStdout     bool                   `config:"log stdout"`
-	LogSyslog     bool                   `config:"log syslog"`
-	SpoolSize     int64                  `config:"spool size"`
-	SpoolMaxBytes int64                  `config:"spool max bytes"`
-	SpoolTimeout  time.Duration          `config:"spool timeout"`
+	GlobalFields map[string]interface{} `config:"global fields"`
+	Host         string                 `config:"host"`
+	LogFile      string                 `config:"log file"`
+	LogLevel     logging.Level          `config:"log level"`
+	LogStdout    bool                   `config:"log stdout"`
+	LogSyslog    bool                   `config:"log syslog"`
 
-	// TODO: Log Courier specific fields - have a dynamic area to General? Or do
-	// they deserve their own section? Own section would break compatibility though
-	LineBufferBytes  int64         `config:"line buffer bytes"`
-	MaxLineBytes     int64         `config:"max line bytes"`
-	PersistDir       string        `config:"persist directory"`
-	ProspectInterval time.Duration `config:"prospect interval"`
+	Custom map[string]interface{} `config:",embed_dynamic"`
 }
 
 // Validate the configuration
 func (gc *General) Validate(p *Parser, path string) (err error) {
-	if gc.PersistDir == "" {
-		err = fmt.Errorf("%s/persist directory must be specified", path)
-		return
-	}
-
-	// Enforce maximum of 2 GB since event transmit length is uint32
-	if gc.SpoolMaxBytes > 2*1024*1024*1024 {
-		err = fmt.Errorf("%s/spool max bytes can not be greater than 2 GiB", path)
-		return
-	}
-
-	if gc.LineBufferBytes < 1 {
-		err = fmt.Errorf("%s/line buffer bytes must be greater than 1", path)
-		return
-	}
-
-	// Max line bytes can not be larger than spool max bytes
-	if gc.MaxLineBytes > gc.SpoolMaxBytes {
-		err = fmt.Errorf("%s/max line bytes can not be greater than %s/spool max bytes", path, path)
-		return
-	}
-
 	if gc.Host == "" {
 		ret, hostErr := os.Hostname()
 		if hostErr == nil {
@@ -113,19 +74,37 @@ func (c *Config) General() *General {
 	return c.Sections["general"].(*General)
 }
 
+// GeneralPart returns the named custom general configuration registered through
+// RegisterGeneral()
+func (c *Config) GeneralPart(name string) interface{} {
+	return c.Sections["general"].(*General).Custom[name]
+}
+
+// RegisterGeneral registers additional configuration values to be read from
+// the general section of the configuration file. It works exactly the same
+// as RegisterSection except that the structure is populated from the general
+// section instead of a dedicated named section. The name given is purely for
+// accessing the structure directly using GeneralPart()
+//
+// It is useful for packages to register small sets of rarely used configuration
+// values where a dedicated section in the configuration file seems unnecessary.
+func RegisterGeneral(name string, creator SectionCreator) {
+	registeredGeneralCreators[name] = creator
+}
+
 func init() {
 	RegisterSection("general", func() interface{} {
-		return &General{
-			LineBufferBytes:  defaultGeneralLineBufferBytes,
-			LogLevel:         defaultGeneralLogLevel,
-			LogStdout:        defaultGeneralLogStdout,
-			LogSyslog:        defaultGeneralLogSyslog,
-			MaxLineBytes:     defaultGeneralMaxLineBytes,
-			PersistDir:       DefaultGeneralPersistDir,
-			ProspectInterval: defaultGeneralProspectInterval,
-			SpoolSize:        defaultGeneralSpoolSize,
-			SpoolMaxBytes:    defaultGeneralSpoolMaxBytes,
-			SpoolTimeout:     defaultGeneralSpoolTimeout,
+		c := &General{
+			LogLevel:  defaultGeneralLogLevel,
+			LogStdout: defaultGeneralLogStdout,
+			LogSyslog: defaultGeneralLogSyslog,
+			Custom:    make(map[string]interface{}),
 		}
+
+		for k, creator := range registeredGeneralCreators {
+			c.Custom[k] = creator()
+		}
+
+		return c
 	})
 }

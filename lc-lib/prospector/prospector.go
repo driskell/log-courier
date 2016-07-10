@@ -44,7 +44,7 @@ type Prospector struct {
 
 	app             *core.App
 	config          *config.Config
-	genConfig       *config.General
+	genConfig       *General
 	fileConfigs     Config
 	prospectorindex map[string]*prospectorInfo
 	prospectors     map[*prospectorInfo]*prospectorInfo
@@ -63,12 +63,13 @@ type Prospector struct {
 // files on the FIRST scan will be started from the beginning, as opposed to
 // from the end
 func NewProspector(app *core.App, fromBeginning bool, spoolerImpl *spooler.Spooler, publisherImpl *publisher.Publisher) (*Prospector, error) {
-	registrarImpl := registrar.NewRegistrar(app)
+	genConfig := app.Config().GeneralPart("prospector").(*General)
+	registrarImpl := registrar.NewRegistrar(app, genConfig.PersistDir)
 
 	ret := &Prospector{
 		app:             app,
 		config:          app.Config(),
-		genConfig:       app.Config().General(),
+		genConfig:       genConfig,
 		fileConfigs:     *app.Config().Section("files").(*Config),
 		prospectorindex: make(map[string]*prospectorInfo),
 		prospectors:     make(map[*prospectorInfo]*prospectorInfo),
@@ -202,7 +203,7 @@ DelayLoop:
 		case <-p.OnShutdown():
 			return true
 		case cfg := <-p.OnConfig():
-			p.genConfig = cfg.General()
+			p.genConfig = cfg.GeneralPart("prospector").(*General)
 			p.fileConfigs = cfg.Section("files").(Config)
 		}
 

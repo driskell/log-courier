@@ -17,6 +17,7 @@
 package harvester
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -28,6 +29,9 @@ import (
 const (
 	defaultStreamAddPathField bool          = true
 	defaultStreamDeadTime     time.Duration = 1 * time.Hour
+
+	defaultGeneralLineBufferBytes int64 = 16384
+	defaultGeneralMaxLineBytes    int64 = 1048576
 )
 
 // StreamConfig holds the configuration for a stream of logs produced by a
@@ -57,7 +61,7 @@ func (sc *StreamConfig) NewHarvester(app *core.App, stream core.Stream, offset i
 	ret := &Harvester{
 		stopChan:     make(chan interface{}),
 		stream:       stream,
-		genConfig:    app.Config().General(),
+		genConfig:    app.Config().GeneralPart("harvester").(*General),
 		streamConfig: sc,
 		offset:       offset,
 		lastEOF:      nil,
@@ -82,4 +86,35 @@ func (sc *StreamConfig) NewHarvester(app *core.App, stream core.Stream, offset i
 	}
 
 	return ret
+}
+
+// General contains extra general section configuration values for the
+// harvester
+type General struct {
+	LineBufferBytes int64 `config:"line buffer bytes"`
+	MaxLineBytes    int64 `config:"max line bytes"`
+}
+
+// Validate the additional general configuration
+func (gc *General) Validate(p *config.Parser, path string) (err error) {
+	if gc.LineBufferBytes < 1 {
+		err = fmt.Errorf("%s/line buffer bytes must be greater than 1", path)
+		return
+	}
+
+	if gc.MaxLineBytes < 1 {
+		err = fmt.Errorf("%s/max line bytes must be greater than 1", path)
+		return
+	}
+
+	return
+}
+
+func init() {
+	config.RegisterGeneral("harvester", func() interface{} {
+		return &General{
+			LineBufferBytes: defaultGeneralLineBufferBytes,
+			MaxLineBytes:    defaultGeneralMaxLineBytes,
+		}
+	})
 }

@@ -25,15 +25,20 @@ import (
 	"github.com/driskell/log-courier/lc-lib/harvester"
 )
 
+var (
+	validationReady = 0
+	validationWait  = 2
+
+	// DefaultGeneralPersistDir is a path to the default directory to store
+	DefaultGeneralPersistDir = ""
+)
+
 const (
 	defaultStreamAddOffsetField bool          = true
 	defaultStreamAddPathField   bool          = true
 	defaultStreamDeadTime       time.Duration = 1 * time.Hour
-)
 
-var (
-	validationReady = 0
-	validationWait  = 2
+	defaultGeneralProspectInterval time.Duration = 10 * time.Second
 )
 
 // FileConfig holds the configuration for a set of paths that share the same
@@ -110,6 +115,23 @@ func (c Config) Validate(p *config.Parser, path string) (err error) {
 	return
 }
 
+// General contains extra general section configuration values for the
+// prospector and registrar
+type General struct {
+	PersistDir       string        `config:"persist directory"`
+	ProspectInterval time.Duration `config:"prospect interval"`
+}
+
+// Validate the additional general configuration
+func (gc *General) Validate(p *config.Parser, path string) (err error) {
+	if gc.PersistDir == "" {
+		err = fmt.Errorf("%s/persist directory must be specified", path)
+		return
+	}
+
+	return
+}
+
 // Validate validates all config structures and initialises streams
 func validateFileConfigs(p *config.Parser) (err error) {
 	c := *p.Config().Section("files").(*Config)
@@ -135,5 +157,12 @@ func init() {
 
 	config.RegisterSection("includes", func() interface{} {
 		return &IncludeConfig{}
+	})
+
+	config.RegisterGeneral("prospector", func() interface{} {
+		return &General{
+			PersistDir:       DefaultGeneralPersistDir,
+			ProspectInterval: defaultGeneralProspectInterval,
+		}
 	})
 }
