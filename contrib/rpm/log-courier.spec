@@ -74,18 +74,19 @@ touch %{buildroot}%{_var}/lib/log-courier/.log-courier
 
 # Install init script and related paraphernalia
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
+
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
 install -m 0644 contrib/initscripts/redhat-systemd.service %{buildroot}%{_unitdir}/log-courier.service
 install -m 0644 contrib/initscripts/log-courier-systemd.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
 %else
-# Make the run dir
-mkdir -p %{buildroot}%{_var}/run %{buildroot}%{_var}/run/log-courier
-touch %{buildroot}%{_var}/run/log-courier/admin.socket
-
 mkdir -p %{buildroot}%{_sysconfdir}/init.d
 install -m 0755 contrib/initscripts/redhat-sysv.init %{buildroot}%{_sysconfdir}/init.d/log-courier
 install -m 0644 contrib/initscripts/log-courier.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
+
+# Make the run dir
+mkdir -p %{buildroot}%{_var}/run/log-courier
+touch %{buildroot}%{_var}/run/log-courier/admin.socket
 touch %{buildroot}%{_var}/run/log-courier/log-courier.pid
 %endif
 

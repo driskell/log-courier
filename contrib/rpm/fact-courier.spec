@@ -38,7 +38,7 @@ instances. The munin-node service does not even need to be running - the scripts
 are called directly.
 
 %prep
-%setup -q -n %{name}-%{version}
+%setup -q -n log-courier-%{version}
 
 %build
 # Build a go workspace
@@ -62,19 +62,22 @@ export GOPATH=$(pwd)/_workspace
 mkdir -p %{buildroot}%{_sbindir}
 install -m 0755 $GOPATH/bin/fact-courier %{buildroot}%{_sbindir}/fact-courier
 
+# Install config directory
+mkdir -p %{buildroot}%{_sysconfdir}/fact-courier
+
 # Install init script and related paraphernalia
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
+
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
 install -m 0644 contrib/initscripts/fact-redhat-systemd.service %{buildroot}%{_unitdir}/fact-courier.service
 install -m 0644 contrib/initscripts/fact-courier-systemd.env %{buildroot}%{_sysconfdir}/sysconfig/fact-courier
 %else
-# Make the run dir
-mkdir -p %{buildroot}%{_var}/run %{buildroot}%{_var}/run/fact-courier
-
 mkdir -p %{buildroot}%{_sysconfdir}/init.d
 install -m 0755 contrib/initscripts/fact-redhat-sysv.init %{buildroot}%{_sysconfdir}/init.d/fact-courier
 install -m 0644 contrib/initscripts/fact-courier.env %{buildroot}%{_sysconfdir}/sysconfig/fact-courier
+# Make the run dir
+mkdir -p %{buildroot}%{_var}/run/fact-courier
 touch %{buildroot}%{_var}/run/fact-courier/fact-courier.pid
 %endif
 

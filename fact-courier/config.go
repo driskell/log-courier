@@ -17,28 +17,56 @@
 package main
 
 import (
+	"os"
+
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+)
+
+const (
+	defaultMuninConfigBase    string = "/etc/munin"
+	defaultMuninConfigFile    string = "${munin config base}/munin-node.conf"
+	defaultMuninConfigPluginD string = "${munin config base}/plugin-conf.d"
+	defaultMuninPluginBase    string = "${munin config base}/plugins"
 )
 
 // Config holds the Fact Courier configuration, and the Stream configuration
 type Config struct {
 	event.StreamConfig `config:",embed"`
+
+	MuninConfigBase    string `config:"munin config base"`
+	MuninConfigFile    string `config:"munin config file"`
+	MuninConfigPluginD string `config:"munin config plugind"`
+	MuninPluginBase    string `config:"munin plugin base"`
 }
 
 // Defaults populates any default configurations
 func (c *Config) Defaults() {
 }
 
-// Validate does nothing for a fact-courier stream
-// This is here to prevent double validation of event.StreamConfig whose
-// validation function would otherwise be inherited
+// Validate will check the configuration and expand variables
 func (c *Config) Validate(p *config.Parser, path string) (err error) {
+	mapper := func(name string) string {
+		switch name {
+		case "munin config base":
+			return c.MuninConfigBase
+		}
+		return ""
+	}
+
+	os.Expand(c.MuninConfigFile, mapper)
+	os.Expand(c.MuninConfigPluginD, mapper)
+
 	return nil
 }
 
 func init() {
 	config.RegisterSection("facts", func() interface{} {
-		return &Config{}
+		return &Config{
+			MuninConfigBase:    defaultMuninConfigBase,
+			MuninConfigFile:    defaultMuninConfigFile,
+			MuninConfigPluginD: defaultMuninConfigPluginD,
+			MuninPluginBase:    defaultMuninPluginBase,
+		}
 	})
 }

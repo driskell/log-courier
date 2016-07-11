@@ -128,13 +128,13 @@ func (m *MuninCollector) collect(timestamp time.Time) []*event.Event {
 // collectRunner performs a collection from a single MuninRunner, and generates
 // the necessary event structure from the result
 func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time) *event.Event {
-	log.Debug("[%s] Collecting", runner.Name())
-
 	result, err := runner.Collect(m.credentialCache, timestamp)
 	if err != nil {
 		log.Warning("[%s] Collect error: %s", runner.Name(), err)
 		return nil
 	}
+
+	fieldCount := len(result)
 
 	// Set timestamp, plugin name and other fields
 	result["@timestamp"] = timestamp.Format(time.RFC3339)
@@ -149,6 +149,8 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 		log.Warning("[%s] Skipping data due to encoding error: %s", runner.Name(), err)
 		return nil
 	}
+
+	log.Debug("[%s] %d fields collected", runner.Name(), fieldCount)
 
 	return event
 }
@@ -196,21 +198,22 @@ func (m *MuninCollector) scanFolder(path string, cb func(string, error)) error {
 // scans the plugin-conf.d folder for plugin configurations so we can ensure
 // we run plugins as the correct user and group
 func (m *MuninCollector) loadConfig() error {
-	// TODO: Configuration for this
-	muninConfig, err := NewMuninConfig("/etc/munin/munin-node.conf")
+	log.Debug("Loading munin configuration from: %s", m.factConfig.MuninConfigFile)
+	muninConfig, err := NewMuninConfig(m.factConfig.MuninConfigFile)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Determine this from the munin-node.conf? Can it be changed there?
-	confPath := "/etc/munin/plugin-conf.d"
-	m.scanFolder(confPath, func(name string, err error) {
+	m.scanFolder(m.factConfig.MuninConfigPluginD, func(name string, err error) {
 		if err != nil {
 			log.Errorf("Config scan error: %s", err)
 			return
 		}
 
-		err = muninConfig.Append(filepath.Join(confPath, name))
+		confPath := filepath.Join(m.factConfig.MuninConfigPluginD, name)
+
+		log.Debug("Loading additional munin configuration from: %s", confPath)
+		err = muninConfig.Append(confPath)
 		if err != nil {
 			log.Errorf("Config append error: %s", err)
 			return
@@ -220,25 +223,24 @@ func (m *MuninCollector) loadConfig() error {
 	m.muninConfig = muninConfig
 	m.sections = m.muninConfig.Sections()
 
-	log.Debug("Sections: %v", m.sections)
 	for _, section := range m.sections {
 		log.Debug("[%s]: %v", section, m.muninConfig.Section(section))
 	}
+
+	log.Info("Successfully loaded %d munin configuration sections", len(m.sections))
 
 	return nil
 }
 
 // loadScripts performs munin-node plugin discovery
 func (m *MuninCollector) loadScripts() {
-	// TODO: Determine this from the munin-node.conf? Can it be changed there?
-	scriptPath := "/etc/munin/plugins"
-	m.scanFolder(scriptPath, func(name string, err error) {
+	m.scanFolder(m.factConfig.MuninPluginBase, func(name string, err error) {
 		if err != nil {
 			log.Errorf("Scan error: %s", err)
 			return
 		}
 
-		runner, err := m.createRunner(scriptPath, name)
+		runner, err := m.createRunner(m.factConfig.MuninPluginBase, name)
 		if err != nil {
 			log.Errorf("Create runner error: %s", err)
 			return
@@ -246,6 +248,8 @@ func (m *MuninCollector) loadScripts() {
 
 		m.runners = append(m.runners, runner)
 	})
+
+	log.Info("Successfully configured %d munin plugin runners", len(m.runners))
 }
 
 // createRunner scans the loaded plugin configurations to produce a list of
@@ -255,11 +259,10 @@ func (m *MuninCollector) loadScripts() {
 func (m *MuninCollector) createRunner(scriptPath, name string) (*MuninRunner, error) {
 	var applySections []string
 
-	log.Debug("Creating runner %s", name)
+	log.Debug("[%s] Configuring munin plugin runner", name)
 
 	// Search sections and match against name
 	for _, section := range m.sections {
-		log.Debug("Considering %s", section)
 		sectionLen := len(section)
 		if section[sectionLen-1] == '*' {
 			if !strings.HasPrefix(name, section[:sectionLen-1]) {
@@ -269,7 +272,7 @@ func (m *MuninCollector) createRunner(scriptPath, name string) (*MuninRunner, er
 			continue
 		}
 
-		log.Debug("Using %s", section)
+		log.Debug("[%s] Using configuration section: %s", name, section)
 
 		applySections = append(applySections, section)
 	}
@@ -283,13 +286,11 @@ func (m *MuninCollector) createRunnerFromSections(scriptPath, name string, secti
 	runner := NewMuninRunner(scriptPath, name)
 
 	for _, section := range sections {
-		log.Debug("Applying %s to %s", section, name)
 		if err := runner.ApplySection(m.muninConfig.Section(section)); err != nil {
 			return nil, err
 		}
 	}
 
-	log.Debug("Configuring %s", name)
 	if err := runner.Configure(m.credentialCache); err != nil {
 		return nil, err
 	}
