@@ -8,12 +8,14 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/harvester"
+	"github.com/driskell/log-courier/lc-lib/spooler"
 )
 
 func createMultilineCodec(unused map[string]interface{}, callback codecs.CallbackFunc, t *testing.T) codecs.Codec {
 	cfg := config.NewConfig()
-	cfg.General().MaxLineBytes = 1048576
-	cfg.General().SpoolMaxBytes = 10485760
+	cfg.GeneralPart("harvester").(*harvester.General).MaxLineBytes = 1048576
+	cfg.GeneralPart("spooler").(*spooler.General).SpoolMaxBytes = 10485760
 
 	factory, err := NewMultilineCodecFactory(config.NewParser(cfg), "", unused, "multiline")
 	if err != nil {

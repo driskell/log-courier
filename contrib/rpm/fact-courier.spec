@@ -5,7 +5,7 @@
 Summary: Fact Courier
 Name: fact-courier
 Version: 2.5.0
-Release: 1%{dist}
+Release: 2%{dist}
 License: Apache
 Group: System Environment/Libraries
 Packager: Jason Woods <packages@jasonwoods.me.uk>
@@ -143,5 +143,8 @@ fi
 %endif
 
 %changelog
+* Mon Jul 11 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.5.0-2
+- Tweaks
+
 * Tue Jun 28 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.5.0-1
 - Fact Courier

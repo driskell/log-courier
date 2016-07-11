@@ -54,8 +54,9 @@ func (c *Config) Validate(p *config.Parser, path string) (err error) {
 		return ""
 	}
 
-	os.Expand(c.MuninConfigFile, mapper)
-	os.Expand(c.MuninConfigPluginD, mapper)
+	c.MuninConfigFile = os.Expand(c.MuninConfigFile, mapper)
+	c.MuninConfigPluginD = os.Expand(c.MuninConfigPluginD, mapper)
+	c.MuninPluginBase = os.Expand(c.MuninPluginBase, mapper)
 
 	return nil
 }
