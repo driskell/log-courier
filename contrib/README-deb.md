@@ -11,7 +11,11 @@ archive, setup the source for debian building, and build the package.
     git clone https://github.com/driskell/log-courier
     tar -czf log-courier_VERSION.orig.tar.gz log-courier
     cd log-courier
-    mv contrib/deb debian
+    # You can build the package for either upstart or systemd
+    # upstart
+    mv contrib/deb-upstart debian
+    # systemd
+    # mv contrib/deb-systemd debian
     dpkg-buildpackage
 
 Packaging on Wheezy
