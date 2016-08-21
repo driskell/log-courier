@@ -21,7 +21,7 @@ download.
 export VERSION="<your version here>"
 wget -P rpmbuild/SOURCES "https://github.com/driskell/log-courier/archive/v${VERSION}.zip"
 wget -P rpmbuild/SPECS "https://raw.githubusercontent.com/driskell/log-courier/v${VERSION}/contrib/rpm/log-courier.spec"
-sed -i "s/^Version: .*$/Version: ${VERSION}/" rpmbuild/SOURCES/log-courier.spec
+sed -i "s/^Version: .*$/Version: ${VERSION}/" rpmbuild/SPECS/log-courier.spec
 rpmbuild -ba rpmbuild/SPECS/log-courier.spec
 ```
 
