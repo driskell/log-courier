@@ -1,6 +1,7 @@
 #!/bin/bash
 
 adduser --quiet --system --home /var/lib/log-courier --no-create-home --group log-courier
+mkdir -p /var/run/log-courier
 chown log-courier: /var/lib/log-courier /var/run/log-courier
 
 if [ -f /var/run/log-courier.pid ]; then
