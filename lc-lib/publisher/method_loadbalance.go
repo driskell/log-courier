@@ -20,7 +20,6 @@
 package publisher
 
 import (
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
 	"github.com/driskell/log-courier/lc-lib/transports"
@@ -62,10 +61,15 @@ func (m *methodLoadbalance) reloadConfig(cfg *config.Config) {
 
 	// Verify all servers are present and reload them
 	var last, foundEndpoint *endpoint.Endpoint
-	for _, server := range m.netConfig.Servers {
+	for n, server := range m.netConfig.Servers {
 		if foundEndpoint = m.sink.FindEndpoint(server); foundEndpoint == nil {
 			// Add a new endpoint
-			last = m.sink.AddEndpointAfter(server, addresspool.NewPool(server), false, last)
+			last = m.sink.AddEndpointAfter(
+				server,
+				m.netConfig.AddressPools[n],
+				false,
+				last,
+			)
 			log.Debug("[Loadbalance] Initialised new endpoint: %s", last.Server())
 			continue
 		}
