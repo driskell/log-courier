@@ -98,13 +98,16 @@ func newMethodRandom(sink *endpoint.Sink, config *config.Network) *methodRandom 
 
 func (m *methodRandom) connectRandom() {
 	var server string
+	var addressPool *addresspool.Pool
 	if len(m.config.Servers) == 1 {
 		// Only one entry
 		server = m.config.Servers[0]
+		addressPool = m.config.AddressPools[0]
 		m.activeServer = 0
 	} else if len(m.config.Servers) == 2 && m.activeServer != -1 {
 		m.activeServer = (m.activeServer + 1) % 2
 		server = m.config.Servers[m.activeServer]
+		addressPool = m.config.AddressPools[m.activeServer]
 	} else {
 		for {
 			selected := m.generator.Intn(len(m.config.Servers))
@@ -115,13 +118,14 @@ func (m *methodRandom) connectRandom() {
 
 			m.activeServer = selected
 			server = m.config.Servers[selected]
+			addressPool = m.config.AddressPools[selected]
 			break
 		}
 	}
 
 	log.Debug("[Random] Randomly selected new endpoint: %s", server)
 
-	m.sink.AddEndpoint(server, addresspool.NewPool(server), true)
+	m.sink.AddEndpoint(server, addressPool, true)
 }
 
 func (m *methodRandom) onFail(endpoint *endpoint.Endpoint) {

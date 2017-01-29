@@ -71,7 +71,11 @@ func (m *methodFailover) onFail(endpoint *endpoint.Endpoint) {
 		m.sink.MoveEndpointAfter(endpoint, m.currentEndpoint)
 		m.currentEndpoint = endpoint
 	} else {
-		m.currentEndpoint = m.sink.AddEndpoint(newServer, addresspool.NewPool(newServer), false)
+		m.currentEndpoint = m.sink.AddEndpoint(
+			newServer,
+			m.config.AddressPools[m.failoverPosition],
+			false,
+		)
 	}
 }
 

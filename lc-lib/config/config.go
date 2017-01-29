@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"gopkg.in/op/go-logging.v1"
 )
 
@@ -113,7 +114,8 @@ func (gc *General) InitDefaults() {
 
 // Network holds network related configuration
 type Network struct {
-	Factory interface{}
+	Factory      interface{}
+	AddressPools []*addresspool.Pool
 
 	Backoff            time.Duration `config:"failure backoff"`
 	BackoffMax         time.Duration `config:"failure backoff max"`
@@ -309,12 +311,14 @@ func (c *Config) Load(path string, initFactories bool) (err error) {
 	}
 
 	servers := make(map[string]bool)
-	for _, server := range c.Network.Servers {
+	c.Network.AddressPools = make([]*addresspool.Pool, len(c.Network.Servers))
+	for n, server := range c.Network.Servers {
 		if _, exists := servers[server]; exists {
 			err = fmt.Errorf("The list of network servers (/network/servers) must be unique: %s appears multiple times", server)
 			return
 		}
 		servers[server] = true
+		c.Network.AddressPools[n] = addresspool.NewPool(server)
 	}
 
 	if initFactories {
