@@ -313,7 +313,7 @@ func (h *Harvester) takeMeasurements(duration time.Duration, isPipelineBlocked b
 	// TODO: Make time configurable? Bear in mind this does a stale buffer check
 	//       and reports an error saying "stale data for more than 10s"
 	doChecks := false
-	if duration := time.Since(h.lastCheck); duration >= 10*time.Second {
+	if checksDuration := time.Since(h.lastCheck); checksDuration >= 10*time.Second {
 		h.lastCheck = h.lastMeasurement
 		doChecks = true
 	}
