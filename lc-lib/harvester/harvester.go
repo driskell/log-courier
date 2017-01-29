@@ -264,8 +264,8 @@ func (h *Harvester) performRead() error {
 
 	if h.isStream {
 		// Stream has finished
-		log.Info("Stopping harvest of %s; EOF reached")
-		return nil
+		log.Info("Stopping harvest of %s; EOF reached", h.path)
+		return errStopRequested
 	}
 
 	h.mutex.Lock()
