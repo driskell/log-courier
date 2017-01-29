@@ -25,6 +25,9 @@ describe 'log-courier' do
   it 'should follow stdin' do
     startup stdin: true, config: <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "localhost:#{server_port}" ]
@@ -46,7 +49,7 @@ describe 'log-courier' do
     receive_and_check(total: 5_000) do |e|
       expect(e['message']).to eq "stdin line test #{i}"
       expect(e['host']).to eq host
-      expect(e['path']).to eq '-'
+      expect(e['path']).to eq 'stdin'
       expect(e['type']).to eq 'stdin'
       i += 1
     end
@@ -57,6 +60,9 @@ describe 'log-courier' do
   it 'should split lines that are too long' do
     startup stdin: true, config: <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -83,7 +89,7 @@ describe 'log-courier' do
         expect(e.has_key?('tags')).to eq false
       end
       expect(e['host']).to eq host
-      expect(e['path']).to eq '-'
+      expect(e['path']).to eq 'stdin'
       i += 1
     end
 
@@ -217,6 +223,9 @@ describe 'log-courier' do
   it 'should handle log rotation and resume correctly with symlinked log files', :unless => RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/ do
     config = <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -286,6 +295,9 @@ describe 'log-courier' do
   it 'should resume harvesting a file that reached dead time but changed again' do
     startup config: <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -318,6 +330,9 @@ describe 'log-courier' do
     # We use dead time to make sure the harvester stops, as file deletion is only acted upon once the harvester stops
     startup config: <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -360,6 +375,9 @@ describe 'log-courier' do
 
     startup config: <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -384,6 +402,9 @@ describe 'log-courier' do
     # Reload configuration
     reload <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port('new')}" ]
@@ -454,6 +475,9 @@ describe 'log-courier' do
   it 'should allow multiple fields to be configured' do
     startup config: <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -490,6 +514,9 @@ describe 'log-courier' do
   it 'should allow arrays inside field configuration' do
     startup stdin: true, config: <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -513,7 +540,7 @@ describe 'log-courier' do
       expect(e['array'][0]).to eq 1
       expect(e['array'][1]).to eq 2
       expect(e['host']).to eq host
-      expect(e['path']).to eq '-'
+      expect(e['path']).to eq 'stdin'
       i += 1
     end
 
@@ -523,6 +550,9 @@ describe 'log-courier' do
   it 'should allow dictionaries inside field configuration' do
     startup stdin: true, config: <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -546,7 +576,7 @@ describe 'log-courier' do
       expect(e['dict']['first']).to eq 'first'
       expect(e['dict']['second']).to eq 5
       expect(e['host']).to eq host
-      expect(e['path']).to eq '-'
+      expect(e['path']).to eq 'stdin'
       i += 1
     end
 
@@ -561,6 +591,9 @@ describe 'log-courier' do
 
     config = <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ]
@@ -578,7 +611,7 @@ describe 'log-courier' do
 
     begin
       [1,2].each do |i|
-        include_file = File.open(File.join(TEMP_PATH, 'include-' + i.to_s), 'w')
+        include_file = File.open(File.join(TEMP_PATH, 'include-' + i.to_s + '.json'), 'w')
         includes.push include_file.path
         include_file.puts <<-config
         [
@@ -612,6 +645,7 @@ describe 'log-courier' do
     startup config: <<-config
     {
       "general": {
+        "persist directory": ".",
         "prospect interval": 10,
         "spool size": 1024,
         "spool timeout": 5,
@@ -625,7 +659,10 @@ describe 'log-courier' do
         "ssl ca": "#{@ssl_cert.path}",
         "servers": [ "127.0.0.1:#{server_port}" ],
         "timeout": 15,
-        "reconnect": 1
+        "failure backoff": 1,
+        "failure backoff max": 60,
+        "reconnect backoff": 1,
+        "reconnect backoff max": 60
       },
       "files": [
         {

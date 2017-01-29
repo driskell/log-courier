@@ -31,6 +31,9 @@ describe 'log-courier' do
 
     startup config: <<-config
     {
+      "general": {
+        "persist directory": "."
+      },
       "network": {
         "transport": "tcp",
         "servers": [ "127.0.0.1:#{server_port}" ]
