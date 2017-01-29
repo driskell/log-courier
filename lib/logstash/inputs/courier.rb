@@ -26,11 +26,6 @@ module LogStash
     class Courier < LogStash::Inputs::Base
       config_name 'courier'
 
-      # Compatibility with Logstash 1.4 requires milestone
-      if Gem::Version.new(LOGSTASH_VERSION) < Gem::Version.new('1.5.0')
-        milestone 2
-      end
-
       # Disable raw_events in the Log Courier gem if we're Logstash 1.5.5+ or
       # 2.0.0+. Due to changes in those versions to JrJackson, JSON outputs like
       # elasticsearch can be broken by our use of raw_events (which defaults

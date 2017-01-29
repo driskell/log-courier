@@ -1,6 +1,6 @@
 # encoding: utf-8
 
-# Copyright 2014 Jason Woods.
+# Copyright 2014-2016 Jason Woods.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-$LOAD_PATH << File.join(File.dirname(File.dirname(File.dirname(__FILE__))), 'lib')
+# $LOAD_PATH << File.join(
+#   File.dirname(File.dirname(File.dirname(__FILE__))), 'lib')
 
 require 'lib/helpers/common'
-require 'lib/logfile'
 
 TEMP_PATH = File.join(File.dirname(File.dirname(__FILE__)), 'tmp')
-STARTUP_WAIT_TIME = 2
 EVENT_WAIT_COUNT = 50
 EVENT_WAIT_TIME = 0.5
 

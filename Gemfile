@@ -2,12 +2,12 @@ source 'https://rubygems.org'
 
 gemspec
 
-gem 'rake', :group => 'test'
-gem 'rubocop', :group => 'test'
+group :development do
+  gem 'rake'
+end
 
-# Profiler for MRI
-gem 'ruby-prof', '~> 0.15', :platforms => :mri, :group => 'test'
-
-# Tests
-gem 'rspec', '~> 3.1', :group => 'test'
-gem 'rspec-core', '~> 3.1', :group => 'test'
+group :test do
+  gem 'rubocop'
+  gem 'rspec', '~> 3.1'
+  gem 'rspec-core', '~> 3.1'
+end
