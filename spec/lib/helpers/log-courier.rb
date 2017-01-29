@@ -22,7 +22,7 @@ shared_context 'Helpers_Log_Courier' do
   end
 
   before :each do
-    @config = File.open(File.join(TEMP_PATH, 'config'), 'w')
+    @config = File.open(File.join(TEMP_PATH, 'config.json'), 'w')
 
     @log_courier = nil
   end
@@ -57,7 +57,8 @@ shared_context 'Helpers_Log_Courier' do
           "ssl ca": "#{@ssl_cert.path}",
           "servers": [ "127.0.0.1:#{server_port}" ],
           "timeout": 15,
-          "reconnect": 1
+          "reconnect backoff": 1,
+          "reconnect backoff max": 60
         },
         "files": [
           {

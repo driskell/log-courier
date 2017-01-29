@@ -28,12 +28,10 @@ describe 'profile' do
 
   before :all do
     puts ':: Initialising'
-  #  @transport = 'zmq'
   end
 
   after :all do
     puts ':: Done'
-  #  @transport = 'zmq'
   end
 
   it "should process #{PROFILE_LINES} events and produce a profiler result" do
@@ -70,13 +68,10 @@ describe 'profile' do
     }
     config
 
-    #startup args: '-from-beginning=true', config: <<-config
+    #startup verbose: false, args: '-from-beginning=true', config: <<-config
     #{
     #  "network": {
-    #    "transport": "zmq",
-    #    "curve server key": "i@tV)lm/:sbI-ODWpD[*7kn2[19[DcUBWnZ2)LJ>",
-    #    "curve public key": "6aoJA{jXq[j8y>mTE:&XkW3kUD]8zK&SiVv]KJ?j",
-    #    "curve secret key": "Z8U#fkH%z1e9lJLIuQ=P(mC)8GJQ?sdcGxi*l(5W",
+    #    "ssl ca": "#{@ssl_cert.path}",
     #    "servers": [
     #      "127.0.0.1:#{server_port}",
     #      "127.0.0.1:#{server_port('peer2')}",
