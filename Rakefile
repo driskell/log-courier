@@ -1,23 +1,3 @@
-require 'rubygems'
-
-task :default => [:deploy] do
-  require 'rspec/core/rake_task'
-  RSpec::Core::RakeTask.new(:spec)
-  Rake::Task[:spec].invoke
-end
-
-task :deploy do
-  Bundler.with_clean_env do
-    sh 'bundle install --deployment'
-  end
-end
-
-task :update do
-  Bundler.with_clean_env do
-    sh 'bundle install --no-deployment --path .bundle'
-  end
-end
-
 task :docs do
   sh 'npm --version >/dev/null' do |ok|
     next if ok
