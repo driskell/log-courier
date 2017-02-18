@@ -2,11 +2,12 @@
 
 ## 2.0.5
 
-*30th January 2017*
+*18th February 2017*
 
 * Fix -stdin run mode not being able to exit cleanly (#353)
 * Fix address pool rotation so that the same connection address is used on every
 connection attempt
+* Fix certificate problem notices showing invalid year values
 * Fix end-to-end tests
 
 ## 2.0.4

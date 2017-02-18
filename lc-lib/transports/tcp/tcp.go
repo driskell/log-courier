@@ -263,12 +263,12 @@ func (t *TransportTCP) checkClientCertificates() {
 
 	for _, cert := range t.config.certificateList {
 		if cert.NotBefore.After(now) {
-			log.Warning("The SSL Certificate with subject '%s' is not valid until %s.", cert.Subject, cert.NotBefore.Format("Jan _2 2016"))
+			log.Warning("The client certificate with common name '%s' is not valid until %s.", cert.Subject.CommonName, cert.NotBefore.Format("Jan 02 2006"))
 			certIssues = true
 		}
 
 		if cert.NotAfter.Before(now) {
-			log.Warning("The SSL Certificate with subject '%s' expired on %s.", cert.Subject, cert.NotAfter.Format("Jan _2 2016"))
+			log.Warning("The client certificate with common name '%s' expired on %s.", cert.Subject.CommonName, cert.NotAfter.Format("Jan 02 2006"))
 			certIssues = true
 		}
 	}
