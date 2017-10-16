@@ -97,9 +97,11 @@ func LoadFile(filePath string, rawConfig interface{}) error {
 		return loadJSONFile(filePath, rawConfig)
 	case ".yaml":
 		return loadYAMLFile(filePath, rawConfig)
+	case ".yml":
+		return loadYAMLFile(filePath, rawConfig)
 	}
 
-	return fmt.Errorf("File extension '%s' is not within the known extensions: conf, json, yaml", ext)
+	return fmt.Errorf("File extension '%s' is not within the known extensions: conf, json, yaml, yml", ext)
 }
 
 // RegisterSection registers a new configuration section with a SectionCreator

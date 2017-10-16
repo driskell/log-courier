@@ -69,7 +69,7 @@ When loading a configuration file, the format is determined by the file
 extension. If the file extension is not recognised, Log Courier reports an
 error.
 
-* `.yaml` - YAML
+* `.yaml` and `.yml` - YAML
 * `.json` - JSON
 * `.conf` - JSON
 
