@@ -76,12 +76,12 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 		hostportRegexp: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
 	}
 
+	if err = p.Populate(ret, unUsed, configPath, true); err != nil {
+		return nil, err
+	}
+
 	// Only allow SSL configurations if using TLS
 	if name == TransportTCPTLS {
-		if err = p.Populate(ret, unUsed, configPath, true); err != nil {
-			return nil, err
-		}
-
 		if len(ret.SSLCertificate) > 0 || len(ret.SSLKey) > 0 {
 			if len(ret.SSLCertificate) == 0 {
 				return nil, errors.New("ssl key is only valid with a matching ssl certificate")
@@ -93,7 +93,7 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 
 			certificate, err := tls.LoadX509KeyPair(ret.SSLCertificate, ret.SSLKey)
 			if err != nil {
-				return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
+				return nil, fmt.Errorf("failed loading client ssl certificate: %s", err)
 			}
 
 			ret.certificate = &certificate
@@ -101,7 +101,7 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 			for _, certBytes := range ret.certificate.Certificate {
 				thisCert, err := x509.ParseCertificate(certBytes)
 				if err != nil {
-					return nil, fmt.Errorf("Failed loading client ssl certificate: %s", err)
+					return nil, fmt.Errorf("failed loading client ssl certificate: %s", err)
 				}
 				ret.certificateList = append(ret.certificateList, thisCert)
 			}
@@ -113,7 +113,7 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 
 		pemdata, err := ioutil.ReadFile(ret.SSLCA)
 		if err != nil {
-			return nil, fmt.Errorf("Failure reading CA certificate: %s\n", err)
+			return nil, fmt.Errorf("failure reading CA certificate: %s\n", err)
 		}
 		rest := pemdata
 		var block *pem.Block
@@ -122,11 +122,11 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 			block, rest = pem.Decode(rest)
 			if block != nil {
 				if block.Type != "CERTIFICATE" {
-					return nil, fmt.Errorf("Block %d does not contain a certificate: %s\n", pemBlockNum, ret.SSLCA)
+					return nil, fmt.Errorf("block %d does not contain a certificate: %s\n", pemBlockNum, ret.SSLCA)
 				}
 				cert, err := x509.ParseCertificate(block.Bytes)
 				if err != nil {
-					return nil, fmt.Errorf("Failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
+					return nil, fmt.Errorf("failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
 				}
 				ret.caList = append(ret.caList, cert)
 				pemBlockNum++
@@ -135,8 +135,8 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 			}
 		}
 	} else {
-		if err := p.ReportUnusedConfig(unUsed, configPath); err != nil {
-			return nil, err
+		if len(ret.SSLCertificate) > 0 || len(ret.SSLKey) > 0 || len(ret.SSLCA) > 0 {
+			return nil, fmt.Errorf("transport tcp does not support ssl certificate, ssl key or ssl ca configurations")
 		}
 	}
 
