@@ -1,0 +1,31 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "kR64D1QzAOSM9LHOnTPdbigC8q0=",
+			"path": "github.com/fatih/camelcase",
+			"revision": "f6a740d52f961c60348ebb109adde9f4635d7540",
+			"revisionTime": "2016-03-18T18:15:35Z"
+		},
+		{
+			"checksumSHA1": "rL5r44ASTGubGW88gqQwlvVQshw=",
+			"path": "gopkg.in/op/go-logging.v1",
+			"revision": "b2cb9fa56473e98db8caba80237377e83fe44db5",
+			"revisionTime": "2016-02-11T21:21:56Z"
+		},
+		{
+			"checksumSHA1": "O9E8G234qCcPA7f7srGpnawDmMs=",
+			"path": "gopkg.in/tylerb/graceful.v1",
+			"revision": "4654dfbb6ad53cb5e27f37d99b02e16c1872fbbb",
+			"revisionTime": "2017-02-01T19:58:55Z"
+		},
+		{
+			"checksumSHA1": "RDJpJQwkF012L6m/2BJizyOksNw=",
+			"path": "gopkg.in/yaml.v2",
+			"revision": "eb3733d160e74a9c7e442f435eb3bea458e1d19f",
+			"revisionTime": "2017-08-12T16:00:11Z"
+		}
+	],
+	"rootPath": "github.com/driskell/log-courier"
+}
