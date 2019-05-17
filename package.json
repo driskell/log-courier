@@ -1,0 +1,26 @@
+{
+  "name": "log-courier",
+  "version": "1.0.0",
+  "description": "[![Build Status](https://img.shields.io/travis/driskell/log-courier/master.svg)](https://travis-ci.org/driskell/log-courier) [![Latest Release](https://img.shields.io/github/release/driskell/log-courier.svg)](https://github.com/driskell/log-courier/releases/latest)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "dependencies": {
+    "doctoc": "^1.4.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/driskell/log-courier.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/driskell/log-courier/issues"
+  },
+  "homepage": "https://github.com/driskell/log-courier#readme"
+}
