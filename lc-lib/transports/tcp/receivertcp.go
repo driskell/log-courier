@@ -73,13 +73,9 @@ func (t *ReceiverTCP) ReloadConfig(cfg *config.Config) bool {
 	return false
 }
 
-// controller is the master routine which handles connection and reconnection
-// When reconnecting, the socket and all routines are torn down and restarted.
-// It also handles listening including when a listen socket fails
+// controller is the master routine which handles listening and resetting listen on network changes
 func (t *ReceiverTCP) controller() {
-	// Main connect/listen loop
-	// (we loop for listen since we had logic already, and it will cope with interface changes)
-	// Also handles closing/new connections
+	// Main listen loop
 	for {
 		var (
 			err      error
@@ -145,8 +141,8 @@ func (t *ReceiverTCP) monitor() (err error) {
 	}
 }
 
-// setupWait waits the backoff timeout before attempting to reconnect/listen.
-// It also monitors for shutdown and configuration reload events while waiting.
+// setupWait waits the backoff timeout before attempting to listen again
+// It also monitors for shutdown and configuration reload events while waiting
 func (t *ReceiverTCP) setupWait() bool {
 	now := time.Now()
 	setupDue := now.Add(t.backoff.Trigger())
@@ -162,7 +158,7 @@ func (t *ReceiverTCP) setupWait() bool {
 	return true
 }
 
-// setup selects the next address to use and triggers the listen or connect
+// setup selects the next address to use and starts the listener
 // Returns an error and also true if shutdown was detected
 func (t *ReceiverTCP) setup() (bool, error) {
 	addr, err := t.pool.Next()
@@ -199,7 +195,7 @@ func (t *ReceiverTCP) setup() (bool, error) {
 	return t.listener.Start(desc, addr)
 }
 
-// teardown shuts down the connect / listen
+// teardown shuts down the listener
 func (t *ReceiverTCP) teardown() {
 	t.listener.Stop()
 	t.listener = nil
