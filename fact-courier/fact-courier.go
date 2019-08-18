@@ -22,11 +22,13 @@ package main
 import (
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/publisher"
+	"github.com/driskell/log-courier/lc-lib/spooler"
 	"gopkg.in/op/go-logging.v1"
-)
 
-import _ "github.com/driskell/log-courier/lc-lib/codecs"
-import _ "github.com/driskell/log-courier/lc-lib/transports/tcp"
+	_ "github.com/driskell/log-courier/lc-lib/codecs"
+
+	_ "github.com/driskell/log-courier/lc-lib/transports/tcp"
+)
 
 var (
 	log *logging.Logger
@@ -36,23 +38,16 @@ var (
 func main() {
 	app = core.NewApp("Fact Courier", "fact-courier", core.LogCourierVersion)
 	app.StartUp()
-	setupPipeline()
-	app.Run()
-}
-
-func setupPipeline() {
-	log.Info("Configuring Fact Courier version %s pipeline", core.LogCourierVersion)
-
-	publisherImpl := publisher.NewPublisher(app)
-	app.AddToPipeline(publisherImpl)
 
 	// TODO: Support arbitary scripts, not just Munin
-	collector, err := NewMuninCollector(app, publisherImpl)
-	if err != nil {
-		log.Fatalf("Failed to initialise: %s", err)
-	}
+	app.Pipeline().AddSource(NewMuninCollector(app))
 
-	app.AddToPipeline(collector)
+	// Add spooler as first processor, it combines into larger chunks as needed
+	app.Pipeline().AddProcessor(spooler.NewSpooler(app))
+	// Create sink
+	app.Pipeline().SetSink(publisher.NewPublisher())
+	// Go!
+	app.Run()
 }
 
 func init() {

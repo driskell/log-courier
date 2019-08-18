@@ -10,7 +10,6 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
-	"github.com/driskell/log-courier/lc-lib/publisher"
 )
 
 const (
@@ -20,9 +19,6 @@ const (
 // MuninCollector facilitates the collection of statistics from a local
 // munin-node installation
 type MuninCollector struct {
-	core.PipelineSegment
-
-	app        *core.App
 	factConfig *Config
 	genConfig  *config.General
 
@@ -31,47 +27,43 @@ type MuninCollector struct {
 	runners     []*MuninRunner
 
 	credentialCache *CredentialCache
-	publisher       *publisher.Publisher
+	shutdownChan    <-chan struct{}
 	output          chan<- []*event.Event
 }
 
 // NewMuninCollector creates a new MuninCollector for the given app with the
 // given publisher as the output for events
-func NewMuninCollector(app *core.App, publisher *publisher.Publisher) (*MuninCollector, error) {
-	ret := &MuninCollector{
-		app:             app,
+func NewMuninCollector(app *core.App) *MuninCollector {
+	return &MuninCollector{
 		factConfig:      app.Config().Section("facts").(*Config),
 		genConfig:       app.Config().General(),
-		publisher:       publisher,
-		output:          publisher.Connect(),
 		credentialCache: NewCredentialCache(),
 	}
-
-	if err := ret.init(); err != nil {
-		return nil, err
-	}
-
-	return ret, nil
 }
 
-// init loads the munin-node configuration and detects the plugins to use, and
-// creates a MuninRunner for each one
-func (m *MuninCollector) init() error {
+// Init loads the munin-node configuration and detects the plugins to use, and
+// creates a MuninRunner for each one, returning an error if any issues
+func (m *MuninCollector) Init(cfg *config.Config) error {
 	if err := m.loadConfig(); err != nil {
 		return err
 	}
 
 	m.loadScripts()
-
 	return nil
+}
+
+// SetOutput sets the output channel
+func (m *MuninCollector) SetOutput(output chan<- []*event.Event) {
+	m.output = output
+}
+
+// SetShutdownChan sets the shutdown channel
+func (m *MuninCollector) SetShutdownChan(shutdownChan <-chan struct{}) {
+	m.shutdownChan = shutdownChan
 }
 
 // Run the MuninCollector - loops until shutdown
 func (m *MuninCollector) Run() {
-	defer func() {
-		m.Done()
-	}()
-
 	for m.runOnce() {
 	}
 
@@ -96,7 +88,7 @@ func (m *MuninCollector) runOnce() bool {
 	log.Debug("Next collection at %s in %s", nextCollection, delay)
 
 	select {
-	case <-m.OnShutdown():
+	case <-m.shutdownChan:
 		return false
 	case <-time.After(delay):
 	}
@@ -141,14 +133,7 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 	result["munin_plugin"] = runner.Name()
 
 	// Create a new munin event with nil context
-	event := m.factConfig.NewEvent("munin", result, nil)
-
-	// Pre-encode it for transmission
-	err = event.Encode()
-	if err != nil {
-		log.Warning("[%s] Skipping data due to encoding error: %s", runner.Name(), err)
-		return nil
-	}
+	event := m.factConfig.NewEvent(nil, result, nil)
 
 	log.Debug("[%s] %d fields collected", runner.Name(), fieldCount)
 
@@ -161,7 +146,7 @@ func (m *MuninCollector) sendEvents(events []*event.Event) bool {
 	select {
 	case m.output <- events:
 		return true
-	case <-m.OnShutdown():
+	case <-m.shutdownChan:
 	}
 	return false
 }
