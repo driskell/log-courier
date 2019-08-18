@@ -26,14 +26,14 @@ import (
 // the SetWriteDeadline there and check shutdown signal and loop. Inside
 // tls.Conn the Write blocks until it finishes and everyone is happy
 type transportTCPWrap struct {
-	transport *TransportTCP
-	tcpsocket net.Conn
+	controllerChan <-chan struct{}
+	tcpSocket      net.Conn
 
 	net.Conn
 }
 
 func (w *transportTCPWrap) Read(b []byte) (int, error) {
-	return w.tcpsocket.Read(b)
+	return w.tcpSocket.Read(b)
 }
 
 func (w *transportTCPWrap) Write(b []byte) (n int, err error) {
@@ -42,9 +42,9 @@ func (w *transportTCPWrap) Write(b []byte) (n int, err error) {
 RetrySend:
 	for {
 		// Timeout after socket_interval_seconds, check for shutdown, and try again
-		w.tcpsocket.SetWriteDeadline(time.Now().Add(socketIntervalSeconds * time.Second))
+		w.tcpSocket.SetWriteDeadline(time.Now().Add(socketIntervalSeconds * time.Second))
 
-		n, err = w.tcpsocket.Write(b[length:])
+		n, err = w.tcpSocket.Write(b[length:])
 		length += n
 
 		if length >= len(b) {
@@ -59,7 +59,7 @@ RetrySend:
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			// Check for shutdown, then try again
 			select {
-			case <-w.transport.sendControl:
+			case <-w.controllerChan:
 				// Shutdown
 				return length, err
 			default:
@@ -72,25 +72,25 @@ RetrySend:
 }
 
 func (w *transportTCPWrap) Close() error {
-	return w.tcpsocket.Close()
+	return w.tcpSocket.Close()
 }
 
 func (w *transportTCPWrap) LocalAddr() net.Addr {
-	return w.tcpsocket.LocalAddr()
+	return w.tcpSocket.LocalAddr()
 }
 
 func (w *transportTCPWrap) RemoteAddr() net.Addr {
-	return w.tcpsocket.RemoteAddr()
+	return w.tcpSocket.RemoteAddr()
 }
 
 func (w *transportTCPWrap) SetDeadline(t time.Time) error {
-	return w.tcpsocket.SetDeadline(t)
+	return w.tcpSocket.SetDeadline(t)
 }
 
 func (w *transportTCPWrap) SetReadDeadline(t time.Time) error {
-	return w.tcpsocket.SetReadDeadline(t)
+	return w.tcpSocket.SetReadDeadline(t)
 }
 
 func (w *transportTCPWrap) SetWriteDeadline(t time.Time) error {
-	return w.tcpsocket.SetWriteDeadline(t)
+	return w.tcpSocket.SetWriteDeadline(t)
 }

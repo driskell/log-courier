@@ -63,7 +63,7 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 
 // NewEvent creates a new event structure for the given stream. It applies all
 // transformations necessary from the stream configuration
-func (sc *StreamConfig) NewEvent(eventType string, data map[string]interface{}, context interface{}) *Event {
+func (sc *StreamConfig) NewEvent(acker Acknowledger, data map[string]interface{}, context interface{}) *Event {
 	if sc.AddHostField {
 		data["host"] = sc.genConfig.Host
 	}
@@ -80,5 +80,5 @@ func (sc *StreamConfig) NewEvent(eventType string, data map[string]interface{}, 
 		data[k] = sc.Fields[k]
 	}
 
-	return NewEvent(eventType, data, context)
+	return NewEvent(acker, data, context)
 }

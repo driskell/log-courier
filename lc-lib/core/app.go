@@ -46,9 +46,10 @@ type App struct {
 // NewApp creates a new courier application
 func NewApp(name, binName, version string) *App {
 	return &App{
-		name:     name,
-		version:  version,
-		pipeline: NewPipeline(),
+		name:       name,
+		version:    version,
+		pipeline:   NewPipeline(),
+		signalChan: make(chan os.Signal, 1),
 	}
 }
 
@@ -75,14 +76,19 @@ func (a *App) StartUp() {
 	}
 
 	if listSupported {
-		fmt.Printf("Available transports:\n")
-		for _, transport := range transports.Available() {
-			fmt.Printf("  %s\n", transport)
-		}
-
 		fmt.Printf("Available codecs:\n")
 		for _, codec := range codecs.Available() {
 			fmt.Printf("  %s\n", codec)
+		}
+
+		fmt.Printf("Available receivers:\n")
+		for _, receiver := range transports.AvailableReceivers() {
+			fmt.Printf("  %s\n", receiver)
+		}
+
+		fmt.Printf("Available transports:\n")
+		for _, transport := range transports.AvailableTransports() {
+			fmt.Printf("  %s\n", transport)
 		}
 		os.Exit(0)
 	}
@@ -138,11 +144,13 @@ func (a *App) StartUp() {
 
 // Run the application
 func (a *App) Run() {
-	a.pipeline.Start()
+	log.Notice("%s v%s starting up", a.name, a.version)
 
-	log.Notice("Pipeline ready")
+	// Check config
+	a.Config()
 
-	a.signalChan = make(chan os.Signal, 1)
+	go a.pipeline.Run(a.config)
+
 	a.registerSignals()
 
 SignalLoop:
@@ -150,13 +158,15 @@ SignalLoop:
 		select {
 		case signal := <-a.signalChan:
 			if signal == nil || isShutdownSignal(signal) {
-				a.cleanShutdown()
 				break SignalLoop
 			}
 
 			a.ReloadConfig()
 		}
 	}
+
+	a.pipeline.Shutdown()
+	a.pipeline.Wait()
 
 	log.Notice("Exiting")
 
@@ -170,13 +180,16 @@ func (a *App) Stop() {
 	close(a.signalChan)
 }
 
-// AddToPipeline adds a pipeline segment to the pipeline
-func (a *App) AddToPipeline(segment IPipelineSegment) {
-	a.pipeline.Add(segment)
+// Pipeline gets the pipeline instance
+func (a *App) Pipeline() *Pipeline {
+	return a.pipeline
 }
 
 // Config returns the configuration
 func (a *App) Config() *config.Config {
+	if a.config == nil {
+		panic("StartUp has not been called")
+	}
 	return a.config
 }
 
@@ -222,6 +235,9 @@ func (a *App) loadConfig() error {
 // routines in the pipeline that are subscribed to it, so they may update their
 // runtime configuration
 func (a *App) ReloadConfig() error {
+	// Check config
+	a.Config()
+
 	if err := a.loadConfig(); err != nil {
 		return err
 	}
@@ -241,12 +257,4 @@ func (a *App) ReloadConfig() error {
 	a.pipeline.SendConfig(a.config)
 
 	return nil
-}
-
-// cleanShutdown initiates a clean shutdown of log-courier
-func (a *App) cleanShutdown() {
-	log.Notice("Initiating shutdown")
-
-	a.pipeline.Shutdown()
-	a.pipeline.Wait()
 }

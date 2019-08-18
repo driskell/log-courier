@@ -14,25 +14,27 @@
  * limitations under the License.
  */
 
-package main
+package listener
 
 import (
+	"sync"
+
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/harvester"
 )
 
-// StdinStreamConfig is the stream configuration for the stdin stream
-type StdinStreamConfig struct {
-	harvester.StreamConfig `config:",embed"`
+// Listener listens for incoming events and spools them
+type Listener struct {
+	config *Config
 }
 
-// Validate initialises the stdin stream configuration
-func (ssc *StdinStreamConfig) Validate(p *config.Parser, path string) error {
-	return ssc.Init(p, path)
+// Init the listener
+func (r *Listener) Init(config *config.Config) error {
+	return nil
 }
 
-func init() {
-	config.RegisterSection("stdin", func() interface{} {
-		return &StdinStreamConfig{}
-	})
+// Run the receiver
+func (r *Listener) Run(group *sync.WaitGroup) {
+	defer func() {
+		group.Done()
+	}()
 }

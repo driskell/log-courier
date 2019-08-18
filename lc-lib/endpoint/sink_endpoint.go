@@ -80,6 +80,6 @@ func (s *Sink) ForceFailure(endpoint *Endpoint) {
 		return
 	}
 
-	s.moveFailed(endpoint, nil)
+	s.moveFailed(endpoint)
 	endpoint.forceFailure()
 }

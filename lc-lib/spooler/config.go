@@ -30,8 +30,7 @@ const (
 	defaultGeneralSpoolTimeout  time.Duration = 5 * time.Second
 )
 
-// General contains extra general section configuration values for the
-// prospector and registrar
+// General contains general configuration values
 type General struct {
 	SpoolSize     int64         `config:"spool size"`
 	SpoolMaxBytes int64         `config:"spool max bytes"`

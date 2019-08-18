@@ -24,12 +24,11 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sync"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
-	"github.com/driskell/log-courier/lc-lib/harvester"
 )
 
 // LoadPreviousFunc is a callback implemented by a consumer of the Registrar,
@@ -40,13 +39,9 @@ type LoadPreviousFunc func(string, *FileState) (core.Stream, error)
 // Registrar persists file offsets to a file that can be read again on startup
 // to resume where we left off
 type Registrar struct {
-	core.PipelineSegment
-
-	sync.Mutex
-
+	shutdownChan  <-chan struct{}
 	registrarChan chan []EventProcessor
 	writeTimer    *time.Timer
-	references    int
 	persistdir    string
 	statefile     string
 	statepath     string
@@ -54,7 +49,7 @@ type Registrar struct {
 }
 
 // NewRegistrar creates a new Registrar associated with a file in a directory
-func NewRegistrar(app *core.App, persistDir string) *Registrar {
+func NewRegistrar(persistDir string) *Registrar {
 	ret := &Registrar{
 		registrarChan: make(chan []EventProcessor, 16), // TODO: Make configurable?
 		writeTimer:    time.NewTimer(0),
@@ -66,15 +61,16 @@ func NewRegistrar(app *core.App, persistDir string) *Registrar {
 	ret.statepath = path.Join(ret.persistdir, ret.statefile)
 	ret.writeTimer.Stop()
 
-	event.RegisterForAck(harvester.EventType, ret.ackFunc)
-
-	app.AddToPipeline(ret)
-
 	return ret
 }
 
-// ackFunc is called when an acknowledgement is made by the publisher
-func (r *Registrar) ackFunc(events []*event.Event) {
+// SetShutdownChan sets the shutdown channel
+func (r *Registrar) SetShutdownChan(shutdownChan <-chan struct{}) {
+	r.shutdownChan = shutdownChan
+}
+
+// Acknowledge is called when an acknowledgement is made by the publisher
+func (r *Registrar) Acknowledge(events []*event.Event) {
 	r.registrarChan <- []EventProcessor{NewAckEvent(events)}
 }
 
@@ -134,24 +130,6 @@ func (r *Registrar) LoadPrevious(callbackFunc LoadPreviousFunc) (havePrevious bo
 	return
 }
 
-// Connect returns a connected EventSpooler
-func (r *Registrar) Connect() EventSpooler {
-	r.Lock()
-	defer r.Unlock()
-	r.references++
-	return newEventSpool(r)
-}
-
-func (r *Registrar) dereferenceSpooler() {
-	r.Lock()
-	defer r.Unlock()
-	r.references--
-	if r.references == 0 {
-		// Shutdown registrar, all references are closed
-		close(r.registrarChan)
-	}
-}
-
 func (r *Registrar) toCanonical() (canonical map[string]*FileState) {
 	canonical = make(map[string]*FileState, len(r.state))
 	for _, value := range r.state {
@@ -164,25 +142,21 @@ func (r *Registrar) toCanonical() (canonical map[string]*FileState) {
 	return
 }
 
+// Init does nothing, as Registrar needs no setup
+func (r *Registrar) Init(cfg *config.Config) error {
+	return nil
+}
+
 // Run starts the registrar - it is called by the pipeline
 func (r *Registrar) Run() {
-	defer func() {
-		r.Done()
-	}()
-
 	pendingWrite := false
 	// TODO: Make configurable?
 	r.writeTimer.Reset(time.Second)
 
 RegistrarLoop:
 	for {
-		// Ignore shutdown channel - wait for registrar to close
 		select {
 		case spool := <-r.registrarChan:
-			if spool == nil {
-				break RegistrarLoop
-			}
-
 			for _, event := range spool {
 				event.process(r.state)
 			}
@@ -197,6 +171,9 @@ RegistrarLoop:
 			}
 
 			r.tryWriteRegistry()
+		case <-r.shutdownChan:
+			// Sink has completed and we're now shutting down
+			break RegistrarLoop
 		}
 	}
 

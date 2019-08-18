@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2015 Jason Woods.
+ * Copyright 2014-2016 Jason Woods.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,25 @@
  * limitations under the License.
  */
 
-package publisher
+package stdinharvester
 
 import (
-	"github.com/driskell/log-courier/lc-lib/endpoint"
-	"github.com/driskell/log-courier/lc-lib/transports"
+	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/harvester"
 )
 
-type method interface {
-	onFail(*endpoint.Endpoint)
-	onFinish(*endpoint.Endpoint) bool
-	onStarted(*endpoint.Endpoint)
-	reloadConfig(*transports.Config)
+// StreamConfig is the stream configuration for the stdin stream
+type StreamConfig struct {
+	harvester.StreamConfig `config:",embed"`
+}
+
+// Validate initialises the stdin stream configuration
+func (ssc *StreamConfig) Validate(p *config.Parser, path string) error {
+	return ssc.Init(p, path)
+}
+
+func init() {
+	config.RegisterSection("stdin", func() interface{} {
+		return &StreamConfig{}
+	})
 }

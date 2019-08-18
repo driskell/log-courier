@@ -22,6 +22,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/internallist"
+	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -41,6 +42,21 @@ type Sink struct {
 	readyList   internallist.List
 	failedList  internallist.List
 	orderedList internallist.List
+
+	// OnAck is called when an acknowledgement response is received
+	// The payload is given and the second argument is true if this ack is the
+	// first ack for this payload
+	OnAck func(*Endpoint, *payload.Payload, bool, int)
+	// OnFail is called when the endpoint fails
+	OnFail func(*Endpoint)
+	// OnFinished is called when an endpoint finishes and is removed
+	// Returning false prevents the endpoint from being recreated, which it will
+	// be if it still exists in the configuration
+	OnFinish func(*Endpoint) bool
+	// OnPong is called when a pong response is received from the endpoint
+	OnPong func(*Endpoint)
+	// OnStarted is called when an endpoint starts up and is ready
+	OnStarted func(*Endpoint)
 }
 
 // NewSink initialises a new message sink for endpoints
@@ -51,6 +67,12 @@ func NewSink(config *transports.Config) *Sink {
 		config:       config,
 		eventChan:    make(chan transports.Event, 10),
 		timeoutTimer: time.NewTimer(1 * time.Second),
+
+		OnAck:     func(*Endpoint, *payload.Payload, bool, int) {},
+		OnFail:    func(*Endpoint) {},
+		OnFinish:  func(*Endpoint) bool { return false },
+		OnPong:    func(*Endpoint) {},
+		OnStarted: func(*Endpoint) {},
 	}
 
 	ret.timeoutTimer.Stop()

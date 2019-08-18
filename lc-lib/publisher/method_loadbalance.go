@@ -20,7 +20,6 @@
 package publisher
 
 import (
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -30,13 +29,13 @@ type methodLoadbalance struct {
 	netConfig *transports.Config
 }
 
-func newMethodLoadbalance(sink *endpoint.Sink, cfg *config.Config) *methodLoadbalance {
+func newMethodLoadbalance(sink *endpoint.Sink, netConfig *transports.Config) *methodLoadbalance {
 	ret := &methodLoadbalance{
 		sink: sink,
 	}
 
 	// Reload configuration to ensure all servers are present in the sink
-	ret.reloadConfig(cfg)
+	ret.reloadConfig(netConfig)
 
 	return ret
 }
@@ -56,8 +55,8 @@ func (m *methodLoadbalance) onStarted(endpoint *endpoint.Endpoint) {
 	return
 }
 
-func (m *methodLoadbalance) reloadConfig(cfg *config.Config) {
-	m.netConfig = transports.FetchConfig(cfg)
+func (m *methodLoadbalance) reloadConfig(netConfig *transports.Config) {
+	m.netConfig = netConfig
 
 	// Verify all servers are present and reload them
 	var last, foundEndpoint *endpoint.Endpoint
@@ -76,7 +75,7 @@ func (m *methodLoadbalance) reloadConfig(cfg *config.Config) {
 
 		// Ensure ordering
 		m.sink.MoveEndpointAfter(foundEndpoint, last)
-		foundEndpoint.ReloadConfig(cfg, false)
+		foundEndpoint.ReloadConfig(netConfig, false)
 		last = foundEndpoint
 	}
 }

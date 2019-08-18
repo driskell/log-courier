@@ -37,9 +37,6 @@ var (
 	// Stdin is the filename that represents stdin
 	Stdin = "stdin"
 
-	// EventType is the type of event produced by a Harvester
-	EventType = "harvester"
-
 	errFileTruncated = errors.New("File truncation detected")
 	errStopRequested = errors.New("Stop requested")
 )
@@ -65,16 +62,17 @@ type EventContext struct {
 type Harvester struct {
 	mutex sync.RWMutex
 
-	stopChan        chan interface{}
+	stopChan        chan struct{}
 	returnChan      chan *FinishStatus
 	stream          core.Stream
+	acker           event.Acknowledger
 	fileinfo        os.FileInfo
 	path            string
 	genConfig       *General
 	streamConfig    *StreamConfig
 	eventStream     *codecs.Stream
 	offset          int64
-	output          chan<- *event.Event
+	output          chan<- []*event.Event
 	file            *os.File
 	backOffTimer    *time.Timer
 	meterTimer      *time.Timer
@@ -102,9 +100,17 @@ type Harvester struct {
 	lastOffset int64
 }
 
-// Start runs the harvester, sending events to the output given, and returns
-// immediately
-func (h *Harvester) Start(output chan<- *event.Event) {
+// SetOutput sets the harvester output
+func (h *Harvester) SetOutput(output chan<- []*event.Event) {
+	h.output = output
+}
+
+// Start runs the harvester, sending events to the output given, and returns immediately
+func (h *Harvester) Start() {
+	if h.output == nil {
+		panic("Must call SetOutput before Start on Harvester")
+	}
+
 	if h.returnChan != nil {
 		h.Stop()
 		<-h.returnChan
@@ -114,7 +120,7 @@ func (h *Harvester) Start(output chan<- *event.Event) {
 
 	go func() {
 		status := &FinishStatus{}
-		status.LastEventOffset, status.Error = h.harvest(output)
+		status.LastEventOffset, status.Error = h.harvest()
 		status.LastReadOffset = h.offset
 		status.LastStat = h.fileinfo
 		h.returnChan <- status
@@ -134,14 +140,12 @@ func (h *Harvester) OnFinish() <-chan *FinishStatus {
 }
 
 // harvest runs in its own routine, opening the file and starting the read loop
-func (h *Harvester) harvest(output chan<- *event.Event) (int64, error) {
+func (h *Harvester) harvest() (int64, error) {
 	if err := h.prepareHarvester(); err != nil {
 		return h.offset, err
 	}
 
 	defer h.file.Close()
-
-	h.output = output
 
 	if h.isStream {
 		log.Info("Started harvester: %s", h.path)
@@ -376,8 +380,8 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[s
 		h.split = false
 	}
 
-	event := h.streamConfig.NewEvent(
-		EventType,
+	newEvent := h.streamConfig.NewEvent(
+		h.acker,
 		data,
 		&EventContext{
 			Offset: endOffset,
@@ -385,19 +389,12 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[s
 		},
 	)
 
-	err := event.Encode()
-	if err != nil {
-		// This should never happen - log and skip if it does
-		log.Warning("Skipping line in %s due to encoding failure: %s", h.path, err)
-		return
-	}
-
 EventLoop:
 	for {
 		select {
 		case <-h.stopChan:
 			break EventLoop
-		case h.output <- event:
+		case h.output <- []*event.Event{newEvent}:
 			break EventLoop
 		case <-h.meterTimer.C:
 			// TODO: Configurable meter timer? Same as statCheck?

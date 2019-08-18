@@ -24,6 +24,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 const (
@@ -57,11 +58,12 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 }
 
 // NewHarvester creates a new harvester with the given configuration for the given stream identifier
-func (sc *StreamConfig) NewHarvester(app *core.App, stream core.Stream, offset int64) *Harvester {
+func (sc *StreamConfig) NewHarvester(cfg *config.Config, stream core.Stream, acker event.Acknowledger, offset int64) *Harvester {
 	ret := &Harvester{
-		stopChan:     make(chan interface{}),
+		stopChan:     make(chan struct{}),
 		stream:       stream,
-		genConfig:    app.Config().GeneralPart("harvester").(*General),
+		acker:        acker,
+		genConfig:    cfg.GeneralPart("harvester").(*General),
 		streamConfig: sc,
 		offset:       offset,
 		lastEOF:      nil,

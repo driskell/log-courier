@@ -29,21 +29,15 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
-	"github.com/driskell/log-courier/lc-lib/publisher"
 	"github.com/driskell/log-courier/lc-lib/registrar"
-	"github.com/driskell/log-courier/lc-lib/spooler"
 )
 
 // Prospector handles the crawling of paths and starting and stopping of
 // harvester routines against discovered files
 type Prospector struct {
-	core.PipelineSegment
-	core.PipelineConfigReceiver
-
-	mutex sync.RWMutex
-
-	app             *core.App
+	mutex           sync.RWMutex
 	config          *config.Config
+	adminConfig     *admin.Config
 	genConfig       *General
 	fileConfigs     Config
 	prospectorindex map[string]*prospectorInfo
@@ -52,49 +46,56 @@ type Prospector struct {
 	iteration       uint32
 	lastscan        time.Time
 	registrar       *registrar.Registrar
-	publisher       *publisher.Publisher
-	registrarSpool  registrar.EventSpooler
-
-	output chan<- *event.Event
+	registrarSpool  *registrar.EventSpooler
+	shutdownChan    <-chan struct{}
+	configChan      <-chan *config.Config
+	output          chan<- []*event.Event
 }
 
 // NewProspector creates a new path crawler with the given configuration
 // If fromBeginning is true and registrar reports no state was loaded, all new
 // files on the FIRST scan will be started from the beginning, as opposed to
 // from the end
-func NewProspector(app *core.App, fromBeginning bool, spoolerImpl *spooler.Spooler, publisherImpl *publisher.Publisher) (*Prospector, error) {
-	genConfig := app.Config().GeneralPart("prospector").(*General)
-	registrarImpl := registrar.NewRegistrar(app, genConfig.PersistDir)
+func NewProspector(app *core.App, fromBeginning bool) *Prospector {
+	cfg := app.Config()
+	genConfig := cfg.GeneralPart("prospector").(*General)
 
-	ret := &Prospector{
-		app:             app,
-		config:          app.Config(),
-		genConfig:       genConfig,
-		fileConfigs:     *app.Config().Section("files").(*Config),
+	registrarImpl := registrar.NewRegistrar(genConfig.PersistDir)
+	app.Pipeline().AddService(registrarImpl)
+
+	return &Prospector{
 		prospectorindex: make(map[string]*prospectorInfo),
 		prospectors:     make(map[*prospectorInfo]*prospectorInfo),
-		fromBeginning:   fromBeginning,
+		config:          cfg,
+		adminConfig:     admin.FetchConfig(cfg),
+		genConfig:       genConfig,
+		fileConfigs:     *cfg.Section("files").(*Config),
 		registrar:       registrarImpl,
-		publisher:       publisherImpl,
-		registrarSpool:  registrarImpl.Connect(),
-		output:          spoolerImpl.Connect(),
+		registrarSpool:  registrar.NewEventSpooler(registrarImpl),
+		fromBeginning:   fromBeginning,
 	}
-
-	if err := ret.init(); err != nil {
-		return nil, err
-	}
-
-	ret.initAPI()
-
-	app.AddToPipeline(ret)
-
-	return ret, nil
 }
 
-func (p *Prospector) init() (err error) {
-	var havePrevious bool
-	if havePrevious, err = p.registrar.LoadPrevious(p.loadCallback); err != nil {
-		return
+// SetOutput sets the output channel
+func (p *Prospector) SetOutput(output chan<- []*event.Event) {
+	p.output = output
+}
+
+// SetShutdownChan sets the shutdown channel
+func (p *Prospector) SetShutdownChan(shutdownChan <-chan struct{}) {
+	p.shutdownChan = shutdownChan
+}
+
+// SetConfigChan sets the config channel
+func (p *Prospector) SetConfigChan(configChan <-chan *config.Config) {
+	p.configChan = configChan
+}
+
+// Init prepares the Prospector
+func (p *Prospector) Init(cfg *config.Config) error {
+	havePrevious, err := p.registrar.LoadPrevious(p.loadCallback)
+	if err != nil {
+		return err
 	}
 
 	if havePrevious {
@@ -107,9 +108,12 @@ func (p *Prospector) init() (err error) {
 		}
 	}
 
-	return
+	p.initAPI()
+
+	return nil
 }
 
+// loadCallback receives existing file offsets from the registrar
 func (p *Prospector) loadCallback(file string, state *registrar.FileState) (core.Stream, error) {
 	p.prospectorindex[file] = newProspectorInfoFromFileState(file, state)
 	return p.prospectorindex[file], nil
@@ -117,10 +121,6 @@ func (p *Prospector) loadCallback(file string, state *registrar.FileState) (core
 
 // Run begins the prospector loop
 func (p *Prospector) Run() {
-	defer func() {
-		p.Done()
-	}()
-
 	for {
 		if p.runOnce() {
 			break
@@ -137,13 +137,6 @@ func (p *Prospector) Run() {
 		info.wait()
 	}
 	p.mutex.Unlock()
-
-	// Wait for the publisher to complete before disconnecting the registrar to
-	// ensure all acknowledgements have been submitted
-	p.publisher.Wait()
-
-	// Disconnect spool from the registrar - this will allow it to shutdown
-	p.registrarSpool.Close()
 
 	log.Info("Prospector exiting")
 }
@@ -200,9 +193,9 @@ DelayLoop:
 		select {
 		case <-time.After(scanDeadline.Sub(now)):
 			break DelayLoop
-		case <-p.OnShutdown():
+		case <-p.shutdownChan:
 			return true
-		case cfg := <-p.OnConfig():
+		case cfg := <-p.configChan:
 			p.genConfig = cfg.GeneralPart("prospector").(*General)
 			p.fileConfigs = cfg.Section("files").(Config)
 		}
@@ -432,10 +425,11 @@ func (p *Prospector) startHarvester(info *prospectorInfo, fileConfig *FileConfig
 // the given offset
 func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileConfig *FileConfig, offset int64) {
 	// TODO - hook in a shutdown channel
-	info.harvester = fileConfig.StreamConfig.NewHarvester(p.app, info, offset)
+	info.harvester = fileConfig.StreamConfig.NewHarvester(p.config, info, p.registrar, offset)
 	info.running = true
 	info.status = statusOk
-	info.harvester.Start(p.output)
+	info.harvester.SetOutput(p.output)
+	info.harvester.Start()
 }
 
 // lookupFileIds checks a file's filesystem identifiers against all other known
@@ -472,15 +466,13 @@ func (p *Prospector) lookupFileIds(file string, info os.FileInfo) (string, *pros
 
 // initAPI sets up admin connectivity
 func (p *Prospector) initAPI() {
-	adminConfig := admin.ConfigFromApp(p.app)
-
 	// Is admin loaded into the pipeline?
-	if !adminConfig.Enabled {
+	if !p.adminConfig.Enabled {
 		return
 	}
 
 	prospectorAPI := &apiNode{p: p}
 	prospectorAPI.SetEntry("status", &apiStatus{p: p})
 
-	adminConfig.SetEntry("prospector", prospectorAPI)
+	p.adminConfig.SetEntry("prospector", prospectorAPI)
 }

@@ -28,19 +28,11 @@ import (
 // failure by the publisher
 var ErrForcedFailure = errors.New("Failed by endpoint manager")
 
-// Observer is the interface implemented by the consumer of a transport, to
-// allow the transport to communicate back
-// To all intents and purposes this is the Endpoint
-type Observer interface {
-	Pool() *addresspool.Pool
-	EventChan() chan<- Event
-}
-
 // Transport is the generic interface that all transports implement
 type Transport interface {
 	Fail()
 	Ping() error
-	ReloadConfig(*config.Config, bool) bool
+	ReloadConfig(*Config, bool) bool
 	Shutdown()
 	Write(*payload.Payload) error
 }
@@ -50,28 +42,28 @@ type Transport interface {
 // NewTransport is called, return an instance of the transport that obeys that
 // configuration
 type transportFactory interface {
-	NewTransport(Observer, bool) Transport
+	NewTransport(interface{}, *addresspool.Pool, chan<- Event, bool) Transport
 }
 
 // NewTransport returns a Transport interface initialised from the given Factory
-func NewTransport(factory interface{}, observer Observer, finishOnFail bool) Transport {
-	return factory.(transportFactory).NewTransport(observer, finishOnFail)
+func NewTransport(factory interface{}, context interface{}, pool *addresspool.Pool, eventChan chan<- Event, finishOnFail bool) Transport {
+	return factory.(transportFactory).NewTransport(context, pool, eventChan, finishOnFail)
 }
 
 // TransportRegistrarFunc is a callback that validates the configuration for
-// a transport that was registered vua RegisterTransport
+// a transport that was registered via RegisterTransport
 type TransportRegistrarFunc func(*config.Parser, string, map[string]interface{}, string) (interface{}, error)
 
 var registeredTransports = make(map[string]TransportRegistrarFunc)
 
-// Register registered a transport with the configuration module by providing a
+// RegisterTransport registered a transport with the configuration module by providing a
 // callback that can be used to validate the configuration
-func Register(transport string, registrarFunc TransportRegistrarFunc) {
+func RegisterTransport(transport string, registrarFunc TransportRegistrarFunc) {
 	registeredTransports[transport] = registrarFunc
 }
 
-// Available returns the list of registered transports available for use
-func Available() (ret []string) {
+// AvailableTransports returns the list of registered transports available for use
+func AvailableTransports() (ret []string) {
 	ret = make([]string, 0, len(registeredTransports))
 	for k := range registeredTransports {
 		ret = append(ret, k)

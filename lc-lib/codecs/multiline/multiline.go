@@ -58,7 +58,7 @@ type CodecMultiline struct {
 	bufferLines   int64
 	bufferLen     int64
 	timerLock     sync.Mutex
-	timerStop     chan interface{}
+	timerStop     chan struct{}
 	timerWait     sync.WaitGroup
 	timerDeadline time.Time
 
@@ -116,7 +116,7 @@ func (f *CodecMultilineFactory) NewCodec(callbackFunc codecs.CallbackFunc, offse
 
 	// Start the "previous timeout" routine that will auto flush at deadline
 	if f.PreviousTimeout != 0 {
-		c.timerStop = make(chan interface{})
+		c.timerStop = make(chan struct{})
 		c.timerWait.Add(1)
 
 		c.timerDeadline = time.Now().Add(f.PreviousTimeout)

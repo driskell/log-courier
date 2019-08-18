@@ -16,53 +16,66 @@
 
 package event
 
-import (
-	"github.com/driskell/log-courier/lc-lib/simplejson"
-)
+import "encoding/json"
 
-// AckCallback is a function to a call when events have been acknowledged
-type AckCallback func([]*Event)
-
-// ackCallbacks contains the registered callbacks for different event types
-var ackCallbacks = make(map[string]AckCallback)
+// Acknowledger is something that can be called with events once they ar acknowledged
+type Acknowledger interface {
+	Acknowledge([]*Event)
+}
 
 // Event describes an event
+// TODO: Have Event interface and split into two structures, mapEvent and encodedEvent
+//       Will mean read/write of JDAT without decoding is possible
 type Event struct {
-	data      map[string]interface{}
-	encoded   []byte
-	context   interface{}
-	eventType string
+	data    map[string]interface{}
+	encoded []byte
+	context interface{}
+	acker   Acknowledger
 }
 
 // NewEvent creates a new event structure from the given data
-func NewEvent(eventType string, data map[string]interface{}, context interface{}) *Event {
+func NewEvent(acker Acknowledger, data map[string]interface{}, context interface{}) *Event {
 	return &Event{
-		eventType: eventType,
-		data:      data,
-		context:   context,
+		acker:   acker,
+		data:    data,
+		context: context,
 	}
 }
 
-// Data returns the event data, or nil if it was freed
+// NewEventFromBytes creates a new event structure from the given data
+func NewEventFromBytes(acker Acknowledger, data []byte, context interface{}) *Event {
+	return &Event{
+		acker:   acker,
+		encoded: data,
+		context: context,
+	}
+}
+
+// Data returns the event data
 func (e *Event) Data() map[string]interface{} {
+	if e.data == nil {
+		err := json.Unmarshal(e.encoded, &e.data)
+		if err != nil {
+			e.data = make(map[string]interface{})
+			e.data["message"] = err.Error()
+		} else {
+			e.encoded = nil
+		}
+	}
 	return e.data
-}
-
-// Encode returns the event data in JSON format
-func (e *Event) Encode() (err error) {
-	if e.encoded != nil {
-		panic("event is already encoded")
-	}
-
-	e.encoded, err = simplejson.Marshal(e.data)
-	if err != nil {
-		e.data = nil
-	}
-	return
 }
 
 // Bytes returns the encoded event bytes
 func (e *Event) Bytes() []byte {
+	if e.encoded == nil {
+		var err error
+		e.encoded, err = json.Marshal(e.data)
+		if err != nil {
+			e.encoded = make([]byte, 0)
+		} else {
+			e.data = nil
+		}
+	}
 	return e.encoded
 }
 
@@ -70,12 +83,6 @@ func (e *Event) Bytes() []byte {
 // distinguish events from different sources
 func (e *Event) Context() interface{} {
 	return e.context
-}
-
-// RegisterForAck registers a function to be called when events with the given
-// type name are acknowledged
-func RegisterForAck(eventType string, ackCallback AckCallback) {
-	ackCallbacks[eventType] = ackCallback
 }
 
 // DispatchAck processes a bulk of events and calls the required acknowledgement
@@ -87,48 +94,44 @@ func DispatchAck(events []*Event) {
 
 	// Grab first ackFunc
 	e := 0
-	eventType := events[0].eventType
+	acker := events[0].acker
 	for _, event := range events[1:] {
 		e++
 
-		// Different ackFunc?
-		if event.eventType != eventType {
-			// Multiple event types in the works, split up the bulk and pass to the
+		// Different acker?
+		if event.acker != acker {
+			// Multiple event acks in the works, split up the bulk and pass to the
 			// relevant callbacks
-			dispatchAckForMultipleFuncs(eventType, append([]*Event(nil), events[0:e]...), events[e:])
+			dispatchAckForMultipleFuncs(acker, append([]*Event(nil), events[0:e]...), events[e:])
 			return
 		}
 	}
 
-	if eventType == "" {
-		// Skip where no event type
+	if acker == nil {
+		// Skip where no acker
 		return
 	}
 
-	// Single event type - call it's ackFunc
-	if ackCallback, ok := ackCallbacks[eventType]; ok {
-		ackCallback(events)
-	}
+	// Single event type - call it's acknowledger
+	acker.Acknowledge(events)
 }
 
 // dispatchAckForMultipleFuncs handles the case where a bulk of events to be
 // acknowledged contains events for different processors by splitting them apart
 // and calling each processor
-func dispatchAckForMultipleFuncs(firstEventType string, firstAckEvents []*Event, events []*Event) {
-	ackMap := map[string][]*Event{}
-	if firstEventType != "" {
-		ackMap[firstEventType] = firstAckEvents
+func dispatchAckForMultipleFuncs(firstAcker Acknowledger, firstAckerEvents []*Event, events []*Event) {
+	ackMap := map[Acknowledger][]*Event{}
+	if firstAcker != nil {
+		ackMap[firstAcker] = firstAckerEvents
 	}
 
 	for _, event := range events[1:] {
-		if event.eventType != "" {
-			ackMap[event.eventType] = append(ackMap[event.eventType], event)
+		if event.acker != nil {
+			ackMap[event.acker] = append(ackMap[event.acker], event)
 		}
 	}
 
-	for eventType, ackEvents := range ackMap {
-		if ackCallback, ok := ackCallbacks[eventType]; ok {
-			ackCallback(ackEvents)
-		}
+	for acker, ackEvents := range ackMap {
+		acker.Acknowledge(ackEvents)
 	}
 }

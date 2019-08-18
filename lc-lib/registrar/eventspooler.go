@@ -25,47 +25,34 @@ type EventProcessor interface {
 	process(state map[core.Stream]*FileState)
 }
 
-// EventSpooler is implemented by a registrar event handler
-type EventSpooler interface {
-	Close()
-	Add(EventProcessor)
-	Send()
-}
-
-// EventSpool implements an EventSpooler associated with a Registrar
-type EventSpool struct {
+// EventSpooler buffers registrar events for bulk sends
+type EventSpooler struct {
 	registrar *Registrar
 	events    []EventProcessor
 }
 
-func newEventSpool(r *Registrar) *EventSpool {
-	ret := &EventSpool{
+// NewEventSpooler creates a new EventSpooler
+func NewEventSpooler(r *Registrar) *EventSpooler {
+	ret := &EventSpooler{
 		registrar: r,
 	}
 	ret.reset()
 	return ret
 }
 
-// Close disconnects the EventSpooler from the Registrar, allowing it to
-// shutdown
-func (r *EventSpool) Close() {
-	r.registrar.dereferenceSpooler()
-	r.registrar = nil
-}
-
 // Add a registrar event to the spooler
-func (r *EventSpool) Add(event EventProcessor) {
+func (r *EventSpooler) Add(event EventProcessor) {
 	r.events = append(r.events, event)
 }
 
 // Send the buffered registrar events to the registrar
-func (r *EventSpool) Send() {
+func (r *EventSpooler) Send() {
 	if len(r.events) != 0 {
 		r.registrar.registrarChan <- r.events
 		r.reset()
 	}
 }
 
-func (r *EventSpool) reset() {
+func (r *EventSpooler) reset() {
 	r.events = make([]EventProcessor, 0, 0)
 }

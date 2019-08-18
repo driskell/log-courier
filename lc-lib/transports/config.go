@@ -99,7 +99,7 @@ func (nc *Config) Validate(p *config.Parser, path string) (err error) {
 
 // FetchConfig returns the network configuration from a Config structure
 func FetchConfig(cfg *config.Config) *Config {
-	return cfg.Sections["network"].(*Config)
+	return cfg.Section("network").(*Config)
 }
 
 func init() {

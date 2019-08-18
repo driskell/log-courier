@@ -41,6 +41,7 @@ func (t *Timeout) InitTimeout() {
 
 // TimeoutChan returns a channel which will receive the current time when
 // the next endpoint hits its registered timeout
+// TODO: Can be replaced by a TimeoutEvent sent on EventChan
 func (s *Sink) TimeoutChan() <-chan time.Time {
 	return s.timeoutTimer.C
 }

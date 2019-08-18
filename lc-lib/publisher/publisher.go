@@ -56,15 +56,9 @@ const (
 // events from the Publisher and then the transport making decisions on whether
 // there is a problem. This pattern continues that tradition but with there now
 // potentially being multiple transports rather than just one
-// TODO: Extrapolate the load balance / failover logic to other interfaces?
-//       I'm thinking not, as the difference is very little
 type Publisher struct {
-	core.PipelineSegment
-	core.PipelineConfigReceiver
-
 	mutex sync.RWMutex
 
-	config       *config.Config
 	netConfig    *transports.Config
 	adminConfig  *admin.Config
 	endpointSink *endpoint.Sink
@@ -82,32 +76,36 @@ type Publisher struct {
 	lastMeasurement time.Time
 	secondsNoAck    int
 
-	measurementTimer  *time.Timer
-	onShutdown        <-chan interface{}
-	ifSpoolChan       <-chan []*event.Event
-	nextSpool         []*event.Event
-	resendList        internallist.List
-	shutdownCompleted chan struct{}
+	measurementTimer *time.Timer
+	ifSpoolChan      <-chan []*event.Event
+	configChan       <-chan *config.Config
+	nextSpool        []*event.Event
+	resendList       internallist.List
 }
 
 // NewPublisher creates a new publisher instance on the given pipeline
-func NewPublisher(app *core.App) *Publisher {
-	ret := &Publisher{
-		config:            app.Config(),
-		netConfig:         transports.FetchConfig(app.Config()),
-		adminConfig:       app.Config().Section("admin").(*admin.Config),
-		spoolChan:         make(chan []*event.Event, 1),
-		shutdownCompleted: make(chan struct{}),
+func NewPublisher() *Publisher {
+	return &Publisher{
+		spoolChan: make(chan []*event.Event, 1),
 	}
+}
 
-	ret.endpointSink = endpoint.NewSink(ret.netConfig)
+// Init initialises configuration
+func (p *Publisher) Init(cfg *config.Config) error {
+	p.netConfig = transports.FetchConfig(cfg)
+	p.adminConfig = cfg.Section("admin").(*admin.Config)
+	p.endpointSink = endpoint.NewSink(p.netConfig)
 
-	ret.initAPI()
-	ret.initMethod()
+	p.endpointSink.OnAck = p.OnAck
+	p.endpointSink.OnStarted = p.OnStarted
+	p.endpointSink.OnFinish = p.OnFinish
+	p.endpointSink.OnFail = p.OnFail
+	p.endpointSink.OnPong = p.OnPong
 
-	app.AddToPipeline(ret)
+	p.initAPI()
+	p.initMethod()
 
-	return ret
+	return nil
 }
 
 // initMethod initialises the method the Publisher uses to manage multiple
@@ -116,37 +114,34 @@ func (p *Publisher) initMethod() {
 	// TODO: Factory registration for methods
 	switch p.netConfig.Method {
 	case "random":
-		p.method = newMethodRandom(p.endpointSink, p.config)
+		p.method = newMethodRandom(p.endpointSink, p.netConfig)
 		return
 	case "failover":
-		p.method = newMethodFailover(p.endpointSink, p.config)
+		p.method = newMethodFailover(p.endpointSink, p.netConfig)
 		return
 	case "loadbalance":
-		p.method = newMethodLoadbalance(p.endpointSink, p.config)
+		p.method = newMethodLoadbalance(p.endpointSink, p.netConfig)
 		return
 	}
 
 	panic(fmt.Sprintf("Internal error: Unknown publishing method: %s", p.netConfig.Method))
 }
 
-// Connect is used by Spooler
+// Input returns the channel that receives events to be published
 // TODO: Spooler doesn't need to know of publisher, only of events
-func (p *Publisher) Connect() chan<- []*event.Event {
+func (p *Publisher) Input() chan<- []*event.Event {
 	return p.spoolChan
 }
 
-// Wait for the publisher to finish
-// Useful for other pipeline segments so they can wait for all acknowledgement
-// calls to complete or fail
-func (p *Publisher) Wait() {
-	<-p.shutdownCompleted
+// SetConfigChan sets the config channel
+func (p *Publisher) SetConfigChan(configChan <-chan *config.Config) {
+	p.configChan = configChan
 }
 
 // Run starts the publisher, it handles endpoint status changes send from the
 // EndpointSink so it can make payload distribution decisions
 func (p *Publisher) Run() {
 	p.measurementTimer = time.NewTimer(time.Second)
-	p.onShutdown = p.OnShutdown()
 	p.ifSpoolChan = p.spoolChan
 
 	for {
@@ -156,9 +151,6 @@ func (p *Publisher) Run() {
 	}
 
 	log.Info("Publisher exiting")
-
-	p.Done()
-	close(p.shutdownCompleted)
 }
 
 // runOnce runs a single iteration of the Publisher loop
@@ -168,7 +160,9 @@ func (p *Publisher) runOnce() bool {
 	select {
 	case event := <-p.endpointSink.EventChan():
 		// Endpoint Sink processes the events, and feeds back relevant changes
-		p.endpointSink.ProcessEvent(event, p)
+		if !p.endpointSink.ProcessEvent(event) {
+			p.forceEndpointFailure(event.Context().(*endpoint.Endpoint), fmt.Errorf("Unexpected %T message received", event))
+		}
 
 		// If all finished, we're done
 		if p.shuttingDown && p.endpointSink.Count() == 0 {
@@ -176,6 +170,23 @@ func (p *Publisher) runOnce() bool {
 			return true
 		}
 	case spool := <-p.ifSpoolChan:
+		// When inputs close, sources are all closed
+		if spool == nil {
+			p.ifSpoolChan = nil
+			p.nextSpool = nil
+			p.shuttingDown = true
+
+			// If no payloads held, nothing to wait for
+			if !p.eventsHeld() && p.numPayloads == 0 {
+				// If no endpoints, no shutdown necessary
+				if p.endpointSink.Count() == 0 {
+					return true
+				}
+				p.endpointSink.Shutdown()
+			}
+			break
+		}
+
 		if p.numPayloads >= p.netConfig.MaxPendingPayloads {
 			log.Debug("Maximum pending payloads of %d reached, holding %d new events", p.netConfig.MaxPendingPayloads, len(spool))
 		} else if p.resendList.Len() != 0 {
@@ -197,21 +208,8 @@ func (p *Publisher) runOnce() bool {
 	case <-p.measurementTimer.C:
 		p.takeMeasurements()
 		p.measurementTimer.Reset(time.Second)
-	case config := <-p.OnConfig():
+	case config := <-p.configChan:
 		p.reloadConfig(config)
-	case <-p.onShutdown:
-		p.onShutdown = nil
-		p.ifSpoolChan = nil
-		p.nextSpool = nil
-		p.shuttingDown = true
-
-		p.endpointSink.Shutdown()
-
-		// If no endpoints, nothing to wait for
-		if p.endpointSink.Count() == 0 {
-			// TODO: What about out of sync ACK?
-			return true
-		}
 	}
 
 	return false
@@ -219,7 +217,6 @@ func (p *Publisher) runOnce() bool {
 
 func (p *Publisher) reloadConfig(cfg *config.Config) {
 	oldMethod := p.netConfig.Method
-	p.config = cfg
 	p.netConfig = transports.FetchConfig(cfg)
 
 	// Give sink the new config
@@ -230,7 +227,7 @@ func (p *Publisher) reloadConfig(cfg *config.Config) {
 		p.initMethod()
 	} else {
 		// ...otherwise give the existing method the new configuraton
-		p.method.reloadConfig(cfg)
+		p.method.reloadConfig(p.netConfig)
 	}
 
 	// The sink may have changed the priority endpoint after the reload, making
@@ -387,6 +384,11 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 	if complete {
 		// Resume sending if we stopped due to excessive pending payload count
 		p.tryQueueHeld()
+
+		// If last payload confirmed, begin shutdown
+		if p.shuttingDown && !p.eventsHeld() && p.numPayloads == 0 {
+			p.endpointSink.Shutdown()
+		}
 	}
 }
 
@@ -419,7 +421,7 @@ func (p *Publisher) eventsHeld() bool {
 
 // tryQueueHeld attempts to queue held payloads
 func (p *Publisher) tryQueueHeld() bool {
-	if p.shuttingDown || !p.eventsHeld() || !p.endpointSink.CanQueue() {
+	if !p.eventsHeld() || !p.endpointSink.CanQueue() {
 		return false
 	}
 

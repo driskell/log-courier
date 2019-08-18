@@ -25,7 +25,6 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
-	"github.com/driskell/log-courier/lc-lib/publisher"
 )
 
 const (
@@ -35,61 +34,68 @@ const (
 
 // Spooler gathers events into groups and sends them to the publisher in bulk
 type Spooler struct {
-	core.PipelineSegment
-	core.PipelineConfigReceiver
-
-	genConfig  *General
-	spool      []*event.Event
-	spoolSize  int
-	input      chan *event.Event
-	output     chan<- []*event.Event
-	timerStart time.Time
-	timer      *time.Timer
+	genConfig    *General
+	spool        []*event.Event
+	spoolSize    int
+	shutdownChan <-chan struct{}
+	configChan   <-chan *config.Config
+	input        chan []*event.Event
+	output       chan<- []*event.Event
+	timerStart   time.Time
+	timer        *time.Timer
 }
 
 // NewSpooler creates a new event spooler
-func NewSpooler(app *core.App, publisherImpl *publisher.Publisher) *Spooler {
+func NewSpooler(app *core.App) *Spooler {
 	genConfig := app.Config().GeneralPart("spooler").(*General)
-	ret := &Spooler{
+	return &Spooler{
 		genConfig: genConfig,
+		input:     make(chan []*event.Event, 16), // TODO: Make configurable?
 		spool:     make([]*event.Event, 0, genConfig.SpoolSize),
-		input:     make(chan *event.Event, 16), // TODO: Make configurable?
-		output:    publisherImpl.Connect(),
 	}
-
-	app.AddToPipeline(ret)
-
-	return ret
 }
 
-// Connect returns the channel to send events to the spooler with
-func (s *Spooler) Connect() chan<- *event.Event {
+// Input returns the channel to send events to the spooler with
+func (s *Spooler) Input() chan<- []*event.Event {
 	return s.input
 }
 
-// Flush requests the spooler to flush its events immediately
-func (s *Spooler) Flush() {
-	select {
-	case s.input <- nil:
-	case <-s.OnShutdown():
-	}
+// SetOutput sets the output channel
+func (s *Spooler) SetOutput(output chan<- []*event.Event) {
+	s.output = output
+}
+
+// SetShutdownChan sets the shutdown channel
+func (s *Spooler) SetShutdownChan(shutdownChan <-chan struct{}) {
+	s.shutdownChan = shutdownChan
+}
+
+// SetConfigChan sets the config channel
+func (s *Spooler) SetConfigChan(configChan <-chan *config.Config) {
+	s.configChan = configChan
+}
+
+// Init does nothing as nothing to initialise
+func (s *Spooler) Init(cfg *config.Config) error {
+	return nil
 }
 
 // Run starts the spooling routine
 func (s *Spooler) Run() {
-	defer func() {
-		s.Done()
-	}()
-
 	s.timerStart = time.Now()
 	s.timer = time.NewTimer(s.genConfig.SpoolTimeout)
 
 SpoolerLoop:
 	for {
 		select {
-		case event := <-s.input:
-			// Nil event means flush
-			if event == nil {
+		case events := <-s.input:
+			// If nil, shutting down
+			if events == nil {
+				break SpoolerLoop
+			}
+
+			// Empty events means flush
+			if len(events) == 0 {
 				if len(s.spool) > 0 {
 					log.Debug("Spooler flushing %d events due to flush event", len(s.spool))
 
@@ -101,33 +107,35 @@ SpoolerLoop:
 				continue
 			}
 
-			if len(s.spool) > 0 && int64(s.spoolSize)+int64(len(event.Bytes()))+eventHeaderSize >= s.genConfig.SpoolMaxBytes {
-				log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spoolSize, s.genConfig.SpoolMaxBytes, len(event.Bytes())+4)
+			for _, newEvent := range events {
+				if len(s.spool) > 0 && int64(s.spoolSize)+int64(len(newEvent.Bytes()))+eventHeaderSize >= s.genConfig.SpoolMaxBytes {
+					log.Debug("Spooler flushing %d events due to spool max bytes (%d/%d - next is %d)", len(s.spool), s.spoolSize, s.genConfig.SpoolMaxBytes, len(newEvent.Bytes())+4)
 
-				// Can't fit this event in the spool - flush and then queue
-				if !s.sendSpool() {
-					break SpoolerLoop
+					// Can't fit this event in the spool - flush and then queue
+					if !s.sendSpool() {
+						break SpoolerLoop
+					}
+
+					s.resetTimer()
+					s.spoolSize += len(newEvent.Bytes()) + eventHeaderSize
+					s.spool = append(s.spool, newEvent)
+
+					continue
 				}
 
-				s.resetTimer()
-				s.spoolSize += len(event.Bytes()) + eventHeaderSize
-				s.spool = append(s.spool, event)
+				s.spoolSize += len(newEvent.Bytes()) + eventHeaderSize
+				s.spool = append(s.spool, newEvent)
 
-				continue
-			}
+				// Flush if full
+				if len(s.spool) >= cap(s.spool) {
+					log.Debug("Spooler flushing %d events due to spool size reached", len(s.spool))
 
-			s.spoolSize += len(event.Bytes()) + eventHeaderSize
-			s.spool = append(s.spool, event)
+					if !s.sendSpool() {
+						break SpoolerLoop
+					}
 
-			// Flush if full
-			if len(s.spool) >= cap(s.spool) {
-				log.Debug("Spooler flushing %d events due to spool size reached", len(s.spool))
-
-				if !s.sendSpool() {
-					break SpoolerLoop
+					s.resetTimer()
 				}
-
-				s.resetTimer()
 			}
 		case <-s.timer.C:
 			// Flush what we have, if anything
@@ -140,14 +148,17 @@ SpoolerLoop:
 			}
 
 			s.resetTimer()
-		case <-s.OnShutdown():
+		case <-s.shutdownChan:
 			break SpoolerLoop
-		case config := <-s.OnConfig():
+		case config := <-s.configChan:
 			if !s.reloadConfig(config) {
 				break SpoolerLoop
 			}
 		}
 	}
+
+	// No more events
+	close(s.output)
 
 	log.Info("Spooler exiting")
 }
@@ -155,9 +166,9 @@ SpoolerLoop:
 // sendSpool flushes the current spool of events to the publisher
 func (s *Spooler) sendSpool() bool {
 	select {
-	case <-s.OnShutdown():
+	case <-s.shutdownChan:
 		return false
-	case config := <-s.OnConfig():
+	case config := <-s.configChan:
 		if !s.reloadConfig(config) {
 			return false
 		}

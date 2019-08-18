@@ -206,13 +206,15 @@ FieldLoop:
 		if unUsed.IsNil() {
 			unUsed.Set(reflect.MakeMap(unUsed.Type()))
 		}
-		for _, vKey := range vRawConfig.MapKeys() {
-			// If the key is wrapped in interface{}, unwrap it
-			if vKey.Type().Kind() == reflect.Interface {
-				vKey = vKey.Elem()
-			}
+		if vRawConfig.IsValid() {
+			for _, vKey := range vRawConfig.MapKeys() {
+				// If the key is wrapped in interface{}, unwrap it
+				if vKey.Type().Kind() == reflect.Interface {
+					vKey = vKey.Elem()
+				}
 
-			unUsed.SetMapIndex(vKey, vRawConfig.MapIndex(vKey))
+				unUsed.SetMapIndex(vKey, vRawConfig.MapIndex(vKey))
+			}
 		}
 
 		vRawConfig = unUsed

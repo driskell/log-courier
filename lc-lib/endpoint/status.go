@@ -33,6 +33,9 @@ const (
 
 	// The endpoint is about to shutdown once pending payloads are complete
 	endpointStatusClosing
+
+	// Endpoint has completed shutdown and is about to be freed
+	endpointStatusClosed
 )
 
 func (s status) String() string {
@@ -45,6 +48,8 @@ func (s status) String() string {
 		return "Failed"
 	case endpointStatusClosing:
 		return "Shutting down"
+	case endpointStatusClosed:
+		return "Shutdown"
 	}
 	return "Unknown"
 }
@@ -64,9 +69,9 @@ func (e *Endpoint) IsFailed() bool {
 	return e.status == endpointStatusFailed
 }
 
-// IsClosing returns true if this Endpoint is closing down
+// IsClosing returns true if this Endpoint is closing down or finished closing down
 func (e *Endpoint) IsClosing() bool {
-	return e.status == endpointStatusClosing
+	return e.status == endpointStatusClosing || e.status == endpointStatusClosed
 }
 
 // IsAlive returns true if this endpoint is not failed or closing

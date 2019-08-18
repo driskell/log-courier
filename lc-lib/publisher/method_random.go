@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
 	"github.com/driskell/log-courier/lc-lib/transports"
@@ -40,10 +39,10 @@ type methodRandom struct {
 	endpoint.Timeout
 }
 
-func newMethodRandom(sink *endpoint.Sink, cfg *config.Config) *methodRandom {
+func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodRandom {
 	ret := &methodRandom{
 		sink:         sink,
-		netConfig:    transports.FetchConfig(cfg),
+		netConfig:    netConfig,
 		activeServer: -1,
 		generator:    rand.New(rand.NewSource(int64(time.Now().Nanosecond()))),
 	}
@@ -81,7 +80,7 @@ func newMethodRandom(sink *endpoint.Sink, cfg *config.Config) *methodRandom {
 				log.Debug("[Random] Utilising existing endpoint connection: %s", server)
 
 				// Reload it
-				endpoint.ReloadConfig(cfg, true)
+				endpoint.ReloadConfig(netConfig, true)
 				break
 			}
 		}
@@ -154,9 +153,9 @@ func (m *methodRandom) onStarted(endpoint *endpoint.Endpoint) {
 	return
 }
 
-func (m *methodRandom) reloadConfig(cfg *config.Config) {
+func (m *methodRandom) reloadConfig(netConfig *transports.Config) {
 	currentServer := m.netConfig.Servers[m.activeServer]
-	m.netConfig = transports.FetchConfig(cfg)
+	m.netConfig = netConfig
 
 	front := m.sink.Front()
 	if front == nil {
@@ -169,7 +168,7 @@ func (m *methodRandom) reloadConfig(cfg *config.Config) {
 	for _, server := range m.netConfig.Servers {
 		if server == currentServer {
 			// Still present, all good, pass through the reload
-			front.ReloadConfig(cfg, true)
+			front.ReloadConfig(netConfig, true)
 			return
 		}
 	}

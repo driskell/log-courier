@@ -21,7 +21,6 @@ package publisher
 
 import (
 	"github.com/driskell/log-courier/lc-lib/addresspool"
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/endpoint"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -33,7 +32,7 @@ type methodFailover struct {
 	failoverPosition int
 }
 
-func newMethodFailover(sink *endpoint.Sink, cfg *config.Config) *methodFailover {
+func newMethodFailover(sink *endpoint.Sink, netConfig *transports.Config) *methodFailover {
 	ret := &methodFailover{
 		sink:             sink,
 		failoverPosition: 0,
@@ -41,7 +40,7 @@ func newMethodFailover(sink *endpoint.Sink, cfg *config.Config) *methodFailover 
 
 	// reloadConfig will fix up existing endpoints in the sink as well as setting
 	// up the failover method and reloading endpoint configurations
-	ret.reloadConfig(cfg)
+	ret.reloadConfig(netConfig)
 
 	return ret
 }
@@ -115,8 +114,8 @@ func (m *methodFailover) onStarted(endpoint *endpoint.Endpoint) {
 	}
 }
 
-func (m *methodFailover) reloadConfig(cfg *config.Config) {
-	m.netConfig = transports.FetchConfig(cfg)
+func (m *methodFailover) reloadConfig(netConfig *transports.Config) {
+	m.netConfig = netConfig
 
 	// Verify server ordering and if any better current server now available
 	// We also use reloadConfig on first load of this method to cleanup what any
@@ -154,7 +153,7 @@ func (m *methodFailover) reloadConfig(cfg *config.Config) {
 
 		// Ensure ordering and reload the configuration
 		m.sink.MoveEndpointAfter(foundEndpoint, last)
-		foundEndpoint.ReloadConfig(cfg, false)
+		foundEndpoint.ReloadConfig(netConfig, false)
 		last = foundEndpoint
 	}
 }

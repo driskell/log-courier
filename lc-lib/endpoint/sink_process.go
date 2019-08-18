@@ -18,28 +18,8 @@ package endpoint
 
 import (
 	"github.com/driskell/log-courier/lc-lib/addresspool"
-	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
-
-// Observer is the interface implemented by the observer of the sink and will
-// receive callbacks on status changes it needs to action
-type Observer interface {
-	// OnAck is called when an acknowledgement response is received
-	// The payload is given and the second argument is true if this ack is the
-	// first ack for this payload
-	OnAck(*Endpoint, *payload.Payload, bool, int)
-	// OnFail is called when the endpoint fails
-	OnFail(*Endpoint)
-	// OnFinished is called when an endpoint finishes and is removed
-	// Returning false prevents the endpoint from being recreated, which it will
-	// be if it still exists in the configuration
-	OnFinish(*Endpoint) bool
-	// OnPong is called when a pong response is received from the endpoint
-	OnPong(*Endpoint)
-	// OnStarted is called when an endpoint starts up and is ready
-	OnStarted(*Endpoint)
-}
 
 // EventChan returns the event channel
 // Status events and messages from endpoints pass through here for processing
@@ -48,34 +28,36 @@ func (s *Sink) EventChan() <-chan transports.Event {
 }
 
 // ProcessEvent performs the necessary processing of events
-func (s *Sink) ProcessEvent(event transports.Event, observer Observer) {
-	endpoint := event.Observer().(*Endpoint)
+func (s *Sink) ProcessEvent(event transports.Event) bool {
+	endpoint := event.Context().(*Endpoint)
 
 	switch msg := event.(type) {
 	case *transports.StatusEvent:
-		s.processStatusChange(msg, endpoint, observer)
+		s.processStatusChange(msg, endpoint)
 	case *transports.AckEvent:
-		s.processAck(msg, endpoint, observer)
+		s.processAck(msg, endpoint)
 	case *transports.PongEvent:
-		endpoint.processPong(observer)
+		endpoint.processPong(s.OnPong)
 	default:
-		panic("Invalid transport event received")
+		return false
 	}
+
+	return true
 }
 
 // processStatusChange handles status change events
-func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *Endpoint, observer Observer) {
+func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *Endpoint) {
 	switch status.StatusChange() {
 	case transports.Failed:
-		s.moveFailed(endpoint, observer)
+		s.moveFailed(endpoint)
 	case transports.Started:
 		if endpoint.IsFailed() {
-			s.recoverFailed(endpoint, observer)
+			s.recoverFailed(endpoint)
 			break
 		}
 
 		// Mark as active
-		s.markActive(endpoint, observer)
+		s.markActive(endpoint)
 	case transports.Finished:
 		server := endpoint.Server()
 		s.removeEndpoint(server)
@@ -86,8 +68,8 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 				continue
 			}
 
-			// Still in the config, ask the observer if we should re-add it
-			if observer.OnFinish(endpoint) {
+			// Still in the config, ask the OnFish handler if we should re-add it
+			if s.OnFinish(endpoint) {
 				s.AddEndpoint(server, addresspool.NewPool(server), endpoint.finishOnFail)
 			}
 			break
@@ -97,8 +79,8 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 	}
 }
 
-func (s *Sink) processAck(ack *transports.AckEvent, endpoint *Endpoint, observer Observer) {
-	complete := endpoint.processAck(ack, observer)
+func (s *Sink) processAck(ack *transports.AckEvent, endpoint *Endpoint) {
+	complete := endpoint.processAck(ack, s.OnAck)
 
 	// Everything after here runs when a payload is fully completed
 	if !complete {

@@ -27,31 +27,22 @@ import (
 	"fmt"
 	"io/ioutil"
 	"regexp"
-	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
-const (
-	defaultNetworkReconnect    time.Duration = 0 * time.Second
-	defaultNetworkReconnectMax time.Duration = 300 * time.Second
-)
-
-// TransportTCPFactory holds the configuration from the configuration file
-// It allows creation of TransportTCP instances that use this configuration
-type TransportTCPFactory struct {
+// ReceiverTCPFactory holds the configuration from the configuration file
+// It allows creation of ReceiverTCP instances that use this configuration
+type ReceiverTCPFactory struct {
 	transport string
 
 	config *config.Config
 
-	Reconnect      time.Duration `config:"reconnect backoff"`
-	ReconnectMax   time.Duration `config:"reconnect backoff max"`
-	SSLCertificate string        `config:"ssl certificate"`
-	SSLKey         string        `config:"ssl key"`
-	SSLCA          string        `config:"ssl ca"`
+	SSLCertificate string   `config:"ssl certificate"`
+	SSLKey         string   `config:"ssl key"`
+	SSLClientCA    []string `config:"ssl client ca"`
 
 	hostportRegexp  *regexp.Regexp
 	certificate     *tls.Certificate
@@ -59,12 +50,12 @@ type TransportTCPFactory struct {
 	caList          []*x509.Certificate
 }
 
-// NewTransportTCPFactory create a new TransportTCPFactory from the provided
+// NewReceiverTCPFactory create a new ReceiverTCPFactory from the provided
 // configuration data, reporting back any configuration errors it discovers.
-func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
+func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
 	var err error
 
-	ret := &TransportTCPFactory{
+	ret := &ReceiverTCPFactory{
 		config:         p.Config(),
 		transport:      name,
 		hostportRegexp: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
@@ -101,61 +92,51 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 			}
 		}
 
-		if len(ret.SSLCA) == 0 {
-			return nil, errors.New("ssl ca is required when transport is TLS")
-		}
-
-		pemdata, err := ioutil.ReadFile(ret.SSLCA)
-		if err != nil {
-			return nil, fmt.Errorf("failure reading CA certificate: %s\n", err)
-		}
-		rest := pemdata
-		var block *pem.Block
-		var pemBlockNum = 1
-		for {
-			block, rest = pem.Decode(rest)
-			if block != nil {
-				if block.Type != "CERTIFICATE" {
-					return nil, fmt.Errorf("block %d does not contain a certificate: %s\n", pemBlockNum, ret.SSLCA)
+		for _, clientCA := range ret.SSLClientCA {
+			pemdata, err := ioutil.ReadFile(clientCA)
+			if err != nil {
+				return nil, fmt.Errorf("failure reading CA certificate %s: %s\n", clientCA, err)
+			}
+			rest := pemdata
+			var block *pem.Block
+			var pemBlockNum = 1
+			for {
+				block, rest = pem.Decode(rest)
+				if block != nil {
+					if block.Type != "CERTIFICATE" {
+						return nil, fmt.Errorf("block %d of %s does not contain a certificate\n", pemBlockNum, clientCA)
+					}
+					cert, err := x509.ParseCertificate(block.Bytes)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse CA certificate in block %d of %s\n", pemBlockNum, clientCA)
+					}
+					ret.caList = append(ret.caList, cert)
+					pemBlockNum++
+				} else {
+					break
 				}
-				cert, err := x509.ParseCertificate(block.Bytes)
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
-				}
-				ret.caList = append(ret.caList, cert)
-				pemBlockNum++
-			} else {
-				break
 			}
 		}
 	} else {
-		if len(ret.SSLCertificate) > 0 || len(ret.SSLKey) > 0 || len(ret.SSLCA) > 0 {
-			return nil, fmt.Errorf("transport tcp does not support ssl certificate, ssl key or ssl ca configurations")
+		if len(ret.SSLCertificate) > 0 || len(ret.SSLKey) > 0 || len(ret.SSLClientCA) > 0 {
+			return nil, fmt.Errorf("transport tcp does not support ssl certificate, ssl key or ssl client ca configurations")
 		}
 	}
 
 	return ret, nil
 }
 
-// Defaults sets the default configuration values
-func (f *TransportTCPFactory) Defaults() {
-	f.Reconnect = defaultNetworkReconnect
-	f.ReconnectMax = defaultNetworkReconnectMax
-}
-
-// NewTransport returns a new Transport interface using the settings from the
-// TransportTCPFactory.
-func (f *TransportTCPFactory) NewTransport(context interface{}, pool *addresspool.Pool, eventChan chan<- transports.Event, finishOnFail bool) transports.Transport {
-	ret := &TransportTCP{
+// NewReceiver returns a new Receiver interface using the settings from the
+// ReceiverTCPFactory.
+func (f *ReceiverTCPFactory) NewReceiver(context interface{}, pool *addresspool.Pool, eventChan chan<- transports.Event, finishOnFail bool) transports.Receiver {
+	ret := &ReceiverTCP{
 		config:         f,
-		netConfig:      transports.FetchConfig(f.config),
-		finishOnFail:   finishOnFail,
+		netConfig:      transports.FetchReceiverConfig(f.config),
 		context:        context,
 		pool:           pool,
 		eventChan:      eventChan,
 		controllerChan: make(chan error),
 		connectionChan: make(chan *socketMessage),
-		backoff:        core.NewExpBackoff(pool.Server()+" Reconnect", f.Reconnect, f.ReconnectMax),
 	}
 
 	go ret.controller()
@@ -165,6 +146,6 @@ func (f *TransportTCPFactory) NewTransport(context interface{}, pool *addresspoo
 
 // Register the transports
 func init() {
-	transports.RegisterTransport(TransportTCPTCP, NewTransportTCPFactory)
-	transports.RegisterTransport(TransportTCPTLS, NewTransportTCPFactory)
+	transports.RegisterReceiver(TransportTCPTCP, NewReceiverTCPFactory)
+	transports.RegisterReceiver(TransportTCPTLS, NewReceiverTCPFactory)
 }

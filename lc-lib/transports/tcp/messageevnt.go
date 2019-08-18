@@ -27,19 +27,24 @@ import (
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
-type protocolJDAT struct {
+type evntPosition struct {
+	nonce    string
+	sequence uint32
+}
+
+type protocolEVNT struct {
 	nonce  string
 	events []*event.Event
 }
 
-// newProtocolJDAT creates a new structure from wire-bytes
-func newProtocolJDAT(t connection, bodyLength uint32) (*protocolJDAT, error) {
+// Reads the events from existing data
+func newProtocolEVNT(t connection, bodyLength uint32) (*protocolEVNT, error) {
 	if !t.Server() {
 		return nil, errors.New("Protocol error: Unexpected JDAT message received on non-server connection")
 	}
 
 	if bodyLength < 17 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message (JDAT size %d < 17)", bodyLength)
+		return nil, fmt.Errorf("Protocol error: Corrupt message (EVNT size %d < 17)", bodyLength)
 	}
 
 	data, err := t.Read(bodyLength)
@@ -84,17 +89,25 @@ func newProtocolJDAT(t connection, bodyLength uint32) (*protocolJDAT, error) {
 		events = append(events, event.NewEventFromBytes(t, data, &evntPosition{nonce: nonce, sequence: sequence}))
 	}
 
-	return &protocolJDAT{nonce: nonce, events: events}, nil
+	return &protocolEVNT{nonce: nonce, events: events}, nil
 }
 
 // Write writes a payload to the socket
-func (p *protocolJDAT) Write(t connection) error {
-	var eventBuffer bytes.Buffer
+func (p *protocolEVNT) Write(t connection) error {
+	// Encapsulate the data into the message
+	// 4-byte message header (EVNT = EVNT Data, Compressed, Enhanced over JDAT in that it streams and has no size prefix)
+	// 4-byte uint32 data length of 0xFFFF (stream)
+	// 16-byte nonce
+	// compressed stream
+	if _, err := t.Write([]byte{'E', 'V', 'N', 'T', 255, 255, 255, 255}); err != nil {
+		return err
+	}
 
-	// Create the compressed data payload
-	// The event data is each event, prefixed with a 4-byte uint32 length, one
-	// after the other
-	compressor, err := zlib.NewWriterLevel(&eventBuffer, 3)
+	if _, err := t.Write([]byte(p.nonce)); err != nil {
+		return err
+	}
+
+	compressor, err := zlib.NewWriterLevel(t, 3)
 	if err != nil {
 		return err
 	}
@@ -109,39 +122,15 @@ func (p *protocolJDAT) Write(t connection) error {
 		}
 	}
 
-	if err := compressor.Close(); err != nil {
-		return err
-	}
-
-	// Encapsulate the data into the message
-	// 4-byte message header (JDAT = JSON Data, Compressed)
-	// 4-byte uint32 data length
-	// 16-byte nonce
-	// Compressed data
-	if _, err := t.Write([]byte{'J', 'D', 'A', 'T'}); err != nil {
-		return err
-	}
-
-	var length [4]byte
-	binary.BigEndian.PutUint32(length[:], uint32(len(p.nonce)+eventBuffer.Len()))
-	if _, err := t.Write(length[:]); err != nil {
-		return err
-	}
-
-	if _, err := t.Write([]byte(p.nonce)); err != nil {
-		return err
-	}
-
-	_, err = t.Write(eventBuffer.Bytes())
-	return err
+	return compressor.Close()
 }
 
 // Nonce returns the nonce - this implements eventsMessage
-func (p *protocolJDAT) Nonce() string {
+func (p *protocolEVNT) Nonce() string {
 	return p.nonce
 }
 
 // Events returns the events - this implements eventsMessage
-func (p *protocolJDAT) Events() []*event.Event {
+func (p *protocolEVNT) Events() []*event.Event {
 	return p.events
 }

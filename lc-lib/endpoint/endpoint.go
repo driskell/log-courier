@@ -24,7 +24,6 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/admin/api"
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/payload"
@@ -80,7 +79,7 @@ func (e *Endpoint) Init() {
 
 	e.resetPayloads()
 
-	e.transport = transports.NewTransport(e.sink.config.Factory, e, e.finishOnFail)
+	e.transport = transports.NewTransport(e.sink.config.Factory, e, e.Pool(), e.EventChan(), e.finishOnFail)
 }
 
 // Prev returns the previous endpoint in the ordered list
@@ -107,6 +106,9 @@ func (e *Endpoint) shutdownTransport() {
 
 	log.Debug("[%s] Endpoint is now shutting down", e.Server())
 	e.transport.Shutdown()
+
+	// Set status to closed, so we know shutdown has now been triggered
+	e.status = endpointStatusClosed
 }
 
 // Server returns the server string from the configuration file that this
@@ -222,10 +224,10 @@ func (e *Endpoint) LineCount() int64 {
 
 // processAck processes a received acknowledgement message.
 // This will pass the payload that was acked, and whether this is the first
-// acknoweldgement or a later one, to the observer
+// acknoweldgement or a later one, to the OnAck handler
 // It should return whether or not the payload was completed so full status
 // can be updated
-func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool {
+func (e *Endpoint) processAck(ack *transports.AckEvent, onAck func(*Endpoint, *payload.Payload, bool, int)) bool {
 	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), ack.Nonce(), ack.Sequence())
 
 	// Grab the payload the ACK corresponds to by using nonce
@@ -277,21 +279,22 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, observer Observer) bool 
 		e.mutex.Unlock()
 	}
 
-	observer.OnAck(e, payload, firstAck, lineCount)
+	onAck(e, payload, firstAck, lineCount)
 
 	return complete
 }
 
 // ProcessPong processes a received PONG message
-func (e *Endpoint) processPong(observer Observer) {
+func (e *Endpoint) processPong(onPong func(*Endpoint)) {
 	if !e.pongPending {
+		// We can ignore - we sometimes start sending again and ignore the fact we sent a PING
 		return
 	}
 
 	log.Debug("[%s] Received PONG message", e.Server())
 	e.pongPending = false
 
-	observer.OnPong(e)
+	onPong(e)
 }
 
 // IsWarming returns whether the endpoint is warming up or not (slow-start)
@@ -318,8 +321,8 @@ func (e *Endpoint) PullBackPending() []*payload.Payload {
 // ReloadConfig submits a new configuration to the transport, and returns true
 // if the transports requested that it be restarted in order for the
 // configuration to take effect
-func (e *Endpoint) ReloadConfig(cfg *config.Config, finishOnFail bool) bool {
-	return e.transport.ReloadConfig(cfg, finishOnFail)
+func (e *Endpoint) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
+	return e.transport.ReloadConfig(netConfig, finishOnFail)
 }
 
 // resetPayloads resets the internal state for pending payloads

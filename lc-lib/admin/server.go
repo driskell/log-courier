@@ -25,81 +25,46 @@ import (
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"gopkg.in/tylerb/graceful.v1"
 )
 
 // Server provides a REST interface for administration
 type Server struct {
-	core.PipelineSegment
-	core.PipelineConfigReceiver
-
-	app      *core.App
-	config   *Config
-	listener netListener
-	server   *graceful.Server
+	app          *core.App
+	shutdownChan <-chan struct{}
+	configChan   <-chan *config.Config
+	config       *Config
+	listener     netListener
+	server       *graceful.Server
 }
 
 // NewServer creates a new admin listener on the pipeline
-func NewServer(app *core.App) (*Server, error) {
-	ret := &Server{
-		app:    app,
-		config: app.Config().Section("admin").(*Config),
-	}
-
-	ret.config.apiRoot = newAPIRoot(app)
-
-	listener, err := ret.listen(ret.config)
-	if err != nil {
-		return nil, err
-	}
-
-	ret.initServer(listener)
-
-	return ret, nil
+func NewServer(app *core.App) *Server {
+	return &Server{app: app}
 }
 
-func (l *Server) listen(config *Config) (netListener, error) {
-	bind := splitAdminConnectString(config.Bind)
-
-	if listener, ok := registeredListeners[bind[0]]; ok {
-		log.Info("[admin] REST admin now listening on %s:%s", bind[0], bind[1])
-		return listener(bind[0], bind[1])
-	}
-
-	return nil, fmt.Errorf("Unknown transport specified for admin bind: '%s'", bind[0])
+// SetShutdownChan sets the shutdown channel
+func (l *Server) SetShutdownChan(shutdownChan <-chan struct{}) {
+	l.shutdownChan = shutdownChan
 }
 
-func (l *Server) initServer(listener netListener) {
-	l.listener = listener
-	l.server = &graceful.Server{
-		// We handle shutdown ourselves
-		NoSignalHandling: true,
-		// The HTTP server
-		Server: &http.Server{
-			// TODO: Make all these configurable?
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 10 * time.Second,
-			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				l.handle(w, r)
-			}),
-		},
-	}
+// SetConfigChan sets the config channel
+func (l *Server) SetConfigChan(configChan <-chan *config.Config) {
+	l.configChan = configChan
 }
 
-func (l *Server) startServer() {
-	// TODO: error checking
-	go l.server.Serve(l.listener)
+// Init prepares listener
+func (l *Server) Init(config *config.Config) error {
+	l.config = config.Section("admin").(*Config)
+	l.config.apiRoot = newAPIRoot(l.app)
+
+	return l.initServer()
 }
 
 // Run is the main routine for the admin listener
 func (l *Server) Run() {
-	defer func() {
-		l.Done()
-	}()
-
-	l.startServer()
-
 	var closingOldServer <-chan struct{}
 	var reloadingConfig *Config
 	var shuttingDown, shutdownStarted bool
@@ -107,14 +72,14 @@ func (l *Server) Run() {
 ListenerLoop:
 	for {
 		select {
-		case <-l.OnShutdown():
+		case <-l.shutdownChan:
 			shuttingDown = true
 			if closingOldServer == nil {
 				// Start the shutdown
 				closingOldServer = l.shutdownServer()
 				shutdownStarted = true
 			}
-		case config := <-l.OnConfig():
+		case config := <-l.configChan:
 			// We can't yet disable admin during a reload
 			aconfig := config.Section("admin").(*Config)
 			if aconfig.Enabled {
@@ -153,6 +118,45 @@ ListenerLoop:
 	log.Info("[admin] REST administration exited")
 }
 
+func (l *Server) listen(config *Config) (netListener, error) {
+	bind := splitAdminConnectString(config.Bind)
+
+	if listener, ok := registeredListeners[bind[0]]; ok {
+		log.Info("[admin] REST admin now listening on %s:%s", bind[0], bind[1])
+		return listener(bind[0], bind[1])
+	}
+
+	return nil, fmt.Errorf("Unknown transport specified for admin bind: '%s'", bind[0])
+}
+
+func (l *Server) initServer() error {
+	listener, err := l.listen(l.config)
+	if err != nil {
+		return err
+	}
+
+	l.startServer(listener)
+	return nil
+}
+
+func (l *Server) startServer(listener netListener) {
+	l.listener = listener
+	l.server = &graceful.Server{
+		// We handle shutdown ourselves
+		NoSignalHandling: true,
+		// The HTTP server
+		Server: &http.Server{
+			// TODO: Make all these configurable?
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				l.handle(w, r)
+			}),
+		},
+	}
+	go l.server.Serve(l.listener)
+}
+
 func (l *Server) shutdownServer() <-chan struct{} {
 	// TODO: Make configurable? This is the shutdown timeout
 	l.server.Stop(10 * time.Second)
@@ -169,8 +173,7 @@ func (l *Server) reloadServer(config *Config) <-chan struct{} {
 
 	stopChan := l.shutdownServer()
 
-	l.initServer(newListener)
-	l.startServer()
+	l.startServer(newListener)
 
 	return stopChan
 }

@@ -18,23 +18,23 @@ package tcp
 
 import "fmt"
 
-type protocolPING struct {
+type protocolHELO struct {
 }
 
-// newProtocolPING reads a new protocolPING
-func newProtocolPING(t connection, bodyLength uint32) (*protocolPING, error) {
+// newProtocolHELO reads a new protocolHELO
+func newProtocolHELO(t connection, bodyLength uint32) (*protocolHELO, error) {
 	if bodyLength != 0 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message PING size %d != 0", bodyLength)
+		return nil, fmt.Errorf("Protocol error: Corrupt message HELO size %d != 0", bodyLength)
 	}
 
-	return &protocolPING{}, nil
+	return &protocolHELO{}, nil
 }
 
 // Write writes a payload to the socket
-func (p *protocolPING) Write(t connection) error {
-	// Encapsulate the ping into a message
-	// 4-byte message header (PING)
-	// 4-byte uint32 data length (0 length for PING)
-	_, err := t.Write([]byte{'P', 'I', 'N', 'G', 0, 0, 0, 0})
+func (p *protocolHELO) Write(t connection) error {
+	// Encapsulate the HELO into a message
+	// 4-byte message header (HELO)
+	// 4-byte uint32 data length (0 length for HELO)
+	_, err := t.Write([]byte{'H', 'E', 'L', 'O', 0, 0, 0, 0})
 	return err
 }

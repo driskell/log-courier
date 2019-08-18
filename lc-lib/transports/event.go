@@ -16,11 +16,13 @@
 
 package transports
 
-import "encoding/binary"
+import (
+	"github.com/driskell/log-courier/lc-lib/event"
+)
 
 // Event is the interface implemented by all event structures
 type Event interface {
-	Observer() Observer
+	Context() interface{}
 }
 
 // StatusChange holds a value that represents a change in transport status
@@ -35,21 +37,21 @@ const (
 
 // StatusEvent contains information about a status change for a transport
 type StatusEvent struct {
-	observer     Observer
+	context      interface{}
 	statusChange StatusChange
 }
 
-// NewStatusEvent generates a new StatusEvent for the given Observer/Endpoint
-func NewStatusEvent(observer Observer, statusChange StatusChange) *StatusEvent {
+// NewStatusEvent generates a new StatusEvent for the given context
+func NewStatusEvent(context interface{}, statusChange StatusChange) *StatusEvent {
 	return &StatusEvent{
-		observer:     observer,
+		context:      context,
 		statusChange: statusChange,
 	}
 }
 
-// Observer returns the endpoint associated with this event
-func (e *StatusEvent) Observer() Observer {
-	return e.observer
+// Context returns the endpoint associated with this event
+func (e *StatusEvent) Context() interface{} {
+	return e.context
 }
 
 // StatusChange returns the status change value
@@ -59,31 +61,23 @@ func (e *StatusEvent) StatusChange() StatusChange {
 
 // AckEvent contains information on which events have been acknowledged
 type AckEvent struct {
-	observer Observer
+	context  interface{}
 	nonce    string
 	sequence uint32
 }
 
 // NewAckEvent generates a new AckEvent for the given Endpoint
-func NewAckEvent(observer Observer, nonce string, sequence uint32) *AckEvent {
+func NewAckEvent(context interface{}, nonce string, sequence uint32) *AckEvent {
 	return &AckEvent{
-		observer: observer,
+		context:  context,
 		nonce:    nonce,
 		sequence: sequence,
 	}
 }
 
-// NewAckEventWithBytes generates a new AckEvent using bytes, conveniently
-// converting them to string and uint32
-func NewAckEventWithBytes(observer Observer, nonce []byte, sequence []byte) *AckEvent {
-	stringNonce := string(nonce)
-	integerSequence := binary.BigEndian.Uint32(sequence)
-	return NewAckEvent(observer, stringNonce, integerSequence)
-}
-
-// Observer returns the endpoint associated with this event
-func (e *AckEvent) Observer() Observer {
-	return e.observer
+// Context returns the endpoint associated with this event
+func (e *AckEvent) Context() interface{} {
+	return e.context
 }
 
 // Nonce returns the nonce value
@@ -96,19 +90,50 @@ func (e *AckEvent) Sequence() uint32 {
 	return e.sequence
 }
 
-// PongEvent is received when a transport has responded to a Ping() request
-type PongEvent struct {
-	observer Observer
+// EventsEvent contains events that need to be ingested
+type EventsEvent struct {
+	context interface{}
+	nonce   string
+	events  []*event.Event
 }
 
-// NewPongEvent generates a new PongEvent for the given Endpoint
-func NewPongEvent(observer Observer) *PongEvent {
-	return &PongEvent{
-		observer: observer,
+// NewEventsEvent generates a new EventsEvent for the given Endpoint
+func NewEventsEvent(context interface{}, nonce string, events []*event.Event) *EventsEvent {
+	return &EventsEvent{
+		context: context,
+		nonce:   nonce,
+		events:  events,
 	}
 }
 
-// Observer returns the endpoint associated with this event
-func (e *PongEvent) Observer() Observer {
-	return e.observer
+// Context returns the endpoint associated with this event
+func (e *EventsEvent) Context() interface{} {
+	return e.context
+}
+
+// Nonce returns the nonce
+func (e *EventsEvent) Nonce() string {
+	return e.nonce
+}
+
+// Count returns the number of events in the payload
+func (e *EventsEvent) Count() uint32 {
+	return uint32(len(e.events))
+}
+
+// PongEvent is received when a transport has responded to a Ping() request
+type PongEvent struct {
+	context interface{}
+}
+
+// NewPongEvent generates a new PongEvent for the given Endpoint
+func NewPongEvent(context interface{}) *PongEvent {
+	return &PongEvent{
+		context: context,
+	}
+}
+
+// Context returns the endpoint associated with this event
+func (e *PongEvent) Context() interface{} {
+	return e.context
 }

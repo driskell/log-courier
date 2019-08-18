@@ -18,23 +18,23 @@ package tcp
 
 import "fmt"
 
-type protocolPING struct {
+type protocolUNKN struct {
 }
 
-// newProtocolPING reads a new protocolPING
-func newProtocolPING(t connection, bodyLength uint32) (*protocolPING, error) {
+// newProtocolUNKN reads a new protocolUNKN
+func newProtocolUNKN(t connection, bodyLength uint32) (*protocolUNKN, error) {
 	if bodyLength != 0 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message PING size %d != 0", bodyLength)
+		return nil, fmt.Errorf("Protocol error: Corrupt message UNKN size %d != 0", bodyLength)
 	}
 
-	return &protocolPING{}, nil
+	return &protocolUNKN{}, nil
 }
 
 // Write writes a payload to the socket
-func (p *protocolPING) Write(t connection) error {
-	// Encapsulate the ping into a message
-	// 4-byte message header (PING)
-	// 4-byte uint32 data length (0 length for PING)
-	_, err := t.Write([]byte{'P', 'I', 'N', 'G', 0, 0, 0, 0})
+func (p *protocolUNKN) Write(t connection) error {
+	// Encapsulate the message
+	// 4-byte message header (UNKN)
+	// 4-byte uint32 data length (0 length for UNKN)
+	_, err := t.Write([]byte{'?', '?', '?', '?', 0, 0, 0, 0})
 	return err
 }

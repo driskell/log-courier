@@ -26,52 +26,150 @@ import (
 // It holds references to each "pipeline worker" and provides start/stop and
 // config reload and other features to them
 type Pipeline struct {
-	pipes       []IPipelineSegment
-	signal      chan interface{}
-	group       sync.WaitGroup
-	configSinks map[*PipelineConfigReceiver]chan *config.Config
+	sources       []pipelineSourceSegment
+	sink          pipelineSinkSegment
+	processors    []pipelineProcessorSegment
+	services      []pipelineServiceSegment
+	signal        chan struct{}
+	signalSources chan struct{}
+	group         sync.WaitGroup
+	groupSources  sync.WaitGroup
+	closeOnce     sync.Once
+	configSinks   map[pipelineConfigSegment]chan *config.Config
 }
 
 // NewPipeline creates a new pipeline
 func NewPipeline() *Pipeline {
-	return &Pipeline{
-		pipes:       make([]IPipelineSegment, 0, 5),
-		signal:      make(chan interface{}),
-		configSinks: make(map[*PipelineConfigReceiver]chan *config.Config),
+	p := &Pipeline{
+		signal:        make(chan struct{}),
+		signalSources: make(chan struct{}),
+		configSinks:   make(map[pipelineConfigSegment]chan *config.Config),
+	}
+
+	return p
+}
+
+// AddSource adds a source segment
+func (p *Pipeline) AddSource(source pipelineSourceSegment) {
+	p.registerSegment(source)
+	p.sources = append(p.sources, source)
+}
+
+// AddProcessor adds a processor segment
+func (p *Pipeline) AddProcessor(processor pipelineProcessorSegment) {
+	p.registerSegment(processor)
+	p.processors = append(p.processors, processor)
+}
+
+// SetSink sets the sink segment
+func (p *Pipeline) SetSink(sink pipelineSinkSegment) {
+	if p.sink != nil {
+		panic("Can only set one sink segment")
+	}
+	p.registerSegment(sink)
+	p.sink = sink
+}
+
+// AddService adds a service segment
+func (p *Pipeline) AddService(service pipelineServiceSegment) {
+	p.registerSegment(service)
+	p.services = append(p.services, service)
+}
+
+// registerSegment adds a segment to any relevant handlers
+func (p *Pipeline) registerSegment(segment pipelineSegment) {
+	if configSegment, ok := segment.(pipelineConfigSegment); ok {
+		configChan := make(chan *config.Config)
+		p.configSinks[configSegment] = configChan
+		configSegment.SetConfigChan(configChan)
 	}
 }
 
-// Add a pipe segment to the pipeline
-// A pipe segment is any struct that includes a PipelineSegment structure
-// Segments can also include PipelineConfigReceiver structures and others to
-// provide additional functionality to them
-func (p *Pipeline) Add(ipipe IPipelineSegment) {
+// Run the pipeline, starting up each segment and then waiting for sink to finish or shutdown
+func (p *Pipeline) Run(config *config.Config) {
+	if err := p.initRoutines(config); err != nil {
+		log.Error("Pipeline failed: %s", err)
+	}
+
+	// Wait for sink to complete
+	log.Notice("Pipeline ready")
 	p.group.Add(1)
-
-	pipe := ipipe.getStruct()
-	pipe.signal = p.signal
-	pipe.group = &p.group
-
-	p.pipes = append(p.pipes, ipipe)
-
-	if ipipeExt, ok := ipipe.(IPipelineConfigReceiver); ok {
-		pipeExt := ipipeExt.getConfigReceiverStruct()
-		sink := make(chan *config.Config)
-		p.configSinks[pipeExt] = sink
-		pipeExt.configChan = sink
-	}
+	p.run(&p.group, p.sink.Run)
+	// If the sink is not accepting events anymore then nothing is needed anymore
+	p.shutdownAll()
 }
 
-// Start runs the pipeline, starting up each segment
-func (p *Pipeline) Start() {
-	for _, ipipe := range p.pipes {
-		go ipipe.Run()
+// Run the pipeline, starting up each segment and then waiting for sink to finish or shutdown
+func (p *Pipeline) initRoutines(config *config.Config) (err error) {
+	if len(p.sources) == 0 {
+		panic("Must have at least a single source segment")
 	}
+	if p.sink == nil {
+		panic("Missing sink segment")
+	}
+	for _, service := range p.services {
+		service.SetShutdownChan(p.signal)
+		if err = service.Init(config); err != nil {
+			p.shutdownAll()
+			return
+		}
+		p.group.Add(1)
+		go p.run(&p.group, service.Run)
+	}
+	if err = p.sink.Init(config); err != nil {
+		p.shutdownAll()
+		return
+	}
+	input := p.sink.Input()
+	for i := len(p.processors) - 1; i >= 0; i-- {
+		p.processors[i].SetOutput(input)
+		if err = p.processors[i].Init(config); err != nil {
+			p.shutdownAll()
+			return
+		}
+		p.group.Add(1)
+		go p.run(&p.group, p.processors[i].Run)
+		input = p.processors[i].Input()
+	}
+	for _, source := range p.sources {
+		source.SetOutput(input)
+		source.SetShutdownChan(p.signalSources)
+		if err = source.Init(config); err != nil {
+			p.shutdownAll()
+			return
+		}
+		p.groupSources.Add(1)
+		go p.run(&p.groupSources, source.Run)
+	}
+	go func() {
+		p.groupSources.Wait()
+		close(input)
+	}()
+	return nil
 }
 
-// Shutdown stops the pipeline, requesting each segment to shutdown
-func (p *Pipeline) Shutdown() {
+// run wraps the pipeline segment Run method and closes the group when finished
+func (p *Pipeline) run(group *sync.WaitGroup, run func()) {
+	defer func() {
+		group.Done()
+	}()
+
+	run()
+}
+
+// shutdownAll stops everything - should only run once sink dies
+// or if an error occurs during startup (which means sink didn't start yet - as that's last)
+func (p *Pipeline) shutdownAll() {
+	p.Shutdown()
 	close(p.signal)
+}
+
+// Shutdown stops the pipeline, requesting sources to shutdown
+func (p *Pipeline) Shutdown() {
+	p.closeOnce.Do(func() {
+		log.Notice("Pipeline shutting down")
+		close(p.signalSources)
+	})
 }
 
 // Wait sleeps until the pipeline has completely shutdown

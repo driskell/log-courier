@@ -21,7 +21,6 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 var (
@@ -57,9 +56,9 @@ func (c *Config) SetEntry(path string, entry api.Navigatable) {
 	c.apiRoot.(*apiRoot).SetEntry(path, entry)
 }
 
-// ConfigFromApp returns the config from the given application config
-func ConfigFromApp(app *core.App) *Config {
-	return app.Config().Section("admin").(*Config)
+// FetchConfig returns the config from the given config
+func FetchConfig(cfg *config.Config) *Config {
+	return cfg.Section("admin").(*Config)
 }
 
 func init() {

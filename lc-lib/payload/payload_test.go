@@ -29,7 +29,7 @@ const (
 func createTestPayload(t *testing.T, numEvents int) *Payload {
 	testEvents := make([]*event.Event, numEvents)
 	for idx := range testEvents {
-		testEvents[idx] = event.NewEvent("test", map[string]interface{}{}, idx)
+		testEvents[idx] = event.NewEvent(nil, map[string]interface{}{}, idx)
 	}
 
 	ret := NewPayload(testEvents)
