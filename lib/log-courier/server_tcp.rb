@@ -1,6 +1,6 @@
 # encoding: utf-8
 
-# Copyright 2014 Jason Woods.
+# Copyright 2014-2019 Jason Woods and Contributors.
 #
 # This file is a modification of code from Logstash Forwarder.
 # Copyright 2012-2013 Jordan Sissel and contributors.
@@ -172,7 +172,7 @@ module LogCourier
       return
     rescue StandardError, NativeException => e
       # Some other unknown problem
-      @logger.warn e, :hint => 'Unknown error, shutting down' unless @logger.nil?
+      @logger.warn e.message, :hint => 'Unknown error, shutting down' unless @logger.nil?
       return
     ensure
       # Raise shutdown in all client threads and join then
@@ -242,7 +242,7 @@ module LogCourier
       return
     rescue StandardError, NativeException => e
       # Some other unknown problem
-      @logger.warn e, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
+      @logger.warn e.message, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
       return
     end
 

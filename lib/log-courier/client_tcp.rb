@@ -1,6 +1,6 @@
 # encoding: utf-8
 
-# Copyright 2014 Jason Woods.
+# Copyright 2014-2019 Jason Woods and Contributors.
 #
 # This file is a modification of code from Logstash Forwarder.
 # Copyright 2012-2013 Jordan Sissel and contributors.

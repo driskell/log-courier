@@ -1,6 +1,6 @@
 # encoding: utf-8
 
-# Copyright 2014 Jason Woods.
+# Copyright 2014-2019 Jason Woods and Contributors.
 #
 # This file is a modification of code from Ruby.
 # Ruby is copyrighted free software by Yukihiro Matsumoto <matz@netlab.jp>.
