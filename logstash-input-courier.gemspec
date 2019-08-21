@@ -1,6 +1,6 @@
 Gem::Specification.new do |gem|
   gem.name              = 'logstash-input-courier'
-  gem.version           = '1.10.0'
+  gem.version           = '1.10.1'
   gem.description       = 'Courier Input Logstash Plugin'
   gem.summary           =
     'Receive events from Log Courier and Logstash using the Courier protocol'
