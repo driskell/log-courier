@@ -14,5 +14,5 @@ gem 'rspec-core', '~> 3.1', :group => 'test'
 
 # Log Courier gem JSON parsers
 # TODO(Driskell): Move these into platform specific gems?
-gem 'oj', '~> 2.11', :platforms => :mri
-gem 'jrjackson', '~> 0.2',  :platforms => :jruby
+gem 'oj', '~> 3.8', :platforms => :mri
+gem 'jrjackson', '~> 0.4',  :platforms => :jruby
