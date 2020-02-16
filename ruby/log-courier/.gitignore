@@ -1,0 +1,6 @@
+/.bundle
+/.vagrant
+/lib/log-courier/version.rb
+/pkg
+/spec/tmp
+/vendor
