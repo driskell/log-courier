@@ -23,7 +23,7 @@ task :docs do
     next if ok
     fail %('npm' not found. You need to install node.js.)
   end
-  sh 'npm install doctoc >/dev/null' do |ok|
+  sh 'npm install >/dev/null' do |ok|
     next if ok
     fail 'Failed to perform local install of doctoc.'
   end

@@ -11,14 +11,26 @@ instances.
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [Upgrading to 2.x](#upgrading-to-2x)
-- [Features](#features)
-- [Philosophy](#philosophy)
-- [Documentation](#documentation)
-  - [Installation](#installation)
-  - [Reference](#reference)
+- [Log Courier](#log-courier)
+  - [Compatible Logstash Versions](#compatible-logstash-versions)
+  - [Upgrading to 2.x](#upgrading-to-2x)
+  - [Features](#features)
+  - [Philosophy](#philosophy)
+  - [Documentation](#documentation)
+    - [Installation](#installation)
+    - [Reference](#reference)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Compatible Logstash Versions
+
+Log Courier is compatible with most Logstash versions with a single exception.
+
+* `>=7.4.0` and `<7.6.0` use a version of JRuby that has a bug making it incompatible
+  and causes log-courier events to stop processing after an indeterminable amount
+  of time (see #370) - please upgrade to 7.6.0 which updates JRuby to a compatible
+  version.
+
 
 ## Upgrading to 2.x
 
