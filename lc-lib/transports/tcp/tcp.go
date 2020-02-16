@@ -31,9 +31,13 @@ const (
 )
 
 var (
-	// Errors
-	ErrEventTooLarge   = errors.New("JDAT compressed entry message too large to decode")
-	ErrUnexpectedEnd   = errors.New("Unexpected end of JDAT compressed entry")
+	// ErrEventTooLarge occurs when a message breaches the size limit configured
+	ErrEventTooLarge = errors.New("JDAT compressed entry message too large to decode")
+
+	// ErrUnexpectedEnd occurs when a message ends unexpectedly
+	ErrUnexpectedEnd = errors.New("Unexpected end of JDAT compressed entry")
+
+	// ErrUnexpectedBytes occurs when a message has extraneous bytes beyond its compression stream
 	ErrUnexpectedBytes = errors.New("Unexpected bytes after JDAT compressed entry end")
 
 	// TransportTCPTCP is the transport name for plain TCP
@@ -43,7 +47,7 @@ var (
 )
 
 type connection interface {
-	Setup()
+	Run() error
 	Teardown()
 	Server() bool
 	Write([]byte) (int, error)

@@ -40,7 +40,7 @@ const (
 
 // Config holds network related configuration
 type Config struct {
-	Factory      interface{}
+	Factory      TransportFactory
 	AddressPools []*addresspool.Pool
 
 	Backoff            time.Duration `config:"failure backoff"`

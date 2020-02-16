@@ -83,8 +83,7 @@ func (t *listenerTCP) newConnection(socket net.Conn) {
 		poolServer:     t.pool.Server(),
 		connectionChan: t.connectionChan,
 		server:         true,
-		// TODO: Additional small routine to collapse same-nonce acks into a 10-size channel matching receive limit?
-		sendChan: make(chan protocolMessage, 10),
+		sendChan:       make(chan protocolMessage, 10),
 	}
 
 	t.connectionChan <- &socketMessage{conn: conn}

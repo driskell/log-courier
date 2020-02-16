@@ -61,7 +61,7 @@ type TransportTCPFactory struct {
 
 // NewTransportTCPFactory create a new TransportTCPFactory from the provided
 // configuration data, reporting back any configuration errors it discovers.
-func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
+func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (transports.TransportFactory, error) {
 	var err error
 
 	ret := &TransportTCPFactory{

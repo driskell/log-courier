@@ -24,8 +24,9 @@ import (
 
 // ReceiverConfig contains extra section configuration values
 type ReceiverConfig struct {
-	Factory interface{}
+	Factory ReceiverFactory
 
+	Enabled   bool   `config:"enabled"`
 	Transport string `config:"transport"`
 
 	Unused map[string]interface{}
@@ -33,7 +34,7 @@ type ReceiverConfig struct {
 
 // Init the receiver configuration
 func (nc *ReceiverConfig) Init(p *config.Parser, path string) (err error) {
-	registrarFunc, ok := registeredTransports[nc.Transport]
+	registrarFunc, ok := registeredReceivers[nc.Transport]
 	if !ok {
 		err = fmt.Errorf("Unrecognised listener transport '%s'", nc.Transport)
 		return

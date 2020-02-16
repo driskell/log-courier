@@ -34,7 +34,7 @@ import (
 
 type connectionTCP struct {
 	socket   net.Conn
-	server   bool
+	server   bool // TODO: Merge with context - become clientContext
 	rwBuffer bufio.ReadWriter
 
 	context        interface{}
@@ -44,46 +44,56 @@ type connectionTCP struct {
 	sendChan       chan protocolMessage
 
 	controllerChan chan struct{}
+	errChan        chan error
 	wait           sync.WaitGroup
+	err            error
 
 	supportsEvnt   bool
 	partialAcks    []eventsMessage
-	partialAckChan chan eventsMessage
+	partialAckChan chan protocolMessage
 	lastSequence   uint32
 }
 
-// setup starts the sender and receiver routines
-func (t *connectionTCP) Setup() {
+// Run starts the connection
+// Negiation for client connections runs synchronously
+// Then receiver runs sychronously with async sender
+// Sender is stopped via controllerChan by sending it an error on a single error buffered channel
+// Sender will store an error and exit - this means if both receiver and sender fail, sender error wins as it will ignore the channel
+func (t *connectionTCP) Run() error {
 	t.controllerChan = make(chan struct{})
+	t.errChan = make(chan error)
 
 	// Only setup these channels if allowing data, without them, we never allow JDAT
 	if t.server {
 		// TODO: Make configurable, max we receive into memory unacknowledged before stop receiving
 		t.partialAcks = make([]eventsMessage, 10)
-		t.partialAckChan = make(chan eventsMessage)
+		t.partialAckChan = make(chan protocolMessage)
 	}
 
 	t.rwBuffer.Reader = bufio.NewReader(t.socket)
 	t.rwBuffer.Writer = bufio.NewWriter(t.socket)
 
-	if t.server {
-		// Server mode
-		t.wait.Add(2)
-		go t.sender()
-		go t.receiver()
-	} else {
+	if !t.server {
 		// Client mode
 		t.wait.Add(1)
-		go t.negotiate()
+		t.negotiate()
+
+		// Send a started signal to say we're ready
+		if t.sendEvent(transports.NewStatusEvent(t.context, transports.Started)) {
+			return nil
+		}
 	}
+
+	go t.sender()
+	t.receiver()
+
+	// Exiting - wait for sender exit
+	return <-t.errChan
 }
 
 // negotiate works out the protocol version supported by the remote
+// negotiate is synchronous on its own
 func (t *connectionTCP) negotiate() {
-	defer func() {
-		t.wait.Done()
-	}()
-
 	if !t.writeMsg(&protocolHELO{}) {
 		return
 	}
@@ -111,26 +121,19 @@ func (t *connectionTCP) negotiate() {
 	if t.supportsEvnt {
 		log.Debug("[%s] Remote %s supports enhanced EVNT messages", t.poolServer, t.socket.RemoteAddr().String())
 	}
-
-	t.wait.Add(2)
-	go t.sender()
-	t.receiver()
 }
 
 // sender handles socket writes
+// sender is async whilst receiver runs synchronously, and shuts down by receiving err and storing it
 func (t *connectionTCP) sender() {
+	var err error
 	defer func() {
-		t.wait.Done()
+		t.errChan <- err
 	}()
-
-	// Send a started signal to say we're ready to receive events
-	if t.sendEvent(transports.NewStatusEvent(t.context, transports.Started)) {
-		return
-	}
 
 	var timeout *time.Timer
 	var timeoutChan <-chan time.Time
-	var ackChan <-chan eventsMessage
+	var ackChan <-chan protocolMessage
 
 	if t.server {
 		// TODO: Configurable? It's very low impact on anything though... NB: Repeated below
@@ -148,58 +151,81 @@ SenderLoop:
 		case <-t.controllerChan:
 			// Shutdown
 			break SenderLoop
-		case partialAck := <-ackChan:
-			// Stop receiving if we now have 10
-			t.partialAcks = append(t.partialAcks, partialAck)
-			if len(t.partialAcks) >= 10 {
-				ackChan = nil
+		case message := <-ackChan:
+			if partialAck, ok := message.(eventsMessage); ok {
+				// Stop receiving if we now have 10
+				t.partialAcks = append(t.partialAcks, partialAck)
+				if len(t.partialAcks) >= 10 {
+					ackChan = nil
+				}
+
+				// If timer not started, start it
+				if timeoutChan == nil {
+					timeoutChan = timeout.C
+					timeout.Reset(5 * time.Second)
+				}
+				continue
 			}
 
-			// If timer not started, start it
-			if timeoutChan == nil {
-				timeoutChan = timeout.C
-				timeout.Reset(5 * time.Second)
+			if _, ok := message.(*protocolPING); ok {
+				if len(t.partialAcks) > 0 {
+					// Invalid - protocol violation - cannot send PING whilst Events in progress
+					t.fail(fmt.Errorf(
+						"Protocol violation - cannot send PING whilst in-flight events (count: %d, current nonce: %s) in progress (JDAT/EVNT/...)",
+						len(t.partialAcks),
+						t.partialAcks[0].Nonce(),
+					))
+					break SenderLoop
+				}
+
+				msg = &protocolPONG{}
+				break
 			}
 
-			continue
+			panic(fmt.Sprintf(
+				"Invalid sender ackChan request; expected eventsMessage or *protocolPING and received %T",
+				message,
+			))
 		case <-timeoutChan:
 			// Partial ack
 			msg = &protocolACKN{nonce: t.partialAcks[0].Nonce(), sequence: t.lastSequence}
 		case msg = <-t.sendChan:
 			// Should ALWAYS be in order
-			if ack, ok := msg.(*protocolACKN); ok {
-				if ack.nonce != t.partialAcks[0].Nonce() || ack.sequence <= t.lastSequence {
-					panic(fmt.Sprintf(
-						"Out-of-order ACK received; expected nonce %s (sequence > %d) and received ACK for nonce %s (sequence %d)",
-						t.partialAcks[0].Nonce(),
-						t.lastSequence,
-						ack.nonce,
-						ack.sequence,
-					))
-				}
-
-				if ack.sequence >= uint32(len(t.partialAcks[0].Events())) {
-					// Full ack, shift list
-					for i := 1; i < len(t.partialAcks)-1; i++ {
-						t.partialAcks[i-1] = t.partialAcks[i]
-					}
-					t.partialAcks[len(t.partialAcks)-1] = nil
-
-					// Reset last sequence
-					t.lastSequence = 0
-
-					// Still need timer?
-					if len(t.partialAcks) == 0 {
-						timeoutChan = nil
+			if t.server {
+				if ack, ok := msg.(*protocolACKN); ok {
+					if ack.nonce != t.partialAcks[0].Nonce() || ack.sequence <= t.lastSequence {
+						panic(fmt.Sprintf(
+							"Out-of-order ACK received; expected nonce %s (sequence > %d) and received ACK for nonce %s (sequence %d)",
+							t.partialAcks[0].Nonce(),
+							t.lastSequence,
+							ack.nonce,
+							ack.sequence,
+						))
 					}
 
-					// Restore ackChan
-					if ackChan == nil {
-						ackChan = t.partialAckChan
+					if ack.sequence >= uint32(len(t.partialAcks[0].Events())) {
+						// Full ack, shift list
+						for i := 1; i < len(t.partialAcks)-1; i++ {
+							t.partialAcks[i-1] = t.partialAcks[i]
+						}
+						t.partialAcks[len(t.partialAcks)-1] = nil
+
+						// Reset last sequence
+						t.lastSequence = 0
+
+						// Still need timer?
+						if len(t.partialAcks) == 0 {
+							timeoutChan = nil
+						}
+
+						// Restore ackChan
+						if ackChan == nil {
+							ackChan = t.partialAckChan
+						}
+					} else {
+						// Update last sequence
+						t.lastSequence = ack.sequence
 					}
-				} else {
-					// Update last sequence
-					t.lastSequence = ack.sequence
 				}
 			}
 		}
@@ -226,7 +252,7 @@ func (t *connectionTCP) writeMsg(msg protocolMessage) bool {
 	if err != nil {
 		if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
 			// Fail the transport
-			t.fail(err)
+			t.err = err
 			return false
 		}
 	}
@@ -234,24 +260,41 @@ func (t *connectionTCP) writeMsg(msg protocolMessage) bool {
 }
 
 // receiver handles socket reads
+// it runs synchronously
 func (t *connectionTCP) receiver() {
-	defer func() {
-		t.wait.Done()
-	}()
-
 	for {
 		message := t.receiveMsg()
 		if message == nil {
 			break
 		}
 
-		if eventsMessage, ok := message.(eventsMessage); ok {
-			// Start the sender partial acks
-			t.partialAckChan <- eventsMessage
+		if t.server {
+			switch message.(type) {
+			case *protocolPING:
+				// Request receiver to handle a ping response and don't deliver as handled internally in connection
+				t.partialAckChan <- message
+				continue
+			case eventsMessage:
+				// Start the sender partial acks - this blocks if too many outstanding which stops us receiving more
+				t.partialAckChan <- message
+				// TODO - direct events to spooler
+				continue
+			}
+
+			t.fail(fmt.Errorf("Unknown protocol message %T", message))
+			break
 		}
 
-		event := t.messageToEvent(message)
+		var event transports.Event = nil
+		switch messageImpl := message.(type) {
+		case *protocolACKN:
+			event = transports.NewAckEvent(t.context, messageImpl.nonce, messageImpl.sequence)
+		case *protocolPONG:
+			event = transports.NewPongEvent(t.context)
+		}
+
 		if event == nil {
+			t.fail(fmt.Errorf("Unknown protocol message %T", message))
 			break
 		}
 
@@ -333,12 +376,13 @@ func (t *connectionTCP) Read(length uint32) ([]byte, error) {
 // receiverRead will repeatedly read from the socket until the given byte array
 // is filled.
 func (t *connectionTCP) receiverRead(data []byte) (bool, error) {
+	var err error
 	received := 0
 
 ReceiverReadLoop:
 	for {
 		select {
-		case <-t.controllerChan:
+		case err = <-t.errChan:
 			// Shutdown
 			break ReceiverReadLoop
 		default:
@@ -368,7 +412,7 @@ ReceiverReadLoop:
 		}
 	}
 
-	return true, nil
+	return true, err
 }
 
 // fail sends a failure signal
@@ -377,19 +421,6 @@ func (t *connectionTCP) fail(err error) {
 	case <-t.controllerChan:
 	case t.connectionChan <- &socketMessage{conn: t, err: err}:
 	}
-}
-
-// messageToEvent converts a protocol message to a transport event
-func (t *connectionTCP) messageToEvent(message protocolMessage) transports.Event {
-	switch messageImpl := message.(type) {
-	case *protocolACKN:
-		return transports.NewAckEvent(t.context, messageImpl.nonce, messageImpl.sequence)
-	case *protocolPONG:
-		return transports.NewPongEvent(t.context)
-	}
-
-	t.fail(fmt.Errorf("Unknown protocol message"))
-	return nil
 }
 
 // sendEvent ships an event structure whilst also monitoring for

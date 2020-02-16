@@ -37,22 +37,17 @@ type Transport interface {
 	Write(*payload.Payload) error
 }
 
-// transportFactory is the interface that all transport factories implement. The
+// TransportFactory is the interface that all transport factories implement. The
 // transport factory should store the transport's configuration and, when
 // NewTransport is called, return an instance of the transport that obeys that
 // configuration
-type transportFactory interface {
+type TransportFactory interface {
 	NewTransport(interface{}, *addresspool.Pool, chan<- Event, bool) Transport
-}
-
-// NewTransport returns a Transport interface initialised from the given Factory
-func NewTransport(factory interface{}, context interface{}, pool *addresspool.Pool, eventChan chan<- Event, finishOnFail bool) Transport {
-	return factory.(transportFactory).NewTransport(context, pool, eventChan, finishOnFail)
 }
 
 // TransportRegistrarFunc is a callback that validates the configuration for
 // a transport that was registered via RegisterTransport
-type TransportRegistrarFunc func(*config.Parser, string, map[string]interface{}, string) (interface{}, error)
+type TransportRegistrarFunc func(*config.Parser, string, map[string]interface{}, string) (TransportFactory, error)
 
 var registeredTransports = make(map[string]TransportRegistrarFunc)
 

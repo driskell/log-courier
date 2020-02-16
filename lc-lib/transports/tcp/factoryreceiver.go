@@ -52,7 +52,7 @@ type ReceiverTCPFactory struct {
 
 // NewReceiverTCPFactory create a new ReceiverTCPFactory from the provided
 // configuration data, reporting back any configuration errors it discovers.
-func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (interface{}, error) {
+func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (transports.ReceiverFactory, error) {
 	var err error
 
 	ret := &ReceiverTCPFactory{
@@ -128,7 +128,7 @@ func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[strin
 
 // NewReceiver returns a new Receiver interface using the settings from the
 // ReceiverTCPFactory.
-func (f *ReceiverTCPFactory) NewReceiver(context interface{}, pool *addresspool.Pool, eventChan chan<- transports.Event, finishOnFail bool) transports.Receiver {
+func (f *ReceiverTCPFactory) NewReceiver(context interface{}, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Receiver {
 	ret := &ReceiverTCP{
 		config:         f,
 		netConfig:      transports.FetchReceiverConfig(f.config),

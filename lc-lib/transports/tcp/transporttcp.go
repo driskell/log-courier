@@ -87,20 +87,7 @@ func (t *TransportTCP) controller() {
 			// Connected - sit and wait for shutdown or socket message
 			t.backoff.Reset()
 
-			select {
-			// TODO: Handle configuration reload
-			case err = <-t.controllerChan:
-				if err == nil {
-					// Shutdown request
-					t.disconnect()
-					return
-				}
-
-				// Transport error - reset
-			case message := <-t.connectionChan:
-				// Reset transport if socket fails
-				err = message.err
-			}
+			err = t.conn.Run()
 		}
 
 		if err != nil {
@@ -215,8 +202,6 @@ func (t *TransportTCP) connect() (bool, error) {
 	}
 
 	log.Notice("[%s] Connected to %s", t.pool.Server(), desc)
-
-	t.conn.Setup()
 
 	return false, nil
 }

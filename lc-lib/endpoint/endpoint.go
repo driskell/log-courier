@@ -79,7 +79,7 @@ func (e *Endpoint) Init() {
 
 	e.resetPayloads()
 
-	e.transport = transports.NewTransport(e.sink.config.Factory, e, e.Pool(), e.EventChan(), e.finishOnFail)
+	e.transport = e.sink.config.Factory.NewTransport(e, e.Pool(), e.EventChan(), e.finishOnFail)
 }
 
 // Prev returns the previous endpoint in the ordered list

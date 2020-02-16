@@ -27,17 +27,17 @@ type Receiver interface {
 	Shutdown()
 }
 
-// receiverFactory is the interface that all receiver factories implement. The
+// ReceiverFactory is the interface that all receiver factories implement. The
 // receiver factory should store the receiver's configuration and, when
 // NewReceiver is called, return an instance of the receiver that obeys that
 // configuration
-type receiverFactory interface {
-	NewReceiver(interface{}, *addresspool.Pool, chan<- Event, bool) Receiver
+type ReceiverFactory interface {
+	NewReceiver(interface{}, *addresspool.Pool, chan<- Event) Receiver
 }
 
 // ReceiverRegistrarFunc is a callback that validates the configuration for
 // a transport that was registered via Register
-type ReceiverRegistrarFunc func(*config.Parser, string, map[string]interface{}, string) (interface{}, error)
+type ReceiverRegistrarFunc func(*config.Parser, string, map[string]interface{}, string) (ReceiverFactory, error)
 
 var registeredReceivers = make(map[string]ReceiverRegistrarFunc)
 

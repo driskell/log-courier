@@ -116,6 +116,11 @@ func (e *EventsEvent) Nonce() string {
 	return e.nonce
 }
 
+// Events returns the events
+func (e *EventsEvent) Events() []*event.Event {
+	return e.events
+}
+
 // Count returns the number of events in the payload
 func (e *EventsEvent) Count() uint32 {
 	return uint32(len(e.events))
@@ -135,5 +140,22 @@ func NewPongEvent(context interface{}) *PongEvent {
 
 // Context returns the endpoint associated with this event
 func (e *PongEvent) Context() interface{} {
+	return e.context
+}
+
+// PingEvent is received when a transport has responded to a Ping() request
+type PingEvent struct {
+	context interface{}
+}
+
+// NewPingEvent generates a new PingEvent for the given Endpoint
+func NewPingEvent(context interface{}) *PingEvent {
+	return &PingEvent{
+		context: context,
+	}
+}
+
+// Context returns the endpoint associated with this event
+func (e *PingEvent) Context() interface{} {
 	return e.context
 }
