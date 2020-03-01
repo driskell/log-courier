@@ -41,7 +41,6 @@ func (nc *ReceiverConfig) Init(p *config.Parser, path string) (err error) {
 	}
 
 	nc.Factory, err = registrarFunc(p, path+"/", nc.Unused, nc.Transport)
-
 	return
 }
 

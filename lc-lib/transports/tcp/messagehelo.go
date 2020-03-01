@@ -22,7 +22,7 @@ type protocolHELO struct {
 }
 
 // newProtocolHELO reads a new protocolHELO
-func newProtocolHELO(t connection, bodyLength uint32) (*protocolHELO, error) {
+func newProtocolHELO(conn *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength != 0 {
 		return nil, fmt.Errorf("Protocol error: Corrupt message HELO size %d != 0", bodyLength)
 	}
@@ -31,10 +31,10 @@ func newProtocolHELO(t connection, bodyLength uint32) (*protocolHELO, error) {
 }
 
 // Write writes a payload to the socket
-func (p *protocolHELO) Write(t connection) error {
+func (p *protocolHELO) Write(conn *connection) error {
 	// Encapsulate the HELO into a message
 	// 4-byte message header (HELO)
 	// 4-byte uint32 data length (0 length for HELO)
-	_, err := t.Write([]byte{'H', 'E', 'L', 'O', 0, 0, 0, 0})
+	_, err := conn.Write([]byte{'H', 'E', 'L', 'O', 0, 0, 0, 0})
 	return err
 }

@@ -22,7 +22,7 @@ type protocolPING struct {
 }
 
 // newProtocolPING reads a new protocolPING
-func newProtocolPING(t connection, bodyLength uint32) (*protocolPING, error) {
+func newProtocolPING(conn *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength != 0 {
 		return nil, fmt.Errorf("Protocol error: Corrupt message PING size %d != 0", bodyLength)
 	}
@@ -31,10 +31,10 @@ func newProtocolPING(t connection, bodyLength uint32) (*protocolPING, error) {
 }
 
 // Write writes a payload to the socket
-func (p *protocolPING) Write(t connection) error {
+func (p *protocolPING) Write(conn *connection) error {
 	// Encapsulate the ping into a message
 	// 4-byte message header (PING)
 	// 4-byte uint32 data length (0 length for PING)
-	_, err := t.Write([]byte{'P', 'I', 'N', 'G', 0, 0, 0, 0})
+	_, err := conn.Write([]byte{'P', 'I', 'N', 'G', 0, 0, 0, 0})
 	return err
 }

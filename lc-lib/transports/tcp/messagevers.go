@@ -16,20 +16,33 @@
 
 package tcp
 
-import "fmt"
+import (
+	"encoding/binary"
+	"fmt"
+)
 
 type protocolVERS struct {
 	protocolFlags []byte
 }
 
+// createProtocolVERS makes a new sendable version
+func createProtocolVERS() protocolMessage {
+	protocolFlags := make([]byte, 1)
+	// SupportsEVNT flag
+	protocolFlags[0] = protocolFlags[0] & 0x01
+	return &protocolVERS{
+		protocolFlags: protocolFlags,
+	}
+}
+
 // newProtocolVERS reads a new protocolVERS
-func newProtocolVERS(t connection, bodyLength uint32) (*protocolVERS, error) {
+func newProtocolVERS(t *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength > 32 {
 		return nil, fmt.Errorf("Protocol error: Corrupt message (VERS size %d > 32)", bodyLength)
 	}
 
-	protocolFlags, err := t.Read(bodyLength)
-	if protocolFlags == nil {
+	protocolFlags := make([]byte, bodyLength)
+	if _, err := t.Read(protocolFlags); err != nil {
 		return nil, err
 	}
 
@@ -37,11 +50,21 @@ func newProtocolVERS(t connection, bodyLength uint32) (*protocolVERS, error) {
 }
 
 // Write writes a payload to the socket
-func (p *protocolVERS) Write(t connection) error {
+func (p *protocolVERS) Write(conn *connection) error {
 	// Encapsulate the message
-	// 4-byte message header (UNKN)
-	// 4-byte uint32 data length (0 length for UNKN)
-	_, err := t.Write([]byte{'?', '?', '?', '?', 0, 0, 0, 0})
+	// 4-byte message header (VERS)
+	// 4-byte uint32 data length (1 length for VERS)
+	if _, err := conn.Write([]byte{'V', 'E', 'R', 'S'}); err != nil {
+		return err
+	}
+
+	var length [4]byte
+	binary.BigEndian.PutUint32(length[:], uint32(len(p.protocolFlags)))
+	if _, err := conn.Write(length[:]); err != nil {
+		return err
+	}
+
+	_, err := conn.Write(p.protocolFlags)
 	return err
 }
 

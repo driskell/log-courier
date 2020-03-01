@@ -22,7 +22,7 @@ type protocolPONG struct {
 }
 
 // newProtocolPONG reads a new protocolPONG
-func newProtocolPONG(t connection, bodyLength uint32) (*protocolPONG, error) {
+func newProtocolPONG(conn *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength != 0 {
 		return nil, fmt.Errorf("Protocol error: Corrupt message PONG size %d != 0", bodyLength)
 	}
@@ -31,10 +31,10 @@ func newProtocolPONG(t connection, bodyLength uint32) (*protocolPONG, error) {
 }
 
 // Write writes a payload to the socket
-func (p *protocolPONG) Write(t connection) error {
+func (p *protocolPONG) Write(conn *connection) error {
 	// Encapsulate the ping into a message
 	// 4-byte message header (PONG)
 	// 4-byte uint32 data length (0 length for PONG)
-	_, err := t.Write([]byte{'P', 'O', 'N', 'G', 0, 0, 0, 0})
+	_, err := conn.Write([]byte{'P', 'O', 'N', 'G', 0, 0, 0, 0})
 	return err
 }

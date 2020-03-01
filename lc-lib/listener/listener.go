@@ -24,7 +24,7 @@ import (
 
 // Listener listens for incoming events and spools them
 type Listener struct {
-	config *Config
+	config *config.Config
 }
 
 // Init the listener

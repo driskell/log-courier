@@ -27,13 +27,13 @@ type protocolACKN struct {
 }
 
 // newProtocolACKN reads a new protocolACKN
-func newProtocolACKN(t connection, bodyLength uint32) (*protocolACKN, error) {
+func newProtocolACKN(conn *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength != 20 {
 		return nil, fmt.Errorf("Protocol error: Corrupt message (ACKN size %d != 20)", bodyLength)
 	}
 
-	message, err := t.Read(20)
-	if message == nil {
+	message := make([]byte, 20)
+	if _, err := conn.Read(message); err != nil {
 		return nil, err
 	}
 
@@ -42,22 +42,23 @@ func newProtocolACKN(t connection, bodyLength uint32) (*protocolACKN, error) {
 	return &protocolACKN{nonce: nonce, sequence: sequence}, nil
 }
 
-// Write writes a payload to the socket
-func (p *protocolACKN) Write(t connection) error {
+// Write writes a payload to the connection
+func (p *protocolACKN) Write(conn *connection) error {
 	// Encapsulate the ack into a message
 	// 4-byte message header (ACKN)
+	// 4-byte message length
 	// 16-byte nonce
 	// 4-byte uint32 sequence
-	if _, err := t.Write([]byte{'A', 'C', 'K', 'N'}); err != nil {
+	if _, err := conn.Write([]byte{'A', 'C', 'K', 'N', 0, 0, 0, 20}); err != nil {
 		return err
 	}
 
-	if _, err := t.Write([]byte(p.nonce)); err != nil {
+	if _, err := conn.Write([]byte(p.nonce)); err != nil {
 		return err
 	}
 
 	var sequence [4]byte
 	binary.BigEndian.PutUint32(sequence[:], uint32(p.sequence))
-	_, err := t.Write(sequence[:])
+	_, err := conn.Write(sequence[:])
 	return err
 }

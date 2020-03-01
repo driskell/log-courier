@@ -30,6 +30,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -129,18 +130,19 @@ func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[strin
 // NewReceiver returns a new Receiver interface using the settings from the
 // ReceiverTCPFactory.
 func (f *ReceiverTCPFactory) NewReceiver(context interface{}, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Receiver {
-	ret := &ReceiverTCP{
-		config:         f,
-		netConfig:      transports.FetchReceiverConfig(f.config),
-		context:        context,
-		pool:           pool,
-		eventChan:      eventChan,
-		controllerChan: make(chan error),
-		connectionChan: make(chan *socketMessage),
+	ret := &receiverTCP{
+		config:        f,
+		netConfig:     transports.FetchReceiverConfig(f.config),
+		context:       context,
+		pool:          pool,
+		eventChan:     eventChan,
+		listenControl: make(chan struct{}),
+		connections:   make(map[*connection]*connection),
+		// TODO: Own values
+		backoff: core.NewExpBackoff(pool.Server()+" Receiver Reset", defaultNetworkReconnect, defaultNetworkReconnectMax),
 	}
 
-	go ret.controller()
-
+	ret.startController()
 	return ret
 }
 

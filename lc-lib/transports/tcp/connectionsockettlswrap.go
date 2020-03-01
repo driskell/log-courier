@@ -21,22 +21,23 @@ import (
 	"time"
 )
 
+// connectionSocketTLSWrap wraps a TCP socket with timeout functionality for use in TLS
 // If tls.Conn.Write ever times out it will permanently break, so we cannot use
 // SetWriteDeadline with it directly. So we wrap the given tcpsocket and handle
 // the SetWriteDeadline there and check shutdown signal and loop. Inside
 // tls.Conn the Write blocks until it finishes and everyone is happy
-type transportTCPWrap struct {
-	controllerChan <-chan struct{}
-	tcpSocket      net.Conn
+type connectionSocketTLSWrap struct {
+	shutdownOrResetChan <-chan error
+	tcpSocket           net.Conn
 
 	net.Conn
 }
 
-func (w *transportTCPWrap) Read(b []byte) (int, error) {
+func (w *connectionSocketTLSWrap) Read(b []byte) (int, error) {
 	return w.tcpSocket.Read(b)
 }
 
-func (w *transportTCPWrap) Write(b []byte) (n int, err error) {
+func (w *connectionSocketTLSWrap) Write(b []byte) (n int, err error) {
 	length := 0
 
 RetrySend:
@@ -59,9 +60,9 @@ RetrySend:
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			// Check for shutdown, then try again
 			select {
-			case <-w.controllerChan:
+			case <-w.shutdownOrResetChan:
 				// Shutdown
-				return length, err
+				return length, errHardCloseRequested
 			default:
 				goto RetrySend
 			}
@@ -71,26 +72,26 @@ RetrySend:
 	} /* loop forever */
 }
 
-func (w *transportTCPWrap) Close() error {
+func (w *connectionSocketTLSWrap) Close() error {
 	return w.tcpSocket.Close()
 }
 
-func (w *transportTCPWrap) LocalAddr() net.Addr {
+func (w *connectionSocketTLSWrap) LocalAddr() net.Addr {
 	return w.tcpSocket.LocalAddr()
 }
 
-func (w *transportTCPWrap) RemoteAddr() net.Addr {
+func (w *connectionSocketTLSWrap) RemoteAddr() net.Addr {
 	return w.tcpSocket.RemoteAddr()
 }
 
-func (w *transportTCPWrap) SetDeadline(t time.Time) error {
+func (w *connectionSocketTLSWrap) SetDeadline(t time.Time) error {
 	return w.tcpSocket.SetDeadline(t)
 }
 
-func (w *transportTCPWrap) SetReadDeadline(t time.Time) error {
+func (w *connectionSocketTLSWrap) SetReadDeadline(t time.Time) error {
 	return w.tcpSocket.SetReadDeadline(t)
 }
 
-func (w *transportTCPWrap) SetWriteDeadline(t time.Time) error {
+func (w *connectionSocketTLSWrap) SetWriteDeadline(t time.Time) error {
 	return w.tcpSocket.SetWriteDeadline(t)
 }

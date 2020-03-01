@@ -107,7 +107,7 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 
 		pemdata, err := ioutil.ReadFile(ret.SSLCA)
 		if err != nil {
-			return nil, fmt.Errorf("failure reading CA certificate: %s\n", err)
+			return nil, fmt.Errorf("failure reading CA certificate: %s", err)
 		}
 		rest := pemdata
 		var block *pem.Block
@@ -116,11 +116,11 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 			block, rest = pem.Decode(rest)
 			if block != nil {
 				if block.Type != "CERTIFICATE" {
-					return nil, fmt.Errorf("block %d does not contain a certificate: %s\n", pemBlockNum, ret.SSLCA)
+					return nil, fmt.Errorf("block %d does not contain a certificate: %s", pemBlockNum, ret.SSLCA)
 				}
 				cert, err := x509.ParseCertificate(block.Bytes)
 				if err != nil {
-					return nil, fmt.Errorf("failed to parse CA certificate in block %d: %s\n", pemBlockNum, ret.SSLCA)
+					return nil, fmt.Errorf("failed to parse CA certificate in block %d: %s", pemBlockNum, ret.SSLCA)
 				}
 				ret.caList = append(ret.caList, cert)
 				pemBlockNum++
@@ -146,20 +146,19 @@ func (f *TransportTCPFactory) Defaults() {
 // NewTransport returns a new Transport interface using the settings from the
 // TransportTCPFactory.
 func (f *TransportTCPFactory) NewTransport(context interface{}, pool *addresspool.Pool, eventChan chan<- transports.Event, finishOnFail bool) transports.Transport {
-	ret := &TransportTCP{
+	ret := &transportTCP{
 		config:         f,
 		netConfig:      transports.FetchConfig(f.config),
 		finishOnFail:   finishOnFail,
 		context:        context,
 		pool:           pool,
 		eventChan:      eventChan,
-		controllerChan: make(chan error),
+		controllerChan: make(chan error, 1),
 		connectionChan: make(chan *socketMessage),
 		backoff:        core.NewExpBackoff(pool.Server()+" Reconnect", f.Reconnect, f.ReconnectMax),
 	}
 
-	go ret.controller()
-
+	ret.startController()
 	return ret
 }
 

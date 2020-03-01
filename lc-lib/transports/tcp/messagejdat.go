@@ -33,8 +33,8 @@ type protocolJDAT struct {
 }
 
 // newProtocolJDAT creates a new structure from wire-bytes
-func newProtocolJDAT(t connection, bodyLength uint32) (*protocolJDAT, error) {
-	if !t.Server() {
+func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, error) {
+	if !conn.Server() {
 		return nil, errors.New("Protocol error: Unexpected JDAT message received on non-server connection")
 	}
 
@@ -42,8 +42,8 @@ func newProtocolJDAT(t connection, bodyLength uint32) (*protocolJDAT, error) {
 		return nil, fmt.Errorf("Protocol error: Corrupt message (JDAT size %d < 17)", bodyLength)
 	}
 
-	data, err := t.Read(bodyLength)
-	if data == nil {
+	data := make([]byte, bodyLength)
+	if _, err := conn.Read(data); err != nil {
 		return nil, err
 	}
 
@@ -73,22 +73,29 @@ func newProtocolJDAT(t connection, bodyLength uint32) (*protocolJDAT, error) {
 		}
 
 		data := make([]byte, size)
-		n, err := decompressor.Read(data)
-		if n != int(size) {
-			return nil, ErrUnexpectedEnd
-		}
-		if err != io.EOF {
-			return nil, ErrUnexpectedBytes
+		read := 0
+		for {
+			n, err := decompressor.Read(data[read:])
+			read += n
+			if read >= int(size) {
+				break
+			}
+			if err != nil {
+				if err == io.EOF {
+					return nil, ErrUnexpectedEnd
+				}
+				return nil, err
+			}
 		}
 
-		events = append(events, event.NewEventFromBytes(t, data, &evntPosition{nonce: nonce, sequence: sequence}))
+		events = append(events, event.NewEventFromBytes(conn, data, &evntPosition{nonce: nonce, sequence: sequence}))
 	}
 
 	return &protocolJDAT{nonce: nonce, events: events}, nil
 }
 
 // Write writes a payload to the socket
-func (p *protocolJDAT) Write(t connection) error {
+func (p *protocolJDAT) Write(conn *connection) error {
 	var eventBuffer bytes.Buffer
 
 	// Create the compressed data payload
@@ -118,21 +125,21 @@ func (p *protocolJDAT) Write(t connection) error {
 	// 4-byte uint32 data length
 	// 16-byte nonce
 	// Compressed data
-	if _, err := t.Write([]byte{'J', 'D', 'A', 'T'}); err != nil {
+	if _, err := conn.Write([]byte{'J', 'D', 'A', 'T'}); err != nil {
 		return err
 	}
 
 	var length [4]byte
 	binary.BigEndian.PutUint32(length[:], uint32(len(p.nonce)+eventBuffer.Len()))
-	if _, err := t.Write(length[:]); err != nil {
+	if _, err := conn.Write(length[:]); err != nil {
 		return err
 	}
 
-	if _, err := t.Write([]byte(p.nonce)); err != nil {
+	if _, err := conn.Write([]byte(p.nonce)); err != nil {
 		return err
 	}
 
-	_, err = t.Write(eventBuffer.Bytes())
+	_, err = conn.Write(eventBuffer.Bytes())
 	return err
 }
 

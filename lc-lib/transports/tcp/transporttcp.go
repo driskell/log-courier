@@ -24,6 +24,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -32,9 +33,9 @@ import (
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
-// TransportTCP implements a transport that sends over TCP
+// transportTCP implements a transport that sends over TCP
 // It also can optionally introduce a TLS layer for security
-type TransportTCP struct {
+type transportTCP struct {
 	config       *TransportTCPFactory
 	netConfig    *transports.Config
 	finishOnFail bool
@@ -45,12 +46,18 @@ type TransportTCP struct {
 	pool           *addresspool.Pool
 	eventChan      chan<- transports.Event
 	connectionChan chan *socketMessage
-	conn           connection
+	conn           *connection
+
+	sendMutex    sync.RWMutex
+	sendChan     chan protocolMessage
+	supportsEVNT bool
+	shutdown     bool
 }
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-func (t *TransportTCP) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
+// TODO: Modifying netConfig out of routines using it?
+func (t *transportTCP) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
 	newConfig := netConfig.Factory.(*TransportTCPFactory)
 	t.finishOnFail = finishOnFail
 
@@ -66,9 +73,14 @@ func (t *TransportTCP) ReloadConfig(netConfig *transports.Config, finishOnFail b
 	return false
 }
 
-// controller is the master routine which handles connection and reconnection
+// startController starts the controller
+func (t *transportTCP) startController() {
+	go t.controllerRoutine()
+}
+
+// controllerRoutine is the master routine which handles connection and reconnection
 // When reconnecting, the socket and all routines are torn down and restarted
-func (t *TransportTCP) controller() {
+func (t *transportTCP) controllerRoutine() {
 	defer func() {
 		t.eventChan <- transports.NewStatusEvent(t.context, transports.Finished)
 	}()
@@ -78,40 +90,43 @@ func (t *TransportTCP) controller() {
 		var err error
 		var shutdown bool
 
-		shutdown, err = t.connect()
-		if shutdown {
-			t.disconnect()
-			return
-		}
+		err = t.connect()
 		if err == nil {
-			// Connected - sit and wait for shutdown or socket message
 			t.backoff.Reset()
+
+			t.sendMutex.Lock()
+			t.supportsEVNT = t.conn.SupportsEVNT()
+			t.sendChan = t.conn.SendChan()
+			t.sendMutex.Unlock()
 
 			err = t.conn.Run()
 		}
 
+		t.sendMutex.Lock()
+		shutdown = t.shutdown
+		t.sendChan = nil
+		t.sendMutex.Unlock()
+
 		if err != nil {
-			if t.finishOnFail {
-				log.Errorf("[%s] Transport error: %s", t.pool.Server(), err)
-				t.disconnect()
+			log.Errorf("[%s] Transport error, disconnected: %s", t.pool.Server(), err)
+			if t.finishOnFail || shutdown {
 				return
 			}
-
-			log.Errorf("[%s] Transport error, disconnecting: %s", t.pool.Server(), err)
 		} else {
-			log.Info("[%s] Transport disconnecting", t.pool.Server())
+			log.Info("[%s] Transport disconnected gracefully", t.pool.Server())
+			return
 		}
-
-		t.disconnect()
 
 		select {
 		case <-t.controllerChan:
-			return
+			// Ignore any error in controller chan - we're already restarting
 		case t.eventChan <- transports.NewStatusEvent(t.context, transports.Failed):
+			// If we had an error in controller chan, no need to flag in event chan we did error
+			// So this eventChan send should skip if we find one in controllerChan
 		}
 
 		// If this returns false, we are shutting down
-		if !t.reconnectWait() {
+		if t.reconnectWait() {
 			break
 		}
 	}
@@ -119,7 +134,7 @@ func (t *TransportTCP) controller() {
 
 // reconnectWait waits the backoff timeout before attempting to reconnect
 // It also monitors for shutdown and configuration reload events while waiting.
-func (t *TransportTCP) reconnectWait() bool {
+func (t *transportTCP) reconnectWait() bool {
 	now := time.Now()
 	reconnectDue := now.Add(t.backoff.Trigger())
 
@@ -127,21 +142,20 @@ func (t *TransportTCP) reconnectWait() bool {
 	// TODO: Handle configuration reload
 	case <-t.controllerChan:
 		// Shutdown request
-		return false
+		return true
 	case <-time.After(reconnectDue.Sub(now)):
 	}
 
-	return true
+	return false
 }
 
 // connect selects the next address to use and triggers the connect
-// Returns an error and also true if shutdown was detected
-func (t *TransportTCP) connect() (bool, error) {
+func (t *transportTCP) connect() error {
 	t.checkClientCertificates()
 
 	addr, err := t.pool.Next()
 	if err != nil {
-		return false, fmt.Errorf("Failed to select next address: %s", err)
+		return fmt.Errorf("Failed to select next address: %s", err)
 	}
 
 	desc := t.pool.Desc()
@@ -150,7 +164,7 @@ func (t *TransportTCP) connect() (bool, error) {
 
 	socket, err := net.DialTimeout("tcp", addr.String(), t.netConfig.Timeout)
 	if err != nil {
-		return false, fmt.Errorf("Failed to connect to %s: %s", desc, err)
+		return fmt.Errorf("Failed to connect to %s: %s", desc, err)
 	}
 
 	// Maxmium number of payloads we will queue - must be correct as otherwise
@@ -160,6 +174,7 @@ func (t *TransportTCP) connect() (bool, error) {
 	sendChan := make(chan protocolMessage, t.netConfig.MaxPendingPayloads)
 
 	// Now wrap in TLS if this is the TLS transport
+	var connectionSocket connectionSocket
 	if t.config.transport == TransportTCPTLS {
 		tlsConfig := new(tls.Config)
 
@@ -180,73 +195,68 @@ func (t *TransportTCP) connect() (bool, error) {
 		// Set the tlsConfig server name for server validation (required since Go 1.3)
 		tlsConfig.ServerName = t.pool.Host()
 
-		t.conn = &connectionTLS{
-			connectionTCP: connectionTCP{
-				socket:         socket,
-				context:        t.context,
-				poolServer:     t.pool.Server(),
-				eventChan:      t.eventChan,
-				connectionChan: t.connectionChan,
-				sendChan:       sendChan,
-			},
-			tlsConfig: tlsConfig,
-		}
+		connectionSocket = newConnectionSocketTLS(socket.(*net.TCPConn), tlsConfig, false, t.pool.Server())
 	} else {
-		t.conn = &connectionTCP{
-			socket:         socket,
-			context:        t.context,
-			poolServer:     t.pool.Server(),
-			connectionChan: t.connectionChan,
-			sendChan:       sendChan,
-		}
+		connectionSocket = newConnectionSocketTCP(socket.(*net.TCPConn))
 	}
+
+	t.conn = newConnection(connectionSocket, t.context, t.pool.Server(), t.eventChan, sendChan)
 
 	log.Notice("[%s] Connected to %s", t.pool.Server(), desc)
 
-	return false, nil
-}
-
-// disconnect shuts down the connection
-func (t *TransportTCP) disconnect() {
-	if t.conn != nil {
-		t.conn.Teardown()
-	}
-
-	t.conn = nil
-}
-
-// Write a message to the transport
-func (t *TransportTCP) Write(payload *payload.Payload) error {
-	if t.conn.SupportsEVNT() {
-		t.conn.SendChan() <- &protocolEVNT{nonce: payload.Nonce, events: payload.Events()}
-	} else {
-		t.conn.SendChan() <- &protocolJDAT{nonce: payload.Nonce, events: payload.Events()}
-	}
 	return nil
 }
 
-// Ping the remote server
-func (t *TransportTCP) Ping() error {
-	t.conn.SendChan() <- &protocolPING{}
+// Write a message to the transport - only valid after Started transport event received
+func (t *transportTCP) Write(payload *payload.Payload) error {
+	t.sendMutex.Lock()
+	defer t.sendMutex.Unlock()
+	if t.sendChan == nil {
+		return fmt.Errorf("Invalid connection state")
+	}
+	var msg protocolMessage
+	if t.supportsEVNT {
+		msg = &protocolEVNT{nonce: payload.Nonce, events: payload.Events()}
+	} else {
+		msg = &protocolJDAT{nonce: payload.Nonce, events: payload.Events()}
+	}
+	t.sendChan <- msg
+	return nil
+}
+
+// Ping the remote server - only valid after Started transport event received
+func (t *transportTCP) Ping() error {
+	t.sendMutex.Lock()
+	defer t.sendMutex.Unlock()
+	if t.sendChan == nil {
+		return fmt.Errorf("Invalid connection state")
+	}
+	t.sendChan <- &protocolPING{}
 	return nil
 }
 
 // Fail the transport
-func (t *TransportTCP) Fail() {
+func (t *transportTCP) Fail() {
 	select {
 	case t.controllerChan <- transports.ErrForcedFailure:
 	default:
 	}
 }
 
-// Shutdown the transport
-func (t *TransportTCP) Shutdown() {
-	close(t.controllerChan)
+// Shutdown the transport - only valid after Started transport event received
+func (t *transportTCP) Shutdown() {
+	// Sending nil triggers graceful shutdown
+	t.sendMutex.Lock()
+	defer t.sendMutex.Unlock()
+	if t.sendChan != nil {
+		t.sendChan <- nil
+	}
+	t.shutdown = true
 }
 
 // checkClientCertificates logs a warning if it finds any certificates that are
 // not currently valid
-func (t *TransportTCP) checkClientCertificates() {
+func (t *transportTCP) checkClientCertificates() {
 	if t.config.certificateList == nil {
 		// No certificates were specified, don't do anything
 		return

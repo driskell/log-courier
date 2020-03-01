@@ -171,6 +171,7 @@ RegistrarLoop:
 			}
 
 			r.tryWriteRegistry()
+			pendingWrite = false
 		case <-r.shutdownChan:
 			// Sink has completed and we're now shutting down
 			break RegistrarLoop

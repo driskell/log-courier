@@ -37,24 +37,16 @@ var (
 	// ErrUnexpectedEnd occurs when a message ends unexpectedly
 	ErrUnexpectedEnd = errors.New("Unexpected end of JDAT compressed entry")
 
-	// ErrUnexpectedBytes occurs when a message has extraneous bytes beyond its compression stream
-	ErrUnexpectedBytes = errors.New("Unexpected bytes after JDAT compressed entry end")
-
 	// TransportTCPTCP is the transport name for plain TCP
 	TransportTCPTCP = "tcp"
 	// TransportTCPTLS is the transport name for encrypted TLS
 	TransportTCPTLS = "tls"
 )
 
-type connection interface {
-	Run() error
-	Teardown()
-	Server() bool
-	Write([]byte) (int, error)
-	Read(uint32) ([]byte, error)
-	Acknowledge(events []*event.Event)
-	SendChan() chan protocolMessage
-	SupportsEVNT() bool
+type connectionSocket interface {
+	net.Conn
+	Setup() error
+	CloseWrite() error
 }
 
 type listener interface {
@@ -63,7 +55,7 @@ type listener interface {
 }
 
 type protocolMessage interface {
-	Write(connection) error
+	Write(*connection) error
 }
 
 type eventsMessage interface {
@@ -72,6 +64,6 @@ type eventsMessage interface {
 }
 
 type socketMessage struct {
-	conn connection
+	conn *connection
 	err  error
 }

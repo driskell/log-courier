@@ -22,7 +22,7 @@ type protocolUNKN struct {
 }
 
 // newProtocolUNKN reads a new protocolUNKN
-func newProtocolUNKN(t connection, bodyLength uint32) (*protocolUNKN, error) {
+func newProtocolUNKN(conn *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength != 0 {
 		return nil, fmt.Errorf("Protocol error: Corrupt message UNKN size %d != 0", bodyLength)
 	}
@@ -31,10 +31,10 @@ func newProtocolUNKN(t connection, bodyLength uint32) (*protocolUNKN, error) {
 }
 
 // Write writes a payload to the socket
-func (p *protocolUNKN) Write(t connection) error {
+func (p *protocolUNKN) Write(conn *connection) error {
 	// Encapsulate the message
 	// 4-byte message header (UNKN)
 	// 4-byte uint32 data length (0 length for UNKN)
-	_, err := t.Write([]byte{'?', '?', '?', '?', 0, 0, 0, 0})
+	_, err := conn.Write([]byte{'?', '?', '?', '?', 0, 0, 0, 0})
 	return err
 }

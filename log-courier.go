@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/admin"
@@ -112,14 +113,16 @@ func (r *receiverSegment) Init(cfg *config.Config) error {
 
 // Run starts listening
 func (r *receiverSegment) Run() {
-	pool := addresspool.NewPool("0.0.0.0")
+	pool := addresspool.NewPool("0.0.0.0:1222")
 	receiver := r.cfg.Factory.NewReceiver(nil, pool, r.eventChan)
 
 	for {
 		select {
 		case <-r.shutdownChan:
 			receiver.Shutdown()
+			return
 		case receiverEvent := <-r.eventChan:
+			fmt.Printf("%#v\n", receiverEvent)
 			switch eventImpl := receiverEvent.(type) {
 			case *transports.EventsEvent:
 				// TODO: Congestion handling
