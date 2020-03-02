@@ -1,9 +1,8 @@
 language: go
 
-# Test on 1.5-1.6, our supported versions
 go:
-  - 1.5
-  - 1.6
+  - 1.14
+  - 1.13
 
 # Skip install step
 install: true

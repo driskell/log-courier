@@ -49,7 +49,7 @@ func (c *Config) loadJSONFile(path string, rawConfig interface{}) (err error) {
 		return
 	}
 	if stat.Size() > (10 << 20) {
-		err = fmt.Errorf("Config file too large (%s)", stat.Size())
+		err = fmt.Errorf("Config file too large (%d)", stat.Size())
 		return
 	}
 
