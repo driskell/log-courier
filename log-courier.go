@@ -18,7 +18,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/admin"
@@ -122,10 +121,8 @@ func (r *receiverSegment) Run() {
 			receiver.Shutdown()
 			return
 		case receiverEvent := <-r.eventChan:
-			fmt.Printf("%#v\n", receiverEvent)
 			switch eventImpl := receiverEvent.(type) {
 			case *transports.EventsEvent:
-				// TODO: Congestion handling
 				r.output <- eventImpl.Events()
 			}
 		}

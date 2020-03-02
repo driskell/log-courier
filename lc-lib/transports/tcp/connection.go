@@ -283,7 +283,7 @@ func (t *connection) sender() error {
 				if len(t.partialAcks) > 0 {
 					// Invalid - protocol violation - cannot send PING whilst Events in progress
 					return fmt.Errorf(
-						"Protocol violation - cannot send PING whilst in-flight events (count: %d, current nonce: %s) in progress (JDAT/EVNT/...)",
+						"Protocol violation - cannot send PING whilst in-flight events (count: %d, current nonce: %s) in progress",
 						len(t.partialAcks),
 						t.partialAcks[0].Nonce(),
 					)
@@ -294,7 +294,7 @@ func (t *connection) sender() error {
 			}
 
 			panic(fmt.Sprintf(
-				"Invalid sender ackChan request; expected eventsMessage or *protocolPING and received %T",
+				"Invalid sender partialAckChan request; expected eventsMessage or *protocolPING and received %T",
 				message,
 			))
 		case <-timeoutChan:
@@ -309,9 +309,16 @@ func (t *connection) sender() error {
 			if t.server {
 				// ACKN Should ALWAYS be in order
 				if ack, ok := msg.(*protocolACKN); ok {
+					if len(t.partialAcks) == 0 {
+						panic(fmt.Sprintf(
+							"Out-of-order ACK received; there are no outstanding payloads yet received ACK for nonce %x (sequence %d)",
+							ack.nonce,
+							ack.sequence,
+						))
+					}
 					if ack.nonce != t.partialAcks[0].Nonce() || ack.sequence <= t.lastSequence {
 						panic(fmt.Sprintf(
-							"Out-of-order ACK received; expected nonce %s (sequence > %d) and received ACK for nonce %s (sequence %d)",
+							"Out-of-order ACK received; expected nonce %x (sequence > %d) and received ACK for nonce %x (sequence %d)",
 							t.partialAcks[0].Nonce(),
 							t.lastSequence,
 							ack.nonce,
@@ -321,10 +328,10 @@ func (t *connection) sender() error {
 
 					if ack.sequence >= uint32(len(t.partialAcks[0].Events())) {
 						// Full ack, shift list
-						for i := 1; i < len(t.partialAcks)-1; i++ {
+						for i := 1; i < len(t.partialAcks); i++ {
 							t.partialAcks[i-1] = t.partialAcks[i]
 						}
-						t.partialAcks[len(t.partialAcks)-1] = nil
+						t.partialAcks = t.partialAcks[:len(t.partialAcks)-1]
 
 						// Reset last sequence
 						t.lastSequence = 0
@@ -372,8 +379,9 @@ func (t *connection) receiver() error {
 			return err
 		}
 
+		var event transports.Event = nil
 		if t.server {
-			switch message.(type) {
+			switch messageImpl := message.(type) {
 			case *protocolPING:
 				// Request receiver to handle a ping response and don't deliver as handled internally in connection
 				t.partialAckChan <- message
@@ -381,19 +389,15 @@ func (t *connection) receiver() error {
 			case eventsMessage:
 				// Start the sender partial acks - this blocks if too many outstanding which stops us receiving more
 				t.partialAckChan <- message
-				// TODO - direct events to spooler
-				continue
+				event = transports.NewEventsEvent(t.context, messageImpl.Nonce(), messageImpl.Events())
 			}
-
-			return fmt.Errorf("Unknown protocol message %T", message)
-		}
-
-		var event transports.Event = nil
-		switch messageImpl := message.(type) {
-		case *protocolACKN:
-			event = transports.NewAckEvent(t.context, messageImpl.nonce, messageImpl.sequence)
-		case *protocolPONG:
-			event = transports.NewPongEvent(t.context)
+		} else {
+			switch messageImpl := message.(type) {
+			case *protocolACKN:
+				event = transports.NewAckEvent(t.context, messageImpl.nonce, messageImpl.sequence)
+			case *protocolPONG:
+				event = transports.NewPongEvent(t.context)
+			}
 		}
 
 		if event == nil {
@@ -556,8 +560,8 @@ func (t *connection) Acknowledge(events []*event.Event) {
 		nextPosition := event.Context().(*evntPosition)
 		if nextPosition.nonce != position.nonce {
 			t.sendChan <- &protocolACKN{nonce: position.nonce, sequence: position.sequence}
-			position = nextPosition
 		}
+		position = nextPosition
 	}
 	t.sendChan <- &protocolACKN{nonce: position.nonce, sequence: position.sequence}
 }
