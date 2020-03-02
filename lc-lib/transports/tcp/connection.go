@@ -264,6 +264,12 @@ func (t *connection) sender() error {
 			shutdownChan = nil
 			continue
 		case message := <-ackChan:
+			if message == nil {
+				// Channel was closed, likely due to receiver closing, stop listening and continue until graceful completion (or error from shutdownChan)
+				ackChan = nil
+				continue
+			}
+
 			if partialAck, ok := message.(eventsMessage); ok {
 				// Stop receiving if we now have 10
 				t.partialAcks = append(t.partialAcks, partialAck)
