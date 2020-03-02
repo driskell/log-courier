@@ -104,8 +104,10 @@ func (t *connection) Run() error {
 	t.rwBuffer.Reader = bufio.NewReader(t.socket)
 	t.rwBuffer.Writer = bufio.NewWriter(t.socket)
 
+	// Shutdown chan can block - it is only ever closed
 	t.senderShutdownChan = make(chan struct{})
-	t.senderFailedChan = make(chan error)
+	// Failure chan must be able to store the sender's single closing error, for receiver to (optionally) collect later
+	t.senderFailedChan = make(chan error, 1)
 
 	if err := t.socket.Setup(); err != nil {
 		return err
@@ -134,6 +136,10 @@ func (t *connection) Run() error {
 		// Pass to sender to trigger hard close due to failure
 		close(t.senderShutdownChan)
 	}
+	if t.server {
+		// Close partialAckChan to allow sender to shutdown if it is monitoring it and waiting for receiver
+		close(t.partialAckChan)
+	}
 	t.wait.Wait()
 
 	if err == nil {
@@ -152,9 +158,23 @@ func (t *connection) senderRoutine() {
 		t.wait.Done()
 	}()
 
-	if err := t.sender(); err != nil {
+	var err error
+	if err = t.sender(); err != nil {
 		// Forward error to receiver if the sender failed so it can hard close
 		t.senderFailedChan <- err
+	}
+
+	if t.server {
+		// If sender was requested to shutdown by receiver, then stop now
+		// Otherwise, wait in case receiver tries to request further sending through partial Ack, and if it does, force it to close, but only if we did not already
+		select {
+		case <-t.senderShutdownChan:
+		case <-t.partialAckChan:
+			if err == nil {
+				err = errHardCloseRequested
+				t.senderFailedChan <- errHardCloseRequested
+			}
+		}
 	}
 }
 

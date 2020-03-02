@@ -63,6 +63,8 @@ func (t *connectionSocketTLS) Setup() error {
 	subject := ""
 	if len(t.ConnectionState().VerifiedChains) > 0 {
 		subject = fmt.Sprintf(" [%s]", t.ConnectionState().VerifiedChains[0][0].Subject)
+	} else {
+		subject = " [No client certificate]"
 	}
 
 	log.Notice("[%s] Handshake completed with %s%s", t.poolDesc, t.RemoteAddr().String(), subject)
