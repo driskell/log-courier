@@ -1,14 +1,10 @@
 language: go
 
-# Test on 1.5-1.6, our supported versions
 go:
-  - 1.5
-  - 1.6
-
-# Skip install step
-install: true
+  - 1.14
+  - 1.13
 
 # Generate and test
 script:
-  - GO15VENDOREXPERIMENT=1 go generate ./lc-lib/config ./lc-lib/core
-  - GO15VENDOREXPERIMENT=1 go test -v . ./lc-tlscert ./lc-admin ./lc-lib/...
+  - go generate ./lc-lib/config ./lc-lib/core
+  - go test -v . ./lc-tlscert ./lc-admin ./lc-lib/...
