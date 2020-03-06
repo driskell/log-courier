@@ -22,6 +22,7 @@ package tcp
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -36,19 +37,21 @@ import (
 // transportTCP implements a transport that sends over TCP
 // It also can optionally introduce a TLS layer for security
 type transportTCP struct {
-	config       *TransportTCPFactory
-	netConfig    *transports.Config
-	finishOnFail bool
-	backoff      *core.ExpBackoff
-
-	controllerChan chan error
+	// Constructor
+	config         *TransportTCPFactory
+	netConfig      *transports.Config
+	finishOnFail   bool
 	context        interface{}
 	pool           *addresspool.Pool
 	eventChan      chan<- transports.Event
+	controllerChan chan error
 	connectionChan chan *socketMessage
-	conn           *connection
+	backoff        *core.ExpBackoff
 
-	sendMutex    sync.RWMutex
+	// Internal
+	// sendMutex is so we can easily discard existing sendChan and its contents each time we reset
+	conn         *connection
+	sendMutex    sync.Mutex
 	sendChan     chan protocolMessage
 	supportsEVNT bool
 	shutdown     bool
@@ -56,19 +59,23 @@ type transportTCP struct {
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-// TODO: Modifying netConfig out of routines using it?
 func (t *transportTCP) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
 	newConfig := netConfig.Factory.(*TransportTCPFactory)
-	t.finishOnFail = finishOnFail
+
+	// Check if automatic reconnection should be enabled or not
+	if t.finishOnFail != finishOnFail {
+		return true
+	}
 
 	// TODO: Check timestamps of underlying certificate files to detect changes
 	if newConfig.SSLCertificate != t.config.SSLCertificate || newConfig.SSLKey != t.config.SSLKey || newConfig.SSLCA != t.config.SSLCA {
 		return true
 	}
 
-	// Only copy net config just in case something in the factory did change that
-	// we didn't account for which does require a restart
-	t.netConfig = netConfig
+	// Check if timeout or max pending payloads changed
+	if netConfig.Timeout != t.netConfig.Timeout || netConfig.MaxPendingPayloads != t.netConfig.MaxPendingPayloads {
+		return true
+	}
 
 	return false
 }
@@ -97,9 +104,15 @@ func (t *transportTCP) controllerRoutine() {
 			t.sendMutex.Lock()
 			t.supportsEVNT = t.conn.SupportsEVNT()
 			t.sendChan = t.conn.SendChan()
+			shutdown = t.shutdown
 			t.sendMutex.Unlock()
 
-			err = t.conn.Run()
+			// Request immediate shutdown if we just noticed it
+			if shutdown {
+				t.sendChan <- nil
+			}
+
+			err = t.conn.Run(t.startCallback)
 		}
 
 		t.sendMutex.Lock()
@@ -125,7 +138,6 @@ func (t *transportTCP) controllerRoutine() {
 			// So this eventChan send should skip if we find one in controllerChan
 		}
 
-		// If this returns false, we are shutting down
 		if t.reconnectWait() {
 			break
 		}
@@ -133,13 +145,12 @@ func (t *transportTCP) controllerRoutine() {
 }
 
 // reconnectWait waits the backoff timeout before attempting to reconnect
-// It also monitors for shutdown and configuration reload events while waiting.
+// It also monitors for shutdown whilst waiting.
 func (t *transportTCP) reconnectWait() bool {
 	now := time.Now()
 	reconnectDue := now.Add(t.backoff.Trigger())
 
 	select {
-	// TODO: Handle configuration reload
 	case <-t.controllerChan:
 		// Shutdown request
 		return true
@@ -147,6 +158,36 @@ func (t *transportTCP) reconnectWait() bool {
 	}
 
 	return false
+}
+
+// startCallback is called by the connection when it is fully connected and handshake completed
+func (t *transportTCP) startCallback() {
+	// Send a started signal to say we're ready
+	t.eventChan <- transports.NewStatusEvent(t.context, transports.Started)
+}
+
+// getTLSConfig returns the TLS configuration for the connection
+func (t *transportTCP) getTLSConfig() (tlsConfig *tls.Config) {
+	tlsConfig = new(tls.Config)
+
+	// Disable SSLv3 (mitigate POODLE vulnerability)
+	tlsConfig.MinVersion = tls.VersionTLS10
+
+	// Set the certificate if we set one
+	if t.config.certificate != nil {
+		tlsConfig.Certificates = []tls.Certificate{*t.config.certificate}
+	}
+
+	// Set CA for server verification
+	tlsConfig.RootCAs = x509.NewCertPool()
+	for _, cert := range t.config.caList {
+		tlsConfig.RootCAs.AddCert(cert)
+	}
+
+	// Set the tlsConfig server name for server validation (required since Go 1.3)
+	tlsConfig.ServerName = t.pool.Host()
+
+	return
 }
 
 // connect selects the next address to use and triggers the connect
@@ -176,26 +217,7 @@ func (t *transportTCP) connect() error {
 	// Now wrap in TLS if this is the TLS transport
 	var connectionSocket connectionSocket
 	if t.config.transport == TransportTCPTLS {
-		tlsConfig := new(tls.Config)
-
-		// Disable SSLv3 (mitigate POODLE vulnerability)
-		tlsConfig.MinVersion = tls.VersionTLS10
-
-		// Set the certificate if we set one
-		if t.config.certificate != nil {
-			tlsConfig.Certificates = []tls.Certificate{*t.config.certificate}
-		}
-
-		// Set CA for server verification
-		tlsConfig.RootCAs = x509.NewCertPool()
-		for _, cert := range t.config.caList {
-			tlsConfig.RootCAs.AddCert(cert)
-		}
-
-		// Set the tlsConfig server name for server validation (required since Go 1.3)
-		tlsConfig.ServerName = t.pool.Host()
-
-		connectionSocket = newConnectionSocketTLS(socket.(*net.TCPConn), tlsConfig, false, t.pool.Server())
+		connectionSocket = newConnectionSocketTLS(socket.(*net.TCPConn), t.getTLSConfig(), false, t.pool.Server())
 	} else {
 		connectionSocket = newConnectionSocketTCP(socket.(*net.TCPConn))
 	}
@@ -229,7 +251,7 @@ func (t *transportTCP) Ping() error {
 	t.sendMutex.Lock()
 	defer t.sendMutex.Unlock()
 	if t.sendChan == nil {
-		return fmt.Errorf("Invalid connection state")
+		return errors.New("Invalid connection state")
 	}
 	t.sendChan <- &protocolPING{}
 	return nil

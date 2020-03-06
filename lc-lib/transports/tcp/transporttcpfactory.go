@@ -36,24 +36,26 @@ import (
 )
 
 const (
-	defaultNetworkReconnect    time.Duration = 0 * time.Second
-	defaultNetworkReconnectMax time.Duration = 300 * time.Second
+	defaultReconnect    time.Duration = 0 * time.Second
+	defaultReconnectMax time.Duration = 300 * time.Second
 )
 
 // TransportTCPFactory holds the configuration from the configuration file
 // It allows creation of TransportTCP instances that use this configuration
 type TransportTCPFactory struct {
-	transport string
+	// Constructor
+	config         *config.Config
+	transport      string
+	hostportRegexp *regexp.Regexp
 
-	config *config.Config
-
+	// Configuration
 	Reconnect      time.Duration `config:"reconnect backoff"`
 	ReconnectMax   time.Duration `config:"reconnect backoff max"`
 	SSLCertificate string        `config:"ssl certificate"`
 	SSLKey         string        `config:"ssl key"`
 	SSLCA          string        `config:"ssl ca"`
 
-	hostportRegexp  *regexp.Regexp
+	// Internal
 	certificate     *tls.Certificate
 	certificateList []*x509.Certificate
 	caList          []*x509.Certificate
@@ -139,8 +141,8 @@ func NewTransportTCPFactory(p *config.Parser, configPath string, unUsed map[stri
 
 // Defaults sets the default configuration values
 func (f *TransportTCPFactory) Defaults() {
-	f.Reconnect = defaultNetworkReconnect
-	f.ReconnectMax = defaultNetworkReconnectMax
+	f.Reconnect = defaultReconnect
+	f.ReconnectMax = defaultReconnectMax
 }
 
 // NewTransport returns a new Transport interface using the settings from the

@@ -8,3 +8,4 @@
 /platform.go
 /spec/tmp
 /vendor/bundle
+/.vscode

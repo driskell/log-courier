@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	// Essentially, this is how often we should check for disconnect/shutdown during socket reads
+	// This is how often we should check for disconnect/shutdown during socket reads
 	socketIntervalSeconds = 1
 )
 

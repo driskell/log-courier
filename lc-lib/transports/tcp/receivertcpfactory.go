@@ -37,15 +37,17 @@ import (
 // ReceiverTCPFactory holds the configuration from the configuration file
 // It allows creation of ReceiverTCP instances that use this configuration
 type ReceiverTCPFactory struct {
-	transport string
+	// Constructor
+	config         *config.Config
+	transport      string
+	hostportRegexp *regexp.Regexp
 
-	config *config.Config
-
+	// Configuration
 	SSLCertificate string   `config:"ssl certificate"`
 	SSLKey         string   `config:"ssl key"`
 	SSLClientCA    []string `config:"ssl client ca"`
 
-	hostportRegexp  *regexp.Regexp
+	// Internal
 	certificate     *tls.Certificate
 	certificateList []*x509.Certificate
 	caList          []*x509.Certificate
@@ -132,14 +134,13 @@ func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[strin
 func (f *ReceiverTCPFactory) NewReceiver(context interface{}, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Receiver {
 	ret := &receiverTCP{
 		config:        f,
-		netConfig:     transports.FetchReceiverConfig(f.config),
 		context:       context,
 		pool:          pool,
 		eventChan:     eventChan,
 		listenControl: make(chan struct{}),
 		connections:   make(map[*connection]*connection),
 		// TODO: Own values
-		backoff: core.NewExpBackoff(pool.Server()+" Receiver Reset", defaultNetworkReconnect, defaultNetworkReconnectMax),
+		backoff: core.NewExpBackoff(pool.Server()+" Receiver Reset", defaultReconnect, defaultReconnectMax),
 	}
 
 	ret.startController()

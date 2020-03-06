@@ -15,27 +15,25 @@ import (
 )
 
 type receiverTCP struct {
-	context   interface{}
-	eventChan chan<- transports.Event
-	pool      *addresspool.Pool
-	config    *ReceiverTCPFactory
-	netConfig *transports.ReceiverConfig
-	tlsConfig *tls.Config
-	backoff   *core.ExpBackoff
-
-	connections map[*connection]*connection
-	connCount   int
-	connMutex   sync.Mutex
-	connWait    sync.WaitGroup
-
+	// Constructor
+	config        *ReceiverTCPFactory
+	context       interface{}
+	pool          *addresspool.Pool
+	eventChan     chan<- transports.Event
 	listenControl chan struct{}
-	listenWait    sync.WaitGroup
+	connections   map[*connection]*connection
+	backoff       *core.ExpBackoff
+
+	// Internal
+	tlsConfig  *tls.Config
+	connCount  int
+	connMutex  sync.Mutex
+	connWait   sync.WaitGroup
+	listenWait sync.WaitGroup
 }
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-// TODO: Update where config comes from
-// TODO: Modifying netConfig out of routines using it?
 func (t *receiverTCP) ReloadConfig(cfg *config.Config) bool {
 	newNetConfig := transports.FetchReceiverConfig(cfg)
 	newConfig := newNetConfig.Factory.(*ReceiverTCPFactory)
@@ -52,10 +50,6 @@ func (t *receiverTCP) ReloadConfig(cfg *config.Config) bool {
 			return true
 		}
 	}
-
-	// Only copy net config just in case something in the factory did change that
-	// we didn't account for which does require a restart
-	t.netConfig = newNetConfig
 
 	return false
 }
@@ -92,13 +86,12 @@ func (t *receiverTCP) controllerRoutine() {
 }
 
 // retryWait waits the backoff timeout before attempting to listen again
-// It also monitors for shutdown and configuration reload events while waiting
+// It also monitors for shutdown whilst waiting
 func (t *receiverTCP) retryWait() bool {
 	now := time.Now()
 	setupDue := now.Add(t.backoff.Trigger())
 
 	select {
-	// TODO: Handle configuration reload
 	case <-t.listenControl:
 		// Shutdown request
 		return true
@@ -118,24 +111,6 @@ func (t *receiverTCP) listen() error {
 	desc := t.pool.Desc()
 
 	log.Info("[%s] Attempting to listen on %s", t.pool.Server(), desc)
-
-	if t.config.transport == TransportTCPTLS {
-		t.tlsConfig = new(tls.Config)
-
-		// Disable SSLv3 (mitigate POODLE vulnerability)
-		t.tlsConfig.MinVersion = tls.VersionTLS10
-
-		// Set the certificate if we set one
-		if t.config.certificate != nil {
-			t.tlsConfig.Certificates = []tls.Certificate{*t.config.certificate}
-		}
-
-		// Set CA for client verification
-		t.tlsConfig.ClientCAs = x509.NewCertPool()
-		for _, cert := range t.config.caList {
-			t.tlsConfig.ClientCAs.AddCert(cert)
-		}
-	}
 
 	tcplistener, err := net.ListenTCP("tcp", addr)
 	if err != nil {
@@ -174,6 +149,27 @@ func (t *receiverTCP) Shutdown() {
 	t.listenWait.Wait()
 }
 
+// getTLSConfig returns TLS configuration for the connection
+func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
+	tlsConfig = new(tls.Config)
+
+	// Disable SSLv3 (mitigate POODLE vulnerability)
+	tlsConfig.MinVersion = tls.VersionTLS10
+
+	// Set the certificate if we set one
+	if t.config.certificate != nil {
+		tlsConfig.Certificates = []tls.Certificate{*t.config.certificate}
+	}
+
+	// Set CA for client verification
+	tlsConfig.ClientCAs = x509.NewCertPool()
+	for _, cert := range t.config.caList {
+		tlsConfig.ClientCAs.AddCert(cert)
+	}
+
+	return
+}
+
 // startConnection sets up a new connection
 func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 	log.Notice("[%s] New connection from %s", t.pool.Server(), socket.RemoteAddr().String())
@@ -184,7 +180,7 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 
 	var connectionSocket connectionSocket
 	if t.config.transport == TransportTCPTLS {
-		connectionSocket = newConnectionSocketTLS(socket, t.tlsConfig, true, t.pool.Server())
+		connectionSocket = newConnectionSocketTLS(socket, t.getTLSConfig(), true, t.pool.Server())
 	} else {
 		connectionSocket = newConnectionSocketTCP(socket)
 	}
@@ -214,7 +210,7 @@ func (t *receiverTCP) closeConnections() {
 func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	defer t.connWait.Done()
 
-	if err := conn.Run(); err != nil {
+	if err := conn.Run(nil); err != nil {
 		log.Error("[%s] Connection from %s failed: %s", t.pool.Server(), socket.RemoteAddr().String(), err)
 	} else {
 		log.Info("[%s] Connection from %s closed gracefully", t.pool.Server(), socket.RemoteAddr().String())

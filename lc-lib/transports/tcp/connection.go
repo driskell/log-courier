@@ -93,7 +93,7 @@ func (t *connection) setShutdownOrResetChan(shutdownOrResetChan chan error) {
 }
 
 // Run starts the connection and all its routines
-func (t *connection) Run() error {
+func (t *connection) Run(startedCallback func()) error {
 	// Only setup these channels if allowing data, without them, we never allow JDAT
 	if t.server {
 		// TODO: Make configurable, max we receive into memory unacknowledged before stop receiving
@@ -123,10 +123,8 @@ func (t *connection) Run() error {
 		}
 	}
 
-	// Send a started signal to say we're ready
-	// TODO: Move into transporttcp ?
-	if shutdown, err := t.sendEvent(transports.NewStatusEvent(t.context, transports.Started)); shutdown || err != nil {
-		return err
+	if startedCallback != nil {
+		startedCallback()
 	}
 
 	t.wait.Add(1)
