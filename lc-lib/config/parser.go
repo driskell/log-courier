@@ -222,7 +222,9 @@ FieldLoop:
 
 	// Call the Init if any, this should take away the unused values by populating
 	// further structures depending on other values
-	p.callInit(vConfigPtr, configPath)
+	if err = p.callInit(vConfigPtr, configPath); err != nil {
+		return
+	}
 
 	// Report to the user any unused values if there are any, in case they
 	// misspelled an option
@@ -434,7 +436,9 @@ func (p *Parser) populateSlice(vField reflect.Value, vRawConfig reflect.Value, c
 
 	// Call the Init if any, this should take away the unused values by populating
 	// further structures depending on other values
-	p.callInit(vField, configPath)
+	if err = p.callInit(vField, configPath); err != nil {
+		return
+	}
 
 	return
 }
