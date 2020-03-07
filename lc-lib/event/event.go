@@ -60,6 +60,7 @@ func (e *Event) Data() map[string]interface{} {
 		err := json.Unmarshal(e.encoded, &e.data)
 		if err != nil {
 			e.data = make(map[string]interface{})
+			e.data["@timestamp"] = time.Now()
 			e.data["message"] = err.Error()
 		} else {
 			e.encoded = nil

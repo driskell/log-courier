@@ -21,6 +21,7 @@ package es
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -68,6 +69,10 @@ func NewTransportESFactory(p *config.Parser, configPath string, unUsed map[strin
 		return nil, err
 	}
 
+	if ret.IndexPattern == "" {
+		return nil, fmt.Errorf("'index pattern' cannot be empty when using 'es' transport")
+	}
+
 	return ret, nil
 }
 
@@ -76,6 +81,7 @@ func (f *TransportESFactory) Defaults() {
 	f.Routines = defaultRoutines
 	f.Retry = defaultRetry
 	f.RetryMax = defaultRetryMax
+	f.IndexPattern = defaultIndexPattern
 }
 
 // NewTransport returns a new Transport interface using the settings from the
