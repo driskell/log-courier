@@ -23,11 +23,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +38,10 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
+)
+
+var (
+	globalTemplateLock sync.Mutex
 )
 
 // transportES implements a transport that sends over the ES HTTP protocol
@@ -51,10 +58,12 @@ type transportES struct {
 
 	// Internal
 	// payloadMutex is so we can easily discard existing sendChan and its contents each time we reset
-	payloadChan  chan *payload.Payload
-	payloadMutex sync.Mutex
-	poolMutex    sync.Mutex
-	wait         sync.WaitGroup
+	payloadChan     chan *payload.Payload
+	payloadMutex    sync.Mutex
+	poolMutex       sync.Mutex
+	wait            sync.WaitGroup
+	nodeInfo        *nodeInfo
+	maxMajorVersion int
 }
 
 // ReloadConfig returns true if the transport needs to be restarted in order
@@ -91,7 +100,10 @@ func (t *transportES) controllerRoutine() {
 	t.payloadChan = make(chan *payload.Payload, t.netConfig.MaxPendingPayloads)
 	t.payloadMutex.Unlock()
 
-	// TODO: Create index mapping template
+	if t.setupAssociation() {
+		// Shutdown was requested
+		return
+	}
 
 	t.eventChan <- transports.NewStatusEvent(t.context, transports.Started)
 
@@ -104,6 +116,153 @@ func (t *transportES) controllerRoutine() {
 	// Become the main http routine
 	t.wait.Add(1)
 	t.httpRoutine(0)
+}
+
+// setupAssociation gathers cluster information and installs templates
+func (t *transportES) setupAssociation() bool {
+	backoffName := fmt.Sprintf("%s Setup Retry", t.pool.Server())
+	backoff := core.NewExpBackoff(backoffName, t.config.Retry, t.config.RetryMax)
+
+	for {
+		if err := t.populateNodeInfo(); err != nil {
+			log.Errorf("[%s] Failed to fetch Elasticsearch node information: %s", t.pool.Server(), err)
+		} else {
+			if err := t.installTemplate(); err != nil {
+				log.Errorf("[%s] Failed to install Elasticsearch index template: %s", t.pool.Server(), err)
+			} else {
+				return false
+			}
+		}
+
+		if t.retryWait(backoff) {
+			break
+		}
+	}
+
+	// Shutdown
+	return true
+}
+
+// populateNodeInfo populates the nodeInfo structure
+func (t *transportES) populateNodeInfo() error {
+	server, err := t.pool.Next()
+	if err != nil {
+		return err
+	}
+
+	httpRequest, err := http.NewRequestWithContext(t.shutdownContext, "GET", fmt.Sprintf("http://%s/_nodes/http", server.String()), nil)
+	if err != nil {
+		return err
+	}
+
+	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ioutil.ReadAll(httpResponse.Body)
+		httpResponse.Body.Close()
+	}()
+	if httpResponse.StatusCode != 200 {
+		return errors.New(httpResponse.Status)
+	}
+
+	decoder := json.NewDecoder(httpResponse.Body)
+	if err := decoder.Decode(&t.nodeInfo); err != nil {
+		return err
+	}
+
+	t.maxMajorVersion, err = t.nodeInfo.MaxMajorVersion()
+	if err != nil {
+		return fmt.Errorf("Failed to calculate maximum version number for cluster: %s", err)
+	}
+
+	log.Info("[%s] Successfully retrieved Elasticsearch node information (major version: %d)", t.pool.Server(), t.maxMajorVersion)
+
+	return nil
+}
+
+// installTemplate checks if template installation is needed
+func (t *transportES) installTemplate() error {
+	server, err := t.pool.Next()
+	if err != nil {
+		return err
+	}
+
+	name := "logstash"
+	var template string
+	switch t.maxMajorVersion {
+	case 8:
+		template = esTemplate8
+		break
+	case 7:
+		template = esTemplate7
+		break
+	case 6:
+		template = esTemplate6
+		break
+	case 5:
+		template = esTemplate5
+		break
+	default:
+		return fmt.Errorf("Elasticsearch major version %d is unsupported", t.maxMajorVersion)
+	}
+
+	installed, err := t.checkTemplate(server, name)
+	if err != nil {
+		return err
+	} else if installed {
+		return nil
+	}
+
+	httpRequest, err := http.NewRequestWithContext(t.shutdownContext, "PUT", fmt.Sprintf("http://%s/_template/%s", server.String(), name), strings.NewReader(template))
+	if err != nil {
+		return err
+	}
+
+	httpRequest.Header.Add("Content-Type", "application/json")
+	httpRequest.Header.Add("Content-Length", fmt.Sprintf("%d", len(template)))
+
+	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ioutil.ReadAll(httpResponse.Body)
+		httpResponse.Body.Close()
+	}()
+	if httpResponse.StatusCode != 200 {
+		return errors.New(httpResponse.Status)
+	}
+
+	log.Info("[%s] Successfully installed Elasticsearch index template: %s", t.pool.Server(), name)
+
+	return nil
+}
+
+// checkTemplate checks if template is already installed at the given server
+func (t *transportES) checkTemplate(server *net.TCPAddr, name string) (bool, error) {
+	httpRequest, err := http.NewRequestWithContext(t.shutdownContext, "HEAD", fmt.Sprintf("http://%s/_template/%s", server.String(), name), nil)
+	if err != nil {
+		return false, err
+	}
+
+	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		ioutil.ReadAll(httpResponse.Body)
+		httpResponse.Body.Close()
+	}()
+	if httpResponse.StatusCode == 200 {
+		return true, nil
+	}
+	if httpResponse.StatusCode != 404 {
+		return false, errors.New(httpResponse.Status)
+	}
+
+	return false, nil
 }
 
 // httpRoutine performs bulk requests to ES
@@ -158,22 +317,6 @@ func (t *transportES) httpRoutine(id int) {
 	}
 }
 
-// retryWait waits the backoff timeout before attempting to retry
-// It also monitors for shutdown whilst waiting
-func (t *transportES) retryWait(backoff *core.ExpBackoff) bool {
-	now := time.Now()
-	reconnectDue := now.Add(backoff.Trigger())
-
-	select {
-	case <-t.shutdownContext.Done():
-		// Shutdown request
-		return true
-	case <-time.After(reconnectDue.Sub(now)):
-	}
-
-	return false
-}
-
 // performBulkRequest performs a bulk request to the Elasticsearch server
 func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	// Pool Next() is not race-safe
@@ -205,12 +348,7 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 		return err
 	}
 
-	httpRequest, err := http.NewRequestWithContext(
-		t.shutdownContext,
-		"POST",
-		url,
-		bodyBuffer,
-	)
+	httpRequest, err := http.NewRequestWithContext(t.shutdownContext, "POST", url, bodyBuffer)
 	if err != nil {
 		return err
 	}
@@ -223,9 +361,11 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		ioutil.ReadAll(httpResponse.Body)
+		httpResponse.Body.Close()
+	}()
 	if httpResponse.StatusCode != 200 {
-		readall, _ := ioutil.ReadAll(httpResponse.Body)
-		log.Warning("%s", readall)
 		return errors.New(httpResponse.Status)
 	}
 
@@ -240,6 +380,22 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 		log.Warning("[%s:%d] Elasticsearch request partially successful (took %d, created %d)", t.pool.Server(), id, response.Took, request.Created()-created)
 	}
 	return nil
+}
+
+// retryWait waits the backoff timeout before attempting to retry
+// It also monitors for shutdown whilst waiting
+func (t *transportES) retryWait(backoff *core.ExpBackoff) bool {
+	now := time.Now()
+	reconnectDue := now.Add(backoff.Trigger())
+
+	select {
+	case <-t.shutdownContext.Done():
+		// Shutdown request
+		return true
+	case <-time.After(reconnectDue.Sub(now)):
+	}
+
+	return false
 }
 
 // Write a message to the transport - only valid after Started transport event received
