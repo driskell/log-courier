@@ -128,7 +128,8 @@ func (t *transportES) httpRoutine(id int) {
 			}
 
 			lastAckSequence := uint32(0)
-			request := newBulkRequest(payload.Events())
+			request := newBulkRequest(t.config.IndexPattern, payload.Events())
+
 			for {
 				if err := t.performBulkRequest(id, request); err != nil {
 					log.Error("[%s:%d] Elasticsearch request failed: %s", t.pool.Server(), id, err)
@@ -186,7 +187,13 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	// Store what's already created so we can calculate what this specific request created
 	created := request.Created()
 
-	log.Debug("[%s:%d] Performing Elasticsearch bulk request of %d events via %s", t.pool.Server(), id, request.Remaining(), server.String())
+	defaultIndex, err := request.DefaultIndex()
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("http://%s/%s/_bulk", server.String(), defaultIndex)
+	log.Debug("[%s:%d] Performing Elasticsearch bulk request of %d events via %s", t.pool.Server(), id, request.Remaining(), url)
 
 	request.Reset()
 	bodyBuffer := new(bytes.Buffer)
@@ -201,9 +208,7 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	httpRequest, err := http.NewRequestWithContext(
 		t.shutdownContext,
 		"POST",
-		// TODO: Use actual configured index name, not testing
-		// TODO: Timestamp used to calculate this making for potential multiple roundtrips per payload
-		fmt.Sprintf("http://%s/testing/_bulk", server.String()),
+		url,
 		bodyBuffer,
 	)
 	if err != nil {

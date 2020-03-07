@@ -29,9 +29,10 @@ import (
 )
 
 const (
-	defaultRoutines int           = 4
-	defaultRetry    time.Duration = 0 * time.Second
-	defaultRetryMax time.Duration = 300 * time.Second
+	defaultRoutines     int           = 4
+	defaultRetry        time.Duration = 0 * time.Second
+	defaultRetryMax     time.Duration = 300 * time.Second
+	defaultIndexPattern string        = "logstash-%{+2006-01-02}"
 )
 
 var (
@@ -47,9 +48,10 @@ type TransportESFactory struct {
 	transport string
 
 	// Configuration
-	Routines int           `config:"routines"`
-	Retry    time.Duration `config:"retry backoff"`
-	RetryMax time.Duration `config:"retry backoff max"`
+	Routines     int           `config:"routines"`
+	Retry        time.Duration `config:"retry backoff"`
+	RetryMax     time.Duration `config:"retry backoff max"`
+	IndexPattern string        `config:"index pattern"`
 }
 
 // NewTransportESFactory create a new TransportESFactory from the provided

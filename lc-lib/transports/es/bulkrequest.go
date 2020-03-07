@@ -20,6 +20,8 @@
 package es
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 
 	"github.com/driskell/log-courier/lc-lib/event"
@@ -39,13 +41,16 @@ type bulkRequest struct {
 	remaining    int
 	ackSequence  uint32
 	segmentQueue [][]byte
+	indexPattern string
 
 	// Internal
+	defaultIndex string
 	currentBytes []byte
 }
 
-func newBulkRequest(events []*event.Event) *bulkRequest {
+func newBulkRequest(indexPattern string, events []*event.Event) *bulkRequest {
 	eventsClone := append(events[:0:0], events...)
+
 	return &bulkRequest{
 		// events will be mutated and nil holes punched for successful events
 		// and anything non-nil remains oustanding
@@ -56,7 +61,20 @@ func newBulkRequest(events []*event.Event) *bulkRequest {
 		remaining:    len(events),
 		ackSequence:  0,
 		segmentQueue: make([][]byte, 2),
+		indexPattern: indexPattern,
 	}
+}
+
+// DefaultIndex returns the index to use in the URL
+func (p *bulkRequest) DefaultIndex() (string, error) {
+	if p.defaultIndex == "" {
+		defaultIndex, err := p.markCursor.pos[0].Format(p.indexPattern)
+		if err != nil {
+			return "", err
+		}
+		p.defaultIndex = defaultIndex
+	}
+	return p.defaultIndex, nil
 }
 
 // Created returns the number of events that have been successfully created
@@ -120,14 +138,35 @@ func (p *bulkRequest) Reset() {
 
 // Read implements io.Reader and returns a Bulk request body for the attached events
 func (p *bulkRequest) Read(dst []byte) (n int, err error) {
+	defaultIndex, err := p.DefaultIndex()
+	if err != nil {
+		return 0, err
+	}
+
 	for len(dst) > 0 {
 		if len(p.segmentQueue) == 0 {
 			if len(p.readCursor.pos) == 0 {
 				return n, io.EOF
 			}
 
+			index, err := p.readCursor.pos[0].Format(p.indexPattern)
+			if err != nil {
+				return n, err
+			}
+
+			var indexLine []byte
+			if index == defaultIndex {
+				indexLine = []byte("{\"index\":{}\n")
+			} else {
+				jsonIndex, err := json.Marshal(index)
+				if err != nil {
+					return n, err
+				}
+				indexLine = []byte(fmt.Sprintf("{\"index\":{\"_index\":%s}}\n", jsonIndex))
+			}
+
 			p.segmentQueue = [][]byte{
-				[]byte("{\"index\":{}}\n"),
+				indexLine,
 				p.readCursor.pos[0].Bytes(),
 				[]byte("\n"),
 			}
