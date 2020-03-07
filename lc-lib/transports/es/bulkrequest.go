@@ -122,6 +122,7 @@ func (p *bulkRequest) Mark(cursor *bulkRequestCursor, successful bool) (*bulkReq
 			// A cursor is moved when it no longer matches the original
 			p.ackSequence++
 			p.markCursor.pos = currentCursor.pos
+			p.Reset()
 		}
 		if len(currentCursor.pos) == 0 {
 			return nil, true
@@ -133,7 +134,7 @@ func (p *bulkRequest) Mark(cursor *bulkRequestCursor, successful bool) (*bulkReq
 
 // Reset allows the request to be Read again
 func (p *bulkRequest) Reset() {
-	p.readCursor = &bulkRequestCursor{pos: p.markCursor.pos}
+	p.readCursor.pos = p.markCursor.pos
 }
 
 // Read implements io.Reader and returns a Bulk request body for the attached events
@@ -156,7 +157,7 @@ func (p *bulkRequest) Read(dst []byte) (n int, err error) {
 
 			var indexLine []byte
 			if index == defaultIndex {
-				indexLine = []byte("{\"index\":{}\n")
+				indexLine = []byte("{\"index\":{}}\n")
 			} else {
 				jsonIndex, err := json.Marshal(index)
 				if err != nil {
