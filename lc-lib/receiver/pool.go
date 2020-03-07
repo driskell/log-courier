@@ -81,13 +81,16 @@ func (r *Pool) Run() {
 	r.updateReceivers()
 
 	shutdown := false
+
+ReceiverLoop:
 	for {
 		select {
 		case <-r.shutdownChan:
 			if len(r.receivers) == 0 {
-				// Nothing to wait to shutdown, return now
+				// Nothing to wait to shutdown, return now, don't even log
 				return
 			}
+			log.Info("Receiver pool is shutting down receivers")
 			r.shutdown()
 			shutdown = true
 			break
@@ -103,13 +106,15 @@ func (r *Pool) Run() {
 				if eventImpl.StatusChange() == transports.Finished {
 					delete(r.receivers, eventImpl.Context().Value(poolContextListen).(string))
 					if len(r.receivers) == 0 && shutdown {
-						return
+						break ReceiverLoop
 					}
 				}
 			}
 			break
 		}
 	}
+
+	log.Info("Receiver pool exiting")
 }
 
 // updateReceivers updates the list of running receivers

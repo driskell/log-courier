@@ -184,6 +184,8 @@ func (p *Publisher) runOnce() bool {
 					return true
 				}
 				p.endpointSink.Shutdown()
+			} else {
+				log.Info("Publisher will prevent shutdown until outsanding payloads have been acknowledged or fail")
 			}
 			break
 		}
