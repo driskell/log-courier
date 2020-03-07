@@ -120,6 +120,7 @@ func (a *apiFiles) processEntry(info *prospectorInfo) {
 	}
 
 	apiEntry := &api.KeyValue{}
+	// TODO: Memory location leakage - replace with array instead or lookup by path
 	key := fmt.Sprintf("%p", info)
 	apiEntry.SetEntry("id", api.String(key))
 	apiEntry.SetEntry("path", api.String(info.file))

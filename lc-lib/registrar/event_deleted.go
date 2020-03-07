@@ -38,7 +38,7 @@ func (e *DeletedEvent) process(state map[context.Context]*FileState) {
 	if _, ok := state[e.ctx]; ok {
 		log.Debug("Registrar received a deletion event for %s", *state[e.ctx].Source)
 	} else {
-		log.Warning("Registrar received a deletion event for UNKNOWN (%p)", e.ctx)
+		log.Warning("Registrar received a deletion event for an unknown context")
 	}
 
 	// Purge the registrar entry - means the file is deleted so we can't resume
