@@ -17,31 +17,31 @@
 package registrar
 
 import (
-	"github.com/driskell/log-courier/lc-lib/core"
+	"context"
 )
 
 // DeletedEvent informs the registrar of a file deletion so it can remove
 // unnecessary states from the state file
 type DeletedEvent struct {
-	stream core.Stream
+	ctx context.Context
 }
 
 // NewDeletedEvent creates a new deletion event
-func NewDeletedEvent(stream core.Stream) *DeletedEvent {
+func NewDeletedEvent(ctx context.Context) *DeletedEvent {
 	return &DeletedEvent{
-		stream: stream,
+		ctx: ctx,
 	}
 }
 
 // process persists the deletion event into the state
-func (e *DeletedEvent) process(state map[core.Stream]*FileState) {
-	if _, ok := state[e.stream]; ok {
-		log.Debug("Registrar received a deletion event for %s", *state[e.stream].Source)
+func (e *DeletedEvent) process(state map[context.Context]*FileState) {
+	if _, ok := state[e.ctx]; ok {
+		log.Debug("Registrar received a deletion event for %s", *state[e.ctx].Source)
 	} else {
-		log.Warning("Registrar received a deletion event for UNKNOWN (%p)", e.stream)
+		log.Warning("Registrar received a deletion event for UNKNOWN (%p)", e.ctx)
 	}
 
 	// Purge the registrar entry - means the file is deleted so we can't resume
 	// This keeps the state clean so it doesn't build up after thousands of log files
-	delete(state, e.stream)
+	delete(state, e.ctx)
 }

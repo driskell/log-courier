@@ -17,19 +17,24 @@
 package payload
 
 import (
+	"context"
 	"testing"
 
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
+type testContext string
+
 const (
-	testNonce = "12345678901234567890123456"
+	testContextOffset testContext = "offset"
+	testNonce                     = "12345678901234567890123456"
 )
 
 func createTestPayload(t *testing.T, numEvents int) *Payload {
 	testEvents := make([]*event.Event, numEvents)
 	for idx := range testEvents {
-		testEvents[idx] = event.NewEvent(nil, map[string]interface{}{}, idx)
+		ctx := context.WithValue(context.Background(), testContextOffset, idx)
+		testEvents[idx] = event.NewEvent(ctx, nil, map[string]interface{}{})
 	}
 
 	ret := NewPayload(testEvents)
@@ -71,8 +76,9 @@ func verifyPayload(t *testing.T, payload *Payload, ack bool, complete bool, numE
 	}
 
 	for _, event := range events {
-		if event.Context().(int) != startEvent {
-			t.Errorf("Payload rollup event offset wrong, got: %d, expected: %d", event.Context().(int), startEvent)
+		offset := event.Context().Value(testContextOffset).(int)
+		if offset != startEvent {
+			t.Errorf("Payload rollup event offset wrong, got: %d, expected: %d", offset, startEvent)
 		}
 		startEvent++
 	}

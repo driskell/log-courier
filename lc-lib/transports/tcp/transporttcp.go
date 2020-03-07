@@ -20,6 +20,7 @@
 package tcp
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -38,10 +39,10 @@ import (
 // It also can optionally introduce a TLS layer for security
 type transportTCP struct {
 	// Constructor
+	ctx            context.Context
 	config         *TransportTCPFactory
 	netConfig      *transports.Config
 	finishOnFail   bool
-	context        interface{}
 	pool           *addresspool.Pool
 	eventChan      chan<- transports.Event
 	controllerChan chan error
@@ -89,7 +90,7 @@ func (t *transportTCP) startController() {
 // When reconnecting, the socket and all routines are torn down and restarted
 func (t *transportTCP) controllerRoutine() {
 	defer func() {
-		t.eventChan <- transports.NewStatusEvent(t.context, transports.Finished)
+		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
 	}()
 
 	// Main connect loop
@@ -131,7 +132,7 @@ func (t *transportTCP) controllerRoutine() {
 		select {
 		case <-t.controllerChan:
 			// Ignore any error in controller chan - we're already restarting
-		case t.eventChan <- transports.NewStatusEvent(t.context, transports.Failed):
+		case t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Failed):
 			// If we had an error in controller chan, no need to flag in event chan we did error
 			// So this eventChan send should skip if we find one in controllerChan
 		}
@@ -161,7 +162,7 @@ func (t *transportTCP) reconnectWait() bool {
 // startCallback is called by the connection when it is fully connected and handshake completed
 func (t *transportTCP) startCallback() {
 	// Send a started signal to say we're ready
-	t.eventChan <- transports.NewStatusEvent(t.context, transports.Started)
+	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Started)
 }
 
 // getTLSConfig returns the TLS configuration for the connection
@@ -220,7 +221,8 @@ func (t *transportTCP) connect() error {
 		connectionSocket = newConnectionSocketTCP(socket.(*net.TCPConn))
 	}
 
-	t.conn = newConnection(connectionSocket, t.context, t.pool.Server(), t.eventChan, sendChan)
+	connContext := context.WithValue(t.ctx, contextIsClient, false)
+	t.conn = newConnection(connContext, connectionSocket, t.pool.Server(), t.eventChan, sendChan)
 
 	log.Notice("[%s] Connected to %s", t.pool.Server(), desc)
 

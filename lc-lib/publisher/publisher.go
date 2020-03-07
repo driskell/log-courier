@@ -161,7 +161,8 @@ func (p *Publisher) runOnce() bool {
 	case event := <-p.endpointSink.EventChan():
 		// Endpoint Sink processes the events, and feeds back relevant changes
 		if !p.endpointSink.ProcessEvent(event) {
-			p.forceEndpointFailure(event.Context().(*endpoint.Endpoint), fmt.Errorf("Unexpected %T message received", event))
+			endpoint := event.Context().Value(endpoint.ContextSelf).(*endpoint.Endpoint)
+			p.forceEndpointFailure(endpoint, fmt.Errorf("Unexpected %T message received", event))
 		}
 
 		// If all finished, we're done
@@ -410,7 +411,6 @@ func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 // forceEndpointFailure is called by Publisher to force an endpoint to enter
 // the failed status. It reports the error and then processes the failure.
 func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
-	log.Errorf("[%s] Failing endpoint: %s", endpoint.Server(), err)
 	p.endpointSink.ForceFailure(endpoint)
 }
 

@@ -17,37 +17,36 @@
 package registrar
 
 import (
+	"context"
 	"os"
-
-	"github.com/driskell/log-courier/lc-lib/core"
 )
 
 // DiscoverEvent informs the registrar of a new file whose state needs to be
 // persisted to the state file
 type DiscoverEvent struct {
-	stream   core.Stream
+	ctx      context.Context
 	source   string
 	offset   int64
 	fileinfo os.FileInfo
 }
 
 // NewDiscoverEvent creates a new discovery event
-func NewDiscoverEvent(stream core.Stream, source string, offset int64, fileinfo os.FileInfo) *DiscoverEvent {
+func NewDiscoverEvent(ctx context.Context, source string, offset int64, fileinfo os.FileInfo) *DiscoverEvent {
 	return &DiscoverEvent{
-		stream:   stream,
+		ctx:      ctx,
 		source:   source,
 		offset:   offset,
 		fileinfo: fileinfo,
 	}
 }
 
-func (e *DiscoverEvent) process(state map[core.Stream]*FileState) {
+func (e *DiscoverEvent) process(state map[context.Context]*FileState) {
 	log.Debug("Registrar received a new file event for %s", e.source)
 
 	// A new file we need to save offset information for so we can resume
-	state[e.stream] = &FileState{
+	state[e.ctx] = &FileState{
 		Source: &e.source,
 		Offset: e.offset,
 	}
-	state[e.stream].PopulateFileIds(e.fileinfo)
+	state[e.ctx].PopulateFileIds(e.fileinfo)
 }

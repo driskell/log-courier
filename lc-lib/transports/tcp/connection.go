@@ -22,6 +22,7 @@ package tcp
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -34,24 +35,31 @@ import (
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
+// connContext is a context key for connections
+type connContext string
+
+const (
+	contextIsClient connContext = "client"
+	contextEventPos connContext = "pos"
+)
+
 // errHardCloseRequested is used to signal hard close requested
 var errHardCloseRequested = errors.New("Hard close requested")
 
 type connection struct {
-	socket connectionSocket
-
-	context    interface{}
+	// Constructor
+	ctx        context.Context
+	socket     connectionSocket
 	poolServer string
 	eventChan  chan<- transports.Event
 	sendChan   chan protocolMessage
+	// shutdownOrResetChan requests sender to hard close, optionally due to an error
+	shutdownOrResetChan chan error
 
 	// TODO: Merge with context - become clientContext
-	server       bool
 	supportsEvnt bool
 	rwBuffer     bufio.ReadWriter
 
-	// shutdownOrResetChan requests sender to hard close, optionally due to an error
-	shutdownOrResetChan chan error
 	// senderShutdownChan requests sender to begin to gracefully shutdown
 	senderShutdownChan chan struct{}
 	// senderFailedChan receives error from sender so receiver can hard close
@@ -71,20 +79,15 @@ type connection struct {
 	lastSequence uint32
 }
 
-func newConnection(socket connectionSocket, context interface{}, poolServer string, eventChan chan<- transports.Event, sendChan chan protocolMessage) *connection {
+func newConnection(ctx context.Context, socket connectionSocket, poolServer string, eventChan chan<- transports.Event, sendChan chan protocolMessage) *connection {
 	return &connection{
+		ctx:                 ctx,
 		socket:              socket,
-		context:             context,
 		poolServer:          poolServer,
 		eventChan:           eventChan,
 		sendChan:            sendChan,
 		shutdownOrResetChan: make(chan error),
 	}
-}
-
-// setServer enabled server mode for this connection, allowing it to receive events
-func (t *connection) setServer(value bool) {
-	t.server = value
 }
 
 // setShutdownOrResetChan sets a channel to use for reset/shutdown (send error to reset, close to shutdown)
@@ -95,7 +98,7 @@ func (t *connection) setShutdownOrResetChan(shutdownOrResetChan chan error) {
 // Run starts the connection and all its routines
 func (t *connection) Run(startedCallback func()) error {
 	// Only setup these channels if allowing data, without them, we never allow JDAT
-	if t.server {
+	if !t.isClient() {
 		// TODO: Make configurable, max we receive into memory unacknowledged before stop receiving
 		t.partialAcks = make([]eventsMessage, 0, 10)
 		t.partialAckChan = make(chan protocolMessage)
@@ -113,12 +116,12 @@ func (t *connection) Run(startedCallback func()) error {
 		return err
 	}
 
-	if t.server {
-		if err := t.serverNegotiation(); err != nil {
+	if t.isClient() {
+		if err := t.clientNegotiation(); err != nil {
 			return err
 		}
 	} else {
-		if err := t.clientNegotiation(); err != nil {
+		if err := t.serverNegotiation(); err != nil {
 			return err
 		}
 	}
@@ -134,7 +137,7 @@ func (t *connection) Run(startedCallback func()) error {
 		// Pass to sender to trigger hard close due to failure
 		close(t.senderShutdownChan)
 	}
-	if t.server {
+	if !t.isClient() {
 		// Close partialAckChan to allow sender to shutdown if it is monitoring it and waiting for receiver
 		close(t.partialAckChan)
 	}
@@ -162,7 +165,7 @@ func (t *connection) senderRoutine() {
 		t.senderFailedChan <- err
 	}
 
-	if t.server {
+	if !t.isClient() {
 		// If sender was requested to shutdown by receiver, then stop now
 		// Otherwise, wait in case receiver tries to request further sending through partial Ack, and if it does, force it to close, but only if we did not already
 		select {
@@ -240,7 +243,7 @@ func (t *connection) sender() error {
 	var ackChan <-chan protocolMessage
 	var shutdownChan <-chan struct{}
 
-	if t.server {
+	if !t.isClient() {
 		// TODO: Configurable? It's very low impact on anything though... NB: Repeated below
 		timeout = time.NewTimer(5 * time.Second)
 		timeout.Stop()
@@ -310,7 +313,7 @@ func (t *connection) sender() error {
 				// Close send side to generate EOF on remote
 				return t.socket.CloseWrite()
 			}
-			if t.server {
+			if !t.isClient() {
 				// ACKN Should ALWAYS be in order
 				if ack, ok := msg.(*protocolACKN); ok {
 					if len(t.partialAcks) == 0 {
@@ -384,7 +387,14 @@ func (t *connection) receiver() error {
 		}
 
 		var event transports.Event = nil
-		if t.server {
+		if t.isClient() {
+			switch messageImpl := message.(type) {
+			case *protocolACKN:
+				event = transports.NewAckEvent(t.ctx, messageImpl.nonce, messageImpl.sequence)
+			case *protocolPONG:
+				event = transports.NewPongEvent(t.ctx)
+			}
+		} else {
 			switch messageImpl := message.(type) {
 			case *protocolPING:
 				// Request receiver to handle a ping response and don't deliver as handled internally in connection
@@ -393,14 +403,7 @@ func (t *connection) receiver() error {
 			case eventsMessage:
 				// Start the sender partial acks - this blocks if too many outstanding which stops us receiving more
 				t.partialAckChan <- message
-				event = transports.NewEventsEvent(t.context, messageImpl.Nonce(), messageImpl.Events())
-			}
-		} else {
-			switch messageImpl := message.(type) {
-			case *protocolACKN:
-				event = transports.NewAckEvent(t.context, messageImpl.nonce, messageImpl.sequence)
-			case *protocolPONG:
-				event = transports.NewPongEvent(t.context)
+				event = transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
 			}
 		}
 
@@ -539,6 +542,16 @@ func (t *connection) sendEvent(transportEvent transports.Event) (bool, error) {
 	return false, nil
 }
 
+// isClient returns true if this is a client side connection
+func (t *connection) isClient() bool {
+	contextValue := t.ctx.Value(contextIsClient)
+	if contextValue == nil {
+		return true
+	}
+
+	return contextValue.(bool)
+}
+
 // Read will receive the body of a message
 // Returns both nil message and nil error on shutdown signal
 // Used by protocol structures to fetch extra message data
@@ -559,9 +572,9 @@ func (t *connection) Write(data []byte) (int, error) {
 
 // Acknowledge handles acknowledgement transmission once an event is complete
 func (t *connection) Acknowledge(events []*event.Event) {
-	position := events[0].Context().(*evntPosition)
+	position := events[0].Context().Value(contextEventPos).(*eventPosition)
 	for _, event := range events[1:] {
-		nextPosition := event.Context().(*evntPosition)
+		nextPosition := event.Context().Value(contextEventPos).(*eventPosition)
 		if nextPosition.nonce != position.nonce {
 			t.sendChan <- &protocolACKN{nonce: position.nonce, sequence: position.sequence}
 		}
@@ -578,11 +591,6 @@ func (t *connection) Teardown() {
 // SendChan returns the sendChan
 func (t *connection) SendChan() chan protocolMessage {
 	return t.sendChan
-}
-
-// Server returns true if this is a server connection that receives data
-func (t *connection) Server() bool {
-	return t.server
 }
 
 // SupportsEVNT returns true if this connection supports EVNT messages

@@ -20,6 +20,7 @@
 package tcp
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -129,16 +130,17 @@ func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[strin
 	return ret, nil
 }
 
-// NewReceiver returns a new Receiver interface using the settings from the
-// ReceiverTCPFactory.
-func (f *ReceiverTCPFactory) NewReceiver(context interface{}, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Receiver {
+// NewReceiver returns a new Receiver interface using the settings from the ReceiverTCPFactory
+func (f *ReceiverTCPFactory) NewReceiver(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Receiver {
+	ctx, shutdownFunc := context.WithCancel(ctx)
+
 	ret := &receiverTCP{
-		config:        f,
-		context:       context,
-		pool:          pool,
-		eventChan:     eventChan,
-		listenControl: make(chan struct{}),
-		connections:   make(map[*connection]*connection),
+		ctx:          ctx,
+		shutdownFunc: shutdownFunc,
+		config:       f,
+		pool:         pool,
+		eventChan:    eventChan,
+		connections:  make(map[*connection]*connection),
 		// TODO: Own values
 		backoff: core.NewExpBackoff(pool.Server()+" Receiver Reset", defaultReconnect, defaultReconnectMax),
 	}

@@ -17,6 +17,7 @@
 package event
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 )
@@ -28,27 +29,28 @@ type Acknowledger interface {
 
 // Event describes an event
 type Event struct {
-	data    map[string]interface{}
+	ctx   context.Context
+	acker Acknowledger
+	data  map[string]interface{}
+
 	encoded []byte
-	context interface{}
-	acker   Acknowledger
 }
 
 // NewEvent creates a new event structure from the given data
-func NewEvent(acker Acknowledger, data map[string]interface{}, context interface{}) *Event {
+func NewEvent(ctx context.Context, acker Acknowledger, data map[string]interface{}) *Event {
 	return &Event{
-		acker:   acker,
-		data:    data,
-		context: context,
+		ctx:   ctx,
+		acker: acker,
+		data:  data,
 	}
 }
 
 // NewEventFromBytes creates a new event structure from the given data
-func NewEventFromBytes(acker Acknowledger, data []byte, context interface{}) *Event {
+func NewEventFromBytes(ctx context.Context, acker Acknowledger, data []byte) *Event {
 	return &Event{
+		ctx:     ctx,
 		acker:   acker,
 		encoded: data,
-		context: context,
 	}
 }
 
@@ -90,8 +92,8 @@ func (e *Event) Format(pattern string) (string, error) {
 
 // Context returns the stream context for this Event - and can be used to
 // distinguish events from different sources
-func (e *Event) Context() interface{} {
-	return e.context
+func (e *Event) Context() context.Context {
+	return e.ctx
 }
 
 // DispatchAck processes a bulk of events and calls the required acknowledgement

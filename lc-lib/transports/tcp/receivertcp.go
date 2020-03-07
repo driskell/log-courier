@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -16,13 +17,13 @@ import (
 
 type receiverTCP struct {
 	// Constructor
-	config        *ReceiverTCPFactory
-	context       interface{}
-	pool          *addresspool.Pool
-	eventChan     chan<- transports.Event
-	listenControl chan struct{}
-	connections   map[*connection]*connection
-	backoff       *core.ExpBackoff
+	ctx          context.Context
+	shutdownFunc context.CancelFunc
+	config       *ReceiverTCPFactory
+	pool         *addresspool.Pool
+	eventChan    chan<- transports.Event
+	connections  map[*connection]*connection
+	backoff      *core.ExpBackoff
 
 	// Internal
 	tlsConfig  *tls.Config
@@ -34,9 +35,8 @@ type receiverTCP struct {
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-func (t *receiverTCP) ReloadConfig(cfg *config.Config) bool {
-	newNetConfig := transports.FetchReceiverConfig(cfg)
-	newConfig := newNetConfig.Factory.(*ReceiverTCPFactory)
+func (t *receiverTCP) ReloadConfig(cfg *config.Config, factory transports.ReceiverFactory) bool {
+	newConfig := factory.(*ReceiverTCPFactory)
 
 	// TODO: Check timestamps of underlying certificate files to detect changes
 	if newConfig.SSLCertificate != t.config.SSLCertificate || newConfig.SSLKey != t.config.SSLKey {
@@ -92,7 +92,7 @@ func (t *receiverTCP) retryWait() bool {
 	setupDue := now.Add(t.backoff.Trigger())
 
 	select {
-	case <-t.listenControl:
+	case <-t.ctx.Done():
 		// Shutdown request
 		return true
 	case <-time.After(setupDue.Sub(now)):
@@ -136,7 +136,7 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 
 		// Check for shutdown request
 		select {
-		case <-t.listenControl:
+		case <-t.ctx.Done():
 			return nil
 		default:
 		}
@@ -145,7 +145,7 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 
 // stop ends the accept loop
 func (t *receiverTCP) Shutdown() {
-	close(t.listenControl)
+	t.shutdownFunc()
 	t.listenWait.Wait()
 }
 
@@ -185,8 +185,8 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 		connectionSocket = newConnectionSocketTCP(socket)
 	}
 
-	conn := newConnection(connectionSocket, t.context, t.pool.Server(), t.eventChan, sendChan)
-	conn.setServer(true)
+	connContext := context.WithValue(t.ctx, contextIsClient, false)
+	conn := newConnection(connContext, connectionSocket, t.pool.Server(), t.eventChan, sendChan)
 
 	t.connMutex.Lock()
 	t.connCount++

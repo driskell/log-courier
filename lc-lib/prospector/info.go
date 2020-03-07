@@ -17,6 +17,7 @@
 package prospector
 
 import (
+	"context"
 	"os"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
@@ -38,6 +39,9 @@ const (
 )
 
 type prospectorInfo struct {
+	// ctx will be unique instance for each tracked file, and can be used
+	// to uniquely identify a stream
+	ctx          context.Context
 	file         string
 	identity     registrar.FileIdentity
 	lastSeen     uint32
@@ -51,6 +55,7 @@ type prospectorInfo struct {
 
 func newProspectorInfoFromFileState(file string, filestate *registrar.FileState) *prospectorInfo {
 	return &prospectorInfo{
+		ctx:          context.Background(),
 		file:         file,
 		identity:     filestate,
 		status:       statusResume,
@@ -60,6 +65,7 @@ func newProspectorInfoFromFileState(file string, filestate *registrar.FileState)
 
 func newProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *prospectorInfo {
 	return &prospectorInfo{
+		ctx:      context.Background(),
 		file:     file,
 		identity: registrar.NewFileInfo(fileinfo), // fileinfo is nil for stdin
 	}
@@ -67,14 +73,11 @@ func newProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *prospecto
 
 func newProspectorInfoInvalid(file string, err error) *prospectorInfo {
 	return &prospectorInfo{
+		ctx:    context.Background(),
 		file:   file,
 		err:    err,
 		status: statusInvalid,
 	}
-}
-
-func (pi *prospectorInfo) Info() (string, os.FileInfo) {
-	return pi.file, pi.identity.Stat()
 }
 
 func (pi *prospectorInfo) isRunning() bool {

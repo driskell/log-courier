@@ -63,6 +63,11 @@ type eventsMessage interface {
 	Events() []*event.Event
 }
 
+type eventPosition struct {
+	nonce    string
+	sequence uint32
+}
+
 type socketMessage struct {
 	conn *connection
 	err  error

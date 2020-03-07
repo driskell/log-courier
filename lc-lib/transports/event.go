@@ -17,12 +17,14 @@
 package transports
 
 import (
+	"context"
+
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 // Event is the interface implemented by all event structures
 type Event interface {
-	Context() interface{}
+	Context() context.Context
 }
 
 // StatusChange holds a value that represents a change in transport status
@@ -37,12 +39,12 @@ const (
 
 // StatusEvent contains information about a status change for a transport
 type StatusEvent struct {
-	context      interface{}
+	context      context.Context
 	statusChange StatusChange
 }
 
 // NewStatusEvent generates a new StatusEvent for the given context
-func NewStatusEvent(context interface{}, statusChange StatusChange) *StatusEvent {
+func NewStatusEvent(context context.Context, statusChange StatusChange) *StatusEvent {
 	return &StatusEvent{
 		context:      context,
 		statusChange: statusChange,
@@ -50,7 +52,7 @@ func NewStatusEvent(context interface{}, statusChange StatusChange) *StatusEvent
 }
 
 // Context returns the endpoint associated with this event
-func (e *StatusEvent) Context() interface{} {
+func (e *StatusEvent) Context() context.Context {
 	return e.context
 }
 
@@ -61,13 +63,13 @@ func (e *StatusEvent) StatusChange() StatusChange {
 
 // AckEvent contains information on which events have been acknowledged
 type AckEvent struct {
-	context  interface{}
+	context  context.Context
 	nonce    string
 	sequence uint32
 }
 
 // NewAckEvent generates a new AckEvent for the given Endpoint
-func NewAckEvent(context interface{}, nonce string, sequence uint32) *AckEvent {
+func NewAckEvent(context context.Context, nonce string, sequence uint32) *AckEvent {
 	return &AckEvent{
 		context:  context,
 		nonce:    nonce,
@@ -76,7 +78,7 @@ func NewAckEvent(context interface{}, nonce string, sequence uint32) *AckEvent {
 }
 
 // Context returns the endpoint associated with this event
-func (e *AckEvent) Context() interface{} {
+func (e *AckEvent) Context() context.Context {
 	return e.context
 }
 
@@ -92,13 +94,13 @@ func (e *AckEvent) Sequence() uint32 {
 
 // EventsEvent contains events that need to be ingested
 type EventsEvent struct {
-	context interface{}
+	context context.Context
 	nonce   string
 	events  []*event.Event
 }
 
 // NewEventsEvent generates a new EventsEvent for the given Endpoint
-func NewEventsEvent(context interface{}, nonce string, events []*event.Event) *EventsEvent {
+func NewEventsEvent(context context.Context, nonce string, events []*event.Event) *EventsEvent {
 	return &EventsEvent{
 		context: context,
 		nonce:   nonce,
@@ -107,7 +109,7 @@ func NewEventsEvent(context interface{}, nonce string, events []*event.Event) *E
 }
 
 // Context returns the endpoint associated with this event
-func (e *EventsEvent) Context() interface{} {
+func (e *EventsEvent) Context() context.Context {
 	return e.context
 }
 
@@ -128,34 +130,34 @@ func (e *EventsEvent) Count() uint32 {
 
 // PongEvent is received when a transport has responded to a Ping() request
 type PongEvent struct {
-	context interface{}
+	context context.Context
 }
 
 // NewPongEvent generates a new PongEvent for the given Endpoint
-func NewPongEvent(context interface{}) *PongEvent {
+func NewPongEvent(context context.Context) *PongEvent {
 	return &PongEvent{
 		context: context,
 	}
 }
 
 // Context returns the endpoint associated with this event
-func (e *PongEvent) Context() interface{} {
+func (e *PongEvent) Context() context.Context {
 	return e.context
 }
 
 // PingEvent is received when a transport has responded to a Ping() request
 type PingEvent struct {
-	context interface{}
+	context context.Context
 }
 
 // NewPingEvent generates a new PingEvent for the given Endpoint
-func NewPingEvent(context interface{}) *PingEvent {
+func NewPingEvent(context context.Context) *PingEvent {
 	return &PingEvent{
 		context: context,
 	}
 }
 
 // Context returns the endpoint associated with this event
-func (e *PingEvent) Context() interface{} {
+func (e *PingEvent) Context() context.Context {
 	return e.context
 }

@@ -17,13 +17,13 @@
 package harvester
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
@@ -58,10 +58,12 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 }
 
 // NewHarvester creates a new harvester with the given configuration for the given stream identifier
-func (sc *StreamConfig) NewHarvester(cfg *config.Config, stream core.Stream, acker event.Acknowledger, offset int64) *Harvester {
+func (sc *StreamConfig) NewHarvester(ctx context.Context, path string, fileinfo os.FileInfo, cfg *config.Config, acker event.Acknowledger, offset int64) *Harvester {
 	ret := &Harvester{
+		ctx:          ctx,
+		path:         path,
+		fileinfo:     fileinfo,
 		stopChan:     make(chan struct{}),
-		stream:       stream,
 		acker:        acker,
 		genConfig:    cfg.GeneralPart("harvester").(*General),
 		streamConfig: sc,
@@ -73,18 +75,15 @@ func (sc *StreamConfig) NewHarvester(cfg *config.Config, stream core.Stream, ack
 	}
 
 	ret.eventStream = sc.NewStream(ret.eventCallback, offset)
-
 	ret.backOffTimer.Stop()
 
-	if stream != nil {
-		// Grab now so we can safely use them even if prospector changes them
-		ret.path, ret.fileinfo = stream.Info()
-		ret.isStream = false
-	} else {
+	if path == Stdin {
 		// This is stdin
 		ret.file = os.Stdin
-		ret.path, ret.fileinfo = Stdin, nil
 		ret.isStream = true
+	} else {
+		// Grab now so we can safely use them even if prospector changes them
+		ret.isStream = false
 	}
 
 	return ret

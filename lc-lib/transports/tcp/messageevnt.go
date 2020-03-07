@@ -19,6 +19,7 @@ package tcp
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -27,11 +28,6 @@ import (
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
-type evntPosition struct {
-	nonce    string
-	sequence uint32
-}
-
 type protocolEVNT struct {
 	nonce  string
 	events []*event.Event
@@ -39,8 +35,8 @@ type protocolEVNT struct {
 
 // Reads the events from existing data
 func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, error) {
-	if !conn.Server() {
-		return nil, errors.New("Protocol error: Unexpected JDAT message received on non-server connection")
+	if conn.isClient() {
+		return nil, errors.New("Protocol error: Unexpected JDAT message received on client connection")
 	}
 
 	if bodyLength < 17 {
@@ -93,7 +89,8 @@ func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, erro
 			}
 		}
 
-		events = append(events, event.NewEventFromBytes(conn, data, &evntPosition{nonce: nonce, sequence: sequence}))
+		ctx := context.WithValue(conn.ctx, contextEventPos, &eventPosition{nonce: nonce, sequence: sequence})
+		events = append(events, event.NewEventFromBytes(ctx, conn, data))
 	}
 
 	return &protocolEVNT{nonce: nonce, events: events}, nil

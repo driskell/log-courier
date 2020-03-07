@@ -74,7 +74,7 @@ func (s *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
 	return bestEndpoint, bestEndpoint.queuePayload(payload)
 }
 
-// ForceFailure forces an endpoint to fail
+// ForceFailure forces the endpoint referenced by the context to fail
 func (s *Sink) ForceFailure(endpoint *Endpoint) {
 	if endpoint.IsFailed() {
 		return

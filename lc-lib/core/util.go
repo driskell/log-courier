@@ -18,15 +18,8 @@ package core
 
 import (
 	"math"
-	"os"
 	"time"
 )
-
-// Stream represents a unique event stream
-// TODO: Get rid of this
-type Stream interface {
-	Info() (string, os.FileInfo)
-}
 
 // CalculateSpeed returns a running average for a speed using variable time
 // periods over 5 seconds. If all measurements are 0 in a 5 second period it

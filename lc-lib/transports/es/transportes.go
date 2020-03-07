@@ -47,14 +47,13 @@ var (
 // transportES implements a transport that sends over the ES HTTP protocol
 type transportES struct {
 	// Constructor
-	config          *TransportESFactory
-	netConfig       *transports.Config
-	finishOnFail    bool
-	context         interface{}
-	pool            *addresspool.Pool
-	eventChan       chan<- transports.Event
-	shutdownContext context.Context
-	shutdownFunc    context.CancelFunc
+	ctx          context.Context
+	shutdownFunc context.CancelFunc
+	config       *TransportESFactory
+	netConfig    *transports.Config
+	finishOnFail bool
+	pool         *addresspool.Pool
+	eventChan    chan<- transports.Event
 
 	// Internal
 	// payloadMutex is so we can easily discard existing sendChan and its contents each time we reset
@@ -92,7 +91,7 @@ func (t *transportES) controllerRoutine() {
 	defer func() {
 		// Wait for all routines to close
 		t.wait.Wait()
-		t.eventChan <- transports.NewStatusEvent(t.context, transports.Finished)
+		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
 	}()
 
 	// Setup payload chan with max write count of pending payloads
@@ -105,7 +104,7 @@ func (t *transportES) controllerRoutine() {
 		return
 	}
 
-	t.eventChan <- transports.NewStatusEvent(t.context, transports.Started)
+	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Started)
 
 	// Start secondary http routines
 	for i := 1; i < t.config.Routines; i++ {
@@ -150,7 +149,7 @@ func (t *transportES) populateNodeInfo() error {
 		return err
 	}
 
-	httpRequest, err := http.NewRequestWithContext(t.shutdownContext, "GET", fmt.Sprintf("http://%s/_nodes/http", server.String()), nil)
+	httpRequest, err := http.NewRequestWithContext(t.ctx, "GET", fmt.Sprintf("http://%s/_nodes/http", server.String()), nil)
 	if err != nil {
 		return err
 	}
@@ -215,7 +214,7 @@ func (t *transportES) installTemplate() error {
 		return nil
 	}
 
-	httpRequest, err := http.NewRequestWithContext(t.shutdownContext, "PUT", fmt.Sprintf("http://%s/_template/%s", server.String(), name), strings.NewReader(template))
+	httpRequest, err := http.NewRequestWithContext(t.ctx, "PUT", fmt.Sprintf("http://%s/_template/%s", server.String(), name), strings.NewReader(template))
 	if err != nil {
 		return err
 	}
@@ -242,7 +241,7 @@ func (t *transportES) installTemplate() error {
 
 // checkTemplate checks if template is already installed at the given server
 func (t *transportES) checkTemplate(server *net.TCPAddr, name string) (bool, error) {
-	httpRequest, err := http.NewRequestWithContext(t.shutdownContext, "HEAD", fmt.Sprintf("http://%s/_template/%s", server.String(), name), nil)
+	httpRequest, err := http.NewRequestWithContext(t.ctx, "HEAD", fmt.Sprintf("http://%s/_template/%s", server.String(), name), nil)
 	if err != nil {
 		return false, err
 	}
@@ -276,7 +275,7 @@ func (t *transportES) httpRoutine(id int) {
 
 	for {
 		select {
-		case <-t.shutdownContext.Done():
+		case <-t.ctx.Done():
 			// Forced failure
 			return
 		case payload := <-t.payloadChan:
@@ -298,10 +297,10 @@ func (t *transportES) httpRoutine(id int) {
 					lastAckSequence = request.AckSequence()
 
 					select {
-					case <-t.shutdownContext.Done():
+					case <-t.ctx.Done():
 						// Forced failure
 						return
-					case t.eventChan <- transports.NewAckEvent(t.context, payload.Nonce, lastAckSequence):
+					case t.eventChan <- transports.NewAckEvent(t.ctx, payload.Nonce, lastAckSequence):
 					}
 				}
 
@@ -348,7 +347,7 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 		return err
 	}
 
-	httpRequest, err := http.NewRequestWithContext(t.shutdownContext, "POST", url, bodyBuffer)
+	httpRequest, err := http.NewRequestWithContext(t.ctx, "POST", url, bodyBuffer)
 	if err != nil {
 		return err
 	}
@@ -389,7 +388,7 @@ func (t *transportES) retryWait(backoff *core.ExpBackoff) bool {
 	reconnectDue := now.Add(backoff.Trigger())
 
 	select {
-	case <-t.shutdownContext.Done():
+	case <-t.ctx.Done():
 		// Shutdown request
 		return true
 	case <-time.After(reconnectDue.Sub(now)):

@@ -17,12 +17,12 @@
 package registrar
 
 import (
-	"github.com/driskell/log-courier/lc-lib/core"
+	"context"
 )
 
 // EventProcessor is implemented by all register events
 type EventProcessor interface {
-	process(state map[core.Stream]*FileState)
+	process(state map[context.Context]*FileState)
 }
 
 // EventSpooler buffers registrar events for bulk sends

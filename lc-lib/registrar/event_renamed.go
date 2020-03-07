@@ -17,33 +17,33 @@
 package registrar
 
 import (
-	"github.com/driskell/log-courier/lc-lib/core"
+	"context"
 )
 
 // RenamedEvent informs the registrar of a file rename that needs to be
 // reflected within the state file
 type RenamedEvent struct {
-	stream core.Stream
+	ctx    context.Context
 	source string
 }
 
 // NewRenamedEvent creates a new rename event
-func NewRenamedEvent(stream core.Stream, source string) *RenamedEvent {
+func NewRenamedEvent(ctx context.Context, source string) *RenamedEvent {
 	return &RenamedEvent{
-		stream: stream,
+		ctx:    ctx,
 		source: source,
 	}
 }
 
-func (e *RenamedEvent) process(state map[core.Stream]*FileState) {
-	_, isFound := state[e.stream]
+func (e *RenamedEvent) process(state map[context.Context]*FileState) {
+	_, isFound := state[e.ctx]
 	if !isFound {
 		// This is probably stdin or a deleted file we can't resume
 		return
 	}
 
-	log.Debug("Registrar received a rename event for %s -> %s", state[e.stream].Source, e.source)
+	log.Debug("Registrar received a rename event for %s -> %s", state[e.ctx].Source, e.source)
 
 	// Update the stored file name
-	state[e.stream].Source = &e.source
+	state[e.ctx].Source = &e.source
 }

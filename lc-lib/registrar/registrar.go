@@ -20,6 +20,7 @@
 package registrar
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -27,14 +28,22 @@ import (
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
+)
+
+// Context is a registrar context key
+type Context string
+
+const (
+	// ContextEndOffset is the end offset that registrar saves
+	// This should be present in all event contexts that registrar needs to persist
+	ContextEndOffset Context = "endOffset"
 )
 
 // LoadPreviousFunc is a callback implemented by a consumer of the Registrar,
 // and is called for each part of a loaded previous state when LoadPrevious is
 // called
-type LoadPreviousFunc func(string, *FileState) (core.Stream, error)
+type LoadPreviousFunc func(string, *FileState) (context.Context, error)
 
 // Registrar persists file offsets to a file that can be read again on startup
 // to resume where we left off
@@ -45,7 +54,7 @@ type Registrar struct {
 	persistdir    string
 	statefile     string
 	statepath     string
-	state         map[core.Stream]*FileState
+	state         map[context.Context]*FileState
 }
 
 // NewRegistrar creates a new Registrar associated with a file in a directory
@@ -55,7 +64,7 @@ func NewRegistrar(persistDir string) *Registrar {
 		writeTimer:    time.NewTimer(0),
 		persistdir:    persistDir,
 		statefile:     ".log-courier",
-		state:         make(map[core.Stream]*FileState),
+		state:         make(map[context.Context]*FileState),
 	}
 
 	ret.statepath = path.Join(ret.persistdir, ret.statefile)
@@ -112,14 +121,14 @@ func (r *Registrar) LoadPrevious(callbackFunc LoadPreviousFunc) (havePrevious bo
 	decoder.Decode(&data)
 	f.Close()
 
-	r.state = make(map[core.Stream]*FileState, len(data))
+	r.state = make(map[context.Context]*FileState, len(data))
 
-	var stream core.Stream
+	var ctx context.Context
 	for file, state := range data {
-		if stream, err = callbackFunc(file, state); err != nil {
+		if ctx, err = callbackFunc(file, state); err != nil {
 			return
 		}
-		r.state[stream] = state
+		r.state[ctx] = state
 	}
 
 	// Test we can successfully save new states by attempting to save now

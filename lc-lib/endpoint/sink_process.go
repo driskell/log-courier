@@ -29,7 +29,7 @@ func (s *Sink) EventChan() <-chan transports.Event {
 
 // ProcessEvent performs the necessary processing of events
 func (s *Sink) ProcessEvent(event transports.Event) bool {
-	endpoint := event.Context().(*Endpoint)
+	endpoint := event.Context().Value(ContextSelf).(*Endpoint)
 
 	switch msg := event.(type) {
 	case *transports.StatusEvent:

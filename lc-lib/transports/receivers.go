@@ -17,13 +17,15 @@
 package transports
 
 import (
+	"context"
+
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
 // Receiver is the generic interface that all receivers implement
 type Receiver interface {
-	ReloadConfig(*config.Config) bool
+	ReloadConfig(*config.Config, ReceiverFactory) bool
 	Shutdown()
 }
 
@@ -32,7 +34,7 @@ type Receiver interface {
 // NewReceiver is called, return an instance of the receiver that obeys that
 // configuration
 type ReceiverFactory interface {
-	NewReceiver(interface{}, *addresspool.Pool, chan<- Event) Receiver
+	NewReceiver(context.Context, *addresspool.Pool, chan<- Event) Receiver
 }
 
 // ReceiverRegistrarFunc is a callback that validates the configuration for

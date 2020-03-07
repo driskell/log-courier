@@ -22,37 +22,59 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
-// ReceiverConfig contains extra section configuration values
-type ReceiverConfig struct {
+const (
+	defaultReceiverTransport = "tls"
+)
+
+// ReceiverConfig is the top level section configuration, and is an array of receivers
+type ReceiverConfig []ReceiverConfigEntry
+
+// ReceiverConfigEntry contains configuration for a single receiver
+type ReceiverConfigEntry struct {
 	Factory ReceiverFactory
 
-	Enabled   bool   `config:"enabled"`
-	Transport string `config:"transport"`
+	Enabled   bool     `config:"enabled"`
+	Transport string   `config:"transport"`
+	Listen    []string `config:"listen"`
 
 	Unused map[string]interface{}
 }
 
+// Defaults sets default receiver configuration
+func (c *ReceiverConfigEntry) Defaults() {
+	c.Enabled = true
+	c.Transport = defaultReceiverTransport
+}
+
 // Init the receiver configuration
-func (nc *ReceiverConfig) Init(p *config.Parser, path string) (err error) {
-	registrarFunc, ok := registeredReceivers[nc.Transport]
+func (c *ReceiverConfigEntry) Init(p *config.Parser, path string) (err error) {
+	registrarFunc, ok := registeredReceivers[c.Transport]
 	if !ok {
-		err = fmt.Errorf("Unrecognised listener transport '%s'", nc.Transport)
+		err = fmt.Errorf("Unrecognised receiver transport '%s'", c.Transport)
 		return
 	}
 
-	nc.Factory, err = registrarFunc(p, path+"/", nc.Unused, nc.Transport)
+	c.Factory, err = registrarFunc(p, path+"/", c.Unused, c.Transport)
 	return
 }
 
-// FetchReceiverConfig returns the network configuration from a Config structure
-func FetchReceiverConfig(cfg *config.Config) *ReceiverConfig {
-	return cfg.Section("listener").(*ReceiverConfig)
+// Validate the receiver configuration
+func (c *ReceiverConfigEntry) Validate(p *config.Parser, path string) (err error) {
+	if len(c.Listen) == 0 {
+		err = fmt.Errorf("No receiver listen addresses were specified (%s/listen)", path)
+		return
+	}
+
+	return nil
+}
+
+// FetchReceiversConfig returns the network configuration from a Config structure
+func FetchReceiversConfig(cfg *config.Config) ReceiverConfig {
+	return cfg.Section("receivers").(ReceiverConfig)
 }
 
 func init() {
-	config.RegisterSection("listener", func() interface{} {
-		return &ReceiverConfig{
-			Transport: defaultNetworkTransport,
-		}
+	config.RegisterSection("receivers", func() interface{} {
+		return make(ReceiverConfig, 0)
 	})
 }

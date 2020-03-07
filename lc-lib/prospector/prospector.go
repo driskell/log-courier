@@ -20,6 +20,7 @@
 package prospector
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"sync"
@@ -114,9 +115,9 @@ func (p *Prospector) Init(cfg *config.Config) error {
 }
 
 // loadCallback receives existing file offsets from the registrar
-func (p *Prospector) loadCallback(file string, state *registrar.FileState) (core.Stream, error) {
+func (p *Prospector) loadCallback(file string, state *registrar.FileState) (context.Context, error) {
 	p.prospectorindex[file] = newProspectorInfoFromFileState(file, state)
-	return p.prospectorindex[file], nil
+	return p.prospectorindex[file].ctx, nil
 }
 
 // Run begins the prospector loop
@@ -174,7 +175,7 @@ func (p *Prospector) runOnce() bool {
 		}
 		if info.orphaned == orphanedMaybe {
 			info.orphaned = orphanedYes
-			p.registrarSpool.Add(registrar.NewDeletedEvent(info))
+			p.registrarSpool.Add(registrar.NewDeletedEvent(info.ctx))
 		}
 	}
 	p.mutex.Unlock()
@@ -296,7 +297,7 @@ func (p *Prospector) processFile(file string, cfg *FileConfig) {
 			info = previousinfo
 			info.file = file
 
-			p.registrarSpool.Add(registrar.NewRenamedEvent(info, file))
+			p.registrarSpool.Add(registrar.NewRenamedEvent(info.ctx, file))
 		} else {
 			// This is a new entry
 			info = newProspectorInfoFromFileInfo(file, fileinfo)
@@ -309,7 +310,7 @@ func (p *Prospector) processFile(file string, cfg *FileConfig) {
 
 				// Store the offset that we should resume from if we notice a modification
 				info.finishOffset = fileinfo.Size()
-				p.registrarSpool.Add(registrar.NewDiscoverEvent(info, file, fileinfo.Size(), fileinfo))
+				p.registrarSpool.Add(registrar.NewDiscoverEvent(info.ctx, file, fileinfo.Size(), fileinfo))
 			} else {
 				// Process new file
 				log.Info("Launching harvester on new file: %s", file)
@@ -336,7 +337,7 @@ func (p *Prospector) processFile(file string, cfg *FileConfig) {
 				info = previousinfo
 				info.file = file
 
-				p.registrarSpool.Add(registrar.NewRenamedEvent(info, file))
+				p.registrarSpool.Add(registrar.NewRenamedEvent(info.ctx, file))
 			} else {
 				// File is not the same file we saw previously, it must have rotated and is a new file
 				log.Info("Launching harvester on rotated file: %s", file)
@@ -416,7 +417,7 @@ func (p *Prospector) startHarvester(info *prospectorInfo, fileConfig *FileConfig
 	}
 
 	// Send a new file event to allow registrar to begin persisting for this harvester
-	p.registrarSpool.Add(registrar.NewDiscoverEvent(info, info.file, offset, info.identity.Stat()))
+	p.registrarSpool.Add(registrar.NewDiscoverEvent(info.ctx, info.file, offset, info.identity.Stat()))
 
 	p.startHarvesterWithOffset(info, fileConfig, offset)
 }
@@ -425,7 +426,7 @@ func (p *Prospector) startHarvester(info *prospectorInfo, fileConfig *FileConfig
 // the given offset
 func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileConfig *FileConfig, offset int64) {
 	// TODO - hook in a shutdown channel
-	info.harvester = fileConfig.StreamConfig.NewHarvester(p.config, info, p.registrar, offset)
+	info.harvester = fileConfig.StreamConfig.NewHarvester(info.ctx, info.file, info.identity.Stat(), p.config, p.registrar, offset)
 	info.running = true
 	info.status = statusOk
 	info.harvester.SetOutput(p.output)

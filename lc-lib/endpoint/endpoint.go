@@ -17,6 +17,7 @@
 package endpoint
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -30,8 +31,18 @@ import (
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
+// Context is a context key for endpoints
+type Context string
+
+const (
+	// ContextSelf returns the endpoint structure from a context
+	ContextSelf Context = "endpoint"
+)
+
 // Endpoint structure represents a single remote endpoint
 type Endpoint struct {
+	ctx context.Context
+
 	mutex sync.RWMutex
 
 	// The endpoint status
@@ -68,6 +79,8 @@ type Endpoint struct {
 // Init prepares the internal Element structures for InternalList and prepares
 // the pending payload structures
 func (e *Endpoint) Init() {
+	e.ctx = context.WithValue(context.Background(), ContextSelf, e)
+
 	e.warming = true
 	e.backoff = core.NewExpBackoff(e.server+" Failure", e.sink.config.Backoff, e.sink.config.BackoffMax)
 
@@ -79,7 +92,12 @@ func (e *Endpoint) Init() {
 
 	e.resetPayloads()
 
-	e.transport = e.sink.config.Factory.NewTransport(e, e.Pool(), e.EventChan(), e.finishOnFail)
+	e.transport = e.sink.config.Factory.NewTransport(e.ctx, e.Pool(), e.EventChan(), e.finishOnFail)
+}
+
+// Context returns the endpoint's context
+func (e *Endpoint) Context() context.Context {
+	return e.ctx
 }
 
 // Prev returns the previous endpoint in the ordered list

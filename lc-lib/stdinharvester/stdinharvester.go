@@ -1,6 +1,8 @@
 package stdinharvester
 
 import (
+	"context"
+
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
@@ -19,7 +21,7 @@ func New(app *core.App) *Stdin {
 	cfg := app.Config()
 	streamConfig := cfg.Section("stdin").(*StreamConfig)
 	return &Stdin{
-		harvester: streamConfig.NewHarvester(cfg, nil, nil, 0),
+		harvester: streamConfig.NewHarvester(context.Background(), harvester.Stdin, nil, cfg, nil, 0),
 	}
 }
 

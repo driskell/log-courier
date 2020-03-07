@@ -19,16 +19,13 @@ package main
 import (
 	"flag"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/admin"
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/prospector"
 	"github.com/driskell/log-courier/lc-lib/publisher"
+	"github.com/driskell/log-courier/lc-lib/receiver"
 	"github.com/driskell/log-courier/lc-lib/spooler"
 	"github.com/driskell/log-courier/lc-lib/stdinharvester"
-	"github.com/driskell/log-courier/lc-lib/transports"
 
 	_ "github.com/driskell/log-courier/lc-lib/codecs/filter"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
@@ -70,12 +67,9 @@ func main() {
 		// Prospector will handle new files, start harvesters, and own the registrar
 		app.Pipeline().AddSource(prospector.NewProspector(app, fromBeginning))
 
-		// Receiver?
-		receiverConfig := transports.FetchReceiverConfig(app.Config())
-		if receiverConfig.Enabled {
-			segment := &receiverSegment{cfg: receiverConfig}
-			app.Pipeline().AddSource(segment)
-		}
+		// Receivers will receive over the network
+		// TODO: Not log-courier
+		app.Pipeline().AddSource(receiver.NewPool(app))
 	}
 
 	// Add spooler as first processor, it combines into larger chunks as needed
@@ -84,46 +78,4 @@ func main() {
 	app.Pipeline().SetSink(publisher.NewPublisher())
 	// Go!
 	app.Run()
-}
-
-type receiverSegment struct {
-	cfg          *transports.ReceiverConfig
-	output       chan<- []*event.Event
-	shutdownChan <-chan struct{}
-	eventChan    chan transports.Event
-}
-
-// SetOutput sets the output channel
-func (r *receiverSegment) SetOutput(output chan<- []*event.Event) {
-	r.output = output
-}
-
-// SetShutdownChan sets the shutdown channel
-func (r *receiverSegment) SetShutdownChan(shutdownChan <-chan struct{}) {
-	r.shutdownChan = shutdownChan
-}
-
-// Init sets up the listener
-func (r *receiverSegment) Init(cfg *config.Config) error {
-	r.eventChan = make(chan transports.Event)
-	return nil
-}
-
-// Run starts listening
-func (r *receiverSegment) Run() {
-	pool := addresspool.NewPool("0.0.0.0:1222")
-	receiver := r.cfg.Factory.NewReceiver(nil, pool, r.eventChan)
-
-	for {
-		select {
-		case <-r.shutdownChan:
-			receiver.Shutdown()
-			return
-		case receiverEvent := <-r.eventChan:
-			switch eventImpl := receiverEvent.(type) {
-			case *transports.EventsEvent:
-				r.output <- eventImpl.Events()
-			}
-		}
-	}
 }

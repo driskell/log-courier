@@ -19,6 +19,7 @@ package tcp
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -34,8 +35,8 @@ type protocolJDAT struct {
 
 // newProtocolJDAT creates a new structure from wire-bytes
 func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, error) {
-	if !conn.Server() {
-		return nil, errors.New("Protocol error: Unexpected JDAT message received on non-server connection")
+	if conn.isClient() {
+		return nil, errors.New("Protocol error: Unexpected JDAT message received on client connection")
 	}
 
 	if bodyLength < 17 {
@@ -88,7 +89,8 @@ func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, erro
 			}
 		}
 
-		events = append(events, event.NewEventFromBytes(conn, data, &evntPosition{nonce: nonce, sequence: sequence}))
+		ctx := context.WithValue(conn.ctx, contextEventPos, &eventPosition{nonce: nonce, sequence: sequence})
+		events = append(events, event.NewEventFromBytes(ctx, conn, data))
 	}
 
 	return &protocolJDAT{nonce: nonce, events: events}, nil

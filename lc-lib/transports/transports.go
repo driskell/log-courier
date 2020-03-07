@@ -17,6 +17,7 @@
 package transports
 
 import (
+	"context"
 	"errors"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -42,8 +43,7 @@ type Transport interface {
 // NewTransport is called, return an instance of the transport that obeys that
 // configuration
 type TransportFactory interface {
-	// TODO: Use context module
-	NewTransport(interface{}, *addresspool.Pool, chan<- Event, bool) Transport
+	NewTransport(context.Context, *addresspool.Pool, chan<- Event, bool) Transport
 }
 
 // TransportRegistrarFunc is a callback that validates the configuration for

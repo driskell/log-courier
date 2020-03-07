@@ -162,8 +162,12 @@ FieldLoop:
 
 				dynamicKeys := vField.MapKeys()
 				for _, key := range dynamicKeys {
-					// Unwrap the interface and the pointer
-					if err = p.populateEntry(vField.MapIndex(key).Elem().Elem(), vRawConfig, configPath, key.String()); err != nil {
+					// Unwrap the interface and the pointer (if any)
+					elem := vField.MapIndex(key).Elem()
+					if elem.Kind() == reflect.Ptr {
+						elem = elem.Elem()
+					}
+					if err = p.populateEntry(elem, vRawConfig, configPath, key.String()); err != nil {
 						return
 					}
 				}
