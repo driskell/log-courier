@@ -270,9 +270,8 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, onAck func(*Endpoint, *p
 			e.transmissionStart = time.Now()
 		}
 
-		// Reset backoff now we finished a whole payload - and reset warming flag
+		// Reset warming flag
 		e.warming = false
-		e.backoff.Reset()
 	} else {
 		e.mutex.Lock()
 		e.lineCount += int64(lineCount)

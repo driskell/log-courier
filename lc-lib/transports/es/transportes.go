@@ -48,7 +48,6 @@ type transportES struct {
 	eventChan       chan<- transports.Event
 	shutdownContext context.Context
 	shutdownFunc    context.CancelFunc
-	backoff         *core.ExpBackoff
 
 	// Internal
 	// payloadMutex is so we can easily discard existing sendChan and its contents each time we reset
@@ -92,6 +91,8 @@ func (t *transportES) controllerRoutine() {
 	t.payloadChan = make(chan *payload.Payload, t.netConfig.MaxPendingPayloads)
 	t.payloadMutex.Unlock()
 
+	// TODO: Create index mapping template
+
 	t.eventChan <- transports.NewStatusEvent(t.context, transports.Started)
 
 	// Start secondary http routines
@@ -111,6 +112,9 @@ func (t *transportES) httpRoutine(id int) {
 		t.wait.Done()
 	}()
 
+	backoffName := fmt.Sprintf("%s:%d Retry", t.pool.Server(), id)
+	backoff := core.NewExpBackoff(backoffName, t.config.Retry, t.config.RetryMax)
+
 	for {
 		select {
 		case <-t.shutdownContext.Done():
@@ -125,7 +129,6 @@ func (t *transportES) httpRoutine(id int) {
 
 			lastAckSequence := uint32(0)
 			request := newBulkRequest(payload.Events())
-
 			for {
 				if err := t.performBulkRequest(id, request); err != nil {
 					log.Error("[%s:%d] Elasticsearch request failed: %s", t.pool.Server(), id, err)
@@ -146,7 +149,7 @@ func (t *transportES) httpRoutine(id int) {
 					break
 				}
 
-				if t.retryWait() {
+				if t.retryWait(backoff) {
 					break
 				}
 			}
@@ -156,9 +159,9 @@ func (t *transportES) httpRoutine(id int) {
 
 // retryWait waits the backoff timeout before attempting to retry
 // It also monitors for shutdown whilst waiting
-func (t *transportES) retryWait() bool {
+func (t *transportES) retryWait(backoff *core.ExpBackoff) bool {
 	now := time.Now()
-	reconnectDue := now.Add(t.backoff.Trigger())
+	reconnectDue := now.Add(backoff.Trigger())
 
 	select {
 	case <-t.shutdownContext.Done():
@@ -198,6 +201,8 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	httpRequest, err := http.NewRequestWithContext(
 		t.shutdownContext,
 		"POST",
+		// TODO: Use actual configured index name, not testing
+		// TODO: Timestamp used to calculate this making for potential multiple roundtrips per payload
 		fmt.Sprintf("http://%s/testing/_bulk", server.String()),
 		bodyBuffer,
 	)

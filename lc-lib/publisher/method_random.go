@@ -148,8 +148,6 @@ func (m *methodRandom) onFinish(endpoint *endpoint.Endpoint) bool {
 }
 
 func (m *methodRandom) onStarted(endpoint *endpoint.Endpoint) {
-	// Reset backoff timer
-	m.backoff.Reset()
 	return
 }
 

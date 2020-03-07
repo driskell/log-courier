@@ -25,7 +25,6 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -91,7 +90,6 @@ func (f *TransportESFactory) NewTransport(lcontext interface{}, pool *addresspoo
 		eventChan:       eventChan,
 		shutdownContext: shutdownContext,
 		shutdownFunc:    shutdownFunc,
-		backoff:         core.NewExpBackoff(pool.Server()+" Retry", f.Retry, f.RetryMax),
 	}
 
 	ret.startController()

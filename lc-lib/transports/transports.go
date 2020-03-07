@@ -42,6 +42,7 @@ type Transport interface {
 // NewTransport is called, return an instance of the transport that obeys that
 // configuration
 type TransportFactory interface {
+	// TODO: Use context module
 	NewTransport(interface{}, *addresspool.Pool, chan<- Event, bool) Transport
 }
 

@@ -99,8 +99,6 @@ func (t *transportTCP) controllerRoutine() {
 
 		err = t.connect()
 		if err == nil {
-			t.backoff.Reset()
-
 			t.sendMutex.Lock()
 			t.supportsEVNT = t.conn.SupportsEVNT()
 			t.sendChan = t.conn.SendChan()
