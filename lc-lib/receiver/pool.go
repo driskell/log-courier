@@ -88,7 +88,7 @@ ReceiverLoop:
 		case <-r.shutdownChan:
 			if len(r.receivers) == 0 {
 				// Nothing to wait to shutdown, return now, don't even log
-				return
+				break ReceiverLoop
 			}
 			log.Info("Receiver pool is shutting down receivers")
 			r.shutdown()

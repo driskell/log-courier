@@ -62,8 +62,6 @@ func (e *Event) Data() map[string]interface{} {
 			e.data = make(map[string]interface{})
 			e.data["@timestamp"] = time.Now()
 			e.data["message"] = err.Error()
-		} else {
-			e.encoded = nil
 		}
 	}
 	return e.data
@@ -76,18 +74,9 @@ func (e *Event) Bytes() []byte {
 		e.encoded, err = json.Marshal(e.data)
 		if err != nil {
 			e.encoded = make([]byte, 0)
-		} else {
-			e.data = nil
 		}
 	}
 	return e.encoded
-}
-
-// Format renders the event data into a format string
-// Supports %{name} syntax for referencing entries in the event
-// Also supports %{+Mon 2 Jan 2006} time formatting
-func (e *Event) Format(pattern string) (string, error) {
-	return FormatPattern(pattern, e.data)
 }
 
 // Context returns the stream context for this Event - and can be used to

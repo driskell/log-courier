@@ -20,13 +20,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
-// FormatPattern renders map data into a format string
-// Supports %{name} syntax for referencing entries in the event
-// Also supports %{+Mon 2 Jan 2006} time formatting
-func FormatPattern(pattern string, data map[string]interface{}) (string, error) {
+// Pattern represents a pattern string that can be rendered using an event
+type Pattern interface {
+	// Format renders map data into a format string
+	// Supports %{name} syntax for referencing entries in the event
+	// Also supports %{+Mon 2 Jan 2006} time formatting//
+	Format(event *Event) (string, error)
+}
+
+// A pattern string
+type variablePattern string
+
+// A static string with no variables
+type staticPattern string
+
+// NewPatternFromString creates a new Pattern
+func NewPatternFromString(pattern string) Pattern {
+	if strings.Contains(pattern, "%{") {
+		return variablePattern(pattern)
+	}
+	return staticPattern(pattern)
+}
+
+// Format implementation for pattern strings
+func (p variablePattern) Format(event *Event) (string, error) {
+	data := event.Data()
+	pattern := string(p)
 	matcher := regexp.MustCompile(`%\{([^}]+)\}`)
 	keyMatcher := regexp.MustCompile(`^([^\[\]]+)|\[([^\[\]]+)\]`)
 
@@ -102,4 +125,19 @@ func FormatPattern(pattern string, data map[string]interface{}) (string, error) 
 		}
 	}
 	return output + pattern[lastOffset:], nil
+}
+
+// String implementation
+func (p variablePattern) String() string {
+	return string(p)
+}
+
+// Format implementation for static strings, just returning itself
+func (p staticPattern) Format(event *Event) (string, error) {
+	return string(p), nil
+}
+
+// String implementation
+func (p staticPattern) String() string {
+	return string(p)
 }

@@ -41,7 +41,7 @@ type bulkRequest struct {
 	remaining    int
 	ackSequence  uint32
 	segmentQueue [][]byte
-	indexPattern string
+	indexPattern event.Pattern
 
 	// Internal
 	defaultIndex string
@@ -61,14 +61,14 @@ func newBulkRequest(indexPattern string, events []*event.Event) *bulkRequest {
 		remaining:    len(events),
 		ackSequence:  0,
 		segmentQueue: make([][]byte, 2),
-		indexPattern: indexPattern,
+		indexPattern: event.NewPatternFromString(indexPattern),
 	}
 }
 
 // DefaultIndex returns the index to use in the URL
 func (p *bulkRequest) DefaultIndex() (string, error) {
 	if p.defaultIndex == "" {
-		defaultIndex, err := p.markCursor.pos[0].Format(p.indexPattern)
+		defaultIndex, err := p.indexPattern.Format(p.markCursor.pos[0])
 		if err != nil {
 			return "", err
 		}
@@ -150,7 +150,7 @@ func (p *bulkRequest) Read(dst []byte) (n int, err error) {
 				return n, io.EOF
 			}
 
-			index, err := p.readCursor.pos[0].Format(p.indexPattern)
+			index, err := p.indexPattern.Format(p.readCursor.pos[0])
 			if err != nil {
 				return n, err
 			}

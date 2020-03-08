@@ -75,6 +75,6 @@ func FetchReceiversConfig(cfg *config.Config) ReceiverConfig {
 
 func init() {
 	config.RegisterSection("receivers", func() interface{} {
-		return make(ReceiverConfig, 0)
+		return ReceiverConfig{}
 	})
 }

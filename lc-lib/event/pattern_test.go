@@ -17,13 +17,14 @@
 package event
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 )
 
-func createTestMap() map[string]interface{} {
-	return map[string]interface{}{
+func createTestEvent() *Event {
+	return NewEvent(context.Background(), nil, map[string]interface{}{
 		"message": "Hello World",
 		"space":   " ",
 		"friend":  "Jane",
@@ -33,23 +34,56 @@ func createTestMap() map[string]interface{} {
 				"last": true,
 			},
 		},
-	}
+	})
 }
 
-func createDateTestMap() map[string]interface{} {
+func createDateTestEvent() *Event {
 	timestamp, err := time.Parse("2006-01-02", "2020-08-03")
 	if err != nil {
 		panic("Unexpected error")
 	}
 
-	return map[string]interface{}{
+	return NewEvent(context.Background(), nil, map[string]interface{}{
 		"message":    "Hello World",
 		"@timestamp": timestamp,
+	})
+}
+
+func TestCreateType(t *testing.T) {
+	result := NewPatternFromString("I say words")
+	if _, ok := result.(staticPattern); !ok {
+		t.Errorf("Unexpected pattern type: %T", result)
+	}
+	result = NewPatternFromString("%\\{testing\\}")
+	if _, ok := result.(staticPattern); !ok {
+		t.Errorf("Unexpected pattern type: %T", result)
+	}
+	result = NewPatternFromString("%{testing}")
+	if _, ok := result.(variablePattern); !ok {
+		t.Errorf("Unexpected pattern type: %T", result)
+	}
+	result = NewPatternFromString("Even more %{testing}")
+	if _, ok := result.(variablePattern); !ok {
+		t.Errorf("Unexpected pattern type: %T", result)
+	}
+	result = NewPatternFromString("Final %{testin still variable")
+	if _, ok := result.(variablePattern); !ok {
+		t.Errorf("Unexpected pattern type: %T", result)
+	}
+}
+
+func TestFormatStatic(t *testing.T) {
+	result, err := NewPatternFromString("I say words").Format(createTestEvent())
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != "I say words" {
+		t.Errorf("Unexpected result: [%s]", result)
 	}
 }
 
 func TestFormatVariableStart(t *testing.T) {
-	result, err := FormatPattern("I say to you, %{message}", createTestMap())
+	result, err := NewPatternFromString("I say to you, %{message}").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -59,7 +93,7 @@ func TestFormatVariableStart(t *testing.T) {
 }
 
 func TestFormatVariableEnd(t *testing.T) {
-	result, err := FormatPattern("%{message}, I say to you", createTestMap())
+	result, err := NewPatternFromString("%{message}, I say to you").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -69,7 +103,7 @@ func TestFormatVariableEnd(t *testing.T) {
 }
 
 func TestFormatVariableMiddle(t *testing.T) {
-	result, err := FormatPattern("I say to you, \"%{message}\", as loud as I will", createTestMap())
+	result, err := NewPatternFromString("I say to you, \"%{message}\", as loud as I will").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -79,7 +113,7 @@ func TestFormatVariableMiddle(t *testing.T) {
 }
 
 func TestFormatVariableMultiple(t *testing.T) {
-	result, err := FormatPattern("%{message}%{space}%{friend}", createTestMap())
+	result, err := NewPatternFromString("%{message}%{space}%{friend}").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -89,7 +123,7 @@ func TestFormatVariableMultiple(t *testing.T) {
 }
 
 func TestFormatVariableMissing(t *testing.T) {
-	result, err := FormatPattern("This is %{nothere} not there", createTestMap())
+	result, err := NewPatternFromString("This is %{nothere} not there").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -99,7 +133,7 @@ func TestFormatVariableMissing(t *testing.T) {
 }
 
 func TestFormatVariableKey(t *testing.T) {
-	result, err := FormatPattern("We have %{sub[inside]} events", createTestMap())
+	result, err := NewPatternFromString("We have %{sub[inside]} events").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -109,7 +143,7 @@ func TestFormatVariableKey(t *testing.T) {
 }
 
 func TestFormatVariableKeyMultiple(t *testing.T) {
-	result, err := FormatPattern("We have %{sub[deeper][last]} events", createTestMap())
+	result, err := NewPatternFromString("We have %{sub[deeper][last]} events").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -119,29 +153,29 @@ func TestFormatVariableKeyMultiple(t *testing.T) {
 }
 
 func TestFormatVariableKeyInvalid(t *testing.T) {
-	result, err := FormatPattern("This %{sub[} will fail", createTestMap())
+	result, err := NewPatternFromString("This %{sub[} will fail").Format(createTestEvent())
 	if err == nil {
 		t.Errorf("Unexpected successful result: %s", result)
 	}
 
-	result, err = FormatPattern("This %{su]b} will fail", createTestMap())
+	result, err = NewPatternFromString("This %{su]b} will fail").Format(createTestEvent())
 	if err == nil {
 		t.Errorf("Unexpected successful result: %s", result)
 	}
 
-	result, err = FormatPattern("This %{sub[inside]more} will fail", createTestMap())
+	result, err = NewPatternFromString("This %{sub[inside]more} will fail").Format(createTestEvent())
 	if err == nil {
 		t.Errorf("Unexpected successful result: %s", result)
 	}
 
-	result, err = FormatPattern("This %{su[]} will fail", createTestMap())
+	result, err = NewPatternFromString("This %{su[]} will fail").Format(createTestEvent())
 	if err == nil {
 		t.Errorf("Unexpected successful result: %s", result)
 	}
 }
 
 func TestFormatVariableKeyMissing(t *testing.T) {
-	result, err := FormatPattern("We have %{sub[missing]} not found events", createTestMap())
+	result, err := NewPatternFromString("We have %{sub[missing]} not found events").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -149,7 +183,7 @@ func TestFormatVariableKeyMissing(t *testing.T) {
 		t.Errorf("Unexpected result: [%s]", result)
 	}
 
-	result, err = FormatPattern("We have %{missing[sub]} not got events", createTestMap())
+	result, err = NewPatternFromString("We have %{missing[sub]} not got events").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -161,7 +195,7 @@ func TestFormatVariableKeyMissing(t *testing.T) {
 func TestFormatDateTimestampMissing(t *testing.T) {
 	day := time.Now().Format("2006-01-02")
 
-	result, err := FormatPattern("Value at %{+2006-01-02} should be current day", createTestMap())
+	result, err := NewPatternFromString("Value at %{+2006-01-02} should be current day").Format(createTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -171,7 +205,7 @@ func TestFormatDateTimestampMissing(t *testing.T) {
 }
 
 func TestFormatDateTimestamp(t *testing.T) {
-	result, err := FormatPattern("Value at %{+2006-01-02} should be event day", createDateTestMap())
+	result, err := NewPatternFromString("Value at %{+2006-01-02} should be event day").Format(createDateTestEvent())
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
