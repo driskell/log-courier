@@ -64,7 +64,7 @@ func (nc *Config) Init(p *config.Parser, path string) (err error) {
 		return
 	}
 
-	nc.Factory, err = registrarFunc(p, path+"/", nc.Unused, nc.Transport)
+	nc.Factory, err = registrarFunc(p, path, nc.Unused, nc.Transport)
 	return
 }
 

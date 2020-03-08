@@ -86,7 +86,12 @@ func (p *Parser) PopulateSlice(configSlice interface{}, rawConfig []interface{},
 	vRawConfig := reflect.ValueOf(rawConfig)
 	vConfig := reflect.ValueOf(configSlice).Elem()
 
-	return p.populateSlice(vConfig, vRawConfig, configPath)
+	var retSlice reflect.Value
+	retSlice, err = p.populateSlice(vConfig, vRawConfig, configPath)
+	if err == nil {
+		vConfig.Set(retSlice)
+	}
+	return
 }
 
 // validate calls all the structure validations
@@ -114,19 +119,46 @@ func (p *Parser) validate() (err error) {
 	return
 }
 
-func (p *Parser) populateStruct(vConfigPtr reflect.Value, vRawConfig reflect.Value, configPath string, reportUnused bool) (err error) {
+// populateStruct populates a structure, and calls its lifecycle events
+func (p *Parser) populateStruct(vConfig reflect.Value, vRawConfig reflect.Value, configPath string, reportUnused bool) (err error) {
+	log.Debugf("populateStruct: %s (%s)", vConfig.Type().String(), configPath)
+
+	// Initialise defaults and register any validation function
+	p.prepareValue(vConfig, configPath)
+
+	if err = p.populateStructInner(vConfig, vRawConfig, configPath); err != nil {
+		return
+	}
+
+	// Call the Init if any, this should take away the unused values by populating
+	// further structures depending on other values
+	if err = p.callInit(vConfig, configPath); err != nil {
+		return
+	}
+
+	// Report to the user any unused values if there are any, in case they
+	// misspelled an option
+	if reportUnused {
+		return p.reportUnusedConfig(vRawConfig, configPath)
+	}
+
+	return
+}
+
+// populateStructInner handles structure population and also creation in case of pointers
+func (p *Parser) populateStructInner(vConfig reflect.Value, vRawConfig reflect.Value, configPath string) (err error) {
+	if vConfig.Kind() == reflect.Ptr {
+		return p.populateStructInner(vConfig.Elem(), vRawConfig, configPath)
+	}
+
+	if vConfig.Kind() != reflect.Struct {
+		panic(fmt.Sprintf("Object passed to populateStruct is not a struct: %s", vConfig.Kind().String()))
+	}
+
 	// Check the incoming data is the right type, a map
 	if vRawConfig.IsValid() && vRawConfig.Type().Kind() != reflect.Map {
 		return fmt.Errorf("Option %s must be a hash", configPath)
 	}
-
-	// Strip pointer
-	vConfig := vConfigPtr.Elem()
-
-	log.Debugf("populateStruct: %s (%s)", vConfig.Type().String(), configPath)
-
-	// Initialise defaults and register any validation function
-	p.prepareValue(vConfigPtr, configPath)
 
 	// Iterate each configuration structure field we need to update, and copy the
 	// value in, checking the type and removing the value from rawConfig as we use
@@ -154,9 +186,10 @@ FieldLoop:
 				// Embed means we recurse into the field, but pull it's values from the
 				// same level within the configuration file we loaded
 				if vField.Kind() != reflect.Struct {
-					panic("Embedded configuration field is not a struct")
+					panic(fmt.Sprintf("Embedded configuration field is not a struct: %s", vField.Kind().String()))
 				}
 
+				// Call with pointer to enable lifecycle methods
 				if err = p.populateStruct(vField.Addr(), vRawConfig, configPath, false); err != nil {
 					return
 				}
@@ -167,34 +200,38 @@ FieldLoop:
 				// file key being the map key
 				// This is generally not exported so don't check that
 				if vField.Kind() != reflect.Map {
-					panic("Dynamic configuration field is not a map")
+					panic(fmt.Sprintf("Dynamic configuration field is not a map: %s", vField.Kind().String()))
 				}
 
 				dynamicKeys := vField.MapKeys()
 				for _, key := range dynamicKeys {
-					// Unwrap the interface and the pointer (if any)
-					elem := vField.MapIndex(key).Elem()
-					if err = p.populateEntry(elem, vRawConfig, configPath, key.String()); err != nil {
+					var retValue reflect.Value
+					if retValue, err = p.populateEntry(vField.MapIndex(key).Elem(), vRawConfig, configPath, key.String()); err != nil {
 						return
 					}
+					// If nothing was provided, don't store anything, so we keep defaults
+					if retValue.IsValid() {
+						vField.SetMapIndex(key, retValue)
+					}
 				}
-				continue
+				continue FieldLoop
 			case "embed_dynamic":
 				// Embed dynamic is the same as dynamic, except we ignore the keys and
 				// dynamically populate each entry as if it were embedded. Used by
 				// General to allow packages to add extra general configuration entries
 				// without needing to create new configuration sections
+				// This means all values of the map should be structs
 				if vField.Kind() != reflect.Map {
-					panic("Embedded dynamic configuration field is not a map")
+					panic(fmt.Sprintf("Embedded dynamic configuration field is not a map: %s", vField.Kind().String()))
 				}
 
 				dynamicKeys := vField.MapKeys()
 				for _, key := range dynamicKeys {
-					// Unwrap the interface but leave the pointer
 					if err = p.populateStruct(vField.MapIndex(key).Elem(), vRawConfig, configPath, false); err != nil {
 						return
 					}
 				}
+				continue FieldLoop
 			}
 		}
 
@@ -203,8 +240,14 @@ FieldLoop:
 			continue
 		}
 
-		if err = p.populateEntry(vField, vRawConfig, configPath, tag); err != nil {
+		var retValue reflect.Value
+		if retValue, err = p.populateEntry(vField, vRawConfig, configPath, tag); err != nil {
 			return
+		}
+
+		// If we didn't have it in the provided configuration, zero value is returned
+		if retValue.IsValid() {
+			vField.Set(retValue)
 		}
 	}
 
@@ -231,24 +274,11 @@ FieldLoop:
 		vRawConfig = unUsed
 	}
 
-	// Call the Init if any, this should take away the unused values by populating
-	// further structures depending on other values
-	if err = p.callInit(vConfigPtr, configPath); err != nil {
-		return
-	}
-
-	// Report to the user any unused values if there are any, in case they
-	// misspelled an option
-	if reportUnused {
-		return p.reportUnusedConfig(vRawConfig, configPath)
-	}
-
 	return
 }
 
-// populateEntry handles population of a single entry, working out whether it
-// can assign directly or needs to process as a struct
-func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, configPath string, tag string) (err error) {
+// getMapIndex returns the reflect value for the given entry in the incoming configuration
+func (p *Parser) getMapIndex(vRawConfig reflect.Value, tag string) reflect.Value {
 	var vMapIndex reflect.Value
 
 	if vRawConfig.IsValid() {
@@ -269,75 +299,88 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		vMapIndex = vRawConfig
 	}
 
-	if vField.Kind() == reflect.Struct || (vField.Kind() == reflect.Ptr && vField.Elem().Kind() == reflect.Struct) {
-		// Recurse with the new structure and values
-		var addr reflect.Value
-		if vField.Kind() == reflect.Ptr {
-			addr = vField
-		} else {
-			addr = vField.Addr()
-		}
-		if err := p.populateStruct(addr, vMapIndex, fmt.Sprintf("%s%s/", configPath, tag), true); err != nil {
-			return err
-		}
+	return vMapIndex
+}
 
+// populateEntry handles population of a single entry, working out whether it
+// can assign directly or needs to process as a struct
+func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, configPath string, tag string) (retValue reflect.Value, err error) {
+	log.Debugf("populateEntry: %s (%s%s)", vField.Type().String(), configPath, tag)
+
+	// Strip pointers - but only if not a ptr to struct
+	// That way populateStruct will receive the ptr to struct and can call lifecylce events attaches to the ptr version
+	if vField.Kind() == reflect.Ptr && vField.Elem().Kind() != reflect.Struct {
+		if !vField.Elem().IsValid() {
+			vField = reflect.New(vField.Type().Elem())
+		}
+		var innerValue reflect.Value
+		if innerValue, err = p.populateEntry(vField.Elem(), vRawConfig, configPath, tag); err != nil {
+			return
+		}
+		retValue = innerValue.Addr()
+		return
+	}
+
+	vMapIndex := vRawConfig
+	if tag != "" {
+		vMapIndex = p.getMapIndex(vRawConfig, tag)
+	}
+
+	if vField.Kind() == reflect.Struct || (vField.Kind() == reflect.Ptr && vField.Elem().Kind() == reflect.Struct) {
+		retValue = vField
+		ptrValue := retValue
+		if vField.Kind() == reflect.Ptr {
+			if !vField.Elem().IsValid() {
+				retValue = reflect.New(vField.Type().Elem())
+			}
+		} else {
+			ptrValue = ptrValue.Addr()
+		}
+		// Call with pointer to enable lifecycle methods if any
+		if err := p.populateStruct(ptrValue, vMapIndex, fmt.Sprintf("%s%s/", configPath, tag), true); err != nil {
+			return reflect.Value{}, err
+		}
+		return
+	}
+
+	if vField.Kind() == reflect.Slice {
+		retValue, err = p.populateSlice(vField, vMapIndex, fmt.Sprintf("%s%s", configPath, tag))
 		return
 	}
 
 	// If the configuration data is empty for this section, don't consider any
 	// values, leave them as the default
+	// Do not skip slice or struct (see above) as they could have lifecycle methods attached
 	if !vMapIndex.IsValid() {
 		return
 	}
 
-	err = p.populateValue(vField, vMapIndex, configPath, tag)
-	return
-}
-
-// populateValue handles value to value mappings within a single configuration
-// structure, such as maps, slices, and scalar values
-func (p *Parser) populateValue(vField reflect.Value, vValue reflect.Value, configPath string, tag string) (err error) {
-	if vField.Kind() == reflect.Ptr {
-		vField = vField.Elem()
-	}
-
-	if vValue.Type().AssignableTo(vField.Type()) {
-		log.Debugf("populateValue: %v (%s%s)", vValue.String(), configPath, tag)
-		vField.Set(vValue)
-		return
-	}
-
-	if vField.Kind() == reflect.Slice {
-		if vValue.Kind() != reflect.Slice {
-			err = fmt.Errorf("Option %s%s must be an array", configPath, tag)
-			return
-		}
-
-		err = p.populateSlice(vField, vValue, fmt.Sprintf("%s%s", configPath, tag))
+	if vMapIndex.Type().AssignableTo(vField.Type()) {
+		log.Debugf("populateEntry value: %v (%s%s)", vMapIndex.String(), configPath, tag)
+		retValue = vMapIndex
 		return
 	}
 
 	if vField.Kind() == reflect.Map {
-		if vValue.Kind() != reflect.Map {
+		if vMapIndex.Kind() != reflect.Map {
 			err = fmt.Errorf("Option %s%s must be a key-value hash", configPath, tag)
 			return
 		}
 
 		if vField.IsNil() {
-			log.Debugf("populateValue: map initialized (%s%s)", configPath, tag)
-			vField.Set(reflect.MakeMap(vField.Type()))
+			retValue = reflect.MakeMap(vField.Type())
 		}
 
-		for _, vKey := range vValue.MapKeys() {
+		for _, vKey := range vMapIndex.MapKeys() {
 			// If the key is wrapped in interface{}, unwrap it
 			if vKey.Type().Kind() == reflect.Interface {
 				vKey = vKey.Elem()
 			}
 
-			vItem := vValue.MapIndex(vKey)
+			vItem := vMapIndex.MapIndex(vKey)
 			if vItem.Elem().Type().AssignableTo(vField.Type().Elem()) {
-				log.Debugf("populateValue: map index %s with value %s (%s%s)", vKey.String(), vItem.Elem().String(), configPath, tag)
-				vField.SetMapIndex(vKey, vItem.Elem())
+				log.Debugf("populateEntry value: map[%s][%s] (%s%s)", vKey.String(), vItem.Elem().String(), configPath, tag)
+				retValue.SetMapIndex(vKey, vItem.Elem())
 			} else {
 				err = fmt.Errorf("Option %s%s must be %s or similar", fmt.Sprintf("%s%s/", configPath, tag), vKey.String(), vField.Type().Elem())
 				return
@@ -350,25 +393,25 @@ func (p *Parser) populateValue(vField reflect.Value, vValue reflect.Value, confi
 		var duration float64
 		vDuration := reflect.ValueOf(duration)
 
-		if vValue.Type().AssignableTo(vDuration.Type()) {
-			duration = vValue.Float()
+		if vMapIndex.Type().AssignableTo(vDuration.Type()) {
+			duration = vMapIndex.Float()
 
 			if duration < math.MinInt64 || duration > math.MaxInt64 {
 				err = fmt.Errorf("Option %s%s must be a valid numeric or string duration", configPath, tag)
 				return
 			}
 
-			log.Debugf("populateValue: %f (%s%s)", duration, configPath, tag)
-			vField.Set(reflect.ValueOf(time.Duration(int64(duration)) * time.Second))
-		} else if vValue.Kind() == reflect.String {
+			log.Debugf("populateEntry value: %f (%s%s)", duration, configPath, tag)
+			retValue = reflect.ValueOf(time.Duration(int64(duration)) * time.Second)
+		} else if vMapIndex.Kind() == reflect.String {
 			var parseDuration time.Duration
 
-			if parseDuration, err = time.ParseDuration(vValue.String()); err != nil {
+			if parseDuration, err = time.ParseDuration(vMapIndex.String()); err != nil {
 				err = fmt.Errorf("Option %s%s was not understood: %s", configPath, tag, err)
 			}
 
-			log.Debugf("populateValue: %v (%s%s)", parseDuration, configPath, tag)
-			vField.Set(reflect.ValueOf(parseDuration))
+			log.Debugf("populateEntry value: %v (%s%s)", parseDuration, configPath, tag)
+			retValue = reflect.ValueOf(parseDuration)
 		} else {
 			err = fmt.Errorf("Option %s%s is not a valid duration (number of seconds or duration syntax)", configPath, tag)
 			return
@@ -378,19 +421,19 @@ func (p *Parser) populateValue(vField reflect.Value, vValue reflect.Value, confi
 	}
 
 	if vField.Type().String() == "logging.Level" {
-		if vValue.Kind() != reflect.String {
+		if vMapIndex.Kind() != reflect.String {
 			err = fmt.Errorf("Option %s%s is not a valid log level (critical, error, warning, notice, info, debug)", configPath, tag)
 			return
 		}
 
 		var logLevel logging.Level
-		if logLevel, err = logging.LogLevel(vValue.String()); err != nil {
+		if logLevel, err = logging.LogLevel(vMapIndex.String()); err != nil {
 			err = fmt.Errorf("Option %s%s is not a valid log level: %s", configPath, tag, err)
 			return
 		}
 
-		log.Debugf("populateValue: %v (%s%s)", logLevel, configPath, tag)
-		vField.Set(reflect.ValueOf(logLevel))
+		log.Debugf("populateEntry value: %v (%s%s)", logLevel, configPath, tag)
+		retValue = reflect.ValueOf(logLevel)
 
 		return
 	}
@@ -398,26 +441,26 @@ func (p *Parser) populateValue(vField reflect.Value, vValue reflect.Value, confi
 	if vField.Kind() == reflect.Int64 || vField.Kind() == reflect.Int {
 		var number int
 
-		if vValue.Kind() == reflect.Float64 {
-			floatNumber := vValue.Float()
+		if vMapIndex.Kind() == reflect.Float64 {
+			floatNumber := vMapIndex.Float()
 			if math.Floor(floatNumber) != floatNumber {
 				err = fmt.Errorf("Option %s%s is not a valid integer (float encountered)", configPath, tag)
 				return
 			}
 
 			number = int(floatNumber)
-		} else if vValue.Kind() == reflect.Int {
-			number = int(vValue.Int())
+		} else if vMapIndex.Kind() == reflect.Int {
+			number = int(vMapIndex.Int())
 		} else {
 			err = fmt.Errorf("Option %s%s is not a valid integer", configPath, tag)
 			return
 		}
 
-		log.Debugf("populateValue: %d (%s%s)", number, configPath, tag)
+		log.Debugf("populateEntry value: %d (%s%s)", number, configPath, tag)
 		if vField.Kind() == reflect.Int64 {
-			vField.Set(reflect.ValueOf(int64(number)))
+			retValue = reflect.ValueOf(int64(number))
 		} else {
-			vField.Set(reflect.ValueOf(number))
+			retValue = reflect.ValueOf(number)
 		}
 
 		return
@@ -428,72 +471,39 @@ func (p *Parser) populateValue(vField reflect.Value, vValue reflect.Value, confi
 
 // populateSlice is used to populate an array of configuration structures using
 // an array from the configuration file
-func (p *Parser) populateSlice(vField reflect.Value, vRawConfig reflect.Value, configPath string) (err error) {
-	sliceType := vField.Type().String()
-	if sliceType == "[]"+vField.Type().Elem().String() {
-		log.Debugf("populateSlice: %s (%s)", sliceType, configPath)
-	} else {
-		log.Debugf("populateSlice: %s - []%s (%s)", sliceType, vField.Type().Elem().String(), configPath)
-	}
+func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, configPath string) (retSlice reflect.Value, err error) {
+	log.Debugf("populateSlice: %s (%s)", vSlice.Type().String(), configPath)
 
-	// Setup default value and register any validation
-	p.prepareValue(vField, configPath)
-
-	tElem := vField.Type().Elem()
-	tInnerElem := tElem
-	if tElem.Kind() == reflect.Ptr {
-		tInnerElem = tElem.Elem()
-	}
-	if tInnerElem.Kind() == reflect.Slice {
-		panic("Slices of slices are not supported by the configuration parser")
-	}
-	if tInnerElem.Kind() != reflect.Struct {
-		// Simple slice copy
-		for i := 0; i < vRawConfig.Len(); i++ {
-			// Unwrap interface{} with Elem
-			log.Debugf("populateSlice entry: %s (%s)", vRawConfig.Index(i).Elem().String(), configPath)
-			vField.Set(reflect.Append(vField, vRawConfig.Index(i).Elem()))
-		}
+	if vRawConfig.IsValid() && vRawConfig.Kind() != reflect.Slice {
+		err = fmt.Errorf("Option %s must be an array", configPath)
 		return
 	}
 
-	c := vField.Len()
-	for i := 0; i < vRawConfig.Len(); i++ {
-		// Support creation of structs that have pointers and those that don't
-		var vItem reflect.Value
-		if tElem.Kind() == reflect.Ptr {
-			vItem = reflect.New(tElem.Elem())
-		} else {
-			vItem = reflect.New(tElem)
-		}
+	// Setup default value and register any validation
+	p.prepareValue(vSlice, configPath)
 
-		// We add to the script and THEN process, as appending to slices that aren't
-		// using pointers to structs will copy the struct
-		// We cannot append after population because some places inside populateStruct
-		// will potentially take a pointer (during Init/Validate/Defaults etc.)
-		var vFieldEntry reflect.Value
-		if tElem.Kind() == reflect.Ptr {
-			vField.Set(reflect.Append(vField, vItem))
-			vFieldEntry = vItem
-		} else {
-			vField.Set(reflect.Append(vField, vItem.Elem()))
-			vFieldEntry = vField.Index(c).Addr()
-		}
+	if vSlice.IsZero() {
+		vSlice = reflect.MakeSlice(vSlice.Type(), 0, 0)
+	}
 
-		// Unwrap vItem from its pointer, and unwrap the map from it's interface{}
-		if err = p.populateStruct(vFieldEntry, vRawConfig.Index(i).Elem(), fmt.Sprintf("%s[%d]/", configPath, i), true); err != nil {
-			return
+	if vRawConfig.IsValid() {
+		for i := 0; i < vRawConfig.Len(); i++ {
+			vItem := reflect.New(vSlice.Type().Elem()).Elem()
+			var retValue reflect.Value
+			if retValue, err = p.populateEntry(vItem, vRawConfig.Index(i).Elem(), fmt.Sprintf("%s[%d]", configPath, i), ""); err != nil {
+				return
+			}
+			vSlice = reflect.Append(vSlice, retValue)
 		}
-
-		c++
 	}
 
 	// Call the Init if any, this should take away the unused values by populating
 	// further structures depending on other values
-	if err = p.callInit(vField, configPath); err != nil {
+	if err = p.callInit(vSlice, configPath); err != nil {
 		return
 	}
 
+	retSlice = vSlice
 	return
 }
 

@@ -55,10 +55,10 @@ type FileConfig struct {
 type IncludeConfig []string
 
 // Config holds the prospector files configuration
-type Config []FileConfig
+type Config []*FileConfig
 
 // Defaults sets up the FileConfig defaults prior to population
-func (fc FileConfig) Defaults() {
+func (fc *FileConfig) Defaults() {
 	fc.AddOffsetField = defaultStreamAddOffsetField
 	fc.AddPathField = defaultStreamAddPathField
 	fc.DeadTime = defaultStreamDeadTime
@@ -67,7 +67,7 @@ func (fc FileConfig) Defaults() {
 // Validate does nothing for a prospector stream
 // This is here to prevent double validation of event.StreamConfig whose
 // validation function would otherwise be inherited
-func (fc FileConfig) Validate(p *config.Parser, path string) (err error) {
+func (fc *FileConfig) Validate(p *config.Parser, path string) (err error) {
 	return nil
 }
 
@@ -134,7 +134,7 @@ func (gc *General) Validate(p *config.Parser, path string) (err error) {
 
 // Validate validates all config structures and initialises streams
 func validateFileConfigs(p *config.Parser) (err error) {
-	c := *p.Config().Section("files").(*Config)
+	c := p.Config().Section("files").(Config)
 	for k := range c {
 		if len(c[k].Paths) == 0 {
 			err = fmt.Errorf("No paths specified for /files[%d]/", k)
@@ -152,11 +152,11 @@ func validateFileConfigs(p *config.Parser) (err error) {
 
 func init() {
 	config.RegisterSection("files", func() interface{} {
-		return &Config{}
+		return Config{}
 	})
 
 	config.RegisterSection("includes", func() interface{} {
-		return &IncludeConfig{}
+		return IncludeConfig{}
 	})
 
 	config.RegisterGeneral("prospector", func() interface{} {

@@ -70,7 +70,7 @@ func NewProspector(app *core.App, fromBeginning bool) *Prospector {
 		config:          cfg,
 		adminConfig:     admin.FetchConfig(cfg),
 		genConfig:       genConfig,
-		fileConfigs:     *cfg.Section("files").(*Config),
+		fileConfigs:     cfg.Section("files").(Config),
 		registrar:       registrarImpl,
 		registrarSpool:  registrar.NewEventSpooler(registrarImpl),
 		fromBeginning:   fromBeginning,
@@ -151,7 +151,7 @@ func (p *Prospector) runOnce() bool {
 	for configKey, config := range p.fileConfigs {
 		for _, path := range config.Paths {
 			log.Debug("Scanning %s", path)
-			p.scan(path, &p.fileConfigs[configKey])
+			p.scan(path, p.fileConfigs[configKey])
 		}
 	}
 

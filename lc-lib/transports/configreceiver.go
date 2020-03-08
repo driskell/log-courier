@@ -27,7 +27,7 @@ const (
 )
 
 // ReceiverConfig is the top level section configuration, and is an array of receivers
-type ReceiverConfig []ReceiverConfigEntry
+type ReceiverConfig []*ReceiverConfigEntry
 
 // ReceiverConfigEntry contains configuration for a single receiver
 type ReceiverConfigEntry struct {
@@ -54,7 +54,7 @@ func (c *ReceiverConfigEntry) Init(p *config.Parser, path string) (err error) {
 		return
 	}
 
-	c.Factory, err = registrarFunc(p, path+"/", c.Unused, c.Transport)
+	c.Factory, err = registrarFunc(p, path, c.Unused, c.Transport)
 	return
 }
 
