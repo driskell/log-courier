@@ -489,8 +489,13 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 	if vRawConfig.IsValid() {
 		for i := 0; i < vRawConfig.Len(); i++ {
 			vItem := reflect.New(vSlice.Type().Elem()).Elem()
+			// Dereference interface{} map value in incoming config to get the real item
+			configItem := vRawConfig.Index(i)
+			if configItem.Kind() == reflect.Interface {
+				configItem = configItem.Elem()
+			}
 			var retValue reflect.Value
-			if retValue, err = p.populateEntry(vItem, vRawConfig.Index(i).Elem(), fmt.Sprintf("%s[%d]", configPath, i), ""); err != nil {
+			if retValue, err = p.populateEntry(vItem, configItem, fmt.Sprintf("%s[%d]", configPath, i), ""); err != nil {
 				return
 			}
 			vSlice = reflect.Append(vSlice, retValue)
