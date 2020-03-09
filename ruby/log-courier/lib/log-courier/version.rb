@@ -1,4 +1,4 @@
 # Version of LogCourier
 module LogCourier
-  VERSION = '<VERSION>'
+  VERSION = '1.10'
 end
