@@ -199,12 +199,13 @@ func (p *Publisher) runOnce() bool {
 		p.nextSpool = nil
 		p.shuttingDown = true
 
-		p.endpointSink.Shutdown()
-
-		// If no endpoints, nothing to wait for
-		if p.endpointSink.Count() == 0 {
-			// TODO: What about out of sync ACK?
-			return true
+		// If no payloads held, nothing to wait for
+		if !p.eventsHeld() && p.numPayloads == 0 {
+			// If no endpoints, no shutdown necessary
+			if p.endpointSink.Count() == 0 {
+				return true
+			}
+			p.endpointSink.Shutdown()
 		}
 	}
 
@@ -382,6 +383,11 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 	if complete {
 		// Resume sending if we stopped due to excessive pending payload count
 		p.tryQueueHeld()
+
+		// If last payload confirmed, begin shutdown
+		if p.shuttingDown && !p.eventsHeld() && p.numPayloads == 0 {
+			p.endpointSink.Shutdown()
+		}
 	}
 }
 
@@ -414,7 +420,7 @@ func (p *Publisher) eventsHeld() bool {
 
 // tryQueueHeld attempts to queue held payloads
 func (p *Publisher) tryQueueHeld() bool {
-	if p.shuttingDown || !p.eventsHeld() || !p.endpointSink.CanQueue() {
+	if !p.eventsHeld() || !p.endpointSink.CanQueue() {
 		return false
 	}
 

@@ -37,8 +37,8 @@ func (s *Sink) markActive(endpoint *Endpoint, observer Observer) {
 // moveFailed stores the endpoint on the failed list, removing it from the
 // ready list so no more events are sent to it
 func (s *Sink) moveFailed(endpoint *Endpoint, observer Observer) {
-	// Should never get here if we're closing, caller should check IsClosing()
-	if !endpoint.IsAlive() {
+	// Should never get here if we're closed, caller should check
+	if !endpoint.IsAlive() && !endpoint.IsClosing() {
 		return
 	}
 

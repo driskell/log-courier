@@ -107,6 +107,9 @@ func (e *Endpoint) shutdownTransport() {
 
 	log.Debug("[%s] Endpoint is now shutting down", e.Server())
 	e.transport.Shutdown()
+
+	// Set status to closed, so we know shutdown has now been triggered
+	e.status = endpointStatusClosed
 }
 
 // Server returns the server string from the configuration file that this
