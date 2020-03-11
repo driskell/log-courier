@@ -52,7 +52,7 @@ type TransportRegistrarFunc func(*config.Parser, string, map[string]interface{},
 
 var registeredTransports = make(map[string]TransportRegistrarFunc)
 
-// RegisterTransport registered a transport with the configuration module by providing a
+// RegisterTransport registers a transport with the configuration module by providing a
 // callback that can be used to validate the configuration
 func RegisterTransport(transport string, registrarFunc TransportRegistrarFunc) {
 	registeredTransports[transport] = registrarFunc

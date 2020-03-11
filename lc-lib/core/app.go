@@ -23,11 +23,10 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"sort"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/transports"
 	"gopkg.in/op/go-logging.v1"
 )
 
@@ -76,19 +75,17 @@ func (a *App) StartUp() {
 	}
 
 	if listSupported {
-		fmt.Printf("Available codecs:\n")
-		for _, codec := range codecs.Available() {
-			fmt.Printf("  %s\n", codec)
+		available := config.FetchAvailable()
+		names := make([]string, 0, len(available))
+		for name := range available {
+			names = append(names, name)
 		}
-
-		fmt.Printf("Available receivers:\n")
-		for _, receiver := range transports.AvailableReceivers() {
-			fmt.Printf("  %s\n", receiver)
-		}
-
-		fmt.Printf("Available transports:\n")
-		for _, transport := range transports.AvailableTransports() {
-			fmt.Printf("  %s\n", transport)
+		sort.Strings(names)
+		for _, name := range names {
+			fmt.Printf("Available %s:\n", name)
+			for _, name := range available[name] {
+				fmt.Printf("  %s\n", name)
+			}
 		}
 		os.Exit(0)
 	}

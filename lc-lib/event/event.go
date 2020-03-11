@@ -19,6 +19,7 @@ package event
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -38,11 +39,13 @@ type Event struct {
 
 // NewEvent creates a new event structure from the given data
 func NewEvent(ctx context.Context, acker Acknowledger, data map[string]interface{}) *Event {
-	return &Event{
+	ret := &Event{
 		ctx:   ctx,
 		acker: acker,
 		data:  data,
 	}
+	ret.convertData()
+	return ret
 }
 
 // NewEventFromBytes creates a new event structure from the given data
@@ -54,20 +57,106 @@ func NewEventFromBytes(ctx context.Context, acker Acknowledger, data []byte) *Ev
 	}
 }
 
-// Data returns the event data
+// Data returns the internal event data for reading or mutation
+//
+// If it is mutated, ClearCache must be called to ensure any cached representations are
+// regenerated when returning the event to the network or otherwise
+// Mutations must not modify the type of the guaranteed fields listed below, or the
+// behaviour is undefined and likely to result in panic
+//
+// The following "keys" are guaranteed to exist and be of a specific type:
+//     @timestamp: time.Time
+//         If no value currently exists, it is created with the current time.
+//         If the existing value is invalid, the _timestamp_parse_failure tag is added
+//         and the error is stored inside the timestamp_parse_error field
+//     tags: Tags (Empty Tags instance)
+//         If no value currently exists, it is created empty with no tags.
+//         If the existing value is invalid, the _tags_parse_failure tag is added
+//         and the error is stored inside the tags_parse_error field
+//
+// If any error occured during unmarshaling of an event received over the network
+// then a new event with only a message key (and the above defaults) will be created
+// where the message is the error message, and the "_unmarshal_failure" tag is added
 func (e *Event) Data() map[string]interface{} {
 	if e.data == nil {
 		err := json.Unmarshal(e.encoded, &e.data)
 		if err != nil {
 			e.data = make(map[string]interface{})
-			e.data["@timestamp"] = time.Now()
 			e.data["message"] = err.Error()
+			e.data["tags"] = &Tags{"_unmarshal_failure": struct{}{}}
+			e.data["@timestamp"] = time.Now()
+		} else {
+			e.convertData()
 		}
 	}
 	return e.data
 }
 
+// convertData is the internal function that enforces guaranteed types
+func (e *Event) convertData() {
+	// Resolve tags
+	if entry, ok := e.data["tags"]; ok {
+		switch value := entry.(type) {
+		case Tags:
+		case string:
+			e.data["tags"] = Tags{value: struct{}{}}
+		case []string:
+			tags := Tags{}
+			for _, tag := range value {
+				tags.Add(tag)
+			}
+			e.data["tags"] = tags
+		default:
+			e.data["tags"] = Tags{"_tags_parse_failure": struct{}{}}
+			e.data["tags_parse_error"] = fmt.Sprintf("tags was not a string or string list, was %T", value)
+		}
+	} else {
+		e.data["tags"] = Tags{}
+	}
+	// Resolve "@timestamp" to a time.Time
+	if entry, ok := e.data["@timestamp"]; ok {
+		switch value := entry.(type) {
+		case time.Time:
+		case string:
+			parsed, err := time.Parse(time.RFC3339, value)
+			if err != nil {
+				e.data["@timestamp"] = time.Now()
+				e.data["timestamp_parse_error"] = err
+				e.AddTag("_timestamp_parse_failure")
+			} else {
+				e.data["@timestamp"] = parsed
+			}
+		default:
+			e.data["@timestamp"] = time.Now()
+			e.data["timestamp_parse_error"] = fmt.Sprintf("@timestamp was not a string, was %T", value)
+			e.AddTag("_timestamp_parse_failure")
+		}
+	} else {
+		e.data["@timestamp"] = time.Now()
+	}
+}
+
+// AddTag adds a tag to the event
+func (e *Event) AddTag(tag string) {
+	e.data["tags"].(Tags).Add(tag)
+	e.ClearCache()
+}
+
+// RemoveTag adds a tag to the event
+func (e *Event) RemoveTag(tag string) {
+	e.data["tags"].(Tags).Remove(tag)
+	e.ClearCache()
+}
+
+// ClearCache clears any cached representations, always call it if the event is changed
+func (e *Event) ClearCache() {
+	e.encoded = nil
+}
+
 // Bytes returns the encoded event bytes
+// The returned slice should not be modified and be treated immutable
+// There is currently no way to modify it. To change the event, use Data(),
+// and then use ClearCache to clear the Bytes() cache so it regenerates
 func (e *Event) Bytes() []byte {
 	if e.encoded == nil {
 		var err error

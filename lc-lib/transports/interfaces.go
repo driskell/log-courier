@@ -19,6 +19,7 @@ package transports
 import (
 	"context"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
@@ -160,4 +161,10 @@ func NewPingEvent(context context.Context) *PingEvent {
 // Context returns the endpoint associated with this event
 func (e *PingEvent) Context() context.Context {
 	return e.context
+}
+
+// init registers this module provider
+func init() {
+	config.RegisterAvailable("transports", AvailableTransports)
+	config.RegisterAvailable("receivers", AvailableReceivers)
 }

@@ -87,7 +87,6 @@ func (p variablePattern) Format(event *Event) (string, error) {
 					nameStart, nameEnd = results[j][4], results[j][5]
 				}
 				name := variable[nameStart:nameEnd]
-				fmt.Printf("Name: %s -> %s\n", variable, name)
 				if j == len(results)-1 {
 					// Last item, so will always be a value
 					if value, ok := currentMap[name]; ok {

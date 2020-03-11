@@ -268,10 +268,9 @@ FieldLoop:
 				}
 
 				unUsed.SetMapIndex(vKey, vRawConfig.MapIndex(vKey))
+				vRawConfig.SetMapIndex(vKey, reflect.Value{})
 			}
 		}
-
-		vRawConfig = unUsed
 	}
 
 	return

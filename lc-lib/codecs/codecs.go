@@ -67,3 +67,8 @@ func Available() (ret []string) {
 	}
 	return
 }
+
+// init registers this module provider
+func init() {
+	config.RegisterAvailable("codecs", Available)
+}

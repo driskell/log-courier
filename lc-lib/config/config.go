@@ -22,6 +22,7 @@ package config
 import (
 	"fmt"
 	"path"
+	"sort"
 )
 
 var (
@@ -38,6 +39,13 @@ type SectionCreator func() interface{}
 // registeredSectionCreators contains a list of registered external Section
 // creators that should be processed in all new Config structures
 var registeredSectionCreators = make(map[string]SectionCreator)
+
+// AvailableCallback should return a []string containing available modules
+type AvailableCallback func() []string
+
+// registeredAvailableCallbacks contains a list of registered module providers
+// which can return a list of supported modules
+var registeredAvailableCallbacks = make(map[string]AvailableCallback)
 
 // Config holds the configuration
 type Config struct {
@@ -126,4 +134,22 @@ func LoadFile(filePath string, rawConfig interface{}) error {
 //     for a section itself can be set by the section creator.
 func RegisterSection(name string, creator SectionCreator) {
 	registeredSectionCreators[name] = creator
+}
+
+// RegisterAvailable registers a callback that will be called during
+// list-supported so we can list out louded modules that are available
+func RegisterAvailable(name string, callback AvailableCallback) {
+	registeredAvailableCallbacks[name] = callback
+}
+
+// FetchAvailable returns list of module providers and their modules
+// The lists are sorted alphabetically
+func FetchAvailable() map[string][]string {
+	result := make(map[string][]string)
+	for name, callback := range registeredAvailableCallbacks {
+		list := callback()
+		sort.Strings(list)
+		result[name] = list
+	}
+	return result
 }

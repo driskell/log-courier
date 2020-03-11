@@ -21,11 +21,13 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/processor"
 	"github.com/driskell/log-courier/lc-lib/prospector"
 	"github.com/driskell/log-courier/lc-lib/publisher"
 	"github.com/driskell/log-courier/lc-lib/receiver"
 	"github.com/driskell/log-courier/lc-lib/spooler"
 	"github.com/driskell/log-courier/lc-lib/stdinharvester"
+	"github.com/driskell/log-courier/lc-lib/transports"
 
 	_ "github.com/driskell/log-courier/lc-lib/codecs/filter"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
@@ -67,13 +69,21 @@ func main() {
 		// Prospector will handle new files, start harvesters, and own the registrar
 		app.Pipeline().AddSource(prospector.NewProspector(app, fromBeginning))
 
-		// Receivers will receive over the network
-		// TODO: Not log-courier
-		app.Pipeline().AddSource(receiver.NewPool(app))
+		if len(transports.FetchReceiversConfig(app.Config())) != 0 {
+			// Receivers will receive over the network
+			// TODO: Not log-courier
+			app.Pipeline().AddSource(receiver.NewPool(app))
+		}
 	}
 
 	// Add spooler as first processor, it combines into larger chunks as needed
 	app.Pipeline().AddProcessor(spooler.NewSpooler(app))
+
+	if len(processor.FetchConfig(app.Config())) != 0 {
+		// TODO: Not log-courier
+		app.Pipeline().AddProcessor(processor.NewPool(app))
+	}
+
 	// Create sink
 	app.Pipeline().SetSink(publisher.NewPublisher())
 	// Go!
