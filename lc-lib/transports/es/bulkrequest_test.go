@@ -77,11 +77,11 @@ func TestRequestReadFull(t *testing.T) {
 		result,
 		[]byte(
 			"{\"index\":{}}\n"+
-				"{\"@timestamp\":\"2020-03-07T00:00:00Z\",\"message\":\"message 0\"}\n"+
+				"{\"@timestamp\":\"2020-03-07T00:00:00Z\",\"message\":\"message 0\",\"tags\":[]}\n"+
 				"{\"index\":{}}\n"+
-				"{\"@timestamp\":\"2020-03-07T00:00:00Z\",\"message\":\"message 1\"}\n"+
+				"{\"@timestamp\":\"2020-03-07T00:00:00Z\",\"message\":\"message 1\",\"tags\":[]}\n"+
 				"{\"index\":{}}\n"+
-				"{\"@timestamp\":\"2020-03-07T00:00:00Z\",\"message\":\"message 2\"}\n",
+				"{\"@timestamp\":\"2020-03-07T00:00:00Z\",\"message\":\"message 2\",\"tags\":[]}\n",
 		),
 	) {
 		t.Errorf("Unexpected result: %s", string(result))
@@ -105,11 +105,11 @@ func TestRequestReadMultiple(t *testing.T) {
 		result,
 		[]byte(
 			"{\"index\":{}}\n"+
-				"{\"@timestamp\":\"2020-03-07T00:00:00Z\",\"message\":\"message 0\"}\n"+
+				"{\"@timestamp\":\"2020-03-07T00:00:00Z\",\"message\":\"message 0\",\"tags\":[]}\n"+
 				"{\"index\":{\"_index\":\"logstash-2020-03-14\"}}\n"+
-				"{\"@timestamp\":\"2020-03-14T00:00:00Z\",\"message\":\"message 1\"}\n"+
+				"{\"@timestamp\":\"2020-03-14T00:00:00Z\",\"message\":\"message 1\",\"tags\":[]}\n"+
 				"{\"index\":{\"_index\":\"logstash-2020-03-14\"}}\n"+
-				"{\"@timestamp\":\"2020-03-14T00:00:00Z\",\"message\":\"message 2\"}\n",
+				"{\"@timestamp\":\"2020-03-14T00:00:00Z\",\"message\":\"message 2\",\"tags\":[]}\n",
 		),
 	) {
 		t.Errorf("Unexpected result: %s", string(result))
@@ -177,7 +177,7 @@ func TestRequestMark(t *testing.T) {
 		result,
 		[]byte(
 			"{\"index\":{}}\n"+
-				"{\"@timestamp\":\"2020-03-14T00:00:00Z\",\"message\":\"message 1\"}\n",
+				"{\"@timestamp\":\"2020-03-14T00:00:00Z\",\"message\":\"message 1\",\"tags\":[]}\n",
 		),
 	) {
 		t.Errorf("Unexpected result: %s", string(result))
