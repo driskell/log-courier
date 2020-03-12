@@ -206,3 +206,30 @@ func TestGrokAddPatternTypes(t *testing.T) {
 		t.Fatalf("Unexpected types: %s", typesJSON)
 	}
 }
+
+func TestGrokMissing(t *testing.T) {
+	grok := NewGrok()
+	err := grok.AddPattern("ALL", "(%{SOME}*)")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	missingJSON, _ := json.Marshal(grok.MissingPatterns())
+	if string(missingJSON) != `["SOME"]` {
+		t.Fatalf("Unexpected missing pattern list: %s", missingJSON)
+	}
+}
+
+func TestGrokCompilePattern(t *testing.T) {
+	grok := NewGrok()
+	err := grok.AddPattern("ALL", "(.*)")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	pattern, err := grok.CompilePattern("%{ALL}")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	if pattern.String() != "(.*)" {
+		t.Fatalf("Unexpected pattern: %s", pattern.String())
+	}
+}

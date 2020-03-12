@@ -18,7 +18,6 @@ package grok
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,8 +27,6 @@ import (
 
 var (
 	matcher = regexp.MustCompile(`%\{([^}]+)\}`)
-
-	errIncompletePattern = errors.New("Pattern is incomplete")
 )
 
 // Grok parses messages into fields using regular expressions
@@ -38,11 +35,21 @@ type Grok struct {
 	pending  map[string][]*compilationState
 }
 
-type compiledPattern struct {
-	pattern string
-	types   map[string]string
+// ErrorIncompletePattern is returned when a pattern cannot be used as it
+// references other patterns that are not currently available
+// The name of the missing pattern is set inside the Missing field
+type ErrorIncompletePattern struct {
+	Missing string
 }
 
+// Error returns an error message for the missing pattern
+func (e *ErrorIncompletePattern) Error() string {
+	return fmt.Sprintf("Referenced pattern was not found: %s", e.Missing)
+}
+
+// compilationState tracks the compilation progress of a pattern
+// It allows compilation to pause when a missing pattern is encountered
+// and for it to then resume when that pattern is loaded
 type compilationState struct {
 	name    string
 	pattern string
@@ -63,20 +70,7 @@ func NewGrok() *Grok {
 	}
 }
 
-func newCompiledPattern(pattern string) *compiledPattern {
-	return &compiledPattern{
-		pattern: pattern,
-		types:   map[string]string{},
-	}
-}
-
-func newCompiledPatternFromState(state *compilationState) *compiledPattern {
-	return &compiledPattern{
-		pattern: state.output,
-		types:   state.types,
-	}
-}
-
+// newCompilationState creates a blank compilation state for the given named pattern
 func newCompilationState(name string, pattern string) *compilationState {
 	return &compilationState{
 		name:    name,
@@ -102,6 +96,62 @@ func (g *Grok) LoadPatternsFromFile(path string) error {
 	return g.loadPatternsFromReader(file)
 }
 
+// AddPattern adds a new pattern definition to the Grok instance
+// This pattern can be used within other patterns
+// If this pending uses other patterns that have not yet being added, it
+// will remain available until those other patterns are added
+func (g *Grok) AddPattern(name string, pattern string) error {
+	if strings.Contains(pattern, "%{") {
+		state := newCompilationState(name, pattern)
+		err := g.compilePatternWithState(state)
+		if err != nil {
+			if missingErr, ok := err.(*ErrorIncompletePattern); ok {
+				g.addIncompleteToPending(missingErr, state)
+				return nil
+			}
+			return err
+		}
+		g.compiled[name] = newCompiledPatternFromState(state)
+	} else {
+		g.compiled[name] = newCompiledPattern(pattern)
+	}
+	return g.continueIncompleteUsing(name)
+}
+
+// CompilePattern compiles the given pattern, expanding any pattern
+// references using the loaded patterns, and returns a Pattern interface
+func (g *Grok) CompilePattern(pattern string) (Pattern, error) {
+	var compiled *compiledPattern
+	if strings.Contains(pattern, "%{") {
+		state := newCompilationState("", pattern)
+		err := g.compilePatternWithState(state)
+		if err != nil {
+			return nil, err
+		}
+		compiled = newCompiledPatternFromState(state)
+	} else {
+		compiled = newCompiledPattern(pattern)
+	}
+	err := compiled.init()
+	if err != nil {
+		return nil, err
+	}
+	return compiled, nil
+}
+
+// MissingPatterns will return a list of pattern names that are referenced
+// by blocked pattern compilations which cannot complete
+// This should be called and reported after any pattern loading operations
+// Any blocked pattern compilations will not be usable by new patterns
+func (g *Grok) MissingPatterns() []string {
+	missing := make([]string, 0, len(g.pending))
+	for pending := range g.pending {
+		missing = append(missing, pending)
+	}
+	return missing
+}
+
+// loadPatternsFromReader loads patterns from a reader, see LoadPatternsFromFile
 func (g *Grok) loadPatternsFromReader(reader io.Reader) error {
 	bufferedReader := bufio.NewReader(reader)
 	for {
@@ -135,29 +185,12 @@ func (g *Grok) loadPatternsFromReader(reader io.Reader) error {
 	return nil
 }
 
-// AddPattern adds a new pattern definition to the Grok instance
-// This pattern can be used within other patterns
-// If this pending uses other patterns that have not yet being added, it
-// will remain available until those other patterns are added
-func (g *Grok) AddPattern(name string, pattern string) error {
-	if strings.Contains(pattern, "%{") {
-		state := newCompilationState(name, pattern)
-		err := g.compilePattern(state)
-		if err != nil {
-			if err == errIncompletePattern {
-				g.compiled[name] = newCompiledPattern("")
-				return nil
-			}
-			return err
-		}
-		g.compiled[name] = newCompiledPatternFromState(state)
-	} else {
-		g.compiled[name] = newCompiledPattern(pattern)
-	}
-	return g.rebuildIncompleteUsing(name)
-}
-
-func (g *Grok) compilePattern(state *compilationState) error {
+// compilePatternWithState attempts to compile a new grok pattern
+// it updates the state and returns either an error or nil
+// If nil is returned, the state is complete and its output can be used
+// If errIncompletePattern is returned, the pattern is still waiting for other patterns
+// and will be automatically compiled when those dependency patterns are compiled
+func (g *Grok) compilePatternWithState(state *compilationState) error {
 	if state.results == nil {
 		state.results = matcher.FindAllStringSubmatchIndex(state.pattern, -1)
 		if state.results == nil {
@@ -187,16 +220,7 @@ func (g *Grok) compilePattern(state *compilationState) error {
 			continue
 		}
 
-		var (
-			partials []*compilationState
-			ok       bool
-		)
-		if partials, ok = g.pending[spec[0]]; !ok {
-			partials = nil
-		}
-
-		g.pending[spec[0]] = append(partials, state)
-		return errIncompletePattern
+		return &ErrorIncompletePattern{Missing: spec[0]}
 	}
 
 	state.output += state.pattern[state.lastOffset:]
@@ -204,34 +228,46 @@ func (g *Grok) compilePattern(state *compilationState) error {
 	return nil
 }
 
-func (g *Grok) rebuildIncompleteUsing(name string) error {
+// addIncompleteToPending adds the given state to the pending list
+// for the pattern it is missing
+func (g *Grok) addIncompleteToPending(missingErr *ErrorIncompletePattern, state *compilationState) {
+	var (
+		partials []*compilationState
+		ok       bool
+	)
+	if partials, ok = g.pending[missingErr.Missing]; !ok {
+		partials = nil
+	}
+	g.pending[missingErr.Missing] = append(partials, state)
+}
+
+// rebuildIncompleteUsing will continue the compilation of any pending patterns
+// that depended on the given pattern (which should now be compiled)
+// This function will recurse until all relevant pattern compilations have moved
+// along and either completed or blocked at another missing pattern
+func (g *Grok) continueIncompleteUsing(name string) error {
 	incomplete, ok := g.pending[name]
 	if !ok {
 		return nil
 	}
 
-	newIncomplete := incomplete[:0]
+	delete(g.pending, name)
+
 	for _, state := range incomplete {
-		err := g.compilePattern(state)
+		err := g.compilePatternWithState(state)
 		if err != nil {
-			if err == errIncompletePattern {
-				newIncomplete = append(newIncomplete, state)
+			if missingErr, ok := err.(*ErrorIncompletePattern); ok {
+				g.addIncompleteToPending(missingErr, state)
 				continue
 			}
 			return err
 		}
 
 		g.compiled[state.name] = newCompiledPatternFromState(state)
-		err = g.rebuildIncompleteUsing(state.name)
+		err = g.continueIncompleteUsing(state.name)
 		if err != nil {
 			return err
 		}
-	}
-
-	if len(newIncomplete) == 0 {
-		delete(g.pending, name)
-	} else if len(newIncomplete) != len(incomplete) {
-		g.pending[name] = newIncomplete
 	}
 
 	return nil

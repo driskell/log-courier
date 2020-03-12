@@ -27,17 +27,17 @@ func TestNewEventEmpty(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{})
 	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
 		if time.Since(timestamp) > time.Second {
-			t.Errorf("Wrong timestamp in empty event: %v", event.Data())
+			t.Fatalf("Wrong timestamp in empty event: %v", event.Data())
 		}
 	} else {
-		t.Errorf("Missing timestamp in empty event: %v", event.Data())
+		t.Fatalf("Missing timestamp in empty event: %v", event.Data())
 	}
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		if len(tags) != 0 {
-			t.Errorf("Invalid empty tags: %d", len(tags))
+			t.Fatalf("Invalid empty tags: %d", len(tags))
 		}
 	} else {
-		t.Errorf("Missing tags in empty event: %v", event.Data())
+		t.Fatalf("Missing tags in empty event: %v", event.Data())
 	}
 }
 
@@ -45,16 +45,16 @@ func TestNewEventInvalidTimestamp(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"@timestamp": "Invalid"})
 	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
 		if time.Since(timestamp) > time.Second {
-			t.Errorf("Wrong timestamp in empty event: %v", event.Data())
+			t.Fatalf("Wrong timestamp in empty event: %v", event.Data())
 		}
 	}
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		value, err := tags.MarshalJSON()
 		if err != nil || !bytes.Equal(value, []byte("[\"_timestamp_parse_failure\"]")) {
-			t.Errorf("Invalid tags for failed timestamp: %v (error: %v)", tags, err)
+			t.Fatalf("Invalid tags for failed timestamp: %v (error: %v)", tags, err)
 		}
 	} else {
-		t.Errorf("Missing tags in invalid event: %v", event.Data())
+		t.Fatalf("Missing tags in invalid event: %v", event.Data())
 	}
 }
 
@@ -62,16 +62,16 @@ func TestNewEventWrongTypeTimestamp(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"@timestamp": map[string]int{"invalid": 999}})
 	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
 		if time.Since(timestamp) > time.Second {
-			t.Errorf("Wrong timestamp in empty event: %v", event.Data())
+			t.Fatalf("Wrong timestamp in empty event: %v", event.Data())
 		}
 	}
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		value, err := tags.MarshalJSON()
 		if err != nil || !bytes.Equal(value, []byte("[\"_timestamp_parse_failure\"]")) {
-			t.Errorf("Invalid tags for failed timestamp: %v (error: %v)", tags, err)
+			t.Fatalf("Invalid tags for failed timestamp: %v (error: %v)", tags, err)
 		}
 	} else {
-		t.Errorf("Missing tags in invalid event: %v", event.Data())
+		t.Fatalf("Missing tags in invalid event: %v", event.Data())
 	}
 }
 
@@ -81,10 +81,10 @@ func TestNewEventValidTimestamp(t *testing.T) {
 	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
 		timestampParsed, _ := time.Parse("2006-01-02T15:04:05Z", example)
 		if !timestamp.Equal(timestampParsed) {
-			t.Errorf("Wrong timestamp in event: %v; expected %v", event.Data(), timestampParsed)
+			t.Fatalf("Wrong timestamp in event: %v; expected %v", event.Data(), timestampParsed)
 		}
 	} else {
-		t.Errorf("Missing timestamp in event: %v", event.Data())
+		t.Fatalf("Missing timestamp in event: %v", event.Data())
 	}
 }
 
@@ -94,10 +94,10 @@ func TestNewEventTimestampExisting(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"@timestamp": timestampParsed})
 	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
 		if !timestamp.Equal(timestampParsed) {
-			t.Errorf("Wrong timestamp in event: %v; expected %v", event.Data(), timestampParsed)
+			t.Fatalf("Wrong timestamp in event: %v; expected %v", event.Data(), timestampParsed)
 		}
 	} else {
-		t.Errorf("Missing timestamp in event: %v", event.Data())
+		t.Fatalf("Missing timestamp in event: %v", event.Data())
 	}
 }
 
@@ -106,10 +106,10 @@ func TestNewEventInvalidTags(t *testing.T) {
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		value, err := tags.MarshalJSON()
 		if err != nil || !bytes.Equal(value, []byte("[\"_tags_parse_failure\"]")) {
-			t.Errorf("Invalid tags for failed tags: %v (error: %v)", tags, err)
+			t.Fatalf("Invalid tags for failed tags: %v (error: %v)", tags, err)
 		}
 	} else {
-		t.Errorf("Missing tags in invalid event: %v", event.Data())
+		t.Fatalf("Missing tags in invalid event: %v", event.Data())
 	}
 }
 
@@ -118,10 +118,10 @@ func TestNewEventStringTag(t *testing.T) {
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		value, err := tags.MarshalJSON()
 		if err != nil || !bytes.Equal(value, []byte("[\"_string_tag\"]")) {
-			t.Errorf("Invalid tags for string tag: %v (error: %v)", tags, err)
+			t.Fatalf("Invalid tags for string tag: %v (error: %v)", tags, err)
 		}
 	} else {
-		t.Errorf("Missing tags in event: %v", event.Data())
+		t.Fatalf("Missing tags in event: %v", event.Data())
 	}
 }
 
@@ -130,10 +130,10 @@ func TestNewEventValidTags(t *testing.T) {
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		value, err := tags.MarshalJSON()
 		if err != nil || !bytes.Equal(value, []byte("[\"_one_tag\",\"_two_tag\"]")) {
-			t.Errorf("Invalid tags: %v (error: %v)", tags, err)
+			t.Fatalf("Invalid tags: %v (error: %v)", tags, err)
 		}
 	} else {
-		t.Errorf("Missing tags in event: %v", event.Data())
+		t.Fatalf("Missing tags in event: %v", event.Data())
 	}
 }
 
@@ -141,17 +141,17 @@ func TestNewEventBytes(t *testing.T) {
 	event := NewEventFromBytes(context.Background(), nil, []byte("{\"message\":\"basic event\"}"))
 	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
 		if time.Since(timestamp) > time.Second {
-			t.Errorf("Wrong timestamp in basic event: %v", event.Data())
+			t.Fatalf("Wrong timestamp in basic event: %v", event.Data())
 		}
 	} else {
-		t.Errorf("Missing timestamp in basic event: %v", event.Data())
+		t.Fatalf("Missing timestamp in basic event: %v", event.Data())
 	}
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		if len(tags) != 0 {
-			t.Errorf("Invalid tags for basic event: %v", tags)
+			t.Fatalf("Invalid tags for basic event: %v", tags)
 		}
 	} else {
-		t.Errorf("Missing tags in basic event: %v", event.Data())
+		t.Fatalf("Missing tags in basic event: %v", event.Data())
 	}
 }
 
@@ -159,25 +159,25 @@ func TestNewEventBytesInvalid(t *testing.T) {
 	event := NewEventFromBytes(context.Background(), nil, []byte("invalid bytes"))
 	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
 		if time.Since(timestamp) > time.Second {
-			t.Errorf("Wrong timestamp in empty event: %v", event.Data())
+			t.Fatalf("Wrong timestamp in empty event: %v", event.Data())
 		}
 	} else {
-		t.Errorf("Missing timestamp in empty event: %v", event.Data())
+		t.Fatalf("Missing timestamp in empty event: %v", event.Data())
 	}
 	if tags, ok := event.Data()["tags"].(*Tags); ok {
 		value, err := tags.MarshalJSON()
 		if err != nil || !bytes.Equal(value, []byte("[\"_unmarshal_failure\"]")) {
-			t.Errorf("Invalid tags for failed unmarshal: %v (error: %v)", tags, err)
+			t.Fatalf("Invalid tags for failed unmarshal: %v (error: %v)", tags, err)
 		}
 	} else {
-		t.Errorf("Missing tags in invalid event: %v", event.Data())
+		t.Fatalf("Missing tags in invalid event: %v", event.Data())
 	}
 }
 
 func TestEventBytes(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Test message", "@timestamp": "2020-02-01T13:00:00.000Z"})
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {
-		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 }
 
@@ -186,37 +186,37 @@ func TestEventAddRemoveTag(t *testing.T) {
 	event.AddTag("_testing")
 	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_testing\"]}")) {
-		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 	event.AddTag("_testing")
 	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_testing\"]}")) {
-		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 	event.RemoveTag("_testing")
 	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {
-		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 	event.RemoveTag("_testing")
 	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {
-		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 }
 
 func TestEventCache(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Test message", "@timestamp": "2020-02-01T13:00:00.000Z"})
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {
-		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 	event.Data()["more"] = "value"
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {
-		t.Errorf("Event bytes were not cached: %s", string(event.Bytes()))
+		t.Fatalf("Event bytes were not cached: %s", string(event.Bytes()))
 	}
 	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"more\":\"value\",\"tags\":[]}")) {
-		t.Errorf("Event bytes cache did not clear: %s", string(event.Bytes()))
+		t.Fatalf("Event bytes cache did not clear: %s", string(event.Bytes()))
 	}
 }
 
@@ -226,10 +226,10 @@ func TestResolveKey(t *testing.T) {
 	})
 	result, err := event.Resolve("message", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != "Hello world" {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 }
 
@@ -241,10 +241,10 @@ func TestResolveKeyShallow(t *testing.T) {
 	})
 	result, err := event.Resolve("sub[deeper]", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != 123 {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 }
 
@@ -258,10 +258,10 @@ func TestResolveKeyDeep(t *testing.T) {
 	})
 	result, err := event.Resolve("sub[deeper][last]", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != true {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 }
 
@@ -271,10 +271,10 @@ func TestResolveKeyNonMap(t *testing.T) {
 	})
 	result, err := event.Resolve("sub[deeper][last]", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != nil {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 }
 
@@ -286,27 +286,27 @@ func TestResolveKeyInvalid(t *testing.T) {
 	})
 	result, err := event.Resolve("sub[", nil)
 	if err == nil {
-		t.Errorf("Unexpected successful result: %s", result)
+		t.Fatalf("Unexpected successful result: %s", result)
 	}
 
 	result, err = event.Resolve("su]b", nil)
 	if err == nil {
-		t.Errorf("Unexpected successful result: %s", result)
+		t.Fatalf("Unexpected successful result: %s", result)
 	}
 
 	result, err = event.Resolve("sub[inside]more", nil)
 	if err == nil {
-		t.Errorf("Unexpected successful result: %s", result)
+		t.Fatalf("Unexpected successful result: %s", result)
 	}
 
 	result, err = event.Resolve("sub[inside]nogap[more]", nil)
 	if err == nil {
-		t.Errorf("Unexpected successful result: %s", result)
+		t.Fatalf("Unexpected successful result: %s", result)
 	}
 
 	result, err = event.Resolve("su[]", nil)
 	if err == nil {
-		t.Errorf("Unexpected successful result: %s", result)
+		t.Fatalf("Unexpected successful result: %s", result)
 	}
 }
 
@@ -318,18 +318,18 @@ func TestResolveKeyMissing(t *testing.T) {
 	})
 	result, err := event.Resolve("sub[missing]", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != nil {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 
 	result, err = event.Resolve("missing[sub]", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != nil {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 }
 
@@ -341,47 +341,47 @@ func TestResolveSet(t *testing.T) {
 	})
 	result, err := event.Resolve("sub[missing]", "value")
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != nil {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 	result, err = event.Resolve("sub[missing]", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != "value" {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 
 	result, err = event.Resolve("missing[sub]", 123)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != nil {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 	result, err = event.Resolve("missing[sub]", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != 123 {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 
 	result, err = event.Resolve("sub[message][test]", true)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != nil {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 	result, err = event.Resolve("sub[message][test]", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != true {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 }
 
@@ -393,17 +393,17 @@ func TestResolveUnset(t *testing.T) {
 	})
 	result, err := event.Resolve("sub[message]", ResolveParamUnset)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != "Hello" {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 	result, err = event.Resolve("sub[message]", nil)
 	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	if result != nil {
-		t.Errorf("Unexpected result: [%v]", result)
+		t.Fatalf("Unexpected result: [%v]", result)
 	}
 }
 
@@ -411,7 +411,7 @@ func TestMustResolvePanic(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
 	result := event.MustResolve("message", nil)
 	if result != "Hello" {
-		t.Errorf("Incorrect result from must resolve: %s", result)
+		t.Fatalf("Incorrect result from must resolve: %s", result)
 	}
 
 	defer func() {

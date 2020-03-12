@@ -23,7 +23,6 @@ import (
 	"time"
 )
 
-// Matchers
 var (
 	matcher = regexp.MustCompile(`%\{([^}]+)\}`)
 )
