@@ -76,10 +76,12 @@ func init() {
 
 	config.RegisterAvailable("actions", AvailableActions)
 
-	RegisterAction("add_field", newAddFieldAction)
 	RegisterAction("add_tag", newAddTagAction)
 	RegisterAction("date", newDateAction)
+	RegisterAction("geoip", newGeoIPAction)
 	RegisterAction("grok", newGrokAction)
-	RegisterAction("remove_field", newRemoveFieldAction)
 	RegisterAction("remove_tag", newRemoveTagAction)
+	RegisterAction("set_field", newSetFieldAction)
+	RegisterAction("unset_field", newUnsetFieldAction)
+	RegisterAction("user_agent", newUserAgentAction)
 }

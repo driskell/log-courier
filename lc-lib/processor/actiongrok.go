@@ -55,19 +55,17 @@ func newGrokAction(p *config.Parser, configPath string, unused map[string]interf
 }
 
 func (g *grokAction) Process(event *event.Event) *event.Event {
-	data := event.Data()
-	if entry, ok := data[g.Field]; ok {
-		if value, ok := entry.(string); ok {
-			for reidx, re := range g.compiled {
-				result := re.FindStringSubmatch(value)
-				if result == nil {
-					continue
-				}
-				for nameidx, name := range g.compiledNames[reidx][1:] {
-					data[name] = result[nameidx+1]
-				}
-				return event
+	entry, err := event.Resolve(g.Field, nil)
+	if value, ok := entry.(string); err != nil && ok {
+		for reidx, re := range g.compiled {
+			result := re.FindStringSubmatch(value)
+			if result == nil {
+				continue
 			}
+			for nameidx, name := range g.compiledNames[reidx][1:] {
+				event.Resolve(name, result[nameidx+1])
+			}
+			return event
 		}
 	}
 	event.AddTag("_grok_parse_failure")

@@ -28,16 +28,16 @@ import (
 	"github.com/google/cel-go/common/types"
 )
 
-type addFieldAction struct {
+type setFieldAction struct {
 	Field     string `config:"field"`
 	ValueExpr string `config:"value_expr"`
 
 	valueProgram cel.Program
 }
 
-func newAddFieldAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newSetFieldAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
 	var err error
-	action := &addFieldAction{}
+	action := &setFieldAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {
 		return nil, err
 	}
@@ -48,39 +48,38 @@ func newAddFieldAction(p *config.Parser, configPath string, unused map[string]in
 	return action, nil
 }
 
-func (f *addFieldAction) Process(event *event.Event) *event.Event {
-	data := event.Data()
+func (f *setFieldAction) Process(event *event.Event) *event.Event {
 	val, _, err := f.valueProgram.Eval(map[string]interface{}{"event": event})
 	if err != nil {
-		data["_add_field_error"] = fmt.Sprintf("Failed to evaluate add_field value_expr: [%s] -> %s", f.ValueExpr, err)
-		event.AddTag("_add_field_failure")
+		event.Resolve("_set_field_error", fmt.Sprintf("Failed to evaluate set_field value_expr: [%s] -> %s", f.ValueExpr, err))
+		event.AddTag("_set_field_failure")
 		return event
 	}
 	if types.IsUnknown(val) {
-		data["_add_field_error"] = fmt.Sprintf("Evaluation of add_field returned unknown: [%s]", f.ValueExpr)
-		event.AddTag("_add_field_failure")
+		event.Resolve("_set_field_error", fmt.Sprintf("Evaluation of set_field returned unknown: [%s]", f.ValueExpr))
+		event.AddTag("_set_field_failure")
 		return event
 	}
-	event.Data()[f.Field] = val.Value()
+	event.Resolve(f.Field, val.Value())
 	return event
 }
 
-type removeFieldAction struct {
+type unsetFieldAction struct {
 	Field string `config:"field"`
 }
 
-func newRemoveFieldAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
-	action := &addFieldAction{}
+func newUnsetFieldAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+	action := &unsetFieldAction{}
 	if err := p.Populate(action, unused, configPath, true); err != nil {
 		return nil, err
 	}
 	return action, nil
 }
 
-func (f *removeFieldAction) Process(event *event.Event) *event.Event {
-	if _, ok := event.Data()[f.Field]; ok {
-		delete(event.Data(), f.Field)
-		event.ClearCache()
+func (f *unsetFieldAction) Process(evnt *event.Event) *event.Event {
+	if _, err := evnt.Resolve(f.Field, event.ResolveParamUnset); err != nil {
+		evnt.AddTag("_unset_field_failure")
+		evnt.Resolve("_unset_field_error", fmt.Sprintf("Failed to unset field: %s", err))
 	}
-	return event
+	return evnt
 }

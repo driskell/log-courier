@@ -30,9 +30,6 @@ func createTestEvent() *Event {
 		"friend":  "Jane",
 		"sub": map[string]interface{}{
 			"inside": 567,
-			"deeper": map[string]interface{}{
-				"last": true,
-			},
 		},
 	})
 }
@@ -142,60 +139,14 @@ func TestFormatVariableKey(t *testing.T) {
 	}
 }
 
-func TestFormatVariableKeyMultiple(t *testing.T) {
-	result, err := NewPatternFromString("We have %{sub[deeper][last]} events").Format(createTestEvent())
-	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
-	}
-	if result != "We have true events" {
-		t.Errorf("Unexpected result: [%s]", result)
-	}
-}
-
-func TestFormatVariableKeyInvalid(t *testing.T) {
-	result, err := NewPatternFromString("This %{sub[} will fail").Format(createTestEvent())
-	if err == nil {
-		t.Errorf("Unexpected successful result: %s", result)
-	}
-
-	result, err = NewPatternFromString("This %{su]b} will fail").Format(createTestEvent())
-	if err == nil {
-		t.Errorf("Unexpected successful result: %s", result)
-	}
-
-	result, err = NewPatternFromString("This %{sub[inside]more} will fail").Format(createTestEvent())
-	if err == nil {
-		t.Errorf("Unexpected successful result: %s", result)
-	}
-
-	result, err = NewPatternFromString("This %{su[]} will fail").Format(createTestEvent())
-	if err == nil {
-		t.Errorf("Unexpected successful result: %s", result)
-	}
-}
-
-func TestFormatVariableKeyMissing(t *testing.T) {
-	result, err := NewPatternFromString("We have %{sub[missing]} not found events").Format(createTestEvent())
-	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
-	}
-	if result != "We have  not found events" {
-		t.Errorf("Unexpected result: [%s]", result)
-	}
-
-	result, err = NewPatternFromString("We have %{missing[sub]} not got events").Format(createTestEvent())
-	if err != nil {
-		t.Errorf("Unexpected error: %s", err)
-	}
-	if result != "We have  not got events" {
-		t.Errorf("Unexpected result: [%s]", result)
-	}
-}
-
 func TestFormatDateTimestampMissing(t *testing.T) {
 	day := time.Now().Format("2006-01-02")
 
-	result, err := NewPatternFromString("Value at %{+2006-01-02} should be current day").Format(createTestEvent())
+	// Event defaults to autopopulate a timestamp so forcefully remove it
+	event := createDateTestEvent()
+	delete(event.Data(), "@timestamp")
+
+	result, err := NewPatternFromString("Value at %{+2006-01-02} should be current day").Format(event)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}

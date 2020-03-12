@@ -22,6 +22,7 @@ package processor
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
@@ -125,9 +126,11 @@ func (p *Pool) processorRoutine(softShutdownChan <-chan struct{}, configChan <-c
 				return nil
 			}
 
+			start := time.Now()
 			for idx, event := range events {
 				events[idx] = p.processEvent(event)
 			}
+			log.Debugf("Processed %d events in %v", len(events), time.Since(start))
 
 			select {
 			case <-p.shutdownChan:
@@ -143,7 +146,7 @@ func (p *Pool) processEvent(event *event.Event) *event.Event {
 	for _, pipeline := range p.pipelines {
 		val, _, err := pipeline.conditionProgram.Eval(map[string]interface{}{"event": event.Data()})
 		if err != nil {
-			log.Errorf("Failed to evaluate condition: [%s] -> %s", pipeline.ConditionExpr, err)
+			log.Warningf("Failed to evaluate pipeline condition: [%s] -> %s", pipeline.ConditionExpr, err)
 			continue
 		}
 		if val == types.True {

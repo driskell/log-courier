@@ -42,22 +42,18 @@ func newDateAction(p *config.Parser, configPath string, unused map[string]interf
 }
 
 func (d *dateAction) Process(event *event.Event) *event.Event {
-	data := event.Data()
-	if entry, ok := data[d.Field]; ok {
-		if value, ok := entry.(string); ok {
-			for _, layout := range d.Formats {
-				result, err := time.Parse(layout, value)
-				if err != nil {
-					continue
-				}
-				data["@timestamp"] = result
-				return event
+	entry, err := event.Resolve(d.Field, nil)
+	if value, ok := entry.(string); err != nil && ok {
+		for _, layout := range d.Formats {
+			result, err := time.Parse(layout, value)
+			if err != nil {
+				continue
 			}
-		} else {
-			data["_date_error"] = fmt.Sprintf("Field '%s' for date parse is not a string", d.Field)
+			event.Resolve("@timestamp", result)
+			return event
 		}
 	} else {
-		data["_date_error"] = fmt.Sprintf("Field '%s' is not present", d.Field)
+		event.Resolve("_date_error", fmt.Sprintf("Field '%s' is not present or not a string", d.Field))
 	}
 	event.AddTag("_date_failure")
 	return event

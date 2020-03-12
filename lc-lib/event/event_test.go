@@ -137,6 +137,24 @@ func TestNewEventValidTags(t *testing.T) {
 	}
 }
 
+func TestNewEventBytes(t *testing.T) {
+	event := NewEventFromBytes(context.Background(), nil, []byte("{\"message\":\"basic event\"}"))
+	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
+		if time.Since(timestamp) > time.Second {
+			t.Errorf("Wrong timestamp in basic event: %v", event.Data())
+		}
+	} else {
+		t.Errorf("Missing timestamp in basic event: %v", event.Data())
+	}
+	if tags, ok := event.Data()["tags"].(Tags); ok {
+		if len(tags) != 0 {
+			t.Errorf("Invalid tags for basic event: %v", tags)
+		}
+	} else {
+		t.Errorf("Missing tags in basic event: %v", event.Data())
+	}
+}
+
 func TestNewEventBytesInvalid(t *testing.T) {
 	event := NewEventFromBytes(context.Background(), nil, []byte("invalid bytes"))
 	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
@@ -195,6 +213,193 @@ func TestEventCache(t *testing.T) {
 	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"more\":\"value\",\"tags\":[]}")) {
 		t.Errorf("Event bytes cache did not clear: %s", string(event.Bytes()))
+	}
+}
+
+func TestResolveKey(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"message": "Hello world",
+	})
+	result, err := event.Resolve("message", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != "Hello world" {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+}
+
+func TestResolveKeyShallow(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"sub": map[string]interface{}{
+			"deeper": 123,
+		},
+	})
+	result, err := event.Resolve("sub[deeper]", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != 123 {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+}
+
+func TestResolveKeyDeep(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"sub": map[string]interface{}{
+			"deeper": map[string]interface{}{
+				"last": true,
+			},
+		},
+	})
+	result, err := event.Resolve("sub[deeper][last]", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != true {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+}
+
+func TestResolveKeyNonMap(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"sub": "Message",
+	})
+	result, err := event.Resolve("sub[deeper][last]", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != nil {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+}
+
+func TestResolveKeyInvalid(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"sub": map[string]interface{}{
+			"message": "",
+		},
+	})
+	result, err := event.Resolve("sub[", nil)
+	if err == nil {
+		t.Errorf("Unexpected successful result: %s", result)
+	}
+
+	result, err = event.Resolve("su]b", nil)
+	if err == nil {
+		t.Errorf("Unexpected successful result: %s", result)
+	}
+
+	result, err = event.Resolve("sub[inside]more", nil)
+	if err == nil {
+		t.Errorf("Unexpected successful result: %s", result)
+	}
+
+	result, err = event.Resolve("sub[inside]nogap[more]", nil)
+	if err == nil {
+		t.Errorf("Unexpected successful result: %s", result)
+	}
+
+	result, err = event.Resolve("su[]", nil)
+	if err == nil {
+		t.Errorf("Unexpected successful result: %s", result)
+	}
+}
+
+func TestResolveKeyMissing(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"sub": map[string]interface{}{
+			"message": "",
+		},
+	})
+	result, err := event.Resolve("sub[missing]", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != nil {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+
+	result, err = event.Resolve("missing[sub]", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != nil {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+}
+
+func TestResolveSet(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"sub": map[string]interface{}{
+			"message": "",
+		},
+	})
+	result, err := event.Resolve("sub[missing]", "value")
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != nil {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+	result, err = event.Resolve("sub[missing]", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != "value" {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+
+	result, err = event.Resolve("missing[sub]", 123)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != nil {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+	result, err = event.Resolve("missing[sub]", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != 123 {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+
+	result, err = event.Resolve("sub[message][test]", true)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != nil {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+	result, err = event.Resolve("sub[message][test]", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != true {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+}
+
+func TestResolveUnset(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"sub": map[string]interface{}{
+			"message": "Hello",
+		},
+	})
+	result, err := event.Resolve("sub[message]", ResolveParamUnset)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != "Hello" {
+		t.Errorf("Unexpected result: [%v]", result)
+	}
+	result, err = event.Resolve("sub[message]", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if result != nil {
+		t.Errorf("Unexpected result: [%v]", result)
 	}
 }
 

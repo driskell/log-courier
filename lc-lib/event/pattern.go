@@ -18,10 +18,14 @@ package event
 
 import (
 	"encoding/json"
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
+)
+
+// Matchers
+var (
+	matcher = regexp.MustCompile(`%\{([^}]+)\}`)
 )
 
 // Pattern represents a pattern string that can be rendered using an event
@@ -50,8 +54,6 @@ func NewPatternFromString(pattern string) Pattern {
 func (p variablePattern) Format(event *Event) (string, error) {
 	data := event.Data()
 	pattern := string(p)
-	matcher := regexp.MustCompile(`%\{([^}]+)\}`)
-	keyMatcher := regexp.MustCompile(`^([^\[\]]+)|\[([^\[\]]+)\]`)
 
 	results := matcher.FindAllStringSubmatchIndex(pattern, -1)
 	if results == nil {
@@ -73,53 +75,21 @@ func (p variablePattern) Format(event *Event) (string, error) {
 				output += time.Now().Format(variable[1:])
 			}
 		} else {
-			currentMap := data
-			lastIndex := 0
-			results := keyMatcher.FindAllStringSubmatchIndex(variable, -1)
-			for j := 0; j < len(results); j++ {
-				// Must always join together
-				if results[j][0] != lastIndex {
-					return "", fmt.Errorf("Invalid variable: %s", variable)
-				}
-				lastIndex = results[j][1]
-				nameStart, nameEnd := results[j][2], results[j][3]
-				if nameStart < 0 {
-					nameStart, nameEnd = results[j][4], results[j][5]
-				}
-				name := variable[nameStart:nameEnd]
-				if j == len(results)-1 {
-					// Last item, so will always be a value
-					if value, ok := currentMap[name]; ok {
-						switch valueTyped := value.(type) {
-						case string:
-							output += valueTyped
-							break
-						default:
-							valueEncoded, err := json.Marshal(valueTyped)
-							if err != nil {
-								return "", err
-							}
-							output += string(valueEncoded)
-							break
-						}
-					}
-				} else {
-					// Calculate next inner
-					if value, ok := currentMap[name]; ok {
-						if nextMap := value.(map[string]interface{}); ok {
-							currentMap = nextMap
-						} else {
-							// Can't use non-map, ignore as if it didn't exist, and keep validating
-							currentMap = nil
-						}
-					} else {
-						// Doesn't exist so there's no value but keep validating
-						currentMap = nil
-					}
-				}
+			value, err := event.Resolve(variable, nil)
+			if err != nil {
+				return "", err
 			}
-			if lastIndex != len(variable) {
-				return "", fmt.Errorf("Invalid variable: %s", variable)
+			if value != nil {
+				switch valueTyped := value.(type) {
+				case string:
+					output += valueTyped
+				default:
+					valueEncoded, err := json.Marshal(valueTyped)
+					if err != nil {
+						return "", err
+					}
+					output += string(valueEncoded)
+				}
 			}
 		}
 	}
