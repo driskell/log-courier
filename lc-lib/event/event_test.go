@@ -184,18 +184,22 @@ func TestEventBytes(t *testing.T) {
 func TestEventAddRemoveTag(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Test message", "@timestamp": "2020-02-01T13:00:00.000Z"})
 	event.AddTag("_testing")
+	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_testing\"]}")) {
 		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 	event.AddTag("_testing")
+	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_testing\"]}")) {
 		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 	event.RemoveTag("_testing")
+	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {
 		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 	event.RemoveTag("_testing")
+	event.ClearCache()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {
 		t.Errorf("Invalid event bytes: %s", string(event.Bytes()))
 	}
