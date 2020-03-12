@@ -51,13 +51,11 @@ func newSetFieldAction(p *config.Parser, configPath string, unused map[string]in
 func (f *setFieldAction) Process(event *event.Event) *event.Event {
 	val, _, err := f.valueProgram.Eval(map[string]interface{}{"event": event})
 	if err != nil {
-		event.Resolve("_set_field_error", fmt.Sprintf("Failed to evaluate set_field value_expr: [%s] -> %s", f.ValueExpr, err))
-		event.AddTag("_set_field_failure")
+		event.AddError("set_field", fmt.Sprintf("Failed to evaluate set_field value_expr: [%s] -> %s", f.ValueExpr, err))
 		return event
 	}
 	if types.IsUnknown(val) {
-		event.Resolve("_set_field_error", fmt.Sprintf("Evaluation of set_field returned unknown: [%s]", f.ValueExpr))
-		event.AddTag("_set_field_failure")
+		event.AddError("set_field", fmt.Sprintf("Evaluation of set_field returned unknown: [%s]", f.ValueExpr))
 		return event
 	}
 	event.Resolve(f.Field, val.Value())
@@ -78,8 +76,7 @@ func newUnsetFieldAction(p *config.Parser, configPath string, unused map[string]
 
 func (f *unsetFieldAction) Process(evnt *event.Event) *event.Event {
 	if _, err := evnt.Resolve(f.Field, event.ResolveParamUnset); err != nil {
-		evnt.AddTag("_unset_field_failure")
-		evnt.Resolve("_unset_field_error", fmt.Sprintf("Failed to unset field: %s", err))
+		evnt.AddError("unset_field", fmt.Sprintf("Failed to unset field: %s", err))
 	}
 	return evnt
 }

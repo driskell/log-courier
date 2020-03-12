@@ -61,55 +61,64 @@ func newGeoIPAction(p *config.Parser, configPath string, unused map[string]inter
 
 func (g *geoIPAction) Process(event *event.Event) *event.Event {
 	entry, err := event.Resolve(g.Field, nil)
-	if value, ok := entry.(string); err != nil && ok {
-		var result *geoipActionLookupResult
-		if cachedRecord, ok := g.lru.Get(value); ok {
-			result = cachedRecord.(*geoipActionLookupResult)
-		} else {
-			ip := net.ParseIP(value)
-			if ip == nil {
-				event.Resolve("_geoip_error", fmt.Sprintf("Field '%s' is not a valid IP address", g.Field))
-				event.AddTag("_geoip_failure")
-				return event
-			}
-			record, err := g.reader.City(ip)
-			result = &geoipActionLookupResult{record, err}
-			g.lru.Add(value, result)
-		}
-		if result.err != nil {
-			event.Resolve("_geoip_error", fmt.Sprintf("GeoIP2 lookup failed: %s", result.err))
-			event.AddTag("_geoip_failure")
-			return event
-		}
-		record := result.record
-		if record.City.GeoNameID == 0 {
-			// Not found, ignore
-			return event
-		}
-		dataValue, _ := event.Resolve("source[geo]", nil)
-		var data map[string]interface{}
-		var ok bool
-		if data, ok = dataValue.(map[string]interface{}); !ok {
-			data = map[string]interface{}{}
-		}
-		data["city_name"] = record.City.Names["en"]
-		data["continent_name"] = record.Continent.Names["en"]
-		data["country_iso_code"] = record.Country.IsoCode
-		data["country_name"] = record.Country.Names["en"]
-		data["location"] = map[string]interface{}{
-			"type":        "Point",
-			"coordinates": []float64{record.Location.Longitude, record.Location.Latitude},
-		}
-		data["postal_code"] = record.Postal.Code
-		data["timezone"] = record.Location.TimeZone
-		if len(record.Subdivisions) > 0 {
-			data["region_iso_code"] = record.Subdivisions[0].IsoCode
-			data["region_name"] = record.Subdivisions[0].Names["en"]
-		}
-		event.Resolve("source[geo]", data)
-	} else {
-		event.Resolve("_geoip_error", fmt.Sprintf("Field '%s' is not present", g.Field))
-		event.AddTag("_geoip_failure")
+	if err != nil {
+		event.AddError("geoip", fmt.Sprintf("Field lookup failed: %s", err))
+		return event
 	}
+
+	var (
+		value string
+		ok    bool
+	)
+	if value, ok = entry.(string); !ok {
+		event.AddError("geoip", fmt.Sprintf("Field '%s' is not present", g.Field))
+	}
+
+	var result *geoipActionLookupResult
+	if cachedRecord, ok := g.lru.Get(value); ok {
+		result = cachedRecord.(*geoipActionLookupResult)
+	} else {
+		ip := net.ParseIP(value)
+		if ip == nil {
+			event.AddError("geoip", fmt.Sprintf("Field '%s' is not a valid IP address", g.Field))
+			return event
+		}
+		record, err := g.reader.City(ip)
+		result = &geoipActionLookupResult{record, err}
+		g.lru.Add(value, result)
+	}
+
+	if result.err != nil {
+		event.AddError("geoip", fmt.Sprintf("GeoIP2 lookup failed: %s", result.err))
+		return event
+	}
+
+	record := result.record
+	if record.City.GeoNameID == 0 {
+		// Not found, ignore
+		return event
+	}
+
+	var data map[string]interface{}
+	if data, ok = event.MustResolve("source[geo]", nil).(map[string]interface{}); !ok {
+		data = map[string]interface{}{}
+	}
+
+	data["city_name"] = record.City.Names["en"]
+	data["continent_name"] = record.Continent.Names["en"]
+	data["country_iso_code"] = record.Country.IsoCode
+	data["country_name"] = record.Country.Names["en"]
+	data["location"] = map[string]interface{}{
+		"type":        "Point",
+		"coordinates": []float64{record.Location.Longitude, record.Location.Latitude},
+	}
+	data["postal_code"] = record.Postal.Code
+	data["timezone"] = record.Location.TimeZone
+	if len(record.Subdivisions) > 0 {
+		data["region_iso_code"] = record.Subdivisions[0].IsoCode
+		data["region_name"] = record.Subdivisions[0].Names["en"]
+	}
+
+	event.MustResolve("source[geo]", data)
 	return event
 }

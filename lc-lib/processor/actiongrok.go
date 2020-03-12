@@ -62,12 +62,22 @@ func (g *grokAction) Process(event *event.Event) *event.Event {
 			if result == nil {
 				continue
 			}
+			errors := ""
 			for nameidx, name := range g.compiledNames[reidx][1:] {
-				event.Resolve(name, result[nameidx+1])
+				if _, err := event.Resolve(name, result[nameidx+1]); err != nil {
+					if errors == "" {
+						errors += err.Error()
+					} else {
+						errors += "; " + err.Error()
+					}
+				}
+			}
+			if errors != "" {
+				event.AddError("grok", fmt.Sprintf("Failed to set all required fields: %s", errors))
 			}
 			return event
 		}
 	}
-	event.AddTag("_grok_parse_failure")
+	event.AddError("grok", fmt.Sprintf("Field '%s' was not matched by any of the given patterns", g.Field))
 	return event
 }

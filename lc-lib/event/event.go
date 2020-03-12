@@ -131,7 +131,18 @@ func (e *Event) convertData() {
 	}
 }
 
-// Resolve will return (and optionally set) the value at the given path, using a[b][c] syntax
+// MustResolve is the same as Resolve but will panic if an error occurs
+//
+// This should never be used with user input, and only used with hard-coded field names that are guaranteed to be correct syntax
+func (e *Event) MustResolve(path string, set interface{}) interface{} {
+	output, err := e.Resolve(path, set)
+	if err != nil {
+		panic(err)
+	}
+	return output
+}
+
+// Resolve will return (and optionally set) the value at the given path (field), using a[b][c] syntax
 //
 // It will return an error if the path is invalid, and return nil if the path does not exist
 //
@@ -161,7 +172,7 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 	for j := 0; j < len(results); j++ {
 		// Must always join together
 		if results[j][0] != lastIndex {
-			return nil, fmt.Errorf("Invalid path: %s", path)
+			return nil, fmt.Errorf("Invalid field: %s", path)
 		}
 		lastIndex = results[j][1]
 		nameStart, nameEnd := results[j][2], results[j][3]
@@ -199,7 +210,7 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 		}
 	}
 	if lastIndex != len(path) {
-		return nil, fmt.Errorf("Invalid path: %s", path)
+		return nil, fmt.Errorf("Invalid field: %s", path)
 	}
 	return
 }
@@ -229,6 +240,12 @@ func (e *Event) validateMutation(path string, set interface{}) error {
 		}
 	}
 	return nil
+}
+
+// AddError adds an error tag and an error message field for a specific action that has failed
+func (e *Event) AddError(action string, message string) {
+	e.data[fmt.Sprintf("_%s_error", action)] = message
+	e.AddTag(fmt.Sprintf("_%s_failure", action))
 }
 
 // AddTag adds a tag to the event

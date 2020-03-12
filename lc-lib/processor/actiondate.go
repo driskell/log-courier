@@ -52,9 +52,9 @@ func (d *dateAction) Process(event *event.Event) *event.Event {
 			event.Resolve("@timestamp", result)
 			return event
 		}
+		event.AddError("date", fmt.Sprintf("Field '%s' could not be parsed with any of the given formats", d.Field))
 	} else {
-		event.Resolve("_date_error", fmt.Sprintf("Field '%s' is not present or not a string", d.Field))
+		event.AddError("date", fmt.Sprintf("Field '%s' is not present or not a string", d.Field))
 	}
-	event.AddTag("_date_failure")
 	return event
 }

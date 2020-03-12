@@ -403,6 +403,22 @@ func TestResolveUnset(t *testing.T) {
 	}
 }
 
+func TestMustResolvePanic(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	result := event.MustResolve("message", nil)
+	if result != "Hello" {
+		t.Errorf("Incorrect result from must resolve: %s", result)
+	}
+
+	defer func() {
+		if err := recover(); err != nil {
+			return
+		}
+	}()
+	result = event.MustResolve("message[", nil)
+	t.Error("MustResolve did not panic")
+}
+
 // TODO: DispatchAck
 
 // TODO: Context

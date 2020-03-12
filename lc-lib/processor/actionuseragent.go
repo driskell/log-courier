@@ -51,55 +51,64 @@ func newUserAgentAction(p *config.Parser, configPath string, unused map[string]i
 
 func (g *userAgentAction) Process(event *event.Event) *event.Event {
 	entry, err := event.Resolve(g.Field, nil)
-	if value, ok := entry.(string); err != nil && ok {
-		var client *uaparser.Client
-		if cachedClient, ok := g.lru.Get(value); ok {
-			client = cachedClient.(*uaparser.Client)
-		} else {
-			client = g.parser.Parse(value)
-			g.lru.Add(value, client)
-		}
-		userAgentValue, _ := event.Resolve("user_agent", nil)
-		var userAgent map[string]interface{}
-		var ok bool
-		if userAgent, ok = userAgentValue.(map[string]interface{}); !ok {
-			userAgent = map[string]interface{}{}
-		}
-		userAgent["user_agent[name]"] = client.UserAgent.Family
-		if client.Device.Family != "" {
-			userAgent["user_agent[device][name]"] = client.Device.Family
-		}
-		if versionString := client.UserAgent.ToVersionString(); versionString != "" {
-			userAgent["user_agent[major]"] = versionString
-		}
-		if client.UserAgent.Major != "" {
-			userAgent["user_agent[major]"] = client.UserAgent.Major
-		}
-		if client.UserAgent.Minor != "" {
-			userAgent["user_agent[minor]"] = client.UserAgent.Minor
-		}
-		if client.UserAgent.Patch != "" {
-			userAgent["user_agent[patch]"] = client.UserAgent.Patch
-		}
-		if client.Os.Family != "" {
-			userAgent["user_agent[os][family]"] = client.Os.Family
-		}
-		if versionString := client.Os.ToVersionString(); versionString != "" {
-			userAgent["user_agent[os][family]"] = versionString
-		}
-		if client.Os.Major != "" {
-			userAgent["user_agent[os][major]"] = client.Os.Major
-		}
-		if client.Os.Minor != "" {
-			userAgent["user_agent[os][minor]"] = client.Os.Minor
-		}
-		if client.Os.PatchMinor != "" {
-			userAgent["user_agent[os][version]"] = client.Os.PatchMinor
-		}
-		event.Resolve("user_agent", userAgent)
-	} else {
-		event.Resolve("_geoip_error", fmt.Sprintf("Field '%s' is not present", g.Field))
-		event.AddTag("_geoip_failure")
+	if err != nil {
+		event.AddError("user_agent", fmt.Sprintf("Field lookup failed: %s", err))
+		return event
 	}
+
+	var (
+		value string
+		ok    bool
+	)
+	if value, ok = entry.(string); !ok {
+		event.AddError("user_agent", fmt.Sprintf("Field '%s' is not present", g.Field))
+	}
+
+	var client *uaparser.Client
+	if cachedClient, ok := g.lru.Get(value); ok {
+		client = cachedClient.(*uaparser.Client)
+	} else {
+		client = g.parser.Parse(value)
+		g.lru.Add(value, client)
+	}
+
+	var data map[string]interface{}
+	if data, ok = event.MustResolve("user_agent", nil).(map[string]interface{}); !ok {
+		data = map[string]interface{}{}
+	}
+
+	data["user_agent[name]"] = client.UserAgent.Family
+	if client.Device.Family != "" {
+		data["user_agent[device][name]"] = client.Device.Family
+	}
+	if versionString := client.UserAgent.ToVersionString(); versionString != "" {
+		data["user_agent[major]"] = versionString
+	}
+	if client.UserAgent.Major != "" {
+		data["user_agent[major]"] = client.UserAgent.Major
+	}
+	if client.UserAgent.Minor != "" {
+		data["user_agent[minor]"] = client.UserAgent.Minor
+	}
+	if client.UserAgent.Patch != "" {
+		data["user_agent[patch]"] = client.UserAgent.Patch
+	}
+	if client.Os.Family != "" {
+		data["user_agent[os][family]"] = client.Os.Family
+	}
+	if versionString := client.Os.ToVersionString(); versionString != "" {
+		data["user_agent[os][family]"] = versionString
+	}
+	if client.Os.Major != "" {
+		data["user_agent[os][major]"] = client.Os.Major
+	}
+	if client.Os.Minor != "" {
+		data["user_agent[os][minor]"] = client.Os.Minor
+	}
+	if client.Os.PatchMinor != "" {
+		data["user_agent[os][version]"] = client.Os.PatchMinor
+	}
+
+	event.Resolve("user_agent", data)
 	return event
 }
