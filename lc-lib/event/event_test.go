@@ -423,6 +423,10 @@ func TestMustResolvePanic(t *testing.T) {
 	t.Error("MustResolve did not panic")
 }
 
+// TODO: validateMutation
+
+// TODO: Bytes() encoding error
+
 // TODO: DispatchAck
 
 // TODO: Context

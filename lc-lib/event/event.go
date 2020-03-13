@@ -78,8 +78,9 @@ func (e *Event) Data() map[string]interface{} {
 		if err != nil {
 			e.data = make(map[string]interface{})
 			e.data["message"] = err.Error()
-			e.data["tags"] = &Tags{"_unmarshal_failure": struct{}{}}
 			e.data["@timestamp"] = time.Now()
+			e.data["@metadata"] = map[string]interface{}{}
+			e.data["tags"] = &Tags{"_unmarshal_failure": struct{}{}}
 		} else {
 			e.convertData()
 		}
@@ -89,7 +90,7 @@ func (e *Event) Data() map[string]interface{} {
 
 // convertData is the internal function that enforces guaranteed types
 func (e *Event) convertData() {
-	// Resolve tags
+	// Normalize "tags" first (other resolutions ignore it)
 	if entry, ok := e.data["tags"]; ok {
 		switch value := entry.(type) {
 		case Tags:
@@ -108,7 +109,7 @@ func (e *Event) convertData() {
 	} else {
 		e.data["tags"] = Tags{}
 	}
-	// Resolve "@timestamp" to a time.Time
+	// Normalize "@timestamp" to a time.Time
 	if entry, ok := e.data["@timestamp"]; ok {
 		switch value := entry.(type) {
 		case time.Time:
@@ -129,6 +130,8 @@ func (e *Event) convertData() {
 	} else {
 		e.data["@timestamp"] = time.Now()
 	}
+	// Normalize "@metadata"
+	e.data["@metadata"] = map[string]interface{}{}
 }
 
 // MustResolve is the same as Resolve but will panic if an error occurs
@@ -156,6 +159,9 @@ func (e *Event) MustResolve(path string, set interface{}) interface{} {
 //         If no value currently exists, it is created with the current time.
 //         If the existing value is invalid, the _timestamp_parse_failure tag is added
 //         and the error is stored inside the timestamp_parse_error field
+//     @metadata: map[string]interface{}
+//         Always empty, and overrides any value that came in over the wire.
+//         It is purely for processing metadata and is removed prior to any sending
 //     tags: Tags (Empty Tags instance)
 //         If no value currently exists, it is created empty with no tags.
 //         If the existing value is invalid, the _tags_parse_failure tag is added
@@ -228,6 +234,16 @@ func (e *Event) validateMutation(path string, set interface{}) error {
 		default:
 			return fmt.Errorf("Cannot set builtin @timestamp key to non time value")
 		}
+	case "@metadata":
+		switch value := set.(type) {
+		case map[string]interface{}:
+		case ResolveParam:
+			if value == ResolveParamUnset {
+				return fmt.Errorf("Removal of @metadata key is not allowed as it is builtin")
+			}
+		default:
+			return fmt.Errorf("Cannot set builtin @metadata key to non string to value map")
+		}
 	case "tags":
 		switch value := set.(type) {
 		case []string:
@@ -266,13 +282,17 @@ func (e *Event) ClearCache() {
 }
 
 // Bytes returns the encoded event bytes
+// The @metadata key is completely ignored
 // The returned slice should not be modified and be treated immutable
 // There is currently no way to modify it. To change the event, use Data(),
 // and then use ClearCache to clear the Bytes() cache so it regenerates
 func (e *Event) Bytes() []byte {
 	if e.encoded == nil {
 		var err error
+		metadata := e.data["@metadata"]
+		delete(e.data, "@metadata")
 		e.encoded, err = json.Marshal(e.data)
+		e.data["@metadata"] = metadata
 		if err != nil {
 			e.encoded = make([]byte, 0)
 		}
