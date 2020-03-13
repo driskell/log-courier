@@ -30,6 +30,9 @@ import (
 	_ "github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
+// Generate platform-specific default configuration values
+//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile:LC_FACT_DEFAULT_CONFIGURATION_FILE
+
 var (
 	log *logging.Logger
 	app *core.App
