@@ -1,8 +1,8 @@
 /*
- * Copyright 2014-2015 Jason Woods.
+ * Copyright 2012-2020 Jason Woods and contributors
  *
- * This file is a modification of code from Logstash Forwarder.
- * Copyright 2012-2013 Jordan Sissel and contributors.
+ * This file contains modified templates the originals of which are:
+ *   Copyright 2012-2018 Elasticsearch <http://www.elastic.co>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

@@ -29,7 +29,7 @@ import (
 const platformHeader = `// THIS IS A GO GENERATED FILE
 
 /*
- * Copyright 2014-2016 Jason Woods.
+ * Copyright 2012-2020 Jason Woods and contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

@@ -1,8 +1,5 @@
 /*
- * Copyright 2014-2015 Jason Woods.
- *
- * This file is a modification of code from Logstash Forwarder.
- * Copyright 2012-2013 Jordan Sissel and contributors.
+ * Copyright 2012-2020 Jason Woods and contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
