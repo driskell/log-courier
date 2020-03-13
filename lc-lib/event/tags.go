@@ -16,7 +16,10 @@
 
 package event
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sort"
+)
 
 // Tags is used for the "tags" key of all events
 // It aids with the addition and removal of tags during processing
@@ -40,5 +43,6 @@ func (e Tags) MarshalJSON() ([]byte, error) {
 	for tag := range e {
 		keys = append(keys, tag)
 	}
+	sort.Strings(keys)
 	return json.Marshal(keys)
 }
