@@ -4,22 +4,23 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [Requirements](#requirements)
-- [Linux, Unix, OS X](#linux-unix-os-x)
-  - [Setting up a Go workspace](#setting-up-a-go-workspace)
-  - [Building Log Courier](#building-log-courier)
-  - [Results](#results)
-- [Windows](#windows)
-  - [Setting up a Go workspace](#setting-up-a-go-workspace-1)
-  - [Building Log Courier](#building-log-courier-1)
-  - [Results](#results-1)
+- [Building from Source](#building-from-source)
+  - [Requirements](#requirements)
+  - [Linux, Unix, OS X](#linux-unix-os-x)
+    - [Setting up a Go workspace](#setting-up-a-go-workspace)
+    - [Building Log Courier](#building-log-courier)
+    - [Results](#results)
+  - [Windows](#windows)
+    - [Setting up a Go workspace](#setting-up-a-go-workspace-1)
+    - [Building Log Courier](#building-log-courier-1)
+    - [Results](#results-1)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ## Requirements
 
 1. Linux, Unix, OS X or Windows
-1. The [Golang](http://golang.org/doc/install) compiler tools (1.5-1.6)
+1. The [Golang](http://golang.org/doc/install) compiler tools (1.13+ recommended)
 
 ## Linux, Unix, OS X
 
@@ -36,36 +37,29 @@ export GOPATH=~/Golang
 mkdir -p "$GOPATH"
 ```
 
-Also, ensure that the Go binaries are available on the command line by checking
-that the PATH variable is set correctly. Run `echo $PATH` to view the current
-variable. If it doesn't contain the path to your Golang installation's `bin`
-folder, add it by running `export PATH=$PATH:/usr/local/golang/bin` where
-`/usr/local/golang` is the path to the Golang installation directory.
+Also, ensure that the Go binaries are available on the command line by running
+`go version`. If this doesn't work, check your Go installation is correct.
 
 ### Building Log Courier
 
 Run the following commands to download and build the latest version of Log
-Courier. Ensure you run all commands in the same session to maintain the
-`GO15VENDOREXPERIMENT` variable.
+Courier.
 
 ```
-export GO15VENDOREXPERIMENT=1
 go get -d github.com/driskell/log-courier
 cd $GOPATH/src/github.com/driskell/log-courier
-go generate . ./lc-admin
-go install . ./lc-admin ./lc-tlscert
+go generate ./...
+go install ./...
 ```
 
 To build a downloaded copy of Log Courier, such as a beta version, use the
-following instructions instead. Ensure you run all commands in the same session
-to maintain the `GO15VENDOREXPERIMENT` variable.
+following instructions instead.
 
 ```
-export GO15VENDOREXPERIMENT=1
 mkdir -p $GOPATH/src/github.com/driskell/log-courier
 *Place the contents of the downloaded copy into the above folder*
-go generate ./lc-lib/config ./lc-lib/core
-go install . ./lc-admin ./lc-tlscert
+go generate ./...
+go install ./...
 ```
 
 ### Results
@@ -95,24 +89,19 @@ set GOPATH=C:\Golang
 mkdir %GOPATH%
 ```
 
-Also, ensure that the Go binaries are available on the command line by checking
-that the PATH variable is set correctly. Run `set PATH` to view the current
-variable. If it doesn't contain the path to your Golang installation's `bin`
-folder, add it by running `set PATH=%PATH%;C:\Go\bin` where `C:\Go` is the path
-to the Golang installation directory.
+Also, ensure that the Go binaries are available on the command line by running
+`go version`. If this doesn't work, check your Go installation is correct.
 
 ### Building Log Courier
 
 Run the following commands to download and build the latest version of Log
-Courier. Ensure you run all commands in the same session to maintain the
-`GO15VENDOREXPERIMENT` variable.
+Courier.
 
 ```
-set GO15VENDOREXPERIMENT=1
 go get -d github.com/driskell/log-courier
 cd %GOPATH%/src/github.com/driskell/log-courier
-go generate ./lc-lib/config ./lc-lib/core
-go install . ./lc-admin ./lc-tlscert
+go generate ./...
+go install ./...
 ```
 
 ### Results
