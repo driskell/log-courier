@@ -17,14 +17,12 @@
 package main
 
 import (
-	"flag"
-
 	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/prospector"
+	"github.com/driskell/log-courier/lc-lib/processor"
 	"github.com/driskell/log-courier/lc-lib/publisher"
+	"github.com/driskell/log-courier/lc-lib/receiver"
 	"github.com/driskell/log-courier/lc-lib/spooler"
-	"github.com/driskell/log-courier/lc-lib/stdinharvester"
 
 	_ "github.com/driskell/log-courier/lc-lib/codecs/filter"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
@@ -35,7 +33,7 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile prospector.DefaultGeneralPersistDir admin.DefaultAdminBind
+//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile prospector.DefaultGeneralPersistDir admin.DefaultAdminBind
 
 var (
 	app *core.App
@@ -45,29 +43,25 @@ var (
 )
 
 func main() {
-	app = core.NewApp("Log Courier", "log-courier", core.LogCourierVersion)
-	flag.BoolVar(&stdin, "stdin", false, "Read from stdin instead of files listed in the config file")
-	flag.BoolVar(&fromBeginning, "from-beginning", false, "On first run, read new files from the beginning instead of the end")
+	app = core.NewApp("Log Carver", "log-carver", core.LogCourierVersion)
 	app.StartUp()
 
-	// Skip admin if reading from stdin
-	if !stdin && app.Config().Section("admin").(*admin.Config).Enabled {
+	if app.Config().Section("admin").(*admin.Config).Enabled {
 		app.Pipeline().AddService(admin.NewServer(app))
 	}
 
-	if stdin {
-		// If reading from stdin, don't start prospector, directly start a harvester
-		app.Pipeline().AddSource(stdinharvester.New(app))
-	} else {
-		// Prospector will handle new files, start harvesters, and own the registrar
-		app.Pipeline().AddSource(prospector.NewProspector(app, fromBeginning))
-	}
+	// Receivers will receive over the network
+	app.Pipeline().AddSource(receiver.NewPool(app))
 
 	// Add spooler as first processor, it combines into larger chunks as needed
 	app.Pipeline().AddProcessor(spooler.NewSpooler(app))
 
+	// Add processors
+	app.Pipeline().AddProcessor(processor.NewPool(app))
+
 	// Create sink
 	app.Pipeline().SetSink(publisher.NewPublisher())
+
 	// Go!
 	app.Run()
 }
