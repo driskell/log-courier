@@ -19,7 +19,9 @@ package tcp
 import (
 	_ "crypto/sha256" // Support for newer SSL signature algorithms
 	_ "crypto/sha512" // Support for newer SSL signature algorithms
+	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 
 	"github.com/driskell/log-courier/lc-lib/event"
@@ -28,6 +30,10 @@ import (
 const (
 	// This is how often we should check for disconnect/shutdown during socket reads
 	socketIntervalSeconds = 1
+
+	// Default to TLS 1.2 minimum, supported since Go 1.2
+	defaultMinTLSVersion = tls.VersionTLS12
+	defaultMaxTLSVersion = 0
 )
 
 var (
@@ -71,4 +77,22 @@ type eventPosition struct {
 type socketMessage struct {
 	conn *connection
 	err  error
+}
+
+// parseTLSVersion parses a TLS version string into the tls library value for min/max config
+// We explicitly refuse SSLv3 to mitigate POODLE vulnerability
+func parseTLSVersion(version string, fallback uint16) (uint16, error) {
+	switch version {
+	case "":
+		return fallback, nil
+	case "1.0":
+		return tls.VersionTLS10, nil
+	case "1.1":
+		return tls.VersionTLS11, nil
+	case "1.2":
+		return tls.VersionTLS12, nil
+	case "1.3":
+		return tls.VersionTLS13, nil
+	}
+	return tls.VersionTLS10, fmt.Errorf("Invalid or unknown TLS version: '%s'", version)
 }

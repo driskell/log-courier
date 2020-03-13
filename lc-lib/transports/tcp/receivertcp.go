@@ -153,8 +153,8 @@ func (t *receiverTCP) Shutdown() {
 func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 	tlsConfig = new(tls.Config)
 
-	// Disable SSLv3 (mitigate POODLE vulnerability)
-	tlsConfig.MinVersion = tls.VersionTLS10
+	tlsConfig.MinVersion = t.config.minTLSVersion
+	tlsConfig.MaxVersion = t.config.maxTLSVersion
 
 	// Set the certificate if we set one
 	if t.config.certificate != nil {
@@ -165,6 +165,10 @@ func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 	tlsConfig.ClientCAs = x509.NewCertPool()
 	for _, cert := range t.config.caList {
 		tlsConfig.ClientCAs.AddCert(cert)
+	}
+
+	if t.config.SSLVerifyPeers {
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
 	return

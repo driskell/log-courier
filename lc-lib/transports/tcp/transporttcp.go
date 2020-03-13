@@ -169,8 +169,8 @@ func (t *transportTCP) startCallback() {
 func (t *transportTCP) getTLSConfig() (tlsConfig *tls.Config) {
 	tlsConfig = new(tls.Config)
 
-	// Disable SSLv3 (mitigate POODLE vulnerability)
-	tlsConfig.MinVersion = tls.VersionTLS10
+	tlsConfig.MinVersion = t.config.minTLSVersion
+	tlsConfig.MaxVersion = t.config.maxTLSVersion
 
 	// Set the certificate if we set one
 	if t.config.certificate != nil {
