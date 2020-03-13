@@ -43,18 +43,35 @@ func newDateAction(p *config.Parser, configPath string, unused map[string]interf
 
 func (d *dateAction) Process(event *event.Event) *event.Event {
 	entry, err := event.Resolve(d.Field, nil)
-	if value, ok := entry.(string); err != nil && ok {
-		for _, layout := range d.Formats {
-			result, err := time.Parse(layout, value)
-			if err != nil {
-				continue
-			}
-			event.Resolve("@timestamp", result)
-			return event
-		}
-		event.AddError("date", fmt.Sprintf("Field '%s' could not be parsed with any of the given formats", d.Field))
-	} else {
-		event.AddError("date", fmt.Sprintf("Field '%s' is not present or not a string", d.Field))
+	if err != nil {
+		event.AddError("date", fmt.Sprintf("Field '%s' could not be resolved: %s", d.Field, err))
+		return event
 	}
+
+	var (
+		value string
+		ok    bool
+	)
+	value, ok = entry.(string)
+	if !ok {
+		event.AddError("date", fmt.Sprintf("Field '%s' is not present or not a string", d.Field))
+		return event
+	}
+
+	for _, layout := range d.Formats {
+		result, err := time.Parse(layout, value)
+		if err != nil {
+			continue
+		}
+		event.MustResolve("@timestamp", result)
+		return event
+	}
+
+	event.AddError("date", fmt.Sprintf("Field '%s' could not be parsed with any of the given formats", d.Field))
 	return event
+}
+
+// init will register the action
+func init() {
+	RegisterAction("date", newDateAction)
 }

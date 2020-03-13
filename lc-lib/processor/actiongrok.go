@@ -21,18 +21,18 @@ package processor
 
 import (
 	"fmt"
-	"regexp"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/grok"
 )
 
 type grokAction struct {
-	Field    string   `config:"field"`
-	Patterns []string `config:"patterns"`
+	Field         string            `config:"field"`
+	LocalPatterns map[string]string `config:"local_patterns"`
+	Patterns      []string          `config:"patterns"`
 
-	compiled      []*regexp.Regexp
-	compiledNames [][]string
+	compiled []grok.Pattern
 }
 
 func newGrokAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
@@ -41,43 +41,52 @@ func newGrokAction(p *config.Parser, configPath string, unused map[string]interf
 	if err = p.Populate(action, unused, configPath, true); err != nil {
 		return nil, err
 	}
-	action.compiled = make([]*regexp.Regexp, 0, len(action.Patterns))
-	action.compiledNames = make([][]string, 0, len(action.Patterns))
-	for _, pattern := range action.Patterns {
-		compiled, err := regexp.Compile(fmt.Sprintf("^%s$", pattern))
-		if err != nil {
-			return nil, err
-		}
-		action.compiled = append(action.compiled, compiled)
-		action.compiledNames = append(action.compiledNames, compiled.SubexpNames())
-	}
 	return action, nil
+}
+
+func (g *grokAction) Validate(p *config.Parser, configPath string) error {
+	grokConfig := FetchGrokConfig(p.Config())
+	g.compiled = make([]grok.Pattern, 0, len(g.Patterns))
+	for _, pattern := range g.Patterns {
+		compiled, err := grokConfig.Grok.CompilePattern(pattern, g.LocalPatterns)
+		if err != nil {
+			return fmt.Errorf("Failed to compile grok pattern '%s': %s", pattern, err)
+		}
+		g.compiled = append(g.compiled, compiled)
+	}
+	return nil
 }
 
 func (g *grokAction) Process(event *event.Event) *event.Event {
 	entry, err := event.Resolve(g.Field, nil)
-	if value, ok := entry.(string); err != nil && ok {
-		for reidx, re := range g.compiled {
-			result := re.FindStringSubmatch(value)
-			if result == nil {
+	if err != nil {
+		event.AddError("grok", fmt.Sprintf("Field '%s' failed to resolve: %s", g.Field, err))
+		return event
+	}
+
+	var (
+		value string
+		ok    bool
+	)
+	if value, ok = entry.(string); !ok {
+		event.AddError("grok", fmt.Sprintf("Field '%s' is not present or not a string", g.Field))
+		return event
+	}
+
+	for _, pattern := range g.compiled {
+		err := pattern.Apply(value, func(name string, value interface{}) error {
+			_, err := event.Resolve(name, value)
+			return err
+		})
+		if err != nil {
+			if err == grok.ErrNoMatch {
 				continue
 			}
-			errors := ""
-			for nameidx, name := range g.compiledNames[reidx][1:] {
-				if _, err := event.Resolve(name, result[nameidx+1]); err != nil {
-					if errors == "" {
-						errors += err.Error()
-					} else {
-						errors += "; " + err.Error()
-					}
-				}
-			}
-			if errors != "" {
-				event.AddError("grok", fmt.Sprintf("Failed to set all required fields: %s", errors))
-			}
-			return event
+			event.AddError("grok", fmt.Sprintf("Grok failure: %s", err))
 		}
+		return event
 	}
+
 	event.AddError("grok", fmt.Sprintf("Field '%s' was not matched by any of the given patterns", g.Field))
 	return event
 }

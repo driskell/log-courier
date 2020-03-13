@@ -72,6 +72,7 @@ func (g *geoIPAction) Process(event *event.Event) *event.Event {
 	)
 	if value, ok = entry.(string); !ok {
 		event.AddError("geoip", fmt.Sprintf("Field '%s' is not present", g.Field))
+		return event
 	}
 
 	var result *geoipActionLookupResult
@@ -121,4 +122,9 @@ func (g *geoIPAction) Process(event *event.Event) *event.Event {
 
 	event.MustResolve("source[geo]", data)
 	return event
+}
+
+// init will register the action
+func init() {
+	RegisterAction("geoip", newGeoIPAction)
 }

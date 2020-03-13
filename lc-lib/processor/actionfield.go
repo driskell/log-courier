@@ -51,14 +51,17 @@ func newSetFieldAction(p *config.Parser, configPath string, unused map[string]in
 func (f *setFieldAction) Process(event *event.Event) *event.Event {
 	val, _, err := f.valueProgram.Eval(map[string]interface{}{"event": event})
 	if err != nil {
-		event.AddError("set_field", fmt.Sprintf("Failed to evaluate set_field value_expr: [%s] -> %s", f.ValueExpr, err))
+		event.AddError("set_field", fmt.Sprintf("Failed to evaluate: [%s] -> %s", f.ValueExpr, err))
 		return event
 	}
 	if types.IsUnknown(val) {
-		event.AddError("set_field", fmt.Sprintf("Evaluation of set_field returned unknown: [%s]", f.ValueExpr))
+		event.AddError("set_field", fmt.Sprintf("Evaluation returned unknown: [%s]", f.ValueExpr))
 		return event
 	}
-	event.Resolve(f.Field, val.Value())
+	_, err = event.Resolve(f.Field, val.Value())
+	if err != nil {
+		event.AddError("set_field", fmt.Sprintf("Failed to set field: %s", err))
+	}
 	return event
 }
 
@@ -79,4 +82,10 @@ func (f *unsetFieldAction) Process(evnt *event.Event) *event.Event {
 		evnt.AddError("unset_field", fmt.Sprintf("Failed to unset field: %s", err))
 	}
 	return evnt
+}
+
+// init will register the action
+func init() {
+	RegisterAction("set_field", newSetFieldAction)
+	RegisterAction("unset_field", newUnsetFieldAction)
 }

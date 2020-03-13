@@ -130,8 +130,8 @@ func (p *Pool) processorRoutine(softShutdownChan <-chan struct{}, configChan <-c
 			for idx, event := range events {
 				events[idx] = p.processEvent(event)
 			}
-			log.Debugf("Processed %d events in %v", len(events), time.Since(start))
 
+			log.Debugf("Processed %d events in %v", len(events), time.Since(start))
 			select {
 			case <-p.shutdownChan:
 				return nil

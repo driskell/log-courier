@@ -16,30 +16,43 @@
 
 package grok
 
-import "regexp"
+import (
+	"errors"
+	"regexp"
+)
+
+var (
+	// ErrNoMatch is returned when the pattern did not match
+	ErrNoMatch = errors.New("Grok pattern did not match")
+)
+
+// ApplyCallback is a function called for each named match so it can be stored
+type ApplyCallback func(name string, value interface{}) error
 
 // Pattern can be used to match a string and parse it into
 // named fields as specified by the pattern
 type Pattern interface {
 	// String returns the pattern source
 	String() string
-	// Apply the pattern to the given string, and return the results
-	// Returns nil map if no match was found
-	Apply(string) (map[string]interface{}, error)
+	// Apply the pattern to the given string, and call the callback with the results
+	// Returns ErrNoMatch if no match
+	Apply(string, ApplyCallback) error
 }
 
 // compiledPattern implements the Pattern interface
 type compiledPattern struct {
 	pattern string
-	types   map[string]string
-	re      *regexp.Regexp
+	types   map[string]TypeHint
+
+	re    *regexp.Regexp
+	names []string
 }
 
 // newCompiledPatterns returns a new compiledPattern instance for the given static pattern
 func newCompiledPattern(pattern string) *compiledPattern {
 	return &compiledPattern{
 		pattern: pattern,
-		types:   map[string]string{},
+		types:   map[string]TypeHint{},
 	}
 }
 
@@ -55,6 +68,9 @@ func newCompiledPatternFromState(state *compilationState) *compiledPattern {
 // init builds the pattern
 func (c *compiledPattern) init() (err error) {
 	c.re, err = regexp.Compile(c.pattern)
+	if err == nil {
+		c.names = c.re.SubexpNames()
+	}
 	return
 }
 
@@ -64,6 +80,26 @@ func (c *compiledPattern) String() string {
 }
 
 // Apply the pattern to the given string
-func (c *compiledPattern) Apply(message string) (map[string]interface{}, error) {
-	return nil, nil
+func (c *compiledPattern) Apply(message string, callback ApplyCallback) error {
+	results := c.re.FindStringSubmatch(message)
+	if results == nil {
+		return ErrNoMatch
+	}
+
+	for idx := 1; idx < len(results); idx++ {
+		name := c.names[idx]
+
+		var value interface{}
+		if typeHint, ok := c.types[name]; ok {
+			value = convertToType(results[idx], typeHint)
+		} else {
+			value = results[idx]
+		}
+
+		err := callback(name, value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

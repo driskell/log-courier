@@ -62,6 +62,7 @@ func (g *userAgentAction) Process(event *event.Event) *event.Event {
 	)
 	if value, ok = entry.(string); !ok {
 		event.AddError("user_agent", fmt.Sprintf("Field '%s' is not present", g.Field))
+		return event
 	}
 
 	var client *uaparser.Client
@@ -111,4 +112,9 @@ func (g *userAgentAction) Process(event *event.Event) *event.Event {
 
 	event.Resolve("user_agent", data)
 	return event
+}
+
+// init will register the action
+func init() {
+	RegisterAction("user_agent", newUserAgentAction)
 }

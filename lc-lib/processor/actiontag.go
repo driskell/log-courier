@@ -67,3 +67,9 @@ func (f *removeTagAction) Process(event *event.Event) *event.Event {
 	event.RemoveTag(f.Tag)
 	return event
 }
+
+// init will register the action
+func init() {
+	RegisterAction("add_tag", newAddTagAction)
+	RegisterAction("remove_tag", newRemoveTagAction)
+}

@@ -55,6 +55,18 @@ SOME .
 		t.Fatalf("Load from reader unexpected succeeded")
 	}
 }
+
+func TestGrokLoadFromReaderInvalidTypes(t *testing.T) {
+	grok := NewGrok()
+	err := grok.loadPatternsFromReader(strings.NewReader(`
+ALL (%{SOME:name:invalid}*)
+SOME .
+	`))
+	if err == nil {
+		t.Fatalf("Load from reader unexpected succeeded")
+	}
+}
+
 func TestGrokAddPattern(t *testing.T) {
 	grok := NewGrok()
 	err := grok.AddPattern("ALL", "(.*)")
@@ -207,6 +219,34 @@ func TestGrokAddPatternTypes(t *testing.T) {
 	}
 }
 
+func TestGrokAddPatternInvalidType(t *testing.T) {
+	grok := NewGrok()
+	err := grok.AddPattern("SOME", ".")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	err = grok.AddPattern("ALL", "%{SOME:p:invalid}%{SOME:some:float}*")
+	if err == nil {
+		t.Fatalf("Unexpected success: %s", grok.compiled["ALL"].pattern)
+	}
+}
+
+func TestGrokAddPatternInvalidTypeDelayed(t *testing.T) {
+	grok := NewGrok()
+	err := grok.AddPattern("ALL", "%{MOST:p:invalid}%{SOME:some:float}*")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	err = grok.AddPattern("MOST", "%{SOME:p:int}%{SOME:some:float}*")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	err = grok.AddPattern("SOME", ".")
+	if err == nil {
+		t.Fatalf("Unexpected success: %s", grok.compiled["ALL"].pattern)
+	}
+}
+
 func TestGrokMissing(t *testing.T) {
 	grok := NewGrok()
 	err := grok.AddPattern("ALL", "(%{SOME}*)")
@@ -221,15 +261,160 @@ func TestGrokMissing(t *testing.T) {
 
 func TestGrokCompilePattern(t *testing.T) {
 	grok := NewGrok()
-	err := grok.AddPattern("ALL", "(.*)")
-	if err != nil {
-		t.Fatalf("Unexpected failure: %s", err)
-	}
-	pattern, err := grok.CompilePattern("%{ALL}")
+	pattern, err := grok.CompilePattern("(.*)", nil)
 	if err != nil {
 		t.Fatalf("Unexpected failure: %s", err)
 	}
 	if pattern.String() != "(.*)" {
 		t.Fatalf("Unexpected pattern: %s", pattern.String())
+	}
+	compiledPattern, _ := pattern.(*compiledPattern)
+	if compiledPattern.re == nil {
+		t.Fatal("Compiled pattern was not init")
+	}
+}
+
+func TestGrokCompilePatternReference(t *testing.T) {
+	grok := NewGrok()
+	err := grok.AddPattern("ALL", "(.*)")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	pattern, err := grok.CompilePattern("%{ALL}", nil)
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	if pattern.String() != "(.*)" {
+		t.Fatalf("Unexpected pattern: %s", pattern.String())
+	}
+}
+
+func TestGrokCompilePatternFailed(t *testing.T) {
+	grok := NewGrok()
+	pattern, err := grok.CompilePattern("*", nil)
+	if err == nil {
+		t.Fatalf("Unexpected success: %s", pattern.String())
+	}
+}
+
+func TestGrokCompilePatternFailedType(t *testing.T) {
+	grok := NewGrok()
+	err := grok.AddPattern("ALL", "(.*)")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	pattern, err := grok.CompilePattern("%{ALL:all:invalid}", nil)
+	if err == nil {
+		t.Fatalf("Unexpected success: %s", pattern.String())
+	}
+}
+
+func TestGrokCompilePatternLocal(t *testing.T) {
+	grok := NewGrok()
+	err := grok.AddPattern("ALL", "(.*)")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	pattern, err := grok.CompilePattern("%{SOME}", map[string]string{
+		"SOME": "%{ALL}",
+	})
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	if pattern.String() != "(.*)" {
+		t.Fatalf("Unexpected pattern: %s", pattern.String())
+	}
+	if len(grok.compiled) != 1 {
+		t.Fatalf("Unexpected saved patterns: %v", grok.compiled)
+	}
+}
+
+func TestGrokCompilePatternLocalNested(t *testing.T) {
+	grok := NewGrok()
+	pattern, err := grok.CompilePattern("%{SOME}*", map[string]string{
+		"SOME": ".",
+	})
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	if pattern.String() != ".*" {
+		t.Fatalf("Unexpected pattern: %s", pattern.String())
+	}
+	if len(grok.compiled) != 0 {
+		t.Fatalf("Unexpected saved patterns: %v", grok.compiled)
+	}
+}
+
+func TestGrokCompilePatternLocalNestedDeep(t *testing.T) {
+	grok := NewGrok()
+	pattern, err := grok.CompilePattern("%{MORE}*", map[string]string{
+		"MORE":  "%{SOME}%{OTHER}",
+		"SOME":  "%{LAST}",
+		"OTHER": "o",
+		"LAST":  "t",
+	})
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	if pattern.String() != "to*" {
+		t.Fatalf("Unexpected pattern: %s", pattern.String())
+	}
+	if len(grok.compiled) != 0 {
+		t.Fatalf("Unexpected saved patterns: %v", grok.compiled)
+	}
+}
+
+func TestGrokCompilePatternLocalFailureNested(t *testing.T) {
+	grok := NewGrok()
+	err := grok.AddPattern("ALL", "(.*)")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	pattern, err := grok.CompilePattern("%{INVALID}", map[string]string{
+		"INVALID": "%{ALL:p:invalid}",
+	})
+	if err == nil {
+		t.Fatalf("Unexpected success: %s", pattern.String())
+	}
+}
+
+func TestGrokCompilePatternLocalFailureNestedShallow(t *testing.T) {
+	grok := NewGrok()
+	err := grok.AddPattern("ALL", "(.*)")
+	if err != nil {
+		t.Fatalf("Unexpected failure: %s", err)
+	}
+	pattern, err := grok.CompilePattern("%{INVALID}", map[string]string{
+		"INVALID": "%{WAIT}%{ALL:p:invalid}",
+		"WAIT":    ".",
+	})
+	if err == nil {
+		t.Fatalf("Unexpected success: %s", pattern.String())
+	}
+}
+
+func TestGrokCompilePatternLocalFailureNestedDeep(t *testing.T) {
+	grok := NewGrok()
+	pattern, err := grok.CompilePattern("%{MORE}*", map[string]string{
+		"MORE":  "%{SOME}%{OTHER:p:invalid}",
+		"SOME":  "%{LAST}",
+		"OTHER": "o",
+		"LAST":  "t",
+	})
+	if err == nil {
+		t.Fatalf("Unexpected success: %s", pattern.String())
+	}
+	if len(grok.compiled) != 0 {
+		t.Fatalf("Unexpected saved patterns: %v", grok.compiled)
+	}
+}
+
+func TestGrokCompilePatternLocalFailureMissing(t *testing.T) {
+	grok := NewGrok()
+	pattern, err := grok.CompilePattern("%{SOME}*", map[string]string{
+		"SOME": "%{MISSING}",
+	})
+	if err == nil {
+		t.Fatalf("Unexpected success: %s", pattern.String())
 	}
 }
