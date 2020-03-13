@@ -26,6 +26,7 @@ import (
 
 type grokAction struct {
 	Field         string            `config:"field"`
+	Remove        bool              `config:"remove"`
 	LocalPatterns map[string]string `config:"local_patterns"`
 	Patterns      []string          `config:"patterns"`
 
@@ -54,11 +55,11 @@ func (g *grokAction) Validate(p *config.Parser, configPath string) error {
 	return nil
 }
 
-func (g *grokAction) Process(event *event.Event) *event.Event {
-	entry, err := event.Resolve(g.Field, nil)
+func (g *grokAction) Process(evnt *event.Event) *event.Event {
+	entry, err := evnt.Resolve(g.Field, nil)
 	if err != nil {
-		event.AddError("grok", fmt.Sprintf("Field '%s' failed to resolve: %s", g.Field, err))
-		return event
+		evnt.AddError("grok", fmt.Sprintf("Field '%s' failed to resolve: %s", g.Field, err))
+		return evnt
 	}
 
 	var (
@@ -66,24 +67,30 @@ func (g *grokAction) Process(event *event.Event) *event.Event {
 		ok    bool
 	)
 	if value, ok = entry.(string); !ok {
-		event.AddError("grok", fmt.Sprintf("Field '%s' is not present or not a string", g.Field))
-		return event
+		evnt.AddError("grok", fmt.Sprintf("Field '%s' is not present or not a string", g.Field))
+		return evnt
 	}
 
 	for _, pattern := range g.compiled {
 		err := pattern.Apply(value, func(name string, value interface{}) error {
-			_, err := event.Resolve(name, value)
+			_, err := evnt.Resolve(name, value)
 			return err
 		})
 		if err != nil {
 			if err == grok.ErrNoMatch {
 				continue
 			}
-			event.AddError("grok", fmt.Sprintf("Grok failure: %s", err))
+			evnt.AddError("grok", fmt.Sprintf("Grok failure: %s", err))
 		}
-		return event
+		if g.Remove {
+			_, err := evnt.Resolve(g.Field, event.ResolveParamUnset)
+			if err != nil {
+				evnt.AddError("grok", fmt.Sprintf("Failed to remove field '%s': %s", g.Field, err))
+			}
+		}
+		return evnt
 	}
 
-	event.AddError("grok", fmt.Sprintf("Field '%s' was not matched by any of the given patterns", g.Field))
-	return event
+	evnt.AddError("grok", fmt.Sprintf("Field '%s' was not matched by any of the given patterns", g.Field))
+	return evnt
 }

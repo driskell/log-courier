@@ -26,6 +26,7 @@ import (
 
 type dateAction struct {
 	Field   string   `config:"field"`
+	Remove  bool     `config:"remove"`
 	Formats []string `config:"formats"`
 }
 
@@ -38,11 +39,11 @@ func newDateAction(p *config.Parser, configPath string, unused map[string]interf
 	return action, nil
 }
 
-func (d *dateAction) Process(event *event.Event) *event.Event {
-	entry, err := event.Resolve(d.Field, nil)
+func (d *dateAction) Process(evnt *event.Event) *event.Event {
+	entry, err := evnt.Resolve(d.Field, nil)
 	if err != nil {
-		event.AddError("date", fmt.Sprintf("Field '%s' could not be resolved: %s", d.Field, err))
-		return event
+		evnt.AddError("date", fmt.Sprintf("Field '%s' could not be resolved: %s", d.Field, err))
+		return evnt
 	}
 
 	var (
@@ -51,8 +52,8 @@ func (d *dateAction) Process(event *event.Event) *event.Event {
 	)
 	value, ok = entry.(string)
 	if !ok {
-		event.AddError("date", fmt.Sprintf("Field '%s' is not present or not a string", d.Field))
-		return event
+		evnt.AddError("date", fmt.Sprintf("Field '%s' is not present or not a string", d.Field))
+		return evnt
 	}
 
 	for _, layout := range d.Formats {
@@ -60,12 +61,18 @@ func (d *dateAction) Process(event *event.Event) *event.Event {
 		if err != nil {
 			continue
 		}
-		event.MustResolve("@timestamp", result)
-		return event
+		evnt.MustResolve("@timestamp", result)
+		if d.Remove {
+			_, err := evnt.Resolve(d.Field, event.ResolveParamUnset)
+			if err != nil {
+				evnt.AddError("date", fmt.Sprintf("Failed to remove field '%s': %s", d.Field, err))
+			}
+		}
+		return evnt
 	}
 
-	event.AddError("date", fmt.Sprintf("Field '%s' could not be parsed with any of the given formats", d.Field))
-	return event
+	evnt.AddError("date", fmt.Sprintf("Field '%s' could not be parsed with any of the given formats", d.Field))
+	return evnt
 }
 
 // init will register the action
