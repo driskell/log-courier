@@ -64,11 +64,20 @@ type compilationState struct {
 }
 
 // NewGrok returns a new Grok instance
-func NewGrok() *Grok {
-	return &Grok{
+func NewGrok(includeDefaults bool) *Grok {
+	result := &Grok{
 		compiled: make(map[string]*compiledPattern),
 		pending:  make(map[string][]*compilationState),
 	}
+	if includeDefaults {
+		for name, pattern := range DefaultPatterns {
+			err := result.AddPattern(name, pattern)
+			if err != nil {
+				panic("Corrupt builtin patterns data")
+			}
+		}
+	}
+	return result
 }
 
 // newCompilationState creates a blank compilation state for the given named pattern

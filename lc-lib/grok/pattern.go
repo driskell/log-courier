@@ -18,6 +18,7 @@ package grok
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 )
 
@@ -68,9 +69,10 @@ func newCompiledPatternFromState(state *compilationState) *compiledPattern {
 // init builds the pattern
 func (c *compiledPattern) init() (err error) {
 	c.re, err = regexp.Compile(c.pattern)
-	if err == nil {
-		c.names = c.re.SubexpNames()
+	if err != nil {
+		return fmt.Errorf("Failed to compile pattern: %s [Pattern: %s]", c.pattern, err)
 	}
+	c.names = c.re.SubexpNames()
 	return
 }
 

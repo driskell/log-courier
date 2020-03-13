@@ -23,16 +23,26 @@ import (
 	"github.com/driskell/log-courier/lc-lib/grok"
 )
 
+const (
+	defaultLoadDefaults = true
+)
+
 // GrokConfig contains configuration for grok
 type GrokConfig struct {
+	LoadDefaults bool     `config:"load_defaults"`
 	PatternFiles []string `config:"pattern_files"`
 
 	Grok *grok.Grok
 }
 
-// Init the grok configuration
-func (c *GrokConfig) Init(p *config.Parser, path string) error {
-	c.Grok = grok.NewGrok()
+// Defaults sets defaults
+func (c *GrokConfig) Defaults() {
+	c.LoadDefaults = defaultLoadDefaults
+}
+
+// Validate the grok configuration
+func (c *GrokConfig) Validate(p *config.Parser, path string) error {
+	c.Grok = grok.NewGrok(c.LoadDefaults)
 	for _, path := range c.PatternFiles {
 		err := c.Grok.LoadPatternsFromFile(path)
 		if err != nil {
