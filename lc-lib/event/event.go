@@ -187,7 +187,7 @@ func (e *Event) MustResolve(path string, set interface{}) interface{} {
 // then a new event with only a message key (and the above defaults) will be created
 // where the message is the error message, and the "_unmarshal_failure" tag is added
 func (e *Event) Resolve(path string, set interface{}) (output interface{}, err error) {
-	currentMap := e.data
+	currentMap := e.Data()
 	lastIndex := 0
 	results := keyMatcher.FindAllStringSubmatchIndex(path, -1)
 	for j := 0; j < len(results); j++ {
@@ -260,20 +260,20 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 
 // AddError adds an error tag and an error message field for a specific action that has failed
 func (e *Event) AddError(action string, message string) {
-	e.data[fmt.Sprintf("_%s_error", action)] = message
+	e.Data()[fmt.Sprintf("_%s_error", action)] = message
 	e.AddTag(fmt.Sprintf("_%s_failure", action))
 }
 
 // AddTag adds a tag to the event
 // Remember ClearCache is required to flush any cached representations
 func (e *Event) AddTag(tag string) {
-	e.data["tags"].(Tags).Add(tag)
+	e.Data()["tags"].(Tags).Add(tag)
 }
 
 // RemoveTag adds a tag to the event
 // Remember ClearCache is required to flush any cached representations
 func (e *Event) RemoveTag(tag string) {
-	e.data["tags"].(Tags).Remove(tag)
+	e.Data()["tags"].(Tags).Remove(tag)
 }
 
 // ClearCache clears any cached representations, always call it if the event is changed

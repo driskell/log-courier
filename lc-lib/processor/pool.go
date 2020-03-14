@@ -143,6 +143,7 @@ func (p *Pool) processEvent(evnt *event.Event) *event.Event {
 	for _, entry := range p.pipelines.AST {
 		evnt = entry.Process(evnt)
 	}
+	evnt.ClearCache()
 	eventJSON, _ := json.Marshal(evnt.Data())
 	log.Debugf("Final event: %s", eventJSON)
 	return evnt
