@@ -19,6 +19,7 @@ package event
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -51,7 +52,7 @@ func TestNewEventInvalidTimestamp(t *testing.T) {
 		t.Fatalf("Missing @timestamp invalid event: %v", event.Data())
 	}
 	if tags, ok := event.Data()["tags"].(Tags); ok {
-		value, err := tags.MarshalJSON()
+		value, err := json.Marshal(tags)
 		if err != nil || !bytes.Equal(value, []byte("[\"_timestamp_parse_failure\"]")) {
 			t.Fatalf("Invalid tags for failed timestamp: %v (error: %v)", tags, err)
 		}
@@ -70,7 +71,7 @@ func TestNewEventWrongTypeTimestamp(t *testing.T) {
 		t.Fatalf("Missing @timestamp in invalid event: %v", event.Data())
 	}
 	if tags, ok := event.Data()["tags"].(Tags); ok {
-		value, err := tags.MarshalJSON()
+		value, err := json.Marshal(tags)
 		if err != nil || !bytes.Equal(value, []byte("[\"_timestamp_parse_failure\"]")) {
 			t.Fatalf("Invalid tags for failed timestamp: %v (error: %v)", tags, err)
 		}
@@ -108,7 +109,7 @@ func TestNewEventTimestampExisting(t *testing.T) {
 func TestNewEventInvalidTags(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"tags": map[string]int{"Invalid": 999}})
 	if tags, ok := event.Data()["tags"].(Tags); ok {
-		value, err := tags.MarshalJSON()
+		value, err := json.Marshal(tags)
 		if err != nil || !bytes.Equal(value, []byte("[\"_tags_parse_failure\"]")) {
 			t.Fatalf("Invalid tags for failed tags: %v (error: %v)", tags, err)
 		}
@@ -120,7 +121,7 @@ func TestNewEventInvalidTags(t *testing.T) {
 func TestNewEventStringTag(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"tags": "_string_tag"})
 	if tags, ok := event.Data()["tags"].(Tags); ok {
-		value, err := tags.MarshalJSON()
+		value, err := json.Marshal(tags)
 		if err != nil || !bytes.Equal(value, []byte("[\"_string_tag\"]")) {
 			t.Fatalf("Invalid tags for string tag: %v (error: %v)", tags, err)
 		}
@@ -132,7 +133,7 @@ func TestNewEventStringTag(t *testing.T) {
 func TestNewEventValidTags(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"tags": []interface{}{"_one_tag", "_two_tag"}})
 	if tags, ok := event.Data()["tags"].(Tags); ok {
-		value, err := tags.MarshalJSON()
+		value, err := json.Marshal(tags)
 		if err != nil || !bytes.Equal(value, []byte("[\"_one_tag\",\"_two_tag\"]")) {
 			t.Fatalf("Invalid tags: %s (error: %v)", value, err)
 		}
@@ -168,8 +169,8 @@ func TestNewEventBytesInvalid(t *testing.T) {
 	} else {
 		t.Fatalf("Missing timestamp in invalid event from bytes: %v", event.Data())
 	}
-	if tags, ok := event.Data()["tags"].(*Tags); ok {
-		value, err := tags.MarshalJSON()
+	if tags, ok := event.Data()["tags"].(Tags); ok {
+		value, err := json.Marshal(tags)
 		if err != nil || !bytes.Equal(value, []byte("[\"_unmarshal_failure\"]")) {
 			t.Fatalf("Invalid tags for failed unmarshal: %v (error: %v)", tags, err)
 		}

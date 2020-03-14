@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"time"
 )
 
@@ -88,7 +89,7 @@ func (e *Event) Data() map[string]interface{} {
 			e.data["message"] = err.Error()
 			e.data["@timestamp"] = Timestamp(time.Now())
 			e.data["@metadata"] = map[string]interface{}{}
-			e.data["tags"] = &Tags{"_unmarshal_failure": struct{}{}}
+			e.data["tags"] = Tags{"_unmarshal_failure"}
 		} else {
 			e.convertData()
 		}
@@ -103,21 +104,21 @@ func (e *Event) convertData() {
 		switch value := entry.(type) {
 		case Tags:
 		case string:
-			e.data["tags"] = Tags{value: struct{}{}}
+			e.data["tags"] = Tags{value}
 		case []interface{}:
 			// From unmarshaled over the wire we get []interface{}
 			tags := Tags{}
 			for _, tag := range value {
 				tagString, ok := tag.(string)
 				if !ok {
-					e.data["tags"] = Tags{"_tags_parse_failure": struct{}{}}
+					e.data["tags"] = Tags{"_tags_parse_failure"}
 					e.data["tags_parse_error"] = fmt.Sprintf("tags list must contain only strings, found a %T", tag)
 				}
-				tags.Add(tagString)
+				tags = append(tags, tagString)
 			}
 			e.data["tags"] = tags
 		default:
-			e.data["tags"] = Tags{"_tags_parse_failure": struct{}{}}
+			e.data["tags"] = Tags{"_tags_parse_failure"}
 			e.data["tags_parse_error"] = fmt.Sprintf("tags was not a string or string list, was %T", value)
 		}
 	} else {
@@ -273,13 +274,31 @@ func (e *Event) AddError(action string, message string) {
 // AddTag adds a tag to the event
 // Remember ClearCache is required to flush any cached representations
 func (e *Event) AddTag(tag string) {
-	e.Data()["tags"].(Tags).Add(tag)
+	data := e.Data()
+	tags := data["tags"].(Tags)
+	length := len(tags)
+	idx := sort.SearchStrings(tags, tag)
+	if idx >= length {
+		data["tags"] = append(tags, tag)
+	} else if tags[idx] != tag {
+		tags = tags[: length : length+1]
+		copy(tags[idx+1:], tags[idx:])
+		tags[idx] = tag
+		data["tags"] = tags
+	}
 }
 
 // RemoveTag adds a tag to the event
 // Remember ClearCache is required to flush any cached representations
 func (e *Event) RemoveTag(tag string) {
-	e.Data()["tags"].(Tags).Remove(tag)
+	data := e.Data()
+	tags := data["tags"].(Tags)
+	length := len(tags)
+	idx := sort.SearchStrings(tags, tag)
+	if idx < length && tags[idx] == tag {
+		copy(tags[idx:], tags[idx+1:])
+		data["tags"] = tags[:length-1]
+	}
 }
 
 // ClearCache clears any cached representations, always call it if the event is changed

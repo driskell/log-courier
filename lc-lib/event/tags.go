@@ -17,26 +17,12 @@
 package event
 
 import (
-	"encoding/json"
 	"errors"
-	"sort"
 )
 
 // Tags is used for the "tags" key of all events
 // It aids with the addition and removal of tags during processing
-type Tags map[string]struct{}
-
-// Add a tag
-func (e Tags) Add(tag string) {
-	e[tag] = struct{}{}
-}
-
-// Remove a tag
-func (e Tags) Remove(tag string) {
-	if _, ok := e[tag]; ok {
-		delete(e, tag)
-	}
-}
+type Tags []string
 
 // VerifySetEnter checks if we can set the given key (if we're a map for example)
 func (e Tags) VerifySetEnter(string) error {
@@ -46,14 +32,4 @@ func (e Tags) VerifySetEnter(string) error {
 // VerifySet checks if we can be set to the given value
 func (e Tags) VerifySet(interface{}) (interface{}, error) {
 	return nil, errors.New("Cannot set @tags directly, use add_tag or remove_tag actions")
-}
-
-// MarshalJSON encodes the event tags as a string array
-func (e Tags) MarshalJSON() ([]byte, error) {
-	keys := make([]string, 0, len(e))
-	for tag := range e {
-		keys = append(keys, tag)
-	}
-	sort.Strings(keys)
-	return json.Marshal(keys)
 }
