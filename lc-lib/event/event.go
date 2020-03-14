@@ -132,19 +132,19 @@ func (e *Event) convertData() {
 		case string:
 			parsed, err := time.Parse(time.RFC3339, value)
 			if err != nil {
-				e.data["@timestamp"] = time.Now()
+				e.data["@timestamp"] = Timestamp(time.Now())
 				e.data["timestamp_parse_error"] = err
 				e.AddTag("_timestamp_parse_failure")
 			} else {
-				e.data["@timestamp"] = parsed
+				e.data["@timestamp"] = Timestamp(parsed)
 			}
 		default:
-			e.data["@timestamp"] = time.Now()
+			e.data["@timestamp"] = Timestamp(time.Now())
 			e.data["timestamp_parse_error"] = fmt.Sprintf("@timestamp was not a string, was %T", value)
 			e.AddTag("_timestamp_parse_failure")
 		}
 	} else {
-		e.data["@timestamp"] = time.Now()
+		e.data["@timestamp"] = Timestamp(time.Now())
 	}
 	// Normalize "@metadata"
 	e.data["@metadata"] = Metadata{}
