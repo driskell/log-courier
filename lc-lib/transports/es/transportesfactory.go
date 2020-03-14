@@ -76,16 +76,18 @@ func NewTransportESFactory(p *config.Parser, configPath string, unUsed map[strin
 		return nil, fmt.Errorf("'index pattern' cannot be empty when using 'es' transport")
 	}
 
-	file, err := os.Open(ret.TemplateFile)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		file.Close()
-	}()
-	ret.template, err = ioutil.ReadAll(file)
-	if err != nil {
-		return nil, err
+	if ret.TemplateFile != "" {
+		file, err := os.Open(ret.TemplateFile)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			file.Close()
+		}()
+		ret.template, err = ioutil.ReadAll(file)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return ret, nil
