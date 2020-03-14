@@ -68,7 +68,7 @@ func (p variablePattern) Format(event *Event) (string, error) {
 		if variable[0] == '+' {
 			// Date pattern from event timestamp
 			if timestamp, ok := data["@timestamp"]; ok {
-				output += timestamp.(time.Time).Format(variable[1:])
+				output += timestamp.(Timestamp).Format(variable[1:])
 			} else {
 				// No date field so just use current time
 				output += time.Now().Format(variable[1:])

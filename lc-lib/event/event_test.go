@@ -92,8 +92,8 @@ func TestNewEventTimestampExisting(t *testing.T) {
 	example := "2020-05-05T13:00:12.123Z"
 	timestampParsed, _ := time.Parse("2006-01-02T15:04:05Z", example)
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"@timestamp": timestampParsed})
-	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
-		if !timestamp.Equal(timestampParsed) {
+	if timestamp, ok := event.Data()["@timestamp"].(Timestamp); ok {
+		if !time.Time(timestamp).Equal(timestampParsed) {
 			t.Fatalf("Wrong timestamp in event: %v; expected %v", event.Data(), timestampParsed)
 		}
 	} else {

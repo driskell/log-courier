@@ -50,6 +50,14 @@ type Event struct {
 	encoded []byte
 }
 
+// Builtin is used around builtin keys to allow damage prevention
+type Builtin interface {
+	// VerifySetEnter checks if we can set the given key (if we're a map for example)
+	VerifySetEnter(string) error
+	// VerifySet checks if we can be set to the given value
+	VerifySet(interface{}) (interface{}, error)
+}
+
 // NewEvent creates a new event structure from the given data
 func NewEvent(ctx context.Context, acker Acknowledger, data map[string]interface{}) *Event {
 	ret := &Event{
@@ -118,7 +126,9 @@ func (e *Event) convertData() {
 	// Normalize "@timestamp" to a time.Time
 	if entry, ok := e.data["@timestamp"]; ok {
 		switch value := entry.(type) {
+		case Timestamp:
 		case time.Time:
+			e.data["@timestamp"] = Timestamp(value)
 		case string:
 			parsed, err := time.Parse(time.RFC3339, value)
 			if err != nil {
@@ -137,7 +147,7 @@ func (e *Event) convertData() {
 		e.data["@timestamp"] = time.Now()
 	}
 	// Normalize "@metadata"
-	e.data["@metadata"] = map[string]interface{}{}
+	e.data["@metadata"] = Metadata{}
 }
 
 // MustResolve is the same as Resolve but will panic if an error occurs
@@ -177,7 +187,6 @@ func (e *Event) MustResolve(path string, set interface{}) interface{} {
 // then a new event with only a message key (and the above defaults) will be created
 // where the message is the error message, and the "_unmarshal_failure" tag is added
 func (e *Event) Resolve(path string, set interface{}) (output interface{}, err error) {
-	e.validateMutation(path, set)
 	currentMap := e.data
 	lastIndex := 0
 	results := keyMatcher.FindAllStringSubmatchIndex(path, -1)
@@ -198,10 +207,21 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 				output = value
 			}
 			if set != nil {
-				if set == ResolveParamUnset {
-					delete(currentMap, name)
+				if builtin, ok := currentMap[name].(Builtin); ok {
+					if set == ResolveParamUnset {
+						return nil, fmt.Errorf("Builtin entry '%s' cannot be unset", path)
+					}
+					result, err := builtin.VerifySet(set)
+					if err != nil {
+						return nil, err
+					}
+					currentMap[name] = result
 				} else {
-					currentMap[name] = set
+					if set == ResolveParamUnset {
+						delete(currentMap, name)
+					} else {
+						currentMap[name] = set
+					}
 				}
 			}
 		} else {
@@ -209,10 +229,21 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 			// Can't use non-map, ignore as if it didn't exist, and keep validating
 			// (However, if we are setting, overwrite it with empty map)
 			if value, ok := currentMap[name].(map[string]interface{}); ok {
+				if set != nil {
+					// Block entry to set if this is a builtin that does not want it
+					if builtin, ok := currentMap[name].(Builtin); ok {
+						if err := builtin.VerifySetEnter(name); err != nil {
+							return nil, err
+						}
+					}
+				}
 				currentMap = value
 			} else if set != nil {
-				// Convert path to empty map
+				// Convert path to empty map if allowed
 				newMap := map[string]interface{}{}
+				if _, ok := currentMap[name].(Builtin); ok {
+					return nil, fmt.Errorf("Builtin entry '%s' is not a map", path)
+				}
 				currentMap[name] = newMap
 				currentMap = newMap
 			} else {
@@ -225,43 +256,6 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 		return nil, fmt.Errorf("Invalid field: %s", path)
 	}
 	return
-}
-
-// validateMutation ensures we do not incorrectly modify or change builtin keys
-func (e *Event) validateMutation(path string, set interface{}) error {
-	switch path {
-	case "@timestamp":
-		switch value := set.(type) {
-		case time.Time:
-		case ResolveParam:
-			if value == ResolveParamUnset {
-				return fmt.Errorf("Removal of @timestamp key is not allowed as it is builtin")
-			}
-		default:
-			return fmt.Errorf("Cannot set builtin @timestamp key to non time value")
-		}
-	case "@metadata":
-		switch value := set.(type) {
-		case map[string]interface{}:
-		case ResolveParam:
-			if value == ResolveParamUnset {
-				return fmt.Errorf("Removal of @metadata key is not allowed as it is builtin")
-			}
-		default:
-			return fmt.Errorf("Cannot set builtin @metadata key to non string to value map")
-		}
-	case "tags":
-		switch value := set.(type) {
-		case []string:
-		case ResolveParam:
-			if value == ResolveParamUnset {
-				return fmt.Errorf("Removal of tags key is not allowed as it is builtin")
-			}
-		default:
-			return fmt.Errorf("Cannot set builtin tags key to non string list value")
-		}
-	}
-	return nil
 }
 
 // AddError adds an error tag and an error message field for a specific action that has failed

@@ -18,6 +18,7 @@ package event
 
 import (
 	"encoding/json"
+	"errors"
 	"sort"
 )
 
@@ -35,6 +36,16 @@ func (e Tags) Remove(tag string) {
 	if _, ok := e[tag]; ok {
 		delete(e, tag)
 	}
+}
+
+// VerifySetEnter checks if we can set the given key (if we're a map for example)
+func (e Tags) VerifySetEnter(string) error {
+	return errors.New("Builtin @tags is not a map")
+}
+
+// VerifySet checks if we can be set to the given value
+func (e Tags) VerifySet(interface{}) (interface{}, error) {
+	return nil, errors.New("Cannot set @tags directly, use add_tag or remove_tag actions")
 }
 
 // MarshalJSON encodes the event tags as a string array
