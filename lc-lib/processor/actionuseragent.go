@@ -26,7 +26,8 @@ import (
 )
 
 type userAgentAction struct {
-	Field string `config:"field"`
+	Field  string `config:"field"`
+	Remove bool   `config:"remove"`
 
 	lru    simplelru.LRUCache
 	parser *uaparser.Parser
@@ -46,11 +47,11 @@ func newUserAgentAction(p *config.Parser, configPath string, unused map[string]i
 	return action, nil
 }
 
-func (g *userAgentAction) Process(event *event.Event) *event.Event {
-	entry, err := event.Resolve(g.Field, nil)
+func (g *userAgentAction) Process(subject *event.Event) *event.Event {
+	entry, err := subject.Resolve(g.Field, nil)
 	if err != nil {
-		event.AddError("user_agent", fmt.Sprintf("Field lookup failed: %s", err))
-		return event
+		subject.AddError("user_agent", fmt.Sprintf("Field lookup failed: %s", err))
+		return subject
 	}
 
 	var (
@@ -58,8 +59,8 @@ func (g *userAgentAction) Process(event *event.Event) *event.Event {
 		ok    bool
 	)
 	if value, ok = entry.(string); !ok {
-		event.AddError("user_agent", fmt.Sprintf("Field '%s' is not present", g.Field))
-		return event
+		subject.AddError("user_agent", fmt.Sprintf("Field '%s' is not present", g.Field))
+		return subject
 	}
 
 	var client *uaparser.Client
@@ -70,45 +71,45 @@ func (g *userAgentAction) Process(event *event.Event) *event.Event {
 		g.lru.Add(value, client)
 	}
 
-	var data map[string]interface{}
-	if data, ok = event.MustResolve("user_agent", nil).(map[string]interface{}); !ok {
-		data = map[string]interface{}{}
-	}
-
-	data["user_agent[name]"] = client.UserAgent.Family
+	subject.MustResolve("user_agent[original]", value)
+	subject.MustResolve("user_agent[name]", client.UserAgent.Family)
 	if client.Device.Family != "" {
-		data["user_agent[device][name]"] = client.Device.Family
+		subject.MustResolve("user_agent[device][name]", client.Device.Family)
 	}
 	if versionString := client.UserAgent.ToVersionString(); versionString != "" {
-		data["user_agent[major]"] = versionString
+		subject.MustResolve("user_agent[major]", versionString)
 	}
 	if client.UserAgent.Major != "" {
-		data["user_agent[major]"] = client.UserAgent.Major
+		subject.MustResolve("user_agent[major]", client.UserAgent.Major)
 	}
 	if client.UserAgent.Minor != "" {
-		data["user_agent[minor]"] = client.UserAgent.Minor
+		subject.MustResolve("user_agent[minor]", client.UserAgent.Minor)
 	}
 	if client.UserAgent.Patch != "" {
-		data["user_agent[patch]"] = client.UserAgent.Patch
+		subject.MustResolve("user_agent[patch]", client.UserAgent.Patch)
 	}
 	if client.Os.Family != "" {
-		data["user_agent[os][family]"] = client.Os.Family
+		subject.MustResolve("user_agent[os][family]", client.Os.Family)
 	}
 	if versionString := client.Os.ToVersionString(); versionString != "" {
-		data["user_agent[os][family]"] = versionString
+		subject.MustResolve("user_agent[os][family]", versionString)
 	}
 	if client.Os.Major != "" {
-		data["user_agent[os][major]"] = client.Os.Major
+		subject.MustResolve("user_agent[os][major]", client.Os.Major)
 	}
 	if client.Os.Minor != "" {
-		data["user_agent[os][minor]"] = client.Os.Minor
+		subject.MustResolve("user_agent[os][minor]", client.Os.Minor)
 	}
 	if client.Os.PatchMinor != "" {
-		data["user_agent[os][version]"] = client.Os.PatchMinor
+		subject.MustResolve("user_agent[os][version]", client.Os.PatchMinor)
 	}
-
-	event.Resolve("user_agent", data)
-	return event
+	if g.Remove {
+		_, err := subject.Resolve(g.Field, event.ResolveParamUnset)
+		if err != nil {
+			subject.AddError("user_agent", fmt.Sprintf("Failed to remove field '%s': %s", g.Field, err))
+		}
+	}
+	return subject
 }
 
 // init will register the action
