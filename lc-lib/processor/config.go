@@ -17,7 +17,6 @@
 package processor
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/driskell/log-courier/lc-lib/config"
@@ -96,7 +95,7 @@ func (c *Config) Init(p *config.Parser, path string) error {
 				idx++
 				break
 			}
-			return fmt.Errorf("Pipeline entry '%s' is not valid in its current position", entryToken)
+			return fmt.Errorf("Unexpected '%s' at %s", entryToken, entry.Path)
 		case astStateIf:
 			if entryToken == astTokenElseIf {
 				elseIfEntries = append(elseIfEntries, entry)
@@ -131,12 +130,12 @@ func (c *Config) Init(p *config.Parser, path string) error {
 func (c *Config) initAction(p *config.Parser, entry *ConfigASTEntry) (ASTEntry, error) {
 	action, ok := entry.Unused["name"].(string)
 	if !ok {
-		return nil, errors.New("Action 'name' must be a string")
+		return nil, fmt.Errorf("Invalid or missing 'name' at %s", entry.Path)
 	}
 
 	registrarFunc, ok := registeredActions[action]
 	if !ok {
-		return nil, fmt.Errorf("Unrecognised action '%s'", action)
+		return nil, fmt.Errorf("Unrecognised action '%s' at %s", action, entry.Path)
 	}
 
 	// Action registrars will not consume "name" so remove it before passing
