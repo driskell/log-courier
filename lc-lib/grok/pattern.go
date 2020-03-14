@@ -70,7 +70,7 @@ func newCompiledPatternFromState(state *compilationState) *compiledPattern {
 func (c *compiledPattern) init() (err error) {
 	c.re, err = regexp.Compile(c.pattern)
 	if err != nil {
-		return fmt.Errorf("Failed to compile pattern: %s [Pattern: %s]", c.pattern, err)
+		return fmt.Errorf("Failed to compile pattern '%s': %s", c.pattern, err)
 	}
 	c.names = c.re.SubexpNames()
 	return

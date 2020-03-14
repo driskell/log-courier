@@ -48,7 +48,7 @@ func (g *grokAction) Validate(p *config.Parser, configPath string) error {
 	for _, pattern := range g.Patterns {
 		compiled, err := grokConfig.Grok.CompilePattern(pattern, g.LocalPatterns)
 		if err != nil {
-			return fmt.Errorf("Failed to compile grok pattern '%s' at %s: %s", pattern, configPath, err)
+			return fmt.Errorf("Failed to initialise grok pattern at %s: %s", configPath, err)
 		}
 		g.compiled = append(g.compiled, compiled)
 	}
