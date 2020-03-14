@@ -39,7 +39,7 @@ type geoipActionLookupResult struct {
 	err    error
 }
 
-func newGeoIPAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newGeoIPAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
 	action := &geoIPAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {

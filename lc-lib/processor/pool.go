@@ -18,13 +18,13 @@ package processor
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
-	"github.com/google/cel-go/common/types"
 )
 
 // Pool manages routines that perform sequences of mutations on events
@@ -35,7 +35,7 @@ type Pool struct {
 	configChan   <-chan *config.Config
 
 	wait      sync.WaitGroup
-	pipelines []*PipelineConfig
+	pipelines *Config
 }
 
 // NewPool creates a new processor pool
@@ -139,25 +139,11 @@ func (p *Pool) processorRoutine(softShutdownChan <-chan struct{}, configChan <-c
 }
 
 // processEvent processes a single event
-func (p *Pool) processEvent(event *event.Event) *event.Event {
-	for _, pipeline := range p.pipelines {
-		val, _, err := pipeline.conditionProgram.Eval(map[string]interface{}{"event": event.Data()})
-		if err != nil {
-			log.Warningf("Failed to evaluate pipeline condition: [%s] -> %s", pipeline.ConditionExpr, err)
-			continue
-		}
-		if val == types.True {
-			event = p.processEventInPipeline(pipeline, event)
-		}
+func (p *Pool) processEvent(evnt *event.Event) *event.Event {
+	for _, entry := range p.pipelines.AST {
+		evnt = entry.Process(evnt)
 	}
-	return event
-}
-
-// processEventInPipeline processes a single event in a pipeline
-func (p *Pool) processEventInPipeline(pipeline *PipelineConfig, event *event.Event) *event.Event {
-	for _, action := range pipeline.Actions {
-		event = action.Handler.Process(event)
-	}
-	event.ClearCache()
-	return event
+	eventJSON, _ := json.Marshal(evnt.Data())
+	log.Debugf("Final event: %s", eventJSON)
+	return evnt
 }

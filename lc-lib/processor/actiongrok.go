@@ -33,7 +33,7 @@ type grokAction struct {
 	compiled []grok.Pattern
 }
 
-func newGrokAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newGrokAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
 	action := &grokAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {

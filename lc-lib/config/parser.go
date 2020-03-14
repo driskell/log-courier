@@ -134,8 +134,9 @@ func (p *Parser) populateStruct(vConfig reflect.Value, vRawConfig reflect.Value,
 	}
 
 	// Report to the user any unused values if there are any, in case they
-	// misspelled an option
-	if reportUnused {
+	// misspelled an option, but only if we're a struct
+	// (populateStruct may accept non-structs for embedding)
+	if vRawConfig.IsValid() && vRawConfig.Type().Kind() == reflect.Map && reportUnused {
 		return p.reportUnusedConfig(vRawConfig, configPath)
 	}
 
@@ -148,14 +149,12 @@ func (p *Parser) populateStructInner(vConfig reflect.Value, vRawConfig reflect.V
 		return p.populateStructInner(vConfig.Elem(), vRawConfig, configPath)
 	}
 
+	// When taking fields into struct we must be a struct
 	if vConfig.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("Object passed to populateStruct is not a struct: %s", vConfig.Kind().String()))
 	}
 
-	// Check the incoming data is the right type, a map
-	if vRawConfig.IsValid() && vRawConfig.Type().Kind() != reflect.Map {
-		return fmt.Errorf("Option %s must be a hash", configPath)
-	}
+	hasCheckedInput := false
 
 	// Iterate each configuration structure field we need to update, and copy the
 	// value in, checking the type and removing the value from rawConfig as we use
@@ -229,12 +228,36 @@ FieldLoop:
 					}
 				}
 				continue FieldLoop
+			case "embed_slice":
+				// Embed slice allows us to take a slice into a specific field of a struct
+				// This allows extra metadata to be built around the slice
+				if vField.Kind() != reflect.Slice {
+					panic(fmt.Sprintf("Embedded slice configuration field is not a slice: %s", vField.Kind().String()))
+				}
+
+				// Populate the slice - trim the forward slash from the config path end too
+				var retSlice reflect.Value
+				retSlice, err = p.populateSlice(vField, vRawConfig, configPath[:len(configPath)-1])
+				if err != nil {
+					return
+				}
+				vField.Set(retSlice)
+				continue FieldLoop
 			}
 		}
 
 		// If no tag, we're not supposed to read this config entry
 		if tag == "" {
 			continue
+		}
+
+		if !hasCheckedInput {
+			// Check the incoming data is the right type, a map
+			if vRawConfig.IsValid() && vRawConfig.Type().Kind() != reflect.Map {
+				return fmt.Errorf("Option %s must be a hash", configPath)
+			}
+
+			hasCheckedInput = true
 		}
 
 		var retValue reflect.Value

@@ -29,7 +29,7 @@ type addTagAction struct {
 	valueProgram cel.Program
 }
 
-func newAddTagAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newAddTagAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
 	action := &addTagAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {
@@ -51,7 +51,7 @@ type removeTagAction struct {
 	Tag string `config:"tag"`
 }
 
-func newRemoveTagAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newRemoveTagAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
 	action := &removeTagAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {

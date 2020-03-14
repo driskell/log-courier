@@ -32,7 +32,7 @@ type setFieldAction struct {
 	valueProgram cel.Program
 }
 
-func newSetFieldAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newSetFieldAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
 	action := &setFieldAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {
@@ -66,7 +66,7 @@ type unsetFieldAction struct {
 	Field string `config:"field"`
 }
 
-func newUnsetFieldAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newUnsetFieldAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	action := &unsetFieldAction{}
 	if err := p.Populate(action, unused, configPath, true); err != nil {
 		return nil, err

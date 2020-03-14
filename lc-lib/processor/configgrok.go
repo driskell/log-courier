@@ -40,8 +40,8 @@ func (c *GrokConfig) Defaults() {
 	c.LoadDefaults = defaultLoadDefaults
 }
 
-// Validate the grok configuration
-func (c *GrokConfig) Validate(p *config.Parser, path string) error {
+// Init the grok configuration
+func (c *GrokConfig) Init(p *config.Parser, path string) error {
 	c.Grok = grok.NewGrok(c.LoadDefaults)
 	for _, path := range c.PatternFiles {
 		err := c.Grok.LoadPatternsFromFile(path)

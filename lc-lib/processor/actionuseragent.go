@@ -32,7 +32,7 @@ type userAgentAction struct {
 	parser *uaparser.Parser
 }
 
-func newUserAgentAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newUserAgentAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
 	action := &userAgentAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {

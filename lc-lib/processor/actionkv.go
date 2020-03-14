@@ -43,7 +43,7 @@ type kvAction struct {
 	prefixPattern event.Pattern
 }
 
-func newKVAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newKVAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
 	action := &kvAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {

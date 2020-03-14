@@ -18,17 +18,11 @@ package processor
 
 import (
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/event"
 )
-
-// Action takes an event and returns an event, having potentially mutated or replaced it
-type Action interface {
-	Process(event *event.Event) *event.Event
-}
 
 // ActionRegistrarFunc is a callback that validates the configuration for
 // an action that was registered via RegisterAction
-type ActionRegistrarFunc func(*config.Parser, string, map[string]interface{}, string) (Action, error)
+type ActionRegistrarFunc func(*config.Parser, string, map[string]interface{}, string) (ASTEntry, error)
 
 var registeredActions = make(map[string]ActionRegistrarFunc)
 

@@ -30,7 +30,7 @@ type dateAction struct {
 	Formats []string `config:"formats"`
 }
 
-func newDateAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (Action, error) {
+func newDateAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
 	action := &dateAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {

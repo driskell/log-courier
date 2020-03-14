@@ -17,61 +17,93 @@
 package processor
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/google/cel-go/cel"
 )
 
-// Config is the top level section configuration, and is an array of processor pipelines
-type Config []*PipelineConfig
+// Config contains configuration for a processor pipeline
+type Config struct {
+	Pipeline []*ConfigASTEntry `config:",embed_slice"`
 
-// PipelineConfig contains configuration for a processor pipeline
-type PipelineConfig struct {
-	ConditionExpr string          `config:"condition_expr"`
-	Actions       []*ActionConfig `config:"actions"`
-
-	conditionProgram cel.Program
+	AST []ASTEntry
 }
 
-// ActionConfig contains configuration of a single action/directive
-type ActionConfig struct {
-	Name   string `config:"name"`
+// ConfigASTEntry is a configuration entry we need to parse into an ASTEntry
+type ConfigASTEntry struct {
 	Unused map[string]interface{}
+}
 
-	Handler Action
+// ConfigASTLogic processes configuration for a logical branch
+type ConfigASTLogic struct {
+	IfExpr string  `config:"if_expr"`
+	Then   *Config `config:"then"`
+	Else   *Config `config:"else"`
 }
 
 // Init the pipeline configuration
-func (c *PipelineConfig) Init(p *config.Parser, path string) (err error) {
-	c.conditionProgram, err = ParseExpression(c.ConditionExpr)
-	if err != nil {
-		return fmt.Errorf("Condition at %s failed to parse: %s", path, err)
+func (c *Config) Init(p *config.Parser, path string) (err error) {
+	c.AST = make([]ASTEntry, 0, len(c.Pipeline))
+
+	for idx, entry := range c.Pipeline {
+		// Slip an index before the / so users know which entry we're examining if error occurs
+		entryPath := fmt.Sprintf("%s[%d]/", path[:len(path)-1], idx)
+
+		var ast ASTEntry
+		if _, ok := entry.Unused["name"]; ok {
+			if action, ok := entry.Unused["name"].(string); ok {
+				ast, err = c.initAction(p, entryPath, entry, action)
+			} else {
+				err = errors.New("Action 'name' must be a string")
+				return
+			}
+		} else {
+			ast, err = c.initLogic(p, entryPath, entry)
+		}
+		if err != nil {
+			return
+		}
+		c.AST = append(c.AST, ast)
 	}
 	return
 }
 
-// Init the action configuration
-func (c *ActionConfig) Init(p *config.Parser, path string) (err error) {
-	registrarFunc, ok := registeredActions[c.Name]
+// initAction creates and returns a new action entry
+func (c *Config) initAction(p *config.Parser, path string, entry *ConfigASTEntry, action string) (ASTEntry, error) {
+	registrarFunc, ok := registeredActions[action]
 	if !ok {
-		err = fmt.Errorf("Unrecognised action '%s'", c.Name)
-		return
+		return nil, fmt.Errorf("Unrecognised action '%s'", action)
 	}
 
-	c.Handler, err = registrarFunc(p, path, c.Unused, c.Name)
-	return
+	// Action registrars will not consume "name" so remove it before passing
+	delete(entry.Unused, "name")
+	ast, err := registrarFunc(p, path, entry.Unused, action)
+	if err != nil {
+		return nil, err
+	}
+
+	return ast, nil
+}
+
+// initLogic creates and returns a new ASTLogic entry
+func (c *Config) initLogic(p *config.Parser, path string, entry *ConfigASTEntry) (ASTEntry, error) {
+	ast := &ConfigASTLogic{}
+	if err := p.Populate(ast, entry.Unused, path, true); err != nil {
+		return nil, err
+	}
+	return newASTLogicFromConfig(ast)
 }
 
 // FetchConfig returns the processor configuration from a Config structure
-func FetchConfig(cfg *config.Config) Config {
-	return cfg.Section("pipelines").(Config)
+func FetchConfig(cfg *config.Config) *Config {
+	return cfg.Section("pipelines").(*Config)
 }
 
 // init registers this module provider
 func init() {
 	config.RegisterSection("pipelines", func() interface{} {
-		return Config{}
+		return &Config{}
 	})
 
 	config.RegisterAvailable("actions", AvailableActions)
