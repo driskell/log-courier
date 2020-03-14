@@ -64,7 +64,7 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 
 // NewEvent creates a new event structure for the given stream. It applies all
 // transformations necessary from the stream configuration
-func (sc *StreamConfig) NewEvent(acker Acknowledger, data map[string]interface{}, ctx context.Context) *Event {
+func (sc *StreamConfig) NewEvent(ctx context.Context, acker Acknowledger, data map[string]interface{}) *Event {
 	data["@timestamp"] = time.Now()
 
 	if sc.AddHostField {

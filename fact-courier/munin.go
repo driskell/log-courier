@@ -133,7 +133,7 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 	result["munin_plugin"] = runner.Name()
 
 	// Create a new munin event with nil context
-	event := m.factConfig.NewEvent(nil, result, nil)
+	event := m.factConfig.NewEvent(nil, nil, result)
 
 	log.Debug("[%s] %d fields collected", runner.Name(), fieldCount)
 

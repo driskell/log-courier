@@ -376,7 +376,8 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[s
 		h.split = false
 	}
 
-	newEvent := h.streamConfig.NewEvent(h.acker, data, context.WithValue(h.ctx, registrar.ContextEndOffset, endOffset))
+	ctx := context.WithValue(h.ctx, registrar.ContextEndOffset, endOffset)
+	newEvent := h.streamConfig.NewEvent(ctx, h.acker, data)
 
 EventLoop:
 	for {
