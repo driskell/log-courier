@@ -35,9 +35,6 @@ const (
 
 // Pool manages a list of receivers
 type Pool struct {
-	// Constructor
-	cfg *config.Config
-
 	// Pipeline
 	output       chan<- []*event.Event
 	shutdownChan <-chan struct{}
@@ -50,9 +47,7 @@ type Pool struct {
 
 // NewPool creates a new receiver pool
 func NewPool(app *core.App) *Pool {
-	return &Pool{
-		cfg: app.Config(),
-	}
+	return &Pool{}
 }
 
 // SetOutput sets the output channel
@@ -73,13 +68,12 @@ func (r *Pool) SetConfigChan(configChan <-chan *config.Config) {
 // Init sets up the listener
 func (r *Pool) Init(cfg *config.Config) error {
 	r.eventChan = make(chan transports.Event)
+	r.updateReceivers(cfg)
 	return nil
 }
 
 // Run starts listening
 func (r *Pool) Run() {
-	r.updateReceivers()
-
 	shutdown := false
 
 ReceiverLoop:
@@ -95,8 +89,7 @@ ReceiverLoop:
 			shutdown = true
 			break
 		case newConfig := <-r.configChan:
-			r.cfg = newConfig
-			r.updateReceivers()
+			r.updateReceivers(newConfig)
 			break
 		case receiverEvent := <-r.eventChan:
 			switch eventImpl := receiverEvent.(type) {
@@ -118,29 +111,36 @@ ReceiverLoop:
 }
 
 // updateReceivers updates the list of running receivers
-func (r *Pool) updateReceivers() {
-	receiversConfig := transports.FetchReceiversConfig(r.cfg)
+func (r *Pool) updateReceivers(newConfig *config.Config) {
+	receiversConfig := transports.FetchReceiversConfig(newConfig)
 	existingReceivers := r.receivers
+	newReceivers := make(map[string]transports.Receiver)
 	for _, cfgEntry := range receiversConfig {
 		if cfgEntry.Enabled {
 			for _, listen := range cfgEntry.Listen {
-				if existing, has := r.receivers[listen]; has {
-					// Receiver already exists, update its configuration
-					existing.ReloadConfig(r.cfg, cfgEntry.Factory)
-					delete(existingReceivers, listen)
-					continue
+				if r.receivers != nil {
+					if existing, has := r.receivers[listen]; has {
+						// Receiver already exists, update its configuration
+						existing.ReloadConfig(newConfig, cfgEntry.Factory)
+						delete(existingReceivers, listen)
+						continue
+					}
 				}
 				// Create new receiver
 				pool := addresspool.NewPool(listen)
-				r.receivers[listen] = cfgEntry.Factory.NewReceiver(context.WithValue(context.Background(), poolContextListen, listen), pool, r.eventChan)
+				newReceivers[listen] = cfgEntry.Factory.NewReceiver(context.WithValue(context.Background(), poolContextListen, listen), pool, r.eventChan)
 			}
 		}
 	}
 
-	// Anything left in existingReceivers was not updated so should be shutdown
-	for _, receiver := range existingReceivers {
-		receiver.Shutdown()
+	// Anything left in existing receivers was not updated so should be shutdown
+	if r.receivers != nil {
+		for _, receiver := range r.receivers {
+			receiver.Shutdown()
+		}
 	}
+
+	r.receivers = newReceivers
 }
 
 // shutdown stops all receivers
