@@ -101,7 +101,9 @@ func (t *connection) Run(startedCallback func()) error {
 	if !t.isClient() {
 		// TODO: Make configurable, max we receive into memory unacknowledged before stop receiving
 		t.partialAcks = make([]eventsMessage, 0, 10)
-		t.partialAckChan = make(chan protocolMessage)
+		// We allow this to block and coordinate accordingly, however we need to cache 1 for
+		// older Log Courier clients in case they drop us an event payload during negotiation
+		t.partialAckChan = make(chan protocolMessage, 1)
 	}
 
 	t.rwBuffer.Reader = bufio.NewReader(t.socket)
