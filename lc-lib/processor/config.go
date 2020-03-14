@@ -23,9 +23,17 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
+// astState holds the FSM state when parsing the processor configuration
+type astState int
+
+const (
+	astStatePipeline astState = iota
+	astStateIf
+)
+
 // Config contains configuration for a processor pipeline
 type Config struct {
-	Pipeline []*ConfigASTEntry `config:",embed_slice"`
+	Pipeline []*ConfigASTEntry `config:",embed_slice" json:",omitempty"`
 
 	AST []ASTEntry
 }
@@ -33,44 +41,99 @@ type Config struct {
 // ConfigASTEntry is a configuration entry we need to parse into an ASTEntry
 type ConfigASTEntry struct {
 	Unused map[string]interface{}
-}
-
-// ConfigASTLogic processes configuration for a logical branch
-type ConfigASTLogic struct {
-	IfExpr string  `config:"if_expr"`
-	Then   *Config `config:"then"`
-	Else   *Config `config:"else"`
+	Path   string
 }
 
 // Init the pipeline configuration
-func (c *Config) Init(p *config.Parser, path string) (err error) {
+func (c *Config) Init(p *config.Parser, path string) error {
 	c.AST = make([]ASTEntry, 0, len(c.Pipeline))
 
-	for idx, entry := range c.Pipeline {
-		// Slip an index before the / so users know which entry we're examining if error occurs
-		entryPath := fmt.Sprintf("%s[%d]/", path[:len(path)-1], idx)
-
-		var ast ASTEntry
-		if _, ok := entry.Unused["name"]; ok {
-			if action, ok := entry.Unused["name"].(string); ok {
-				ast, err = c.initAction(p, entryPath, entry, action)
-			} else {
-				err = errors.New("Action 'name' must be a string")
-				return
-			}
-		} else {
-			ast, err = c.initLogic(p, entryPath, entry)
-		}
+	var (
+		ifEntry, elseEntry *ConfigASTEntry
+		elseIfEntries      []*ConfigASTEntry
+		state              = astStatePipeline
+		idx                = 0
+	)
+	constructLogic := func() error {
+		ast, err := c.initLogic(p, ifEntry, elseIfEntries, elseEntry)
 		if err != nil {
-			return
+			return err
 		}
 		c.AST = append(c.AST, ast)
+		return nil
 	}
-	return
+	for idx < len(c.Pipeline) {
+		// Slip an index before the / so users know which entry we're examining if error occurs
+		entry := c.Pipeline[idx]
+		entry.Path = fmt.Sprintf("%s[%d]/", path[:len(path)-1], idx)
+
+		// Tokenise
+		var entryToken astToken
+		if _, ok := entry.Unused[string(astTokenIf)]; ok {
+			entryToken = astTokenIf
+		} else if _, ok := entry.Unused[string(astTokenElseIf)]; ok {
+			entryToken = astTokenElseIf
+		} else if _, ok := entry.Unused[string(astTokenElse)]; ok {
+			entryToken = astTokenElse
+		} else {
+			entryToken = astTokenAction
+		}
+
+		switch state {
+		case astStatePipeline:
+			if entryToken == astTokenAction {
+				ast, err := c.initAction(p, entry)
+				if err != nil {
+					return err
+				}
+				idx++
+				c.AST = append(c.AST, ast)
+				break
+			}
+			if entryToken == astTokenIf {
+				ifEntry = entry
+				state = astStateIf
+				idx++
+				break
+			}
+			return fmt.Errorf("Pipeline entry '%s' is not valid in its current position", entryToken)
+		case astStateIf:
+			if entryToken == astTokenElseIf {
+				elseIfEntries = append(elseIfEntries, entry)
+				idx++
+				break
+			}
+			if entryToken == astTokenElse {
+				elseEntry = entry
+				idx++
+			}
+			state = astStatePipeline
+			if err := constructLogic(); err != nil {
+				return err
+			}
+		}
+	}
+	if state == astStateIf {
+		if err := constructLogic(); err != nil {
+			return err
+		}
+	}
+
+	// Cannot expose this to final configuration output as it won't be renderable
+	// due to YAML decoding actually introducing map[interface{}]interface{}
+	// Let the AST member output instead
+	c.Pipeline = nil
+
+	return nil
 }
 
 // initAction creates and returns a new action entry
-func (c *Config) initAction(p *config.Parser, path string, entry *ConfigASTEntry, action string) (ASTEntry, error) {
+func (c *Config) initAction(p *config.Parser, entry *ConfigASTEntry) (ASTEntry, error) {
+	action, ok := entry.Unused["name"].(string)
+	if !ok {
+		return nil, errors.New("Action 'name' must be a string")
+	}
+
 	registrarFunc, ok := registeredActions[action]
 	if !ok {
 		return nil, fmt.Errorf("Unrecognised action '%s'", action)
@@ -78,7 +141,7 @@ func (c *Config) initAction(p *config.Parser, path string, entry *ConfigASTEntry
 
 	// Action registrars will not consume "name" so remove it before passing
 	delete(entry.Unused, "name")
-	ast, err := registrarFunc(p, path, entry.Unused, action)
+	ast, err := registrarFunc(p, entry.Path, entry.Unused, action)
 	if err != nil {
 		return nil, err
 	}
@@ -87,12 +150,34 @@ func (c *Config) initAction(p *config.Parser, path string, entry *ConfigASTEntry
 }
 
 // initLogic creates and returns a new ASTLogic entry
-func (c *Config) initLogic(p *config.Parser, path string, entry *ConfigASTEntry) (ASTEntry, error) {
-	ast := &ConfigASTLogic{}
-	if err := p.Populate(ast, entry.Unused, path, true); err != nil {
+func (c *Config) initLogic(p *config.Parser, ifEntry *ConfigASTEntry, elseIfEntries []*ConfigASTEntry, elseEntry *ConfigASTEntry) (ASTEntry, error) {
+	// First create the initial "if" AST entry
+	ifAST := &astLogic{}
+	if err := p.Populate(ifAST, ifEntry.Unused, ifEntry.Path, true); err != nil {
 		return nil, err
 	}
-	return newASTLogicFromConfig(ast)
+
+	// Next, create all the "else if" branches
+	if len(elseIfEntries) != 0 {
+		ifAST.ElseIfBranches = make([]*logicBranchElseIf, 0, len(elseIfEntries))
+		for _, entry := range elseIfEntries {
+			elseIfAST := &logicBranchElseIf{}
+			if err := p.Populate(elseIfAST, entry.Unused, entry.Path, true); err != nil {
+				return nil, err
+			}
+			ifAST.ElseIfBranches = append(ifAST.ElseIfBranches, elseIfAST)
+		}
+	}
+
+	// Lastly create the ending "else" AST entry list
+	if elseEntry != nil {
+		ifAST.ElseBranch = &logicBranchElse{}
+		if err := p.Populate(ifAST.ElseBranch, elseEntry.Unused, elseEntry.Path, true); err != nil {
+			return nil, err
+		}
+	}
+
+	return ifAST, nil
 }
 
 // FetchConfig returns the processor configuration from a Config structure

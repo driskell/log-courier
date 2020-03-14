@@ -19,54 +19,100 @@ package processor
 import (
 	"fmt"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 )
 
-// ASTEntry is an entry in the syntax tree
+// astToken holds the type of a token during parsing
+type astToken string
+
+const (
+	astTokenAction astToken = "action"
+	astTokenIf     astToken = "if_expr"
+	astTokenElseIf astToken = "else_if_expr"
+	astTokenElse   astToken = "else"
+)
+
+// ASTEntry is an entry in the syntax tree that processes events
 type ASTEntry interface {
 	Process(*event.Event) *event.Event
 }
 
-// ASTLogic contains configuration for a logical branch
-type ASTLogic struct {
+// astLogic processes an event through a conditional branch
+type astLogic struct {
+	IfExpr         string  `config:"if_expr"` // should match astTokenIf
+	Then           *Config `config:"then"`
+	ElseIfBranches []*logicBranchElseIf
+	ElseBranch     *logicBranchElse
+
 	ifProgram cel.Program
-	ifSource  string
-	thenAST   []ASTEntry
-	elseAST   []ASTEntry
 }
 
-// newASTLogicFromConfig creates an ASTEntry for a logic branch from the configuration
-func newASTLogicFromConfig(config *ConfigASTLogic) (*ASTLogic, error) {
-	ifProgram, err := ParseExpression(config.IfExpr)
-	if err != nil {
-		return nil, fmt.Errorf("Condition failed to parse: [%s] -> %s", config.IfExpr, err)
+// Init the branch
+func (l *astLogic) Init(p *config.Parser, path string) (err error) {
+	if l.ifProgram, err = ParseExpression(l.IfExpr); err != nil {
+		return fmt.Errorf("Condition failed to parse: [%s] -> %s", l.IfExpr, err)
 	}
-
-	return &ASTLogic{
-		ifProgram: ifProgram,
-		ifSource:  config.IfExpr,
-		thenAST:   config.Then.AST,
-		elseAST:   config.Else.AST,
-	}, nil
+	return nil
 }
 
 // Process handles logic for the event
-func (a *ASTLogic) Process(evnt *event.Event) *event.Event {
-	val, _, err := a.ifProgram.Eval(map[string]interface{}{"event": evnt.Data()})
-	if err != nil {
-		log.Warningf("Failed to evaluate if_expr: [%s] -> %s", a.ifSource, err)
-		return evnt
-	}
+func (l *astLogic) Process(subject *event.Event) *event.Event {
 	var next []ASTEntry
-	if val.ConvertToType(types.BoolType) == types.True {
-		next = a.thenAST
+	if evalLogicBranchProgram(l.ifProgram, l.IfExpr, subject) {
+		next = l.Then.AST
 	} else {
-		next = a.elseAST
+		if len(l.ElseIfBranches) != 0 {
+			for _, elseIfBranch := range l.ElseIfBranches {
+				if evalLogicBranchProgram(elseIfBranch.elseIfProgram, elseIfBranch.ElseIfExpr, subject) {
+					next = elseIfBranch.Then.AST
+					break
+				}
+			}
+		}
+		if next == nil {
+			if l.ElseBranch != nil {
+				next = l.ElseBranch.Else.AST
+			} else {
+				return subject
+			}
+		}
 	}
 	for _, entry := range next {
-		evnt = entry.Process(evnt)
+		subject = entry.Process(subject)
 	}
-	return evnt
+	return subject
+}
+
+// logicBranchElseIf branch
+type logicBranchElseIf struct {
+	ElseIfExpr string  `config:"else_if_expr"` // should match astTokenElseIf
+	Then       *Config `config:"then"`
+
+	elseIfProgram cel.Program
+}
+
+// Init the branch
+func (l *logicBranchElseIf) Init(p *config.Parser, path string) (err error) {
+	if l.elseIfProgram, err = ParseExpression(l.ElseIfExpr); err != nil {
+		return fmt.Errorf("Condition failed to parse: [%s] -> %s", l.ElseIfExpr, err)
+	}
+	return nil
+}
+
+// logicBranchElse branch
+type logicBranchElse struct {
+	Else *Config `config:"else"`
+}
+
+// evalLogicBranchProgram runs the condition program and returns true or false
+func evalLogicBranchProgram(program cel.Program, source string, subject *event.Event) bool {
+	val, _, err := program.Eval(map[string]interface{}{"event": subject.Data()})
+	if err != nil {
+		log.Warningf("Failed to evaluate if_expr: [%s] -> %s", source, err)
+		return false
+	}
+	return val.ConvertToType(types.BoolType) == types.True
 }
