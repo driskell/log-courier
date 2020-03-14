@@ -27,6 +27,10 @@ import (
 )
 
 const (
+	// DefaultGeoIPActionDatabase is the default path to the GeoIP database to use
+	// It can be changed during init()
+	DefaultGeoIPActionDatabase = ""
+
 	defaultGeoIPActionTarget = "source[geo]"
 )
 
@@ -62,6 +66,7 @@ func newGeoIPAction(p *config.Parser, configPath string, unused map[string]inter
 }
 
 func (g *geoIPAction) Defaults() {
+	g.Database = DefaultGeoIPActionDatabase
 	g.Target = defaultGeoIPActionTarget
 }
 
