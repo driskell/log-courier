@@ -86,7 +86,7 @@ func (e *Event) Data() map[string]interface{} {
 		if err != nil {
 			e.data = make(map[string]interface{})
 			e.data["message"] = err.Error()
-			e.data["@timestamp"] = time.Now()
+			e.data["@timestamp"] = Timestamp(time.Now())
 			e.data["@metadata"] = map[string]interface{}{}
 			e.data["tags"] = &Tags{"_unmarshal_failure": struct{}{}}
 		} else {

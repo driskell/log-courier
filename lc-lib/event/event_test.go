@@ -25,8 +25,8 @@ import (
 
 func TestNewEventEmpty(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{})
-	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
-		if time.Since(timestamp) > time.Second {
+	if timestamp, ok := event.Data()["@timestamp"].(Timestamp); ok {
+		if time.Since(time.Time(timestamp)) > time.Second {
 			t.Fatalf("Wrong timestamp in empty event: %v", event.Data())
 		}
 	} else {
@@ -43,10 +43,12 @@ func TestNewEventEmpty(t *testing.T) {
 
 func TestNewEventInvalidTimestamp(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"@timestamp": "Invalid"})
-	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
-		if time.Since(timestamp) > time.Second {
-			t.Fatalf("Wrong timestamp in empty event: %v", event.Data())
+	if timestamp, ok := event.Data()["@timestamp"].(Timestamp); ok {
+		if time.Since(time.Time(timestamp)) > time.Second {
+			t.Fatalf("Wrong timestamp in invalid event: %v", event.Data())
 		}
+	} else {
+		t.Fatalf("Missing @timestamp invalid event: %v", event.Data())
 	}
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		value, err := tags.MarshalJSON()
@@ -60,10 +62,12 @@ func TestNewEventInvalidTimestamp(t *testing.T) {
 
 func TestNewEventWrongTypeTimestamp(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"@timestamp": map[string]int{"invalid": 999}})
-	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
-		if time.Since(timestamp) > time.Second {
-			t.Fatalf("Wrong timestamp in empty event: %v", event.Data())
+	if timestamp, ok := event.Data()["@timestamp"].(Timestamp); ok {
+		if time.Since(time.Time(timestamp)) > time.Second {
+			t.Fatalf("Wrong timestamp in invalid event: %v", event.Data())
 		}
+	} else {
+		t.Fatalf("Missing @timestamp in invalid event: %v", event.Data())
 	}
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		value, err := tags.MarshalJSON()
@@ -78,9 +82,9 @@ func TestNewEventWrongTypeTimestamp(t *testing.T) {
 func TestNewEventValidTimestamp(t *testing.T) {
 	example := "2020-05-05T13:00:12.123Z"
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"@timestamp": example})
-	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
+	if timestamp, ok := event.Data()["@timestamp"].(Timestamp); ok {
 		timestampParsed, _ := time.Parse("2006-01-02T15:04:05Z", example)
-		if !timestamp.Equal(timestampParsed) {
+		if !time.Time(timestamp).Equal(timestampParsed) {
 			t.Fatalf("Wrong timestamp in event: %v; expected %v", event.Data(), timestampParsed)
 		}
 	} else {
@@ -139,8 +143,8 @@ func TestNewEventValidTags(t *testing.T) {
 
 func TestNewEventBytes(t *testing.T) {
 	event := NewEventFromBytes(context.Background(), nil, []byte("{\"message\":\"basic event\"}"))
-	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
-		if time.Since(timestamp) > time.Second {
+	if timestamp, ok := event.Data()["@timestamp"].(Timestamp); ok {
+		if time.Since(time.Time(timestamp)) > time.Second {
 			t.Fatalf("Wrong timestamp in basic event: %v", event.Data())
 		}
 	} else {
@@ -157,12 +161,12 @@ func TestNewEventBytes(t *testing.T) {
 
 func TestNewEventBytesInvalid(t *testing.T) {
 	event := NewEventFromBytes(context.Background(), nil, []byte("invalid bytes"))
-	if timestamp, ok := event.Data()["@timestamp"].(time.Time); ok {
-		if time.Since(timestamp) > time.Second {
-			t.Fatalf("Wrong timestamp in empty event: %v", event.Data())
+	if timestamp, ok := event.Data()["@timestamp"].(Timestamp); ok {
+		if time.Since(time.Time(timestamp)) > time.Second {
+			t.Fatalf("Wrong timestamp in invalid event from bytes: %v", event.Data())
 		}
 	} else {
-		t.Fatalf("Missing timestamp in empty event: %v", event.Data())
+		t.Fatalf("Missing timestamp in invalid event from bytes: %v", event.Data())
 	}
 	if tags, ok := event.Data()["tags"].(*Tags); ok {
 		value, err := tags.MarshalJSON()
@@ -170,7 +174,7 @@ func TestNewEventBytesInvalid(t *testing.T) {
 			t.Fatalf("Invalid tags for failed unmarshal: %v (error: %v)", tags, err)
 		}
 	} else {
-		t.Fatalf("Missing tags in invalid event: %v", event.Data())
+		t.Fatalf("Missing tags in invalid event from bytes: %v", event.Data())
 	}
 }
 
