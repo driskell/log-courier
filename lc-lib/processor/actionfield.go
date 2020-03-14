@@ -27,7 +27,7 @@ import (
 
 type setFieldAction struct {
 	Field     string `config:"field"`
-	ValueExpr string `config:"value_expr"`
+	ValueExpr string `config:"value"`
 
 	valueProgram cel.Program
 }

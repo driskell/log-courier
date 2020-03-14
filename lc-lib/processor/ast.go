@@ -30,8 +30,8 @@ type astToken string
 
 const (
 	astTokenAction astToken = "action"
-	astTokenIf     astToken = "if_expr"
-	astTokenElseIf astToken = "else_if_expr"
+	astTokenIf     astToken = "if"
+	astTokenElseIf astToken = "else if"
 	astTokenElse   astToken = "else"
 )
 
@@ -42,7 +42,7 @@ type ASTEntry interface {
 
 // astLogic processes an event through a conditional branch
 type astLogic struct {
-	IfExpr         string  `config:"if_expr"` // should match astTokenIf
+	IfExpr         string  `config:"if"` // should match astTokenIf
 	Then           *Config `config:"then"`
 	ElseIfBranches []*logicBranchElseIf
 	ElseBranch     *logicBranchElse
@@ -88,7 +88,7 @@ func (l *astLogic) Process(subject *event.Event) *event.Event {
 
 // logicBranchElseIf branch
 type logicBranchElseIf struct {
-	ElseIfExpr string  `config:"else_if_expr"` // should match astTokenElseIf
+	ElseIfExpr string  `config:"else if"` // should match astTokenElseIf
 	Then       *Config `config:"then"`
 
 	elseIfProgram cel.Program
@@ -111,7 +111,7 @@ type logicBranchElse struct {
 func evalLogicBranchProgram(program cel.Program, source string, subject *event.Event) bool {
 	val, _, err := program.Eval(map[string]interface{}{"event": subject.Data()})
 	if err != nil {
-		log.Warningf("Failed to evaluate if_expr: [%s] -> %s", source, err)
+		log.Warningf("Failed to evaluate if: [%s] -> %s", source, err)
 		return false
 	}
 	return val.ConvertToType(types.BoolType) == types.True

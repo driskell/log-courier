@@ -24,7 +24,7 @@ import (
 
 type addTagAction struct {
 	Tag       string `config:"tag"`
-	ValueExpr string `config:"value_expr"`
+	ValueExpr string `config:"value"`
 
 	valueProgram cel.Program
 }

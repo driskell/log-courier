@@ -27,7 +27,7 @@ import (
 type grokAction struct {
 	Field         string            `config:"field"`
 	Remove        bool              `config:"remove"`
-	LocalPatterns map[string]string `config:"local_patterns"`
+	LocalPatterns map[string]string `config:"local patterns"`
 	Patterns      []string          `config:"patterns"`
 
 	compiled []grok.Pattern
