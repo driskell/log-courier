@@ -26,11 +26,13 @@ import (
 	"github.com/oschwald/geoip2-golang"
 )
 
-const (
+var (
 	// DefaultGeoIPActionDatabase is the default path to the GeoIP database to use
 	// It can be changed during init()
 	DefaultGeoIPActionDatabase = ""
+)
 
+const (
 	defaultGeoIPActionTarget = "source[geo]"
 )
 
