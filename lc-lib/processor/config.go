@@ -91,6 +91,8 @@ func (c *Config) Init(p *config.Parser, path string) error {
 			}
 			if entryToken == astTokenIf {
 				ifEntry = entry
+				elseIfEntries = nil
+				elseEntry = nil
 				state = astStateIf
 				idx++
 				break
