@@ -126,11 +126,11 @@ func TestNewEventStringTag(t *testing.T) {
 }
 
 func TestNewEventValidTags(t *testing.T) {
-	event := NewEvent(context.Background(), nil, map[string]interface{}{"tags": []string{"_one_tag", "_two_tag"}})
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"tags": []interface{}{"_one_tag", "_two_tag"}})
 	if tags, ok := event.Data()["tags"].(Tags); ok {
 		value, err := tags.MarshalJSON()
 		if err != nil || !bytes.Equal(value, []byte("[\"_one_tag\",\"_two_tag\"]")) {
-			t.Fatalf("Invalid tags: %v (error: %v)", value, err)
+			t.Fatalf("Invalid tags: %s (error: %v)", value, err)
 		}
 	} else {
 		t.Fatalf("Missing tags in event: %v", event.Data())

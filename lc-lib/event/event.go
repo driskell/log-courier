@@ -96,10 +96,16 @@ func (e *Event) convertData() {
 		case Tags:
 		case string:
 			e.data["tags"] = Tags{value: struct{}{}}
-		case []string:
+		case []interface{}:
+			// From unmarshaled over the wire we get []interface{}
 			tags := Tags{}
 			for _, tag := range value {
-				tags.Add(tag)
+				tagString, ok := tag.(string)
+				if !ok {
+					e.data["tags"] = Tags{"_tags_parse_failure": struct{}{}}
+					e.data["tags_parse_error"] = fmt.Sprintf("tags list must contain only strings, found a %T", tag)
+				}
+				tags.Add(tagString)
 			}
 			e.data["tags"] = tags
 		default:
