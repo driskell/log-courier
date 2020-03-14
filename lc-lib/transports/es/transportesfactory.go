@@ -19,6 +19,8 @@ package es
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -50,6 +52,10 @@ type TransportESFactory struct {
 	Retry        time.Duration `config:"retry backoff"`
 	RetryMax     time.Duration `config:"retry backoff max"`
 	IndexPattern string        `config:"index pattern"`
+	TemplateFile string        `config:"template file`
+
+	// Internal
+	template []byte
 }
 
 // NewTransportESFactory create a new TransportESFactory from the provided
@@ -68,6 +74,18 @@ func NewTransportESFactory(p *config.Parser, configPath string, unUsed map[strin
 
 	if ret.IndexPattern == "" {
 		return nil, fmt.Errorf("'index pattern' cannot be empty when using 'es' transport")
+	}
+
+	file, err := os.Open(ret.TemplateFile)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		file.Close()
+	}()
+	ret.template, err = ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
 	}
 
 	return ret, nil

@@ -51,15 +51,20 @@ const (
 			}
 		} ],
 		"properties" : {
-			"@timestamp": { "type": "date"},
-			"@version": { "type": "keyword"},
-			"geoip"  : {
+			"@timestamp": { "type": "date" },
+			"@version": { "type": "keyword" },
+			"source" : {
 				"dynamic": true,
 				"properties" : {
-					"ip": { "type": "ip" },
-					"location" : { "type" : "geo_point" },
-					"latitude" : { "type" : "half_float" },
-					"longitude" : { "type" : "half_float" }
+					"geo": {
+						"dynamic": true,
+						"properties": {
+							"ip": { "type": "ip" },
+							"location" : { "type" : "geo_point" },
+							"latitude" : { "type" : "half_float" },
+							"longitude" : { "type" : "half_float" }
+						}
+					}
 				}
 			}
 		}
@@ -100,15 +105,20 @@ const (
 				}
 			} ],
 			"properties" : {
-				"@timestamp": { "type": "date"},
-				"@version": { "type": "keyword"},
-				"geoip"  : {
+				"@timestamp": { "type": "date" },
+				"@version": { "type": "keyword" },
+				"source" : {
 					"dynamic": true,
 					"properties" : {
-						"ip": { "type": "ip" },
-						"location" : { "type" : "geo_point" },
-						"latitude" : { "type" : "half_float" },
-						"longitude" : { "type" : "half_float" }
+						"geo": {
+							"dynamic": true,
+							"properties": {
+								"ip": { "type": "ip" },
+								"location" : { "type" : "geo_point" },
+								"latitude" : { "type" : "half_float" },
+								"longitude" : { "type" : "half_float" }
+							}
+						}
 					}
 				}
 			}
@@ -150,13 +160,18 @@ const (
 			"properties" : {
 				"@timestamp": { "type": "date", "include_in_all": false },
 				"@version": { "type": "keyword", "include_in_all": false },
-				"geoip"  : {
+				"source" : {
 					"dynamic": true,
 					"properties" : {
-						"ip": { "type": "ip" },
-						"location" : { "type" : "geo_point" },
-						"latitude" : { "type" : "half_float" },
-						"longitude" : { "type" : "half_float" }
+						"geo": {
+							"dynamic": true,
+							"properties": {
+								"ip": { "type": "ip" },
+								"location" : { "type" : "geo_point" },
+								"latitude" : { "type" : "half_float" },
+								"longitude" : { "type" : "half_float" }
+							}
+						}
 					}
 				}
 			}

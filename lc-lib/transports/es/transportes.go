@@ -186,22 +186,33 @@ func (t *transportES) installTemplate() error {
 	}
 
 	name := "logstash"
-	var template string
-	switch t.maxMajorVersion {
-	case 8:
-		template = esTemplate8
-		break
-	case 7:
-		template = esTemplate7
-		break
-	case 6:
-		template = esTemplate6
-		break
-	case 5:
-		template = esTemplate5
-		break
-	default:
-		return fmt.Errorf("Elasticsearch major version %d is unsupported", t.maxMajorVersion)
+	var (
+		templateReader io.Reader
+		templateLen    int
+	)
+	if t.config.template != nil {
+		templateReader = bytes.NewReader(t.config.template)
+		templateLen = len(t.config.template)
+	} else {
+		var template string
+		switch t.maxMajorVersion {
+		case 8:
+			template = esTemplate8
+			break
+		case 7:
+			template = esTemplate7
+			break
+		case 6:
+			template = esTemplate6
+			break
+		case 5:
+			template = esTemplate5
+			break
+		default:
+			return fmt.Errorf("Elasticsearch major version %d is unsupported", t.maxMajorVersion)
+		}
+		templateReader = strings.NewReader(template)
+		templateLen = len(template)
 	}
 
 	installed, err := t.checkTemplate(server, name)
@@ -211,13 +222,13 @@ func (t *transportES) installTemplate() error {
 		return nil
 	}
 
-	httpRequest, err := http.NewRequestWithContext(t.ctx, "PUT", fmt.Sprintf("http://%s/_template/%s", server.String(), name), strings.NewReader(template))
+	httpRequest, err := http.NewRequestWithContext(t.ctx, "PUT", fmt.Sprintf("http://%s/_template/%s", server.String(), name), templateReader)
 	if err != nil {
 		return err
 	}
 
 	httpRequest.Header.Add("Content-Type", "application/json")
-	httpRequest.Header.Add("Content-Length", fmt.Sprintf("%d", len(template)))
+	httpRequest.Header.Add("Content-Length", fmt.Sprintf("%d", templateLen))
 
 	httpResponse, err := http.DefaultClient.Do(httpRequest)
 	if err != nil {
