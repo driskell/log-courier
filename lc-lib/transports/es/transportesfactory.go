@@ -52,7 +52,7 @@ type TransportESFactory struct {
 	Retry        time.Duration `config:"retry backoff"`
 	RetryMax     time.Duration `config:"retry backoff max"`
 	IndexPattern string        `config:"index pattern"`
-	TemplateFile string        `config:"template file`
+	TemplateFile string        `config:"template file"`
 
 	// Internal
 	template []byte
