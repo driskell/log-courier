@@ -239,13 +239,19 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 				}
 				currentMap = value
 			} else if set != nil {
-				// Convert path to empty map if allowed
-				newMap := map[string]interface{}{}
-				if _, ok := currentMap[name].(Builtin); ok {
-					return nil, fmt.Errorf("Builtin entry '%s' is not a map", path)
+				// Are we not map because we're metadata? Enter it
+				// TODO: Make this part of the Builtin interface: Enter() and returns a map
+				if _, ok := currentMap[name].(Metadata); ok {
+					currentMap = map[string]interface{}(currentMap[name].(Metadata))
+				} else {
+					// Convert path to empty map if allowed
+					newMap := map[string]interface{}{}
+					if _, ok := currentMap[name].(Builtin); ok {
+						return nil, fmt.Errorf("Builtin entry '%s' is not a map", path)
+					}
+					currentMap[name] = newMap
+					currentMap = newMap
 				}
-				currentMap[name] = newMap
-				currentMap = newMap
 			} else {
 				// Doesn't exist so there's no value but keep validating
 				currentMap = nil
