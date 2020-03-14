@@ -18,6 +18,7 @@ package processor
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
@@ -57,10 +58,25 @@ func (d *dateAction) Process(evnt *event.Event) *event.Event {
 	}
 
 	for _, layout := range d.Formats {
-		result, err := time.Parse(layout, value)
-		if err != nil {
-			continue
+		var (
+			result time.Time
+			err    error
+		)
+
+		switch layout {
+		case "UNIX":
+			unix, err := strconv.Atoi(layout)
+			if err != nil {
+				continue
+			}
+			result = time.Unix(int64(unix), 0)
+		default:
+			result, err = time.Parse(layout, value)
+			if err != nil {
+				continue
+			}
 		}
+
 		evnt.MustResolve("@timestamp", result)
 		if d.Remove {
 			_, err := evnt.Resolve(d.Field, event.ResolveParamUnset)
