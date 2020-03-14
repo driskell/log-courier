@@ -46,7 +46,7 @@ func newSetFieldAction(p *config.Parser, configPath string, unused map[string]in
 }
 
 func (f *setFieldAction) Process(event *event.Event) *event.Event {
-	val, _, err := f.valueProgram.Eval(map[string]interface{}{"event": event})
+	val, _, err := f.valueProgram.Eval(map[string]interface{}{"event": event.Data()})
 	if err != nil {
 		event.AddError("set_field", fmt.Sprintf("Failed to evaluate: [%s] -> %s", f.ValueExpr, err))
 		return event
