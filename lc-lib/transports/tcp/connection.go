@@ -191,6 +191,16 @@ func (t *connection) serverNegotiation() error {
 
 	_, ok := message.(*protocolHELO)
 	if !ok {
+		if messageImpl, ok := message.(eventsMessage); ok {
+			// Backwards compatible path with older log-courier which do not perform a negotiation
+			t.partialAckChan <- message
+			event := transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
+			if shutdown, err := t.sendEvent(event); shutdown || err != nil {
+				return err
+			}
+			// Now go async
+			return nil
+		}
 		return fmt.Errorf("Unexpected %T during negotiation, expected protocolHELO", message)
 	}
 
