@@ -26,9 +26,14 @@ import (
 	"github.com/oschwald/geoip2-golang"
 )
 
+const (
+	defaultGeoIPActionTarget = "source[geo]"
+)
+
 type geoIPAction struct {
 	Field    string `config:"field"`
 	Database string `config:"database"`
+	Target   string `config:"target"`
 
 	lru    simplelru.LRUCache
 	reader *geoip2.Reader
@@ -54,6 +59,10 @@ func newGeoIPAction(p *config.Parser, configPath string, unused map[string]inter
 		return nil, err
 	}
 	return action, nil
+}
+
+func (g *geoIPAction) Defaults() {
+	g.Target = defaultGeoIPActionTarget
 }
 
 func (g *geoIPAction) Process(event *event.Event) *event.Event {
@@ -98,7 +107,12 @@ func (g *geoIPAction) Process(event *event.Event) *event.Event {
 	}
 
 	var data map[string]interface{}
-	if data, ok = event.MustResolve("source[geo]", nil).(map[string]interface{}); !ok {
+	target, err := event.Resolve(g.Target, nil)
+	if err != nil {
+		event.AddError("geoip", fmt.Sprintf("Failed to load target field '%s': %s", g.Target, err))
+		return event
+	}
+	if data, ok = target.(map[string]interface{}); !ok {
 		data = map[string]interface{}{}
 	}
 
@@ -107,9 +121,12 @@ func (g *geoIPAction) Process(event *event.Event) *event.Event {
 	data["country_iso_code"] = record.Country.IsoCode
 	data["country_name"] = record.Country.Names["en"]
 	data["location"] = map[string]interface{}{
-		"type":        "Point",
+		"type": "Point",
+		// This ordering matches the math coordinates of X Y, so is reversed compared to usual geo-coordinates practice
 		"coordinates": []float64{record.Location.Longitude, record.Location.Latitude},
 	}
+	data["latitude"] = record.Location.Latitude
+	data["longitude"] = record.Location.Longitude
 	data["postal_code"] = record.Postal.Code
 	data["timezone"] = record.Location.TimeZone
 	if len(record.Subdivisions) > 0 {
@@ -117,7 +134,10 @@ func (g *geoIPAction) Process(event *event.Event) *event.Event {
 		data["region_name"] = record.Subdivisions[0].Names["en"]
 	}
 
-	event.MustResolve("source[geo]", data)
+	if _, err := event.Resolve(g.Target, data); err != nil {
+		event.AddError("geoip", fmt.Sprintf("Failed to set target field '%s': %s", g.Target, err))
+		return event
+	}
 	return event
 }
 
