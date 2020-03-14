@@ -37,7 +37,7 @@ type ReceiverConfigEntry struct {
 	Transport string   `config:"transport"`
 	Listen    []string `config:"listen"`
 
-	Unused map[string]interface{}
+	Unused map[string]interface{} `json:",omitempty"`
 }
 
 // Defaults sets default receiver configuration
