@@ -19,24 +19,16 @@ package processor
 import (
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
-	"github.com/google/cel-go/cel"
 )
 
 type addTagAction struct {
-	Tag       string `config:"tag"`
-	ValueExpr string `config:"value"`
-
-	valueProgram cel.Program
+	Tag string `config:"tag"`
 }
 
 func newAddTagAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
 	action := &addTagAction{}
 	if err = p.Populate(action, unused, configPath, true); err != nil {
-		return nil, err
-	}
-	action.valueProgram, err = ParseExpression(action.ValueExpr)
-	if err != nil {
 		return nil, err
 	}
 	return action, nil

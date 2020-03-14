@@ -40,7 +40,7 @@ func newSetFieldAction(p *config.Parser, configPath string, unused map[string]in
 	}
 	action.valueProgram, err = ParseExpression(action.ValueExpr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to parse value for set_field at %s: %s", configPath, err)
 	}
 	return action, nil
 }

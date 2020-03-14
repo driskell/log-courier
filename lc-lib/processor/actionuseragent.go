@@ -40,7 +40,7 @@ func newUserAgentAction(p *config.Parser, configPath string, unused map[string]i
 	}
 	action.lru, err = simplelru.NewLRU(1000, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to initialise LRU cache for user_agent at %s: %s", configPath, err)
 	}
 	action.parser = uaparser.NewFromSaved()
 	return action, nil
