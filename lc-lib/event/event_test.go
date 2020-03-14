@@ -198,14 +198,29 @@ func TestEventAddRemoveTag(t *testing.T) {
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_testing\"]}")) {
 		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
-	event.RemoveTag("_testing")
+	event.AddTag("_adds_before")
 	event.ClearCache()
-	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {
+	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_adds_before\",\"_testing\"]}")) {
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
+	}
+	event.AddTag("adds_after")
+	event.ClearCache()
+	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_adds_before\",\"_testing\",\"adds_after\"]}")) {
 		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 	event.RemoveTag("_testing")
 	event.ClearCache()
-	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {
+	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_adds_before\",\"adds_after\"]}")) {
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
+	}
+	event.RemoveTag("_testing")
+	event.ClearCache()
+	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_adds_before\",\"adds_after\"]}")) {
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
+	}
+	event.AddTag("_adds_without_cap_inc")
+	event.ClearCache()
+	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[\"_adds_before\",\"_adds_without_cap_inc\",\"adds_after\"]}")) {
 		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
 }

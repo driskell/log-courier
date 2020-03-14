@@ -281,8 +281,15 @@ func (e *Event) AddTag(tag string) {
 	if idx >= length {
 		data["tags"] = append(tags, tag)
 	} else if tags[idx] != tag {
-		tags = tags[: length : length+1]
-		copy(tags[idx+1:], tags[idx:])
+		if length+1 > cap(tags) {
+			oldTags := tags
+			tags = make(Tags, length+1)
+			copy(tags, oldTags[:idx])
+			copy(tags[idx+1:], oldTags[idx:])
+		} else {
+			tags = tags[:length+1]
+			copy(tags[idx+1:], tags[idx:])
+		}
 		tags[idx] = tag
 		data["tags"] = tags
 	}
