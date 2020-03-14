@@ -221,7 +221,7 @@ func (t *transportTCP) connect() error {
 		connectionSocket = newConnectionSocketTCP(socket.(*net.TCPConn))
 	}
 
-	connContext := context.WithValue(t.ctx, contextIsClient, false)
+	connContext := context.WithValue(t.ctx, contextIsClient, true)
 	t.conn = newConnection(connContext, connectionSocket, t.pool.Server(), t.eventChan, sendChan)
 
 	log.Notice("[%s] Connected to %s", t.pool.Server(), desc)

@@ -167,7 +167,7 @@ func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 		tlsConfig.ClientCAs.AddCert(cert)
 	}
 
-	if t.config.SSLVerifyPeers {
+	if len(t.config.caList) != 0 && t.config.SSLVerifyPeers {
 		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 

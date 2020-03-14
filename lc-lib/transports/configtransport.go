@@ -71,12 +71,12 @@ func (nc *Config) Validate(p *config.Parser, path string) (err error) {
 		nc.Method = defaultNetworkMethod
 	}
 	if nc.Method != "random" && nc.Method != "failover" && nc.Method != "loadbalance" {
-		err = fmt.Errorf("The network method (%s/method) is not recognised: %s", path, nc.Method)
+		err = fmt.Errorf("The network method (%smethod) is not recognised: %s", path, nc.Method)
 		return
 	}
 
 	if len(nc.Servers) == 0 {
-		err = fmt.Errorf("No network servers were specified (%s/servers)", path)
+		err = fmt.Errorf("No network servers were specified (%sservers)", path)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (nc *Config) Validate(p *config.Parser, path string) (err error) {
 	nc.AddressPools = make([]*addresspool.Pool, len(nc.Servers))
 	for n, server := range nc.Servers {
 		if _, exists := servers[server]; exists {
-			err = fmt.Errorf("The list of network servers (%s/servers) must be unique: %s appears multiple times", path, server)
+			err = fmt.Errorf("The list of network servers (%sservers) must be unique: %s appears multiple times", path, server)
 			return
 		}
 		servers[server] = true

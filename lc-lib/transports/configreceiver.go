@@ -61,7 +61,7 @@ func (c *ReceiverConfigEntry) Init(p *config.Parser, path string) (err error) {
 // Validate the receiver configuration
 func (c *ReceiverConfigEntry) Validate(p *config.Parser, path string) (err error) {
 	if len(c.Listen) == 0 {
-		err = fmt.Errorf("No receiver listen addresses were specified (%s/listen)", path)
+		err = fmt.Errorf("No receiver listen addresses were specified (%slisten)", path)
 		return
 	}
 
