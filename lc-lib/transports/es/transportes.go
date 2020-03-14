@@ -160,7 +160,8 @@ func (t *transportES) populateNodeInfo() error {
 		httpResponse.Body.Close()
 	}()
 	if httpResponse.StatusCode != 200 {
-		return errors.New(httpResponse.Status)
+		body, _ := ioutil.ReadAll(httpResponse.Body)
+		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	decoder := json.NewDecoder(httpResponse.Body)
@@ -239,7 +240,8 @@ func (t *transportES) installTemplate() error {
 		httpResponse.Body.Close()
 	}()
 	if httpResponse.StatusCode != 200 {
-		return errors.New(httpResponse.Status)
+		body, _ := ioutil.ReadAll(httpResponse.Body)
+		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	log.Info("[%s] Successfully installed Elasticsearch index template: %s", t.pool.Server(), name)
