@@ -77,6 +77,13 @@ func (d *dateAction) Process(evnt *event.Event) *event.Event {
 			}
 		}
 
+		// If year 0, we only parsed month/day etc.
+		// We do not support parsing of dates without the current date
+		// For that, we would likely have a flag to say only time parsed, so we can explicitly set the date
+		if result.Year() == 0 {
+			result = time.Date(time.Now().Year(), result.Month(), result.Day(), result.Hour(), result.Minute(), result.Second(), result.Nanosecond(), result.Location())
+		}
+
 		evnt.MustResolve("@timestamp", result)
 		if d.Remove {
 			_, err := evnt.Resolve(d.Field, event.ResolveParamUnset)
