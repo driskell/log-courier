@@ -125,7 +125,7 @@ type General struct {
 // Validate the additional general configuration
 func (gc *General) Validate(p *config.Parser, path string) (err error) {
 	if gc.PersistDir == "" {
-		err = fmt.Errorf("%s/persist directory must be specified", path)
+		err = fmt.Errorf("%spersist directory must be specified", path)
 		return
 	}
 
