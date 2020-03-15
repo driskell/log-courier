@@ -65,7 +65,7 @@ func (d *dateAction) Process(evnt *event.Event) *event.Event {
 
 		switch layout {
 		case "UNIX":
-			unix, err := strconv.ParseFloat(layout, 64)
+			unix, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				continue
 			}
