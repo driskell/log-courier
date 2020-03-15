@@ -242,7 +242,7 @@ func (t *connection) clientNegotiation() error {
 
 	t.supportsEvnt = versMessage.SupportsEVNT()
 	if t.supportsEvnt {
-		log.Debug("[%s] Remote %s supports enhanced EVNT messages", t.poolServer, t.socket.RemoteAddr().String())
+		log.Debug("[%s < %s] Remote supports enhanced EVNT messages", t.poolServer, t.socket.RemoteAddr().String())
 	}
 
 	return nil
@@ -274,6 +274,7 @@ func (t *connection) sender() error {
 				return t.socket.Close()
 			}
 			// Flag as closing, we will end as soon as last acknowledge sent
+			log.Debugf("[%s < %s] Shutdown is waiting for acknowledgement for %d payloads", t.poolServer, t.socket.RemoteAddr().String(), len(t.partialAcks))
 			shutdownChan = nil
 			continue
 		case message := <-ackChan:
@@ -318,6 +319,7 @@ func (t *connection) sender() error {
 			))
 		case <-timeoutChan:
 			// Partial ack
+			log.Debugf("[%s < %s] Sending partial acknowledgement for nonce %s sequence %s", t.poolServer, t.socket.RemoteAddr().String(), t.partialAcks[0].Nonce(), t.lastSequence)
 			msg = &protocolACKN{nonce: t.partialAcks[0].Nonce(), sequence: t.lastSequence}
 		case msg = <-t.sendChan:
 			// Is this the end message? nil? No more to send?
@@ -361,6 +363,7 @@ func (t *connection) sender() error {
 								// Finished! Call Close() to trigger final flush then exit
 								// Safe as receiver is no longer running
 								// This can timeout too so forward back any error...
+								log.Debugf("[%s < %s] All payloads acknowledged, shutting down", t.poolServer, t.socket.RemoteAddr().String())
 								return t.socket.Close()
 							}
 							timeoutChan = nil

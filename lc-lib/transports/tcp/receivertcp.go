@@ -176,7 +176,7 @@ func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 
 // startConnection sets up a new connection
 func (t *receiverTCP) startConnection(socket *net.TCPConn) {
-	log.Notice("[%s] New connection from %s", t.pool.Server(), socket.RemoteAddr().String())
+	log.Notice("[%s < %s] New connection", t.pool.Server(), socket.RemoteAddr().String())
 
 	// Only acknowledgements will be sent
 	// TODO: Consider actual needed value, as we shouldn't expect ACK to block as they are tiny sends
@@ -215,9 +215,9 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	defer t.connWait.Done()
 
 	if err := conn.Run(nil); err != nil {
-		log.Error("[%s] Connection from %s failed: %s", t.pool.Server(), socket.RemoteAddr().String(), err)
+		log.Error("[%s < %s] Connection failed: %s", t.pool.Server(), socket.RemoteAddr().String(), err)
 	} else {
-		log.Info("[%s] Connection from %s closed gracefully", t.pool.Server(), socket.RemoteAddr().String())
+		log.Info("[%s < %s] Connection closed gracefully", t.pool.Server(), socket.RemoteAddr().String())
 	}
 
 	t.connMutex.Lock()
