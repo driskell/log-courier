@@ -17,6 +17,7 @@
 package es
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -156,7 +157,7 @@ func (t *transportES) populateNodeInfo() error {
 		return err
 	}
 	defer func() {
-		ioutil.ReadAll(httpResponse.Body)
+		bufio.NewReader(httpResponse.Body).WriteTo(ioutil.Discard)
 		httpResponse.Body.Close()
 	}()
 	if httpResponse.StatusCode != 200 {
@@ -236,7 +237,7 @@ func (t *transportES) installTemplate() error {
 		return err
 	}
 	defer func() {
-		ioutil.ReadAll(httpResponse.Body)
+		bufio.NewReader(httpResponse.Body).WriteTo(ioutil.Discard)
 		httpResponse.Body.Close()
 	}()
 	if httpResponse.StatusCode != 200 {
@@ -261,14 +262,15 @@ func (t *transportES) checkTemplate(server *net.TCPAddr, name string) (bool, err
 		return false, err
 	}
 	defer func() {
-		ioutil.ReadAll(httpResponse.Body)
+		bufio.NewReader(httpResponse.Body).WriteTo(ioutil.Discard)
 		httpResponse.Body.Close()
 	}()
 	if httpResponse.StatusCode == 200 {
 		return true, nil
 	}
 	if httpResponse.StatusCode != 404 {
-		return false, errors.New(httpResponse.Status)
+		body, _ := ioutil.ReadAll(httpResponse.Body)
+		return false, fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	return false, nil
@@ -371,11 +373,12 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 		return err
 	}
 	defer func() {
-		ioutil.ReadAll(httpResponse.Body)
+		bufio.NewReader(httpResponse.Body).WriteTo(ioutil.Discard)
 		httpResponse.Body.Close()
 	}()
 	if httpResponse.StatusCode != 200 {
-		return errors.New(httpResponse.Status)
+		body, _ := ioutil.ReadAll(httpResponse.Body)
+		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	response, err := newBulkResponse(httpResponse.Body, request)
