@@ -346,7 +346,13 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 		return err
 	}
 
-	url := fmt.Sprintf("http://%s/%s/_bulk", server.String(), defaultIndex)
+	var url string
+	if t.maxMajorVersion >= 7 {
+		// No longer need _type when >= 7
+		url = fmt.Sprintf("http://%s/%s/_bulk", server.String(), defaultIndex)
+	} else {
+		url = fmt.Sprintf("http://%s/%s/_doc/_bulk", server.String(), defaultIndex)
+	}
 	log.Debug("[%s:%d] Performing Elasticsearch bulk request of %d events via %s", t.pool.Server(), id, request.Remaining(), url)
 
 	request.Reset()
