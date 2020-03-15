@@ -536,8 +536,68 @@ func TestResolveSetTimeTimestamp(t *testing.T) {
 	}
 }
 
-// TODO: Bytes() encoding error
+type TestAckknowledger struct {
+	events []*Event
+}
 
-// TODO: DispatchAck
+func (t *TestAckknowledger) Acknowledge(events []*Event) {
+	t.events = append(t.events, events...)
+}
+
+func TestDispatchAck(t *testing.T) {
+	acker := &TestAckknowledger{}
+	events := []*Event{
+		NewEvent(context.Background(), acker, map[string]interface{}{"message": "Hello"}),
+		NewEvent(context.Background(), acker, map[string]interface{}{"message": "Hello"}),
+		NewEvent(context.Background(), acker, map[string]interface{}{"message": "Hello"}),
+		NewEvent(context.Background(), acker, map[string]interface{}{"message": "Hello"}),
+		NewEvent(context.Background(), acker, map[string]interface{}{"message": "Hello"}),
+	}
+	DispatchAck(events)
+	if len(acker.events) != len(events) {
+		t.Fatalf("Only %d of %d events were acked", len(acker.events), len(events))
+	}
+	for idx, entry := range acker.events {
+		if entry != events[idx] {
+			t.Fatal("Acked events did not match")
+		}
+	}
+}
+
+func TestDispatchAckMultiple(t *testing.T) {
+	acker := &TestAckknowledger{}
+	acker2 := &TestAckknowledger{}
+	events := []*Event{
+		NewEvent(context.Background(), acker, map[string]interface{}{"message": "Hello"}),
+		NewEvent(context.Background(), acker2, map[string]interface{}{"message": "Hello"}),
+		NewEvent(context.Background(), acker, map[string]interface{}{"message": "Hello"}),
+		NewEvent(context.Background(), acker2, map[string]interface{}{"message": "Hello"}),
+	}
+	DispatchAck(events)
+	if len(acker.events) != 2 || len(acker2.events) != 2 {
+		t.Fatalf("Acked events do not match (acker1: %d of 2) (acker2: %d of 2)", len(acker.events), len(acker2.events))
+	}
+	for idx, entry := range acker.events {
+		if entry != events[idx*2] {
+			t.Fatal("Acked events did not match")
+		}
+	}
+	for idx, entry := range acker2.events {
+		if entry != events[1+idx*2] {
+			t.Fatal("Acked2 events did not match")
+		}
+	}
+}
+
+func TestDispatchAckNilOrEmpty(t *testing.T) {
+	events := []*Event{
+		NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"}),
+		NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"}),
+	}
+	DispatchAck(events)
+	DispatchAck([]*Event{})
+}
+
+// TODO: Bytes() encoding error
 
 // TODO: Context

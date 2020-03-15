@@ -369,7 +369,7 @@ func dispatchAckForMultipleFuncs(firstAcker Acknowledger, firstAckerEvents []*Ev
 		ackMap[firstAcker] = firstAckerEvents
 	}
 
-	for _, event := range events[1:] {
+	for _, event := range events {
 		if event.acker != nil {
 			ackMap[event.acker] = append(ackMap[event.acker], event)
 		}
