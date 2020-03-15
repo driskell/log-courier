@@ -425,7 +425,7 @@ func (p *Prospector) startHarvester(info *prospectorInfo, fileConfig *FileConfig
 // startHarvesterWithOffset starts a new harvester against a file starting at
 // the given offset
 func (p *Prospector) startHarvesterWithOffset(info *prospectorInfo, fileConfig *FileConfig, offset int64) {
-	// TODO - hook in a shutdown channel
+	// TODO: Hook in a shutdown channel (via context?)
 	info.harvester = fileConfig.StreamConfig.NewHarvester(info.ctx, info.file, info.identity.Stat(), p.config, p.registrar, offset)
 	info.running = true
 	info.status = statusOk

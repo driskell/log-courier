@@ -87,8 +87,6 @@ func (sc *StreamConfig) Init(p *config.Parser, path string) (err error) {
 		}
 	}
 
-	// TODO: EDGE CASE: Event transmit length is uint32, if fields length is rediculous we will fail
-
 	return nil
 }
 

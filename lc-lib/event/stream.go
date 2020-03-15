@@ -20,7 +20,6 @@
 package event
 
 import (
-	"context"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
@@ -62,9 +61,9 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 	return nil
 }
 
-// NewEvent creates a new event structure for the given stream. It applies all
-// transformations necessary from the stream configuration
-func (sc *StreamConfig) NewEvent(ctx context.Context, acker Acknowledger, data map[string]interface{}) *Event {
+// Decorate applies all transformations necessary from the stream configuration
+// to the data that will eventually become an event
+func (sc *StreamConfig) Decorate(data map[string]interface{}) map[string]interface{} {
 	data["@timestamp"] = time.Now()
 
 	if sc.AddHostField {
@@ -83,5 +82,5 @@ func (sc *StreamConfig) NewEvent(ctx context.Context, acker Acknowledger, data m
 		data[k] = sc.Fields[k]
 	}
 
-	return NewEvent(ctx, acker, data)
+	return data
 }
