@@ -26,8 +26,8 @@ import (
 type Timestamp time.Time
 
 // VerifySetEnter checks if we can set the given key (if we're a map for example)
-func (e Timestamp) VerifySetEnter(string) error {
-	return errors.New("Builtin @timestamp is not a map")
+func (e Timestamp) VerifySetEnter(string) (map[string]interface{}, error) {
+	return nil, errors.New("Builtin @timestamp is not a map")
 }
 
 // VerifySet checks if we can be set to the given value

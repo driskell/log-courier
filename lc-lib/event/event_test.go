@@ -142,6 +142,18 @@ func TestNewEventValidTags(t *testing.T) {
 	}
 }
 
+func TestNewEventInvalidMismatchTags(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"tags": []interface{}{false, "_onetag"}})
+	if tags, ok := event.Data()["tags"].(Tags); ok {
+		value, err := json.Marshal(tags)
+		if err != nil || !bytes.Equal(value, []byte("[\"_tags_parse_failure\"]")) {
+			t.Fatalf("Invalid tags for failed tags: %v (error: %v)", tags, err)
+		}
+	} else {
+		t.Fatalf("Missing tags in invalid event: %v", event.Data())
+	}
+}
+
 func TestNewEventBytes(t *testing.T) {
 	event := NewEventFromBytes(context.Background(), nil, []byte("{\"message\":\"basic event\"}"))
 	if timestamp, ok := event.Data()["@timestamp"].(Timestamp); ok {
@@ -443,7 +455,86 @@ func TestMustResolvePanic(t *testing.T) {
 	t.Error("MustResolve did not panic")
 }
 
-// TODO: validateMutation
+func TestResolveMetadata(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	event.MustResolve("@metadata[index]", "World")
+	result := event.MustResolve("@metadata[index]", nil)
+	if result != "World" {
+		t.Fatalf("Incorrect result from resolve: %s", result)
+	}
+}
+
+func TestResolveSetMetadata(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	_, err := event.Resolve("@metadata", map[string]interface{}{"test": "value"})
+	if err == nil {
+		t.Fatal("Unexpectedly set builtin @metadata")
+	}
+}
+
+func TestResolveUnsetMetadata(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	_, err := event.Resolve("@metadata", ResolveParamUnset)
+	if err == nil {
+		t.Fatal("Unexpectedly removed builtin metadata")
+	}
+}
+
+func TestResolveUnsetTimestamp(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	_, err := event.Resolve("@timestamp", ResolveParamUnset)
+	if err == nil {
+		t.Fatal("Unexpectedly removed builtin timestamp")
+	}
+}
+
+func TestResolveUnsetTags(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	_, err := event.Resolve("tags", ResolveParamUnset)
+	if err == nil {
+		t.Fatal("Unexpectedly removed builtin tags")
+	}
+}
+
+func TestResolveSetTags(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	_, err := event.Resolve("tags", []string{"test"})
+	if err == nil {
+		t.Fatal("Unexpectedly set builtin tags")
+	}
+}
+
+func TestResolveOverwriteTags(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	_, err := event.Resolve("tags[overwrite]", "value")
+	if err == nil {
+		t.Fatal("Unexpectedly overwrote builtin tags")
+	}
+}
+
+func TestResolveOverwriteTimestamp(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	_, err := event.Resolve("@timestamp[overwrite]", "value")
+	if err == nil {
+		t.Fatal("Unexpectedly overwrote builtin @timestamp")
+	}
+}
+
+func TestResolveSetStringTimestamp(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	_, err := event.Resolve("@timestamp", "2020-03-15T00:00:00Z")
+	if err == nil {
+		t.Fatal("Unexpectedly set builtin @timestamp to string")
+	}
+}
+
+func TestResolveSetTimeTimestamp(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	_, err := event.Resolve("@timestamp", time.Now())
+	if err != nil {
+		t.Fatalf("Unexpected error setting time to @timestamp: %s", err)
+	}
+}
 
 // TODO: Bytes() encoding error
 

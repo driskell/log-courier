@@ -22,8 +22,8 @@ import "errors"
 type Metadata map[string]interface{}
 
 // VerifySetEnter checks if we can set the given key (if we're a map for example)
-func (e Metadata) VerifySetEnter(string) error {
-	return nil
+func (e Metadata) VerifySetEnter(string) (map[string]interface{}, error) {
+	return e, nil
 }
 
 // VerifySet checks if we can be set to the given value

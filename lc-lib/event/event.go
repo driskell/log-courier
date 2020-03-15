@@ -54,7 +54,7 @@ type Event struct {
 // Builtin is used around builtin keys to allow damage prevention
 type Builtin interface {
 	// VerifySetEnter checks if we can set the given key (if we're a map for example)
-	VerifySetEnter(string) error
+	VerifySetEnter(string) (map[string]interface{}, error)
 	// VerifySet checks if we can be set to the given value
 	VerifySet(interface{}) (interface{}, error)
 }
@@ -111,8 +111,9 @@ func (e *Event) convertData() {
 			for _, tag := range value {
 				tagString, ok := tag.(string)
 				if !ok {
-					e.data["tags"] = Tags{"_tags_parse_failure"}
+					tags = Tags{"_tags_parse_failure"}
 					e.data["tags_parse_error"] = fmt.Sprintf("tags list must contain only strings, found a %T", tag)
+					break
 				}
 				tags = append(tags, tagString)
 			}
@@ -230,29 +231,19 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 			// Can't use non-map, ignore as if it didn't exist, and keep validating
 			// (However, if we are setting, overwrite it with empty map)
 			if value, ok := currentMap[name].(map[string]interface{}); ok {
-				if set != nil {
-					// Block entry to set if this is a builtin that does not want it
-					if builtin, ok := currentMap[name].(Builtin); ok {
-						if err := builtin.VerifySetEnter(name); err != nil {
-							return nil, err
-						}
-					}
-				}
 				currentMap = value
-			} else if set != nil {
-				// Are we not map because we're metadata? Enter it
-				// TODO: Make this part of the Builtin interface: Enter() and returns a map
-				if _, ok := currentMap[name].(Metadata); ok {
-					currentMap = map[string]interface{}(currentMap[name].(Metadata))
-				} else {
-					// Convert path to empty map if allowed
-					newMap := map[string]interface{}{}
-					if _, ok := currentMap[name].(Builtin); ok {
-						return nil, fmt.Errorf("Builtin entry '%s' is not a map", path)
-					}
-					currentMap[name] = newMap
-					currentMap = newMap
+			} else if builtin, ok := currentMap[name].(Builtin); ok {
+				// Block entry to set if this is a builtin that does not want it
+				enter, err := builtin.VerifySetEnter(name)
+				if err != nil {
+					return nil, err
 				}
+				currentMap = enter
+			} else if set != nil {
+				// Convert path to empty map
+				newMap := map[string]interface{}{}
+				currentMap[name] = newMap
+				currentMap = newMap
 			} else {
 				// Doesn't exist so there's no value but keep validating
 				currentMap = nil
