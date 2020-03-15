@@ -74,19 +74,19 @@ func (r *Pool) Init(cfg *config.Config) error {
 
 // Run starts listening
 func (r *Pool) Run() {
-	shutdown := false
+	shutdownChan := r.shutdownChan
 
 ReceiverLoop:
 	for {
 		select {
-		case <-r.shutdownChan:
+		case <-shutdownChan:
 			if len(r.receivers) == 0 {
 				// Nothing to wait to shutdown, return now, don't even log
 				break ReceiverLoop
 			}
 			log.Info("Receiver pool is shutting down receivers")
 			r.shutdown()
-			shutdown = true
+			shutdownChan = nil
 			break
 		case newConfig := <-r.configChan:
 			r.updateReceivers(newConfig)
@@ -98,7 +98,7 @@ ReceiverLoop:
 			case *transports.StatusEvent:
 				if eventImpl.StatusChange() == transports.Finished {
 					delete(r.receivers, eventImpl.Context().Value(poolContextListen).(string))
-					if len(r.receivers) == 0 && shutdown {
+					if len(r.receivers) == 0 && shutdownChan == nil {
 						break ReceiverLoop
 					}
 				}
