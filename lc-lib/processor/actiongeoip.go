@@ -22,7 +22,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
-	"github.com/hashicorp/golang-lru/simplelru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/oschwald/geoip2-golang"
 )
 
@@ -41,7 +41,7 @@ type geoIPAction struct {
 	Database string `config:"database"`
 	Target   string `config:"target"`
 
-	lru    simplelru.LRUCache
+	lru    *lru.Cache
 	reader *geoip2.Reader
 }
 
@@ -56,7 +56,7 @@ func newGeoIPAction(p *config.Parser, configPath string, unused map[string]inter
 	if err = p.Populate(action, unused, configPath, true); err != nil {
 		return nil, err
 	}
-	action.lru, err = simplelru.NewLRU(1000, nil)
+	action.lru, err = lru.New(1000)
 	if err != nil {
 		return nil, err
 	}

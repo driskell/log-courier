@@ -21,7 +21,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
-	"github.com/hashicorp/golang-lru/simplelru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/ua-parser/uap-go/uaparser"
 )
 
@@ -29,7 +29,7 @@ type userAgentAction struct {
 	Field  string `config:"field"`
 	Remove bool   `config:"remove"`
 
-	lru    simplelru.LRUCache
+	lru    *lru.Cache
 	parser *uaparser.Parser
 }
 
@@ -39,7 +39,7 @@ func newUserAgentAction(p *config.Parser, configPath string, unused map[string]i
 	if err = p.Populate(action, unused, configPath, true); err != nil {
 		return nil, err
 	}
-	action.lru, err = simplelru.NewLRU(1000, nil)
+	action.lru, err = lru.New(1000)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialise LRU cache for user_agent at %s: %s", configPath, err)
 	}
