@@ -108,7 +108,7 @@ func (a *apiFiles) processEntry(info *prospectorInfo) {
 		status = "failed"
 		errString = api.String(info.err.Error())
 	case statusInvalid:
-		if _, ok := info.err.(*ProspectorSkipError); ok {
+		if _, ok := info.err.(*prospectorSkipError); ok {
 			status = "skipped"
 		} else {
 			status = "error"

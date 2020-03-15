@@ -265,7 +265,7 @@ func (p *Prospector) processFile(file string, cfg *FileConfig) {
 		info.update(nil, p.iteration)
 
 		// Print a friendly log message
-		if _, ok := err.(*ProspectorSkipError); ok {
+		if _, ok := err.(*prospectorSkipError); ok {
 			log.Info("Skipping %s: %s", file, err)
 		} else {
 			log.Errorf("Error prospecting %s: %s", file, err)
@@ -393,7 +393,7 @@ func (p *Prospector) flagDuplicateError(file string, info *prospectorInfo) {
 	// Have we already logged this error?
 	if info != nil {
 		if info.status == statusInvalid {
-			if skipErr, ok := info.err.(*ProspectorSkipError); ok && skipErr.message == "Duplicate" {
+			if skipErr, ok := info.err.(*prospectorSkipError); ok && skipErr.message == "Duplicate" {
 				return
 			}
 		}

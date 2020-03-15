@@ -16,14 +16,14 @@
 
 package prospector
 
-type ProspectorSkipError struct {
+type prospectorSkipError struct {
 	message string
 }
 
-func newProspectorSkipError(message string) *ProspectorSkipError {
-	return &ProspectorSkipError{message: message}
+func newProspectorSkipError(message string) *prospectorSkipError {
+	return &prospectorSkipError{message: message}
 }
 
-func (e *ProspectorSkipError) Error() string {
+func (e *prospectorSkipError) Error() string {
 	return e.message
 }
