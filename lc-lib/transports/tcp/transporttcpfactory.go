@@ -55,8 +55,8 @@ type TransportTCPFactory struct {
 	SSLCertificate string        `config:"ssl certificate"`
 	SSLKey         string        `config:"ssl key"`
 	SSLCA          string        `config:"ssl ca"`
-	MinTLSVersion  string        `config:"min tls version`
-	MaxTLSVersion  string        `config:"max tls version`
+	MinTLSVersion  string        `config:"min tls version"`
+	MaxTLSVersion  string        `config:"max tls version"`
 
 	// Internal
 	certificate     *tls.Certificate

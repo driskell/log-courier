@@ -49,8 +49,8 @@ type ReceiverTCPFactory struct {
 	SSLKey         string   `config:"ssl key"`
 	SSLClientCA    []string `config:"ssl client ca"`
 	SSLVerifyPeers bool     `config:"verify_peers"`
-	MinTLSVersion  string   `config:"min tls version`
-	MaxTLSVersion  string   `config:"max tls version`
+	MinTLSVersion  string   `config:"min tls version"`
+	MaxTLSVersion  string   `config:"max tls version"`
 
 	// Internal
 	certificate     *tls.Certificate
