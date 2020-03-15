@@ -65,11 +65,11 @@ func (d *dateAction) Process(evnt *event.Event) *event.Event {
 
 		switch layout {
 		case "UNIX":
-			unix, err := strconv.Atoi(layout)
+			unix, err := strconv.ParseFloat(layout, 64)
 			if err != nil {
 				continue
 			}
-			result = time.Unix(int64(unix), 0)
+			result = time.Unix(int64(unix), int64((unix - float64(int64(unix))*1000)))
 		default:
 			result, err = time.Parse(layout, value)
 			if err != nil {
