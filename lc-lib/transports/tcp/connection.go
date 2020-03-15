@@ -319,7 +319,7 @@ func (t *connection) sender() error {
 			))
 		case <-timeoutChan:
 			// Partial ack
-			log.Debugf("[%s < %s] Sending partial acknowledgement for nonce %s sequence %s", t.poolServer, t.socket.RemoteAddr().String(), t.partialAcks[0].Nonce(), t.lastSequence)
+			log.Debugf("[%s < %s] Sending partial acknowledgement for payload %x sequence %d", t.poolServer, t.socket.RemoteAddr().String(), t.partialAcks[0].Nonce(), t.lastSequence)
 			msg = &protocolACKN{nonce: t.partialAcks[0].Nonce(), sequence: t.lastSequence}
 		case msg = <-t.sendChan:
 			// Is this the end message? nil? No more to send?
@@ -377,6 +377,8 @@ func (t *connection) sender() error {
 						// Update last sequence
 						t.lastSequence = ack.sequence
 					}
+
+					log.Debugf("[%s < %s] Sending acknowledgement for payload %x sequence %d", t.poolServer, t.socket.RemoteAddr().String(), ack.nonce, ack.sequence)
 				}
 			}
 		}
@@ -418,6 +420,7 @@ func (t *connection) receiver() error {
 			case eventsMessage:
 				// Start the sender partial acks - this blocks if too many outstanding which stops us receiving more
 				t.partialAckChan <- message
+				log.Debugf("[%s < %s] Received payload %x with %d events", t.poolServer, t.socket.RemoteAddr().String(), messageImpl.Nonce(), len(messageImpl.Events()))
 				event = transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
 			}
 		}
