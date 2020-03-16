@@ -33,6 +33,7 @@ type Pool struct {
 	shutdownChan <-chan struct{}
 	configChan   <-chan *config.Config
 
+	cfg       *config.Config
 	pipelines *Config
 	sequencer *event.Sequencer
 	fanout    chan *event.Bundle
@@ -44,8 +45,6 @@ func NewPool(app *core.App) *Pool {
 	return &Pool{
 		input:     make(chan []*event.Event, 16), // TODO: Make configurable?
 		sequencer: event.NewSequencer(),
-		fanout:    make(chan *event.Bundle, 4),
-		collector: make(chan *event.Bundle, 4),
 	}
 }
 
@@ -69,8 +68,9 @@ func (p *Pool) SetConfigChan(configChan <-chan *config.Config) {
 	p.configChan = configChan
 }
 
-// Init does nothing as nothing to initialise
+// Init initialises
 func (p *Pool) Init(cfg *config.Config) error {
+	p.cfg = cfg
 	p.pipelines = FetchConfig(cfg)
 	return nil
 }
@@ -81,7 +81,13 @@ func (p *Pool) Run() {
 		var newConfig *config.Config
 		ctx, shutdownFunc := context.WithCancel(context.Background())
 		shutdown := false
-		routineCount := 4
+		routineCount := p.cfg.GeneralPart("processor").(*General).ProcessorRoutines
+		inProgress := 0
+		inputChan := p.input
+
+		// Setup channels
+		p.fanout = make(chan *event.Bundle, routineCount)
+		p.collector = make(chan *event.Bundle, routineCount)
 
 		for i := 0; i < routineCount; i++ {
 			go p.processorRoutine(ctx)
@@ -95,12 +101,22 @@ func (p *Pool) Run() {
 			case newConfig = <-p.configChan:
 				// Request shutdown so we can restart with new configuration
 				shutdownFunc()
-			case events := <-p.input:
+			case events := <-inputChan:
 				// Closed input means shutting down gracefully
 				if events == nil {
 					shutdown = true
 					close(p.fanout)
 					continue
+				}
+				// Max number of calls to p.fanout must not exceed 2xroutine
+				// That will account for each routine inside a call to collector
+				// And then one extra on the channel waiting
+				// Any subsequent send would block - yet the processor is waiting on us to collect
+				// We could have two separate routines to fanout and collect but since we're
+				// handling resequencing we should just have one to coordinate that
+				inProgress++
+				if inProgress >= routineCount*2 {
+					inputChan = nil
 				}
 				bundle := event.NewBundle(events)
 				p.sequencer.Track(bundle)
@@ -112,10 +128,14 @@ func (p *Pool) Run() {
 				if bundle == nil {
 					// A routine shutdown
 					routineCount--
+					if routineCount == 0 {
+						// All routines complete
+						break PipelineLoop
+					}
 				}
-				if routineCount == 0 {
-					// All routines complete
-					break PipelineLoop
+				inProgress--
+				if inputChan == nil {
+					inputChan = p.input
 				}
 				result := p.sequencer.Enforce(bundle)
 				for _, bundle := range result {
@@ -133,6 +153,7 @@ func (p *Pool) Run() {
 			break
 		}
 
+		p.cfg = newConfig
 		p.pipelines = FetchConfig(newConfig)
 	}
 

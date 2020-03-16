@@ -28,7 +28,14 @@ type astState int
 const (
 	astStatePipeline astState = iota
 	astStateIf
+
+	defaultGeneralProcessorRoutines = 4
 )
+
+// General contains general configuration values
+type General struct {
+	ProcessorRoutines int `config:"processor routines"`
+}
 
 // Config contains configuration for a processor pipeline
 type Config struct {
@@ -41,6 +48,17 @@ type Config struct {
 type ConfigASTEntry struct {
 	Unused map[string]interface{}
 	Path   string
+}
+
+// Validate the additional general configuration
+func (gc *General) Validate(p *config.Parser, path string) (err error) {
+	// Enforce maximum of 2 GB since event transmit length is uint32
+	if gc.ProcessorRoutines > 1024 {
+		err = fmt.Errorf("%sprocessor routines can not be greater than 1024", path)
+		return
+	}
+
+	return
 }
 
 // Init the pipeline configuration
@@ -188,6 +206,12 @@ func FetchConfig(cfg *config.Config) *Config {
 
 // init registers this module provider
 func init() {
+	config.RegisterGeneral("processor", func() interface{} {
+		return &General{
+			ProcessorRoutines: defaultGeneralProcessorRoutines,
+		}
+	})
+
 	config.RegisterSection("pipelines", func() interface{} {
 		return &Config{}
 	})
