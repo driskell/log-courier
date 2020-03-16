@@ -59,6 +59,8 @@ type connection struct {
 	supportsEvnt bool
 	rwBuffer     bufio.ReadWriter
 
+	// receiverShutdownMutex ensures receiver shutdown happens once as it can be triggered externally and by sender
+	receiverShutdownMutex sync.RWMutex
 	// shutdown is flagged when receiver is shutting down
 	receiverShutdown bool
 	// receiverShutdownChan requests receiver to stop receiving data
@@ -581,6 +583,12 @@ func (t *connection) Acknowledge(events []*event.Event) {
 // Receivers do not gracefully shutdown from our side, only remote side, so this is called to stop receiving more data
 // For Transports this is used to teardown due to a problem
 func (t *connection) Teardown() {
+	t.receiverShutdownMutex.Lock()
+	defer t.receiverShutdownMutex.Unlock()
+	if t.receiverShutdown {
+		return
+	}
+	t.receiverShutdown = true
 	close(t.receiverShutdownChan)
 }
 
