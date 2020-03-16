@@ -54,14 +54,15 @@ type connection struct {
 	eventChan    chan<- transports.Event
 	sendChan     chan protocolMessage
 	shutdownChan chan struct{}
-	shutdown     bool
 
 	// TODO: Merge with context - become clientContext
 	supportsEvnt bool
 	rwBuffer     bufio.ReadWriter
 
-	// Used to allow shutdown to be triggered from any routine via single close
-	shutdownMutex sync.RWMutex
+	// shutdown is flagged when receiver is shutting down
+	receiverShutdown bool
+	// receiverShutdownChan requests receiver to stop receiving data
+	receiverShutdownChan chan struct{}
 	// senderErr stores exit error from sender
 	senderErr error
 	// senderShutdownChan requests sender to begin to gracefully shutdown - called from receiver when EOF
@@ -106,7 +107,7 @@ func (t *connection) Run(startedCallback func()) error {
 	t.rwBuffer.Reader = bufio.NewReader(t.socket)
 	t.rwBuffer.Writer = bufio.NewWriter(t.socket)
 
-	// Shutdown chan can block - it is only ever closed
+	t.receiverShutdownChan = make(chan struct{})
 	t.senderShutdownChan = make(chan struct{})
 
 	if err := t.socket.Setup(); err != nil {
@@ -143,6 +144,9 @@ func (t *connection) Run(startedCallback func()) error {
 	if err == nil {
 		err = t.senderErr
 	}
+
+	// Unblock any external routines communicating via SendMessage
+	close(t.shutdownChan)
 
 	return err
 }
@@ -344,6 +348,9 @@ func (t *connection) sender() error {
 								log.Debugf("[%s < %s] All payloads acknowledged, shutting down", t.poolServer, t.socket.RemoteAddr().String())
 								return t.socket.Close()
 							}
+							if !timeout.Stop() {
+								<-timeout.C
+							}
 							timeoutChan = nil
 						}
 
@@ -364,7 +371,10 @@ func (t *connection) sender() error {
 
 		// Reset timeout
 		if timeoutChan != nil {
-			timeout.Reset(10 * time.Second)
+			if !timeout.Stop() {
+				<-timeout.C
+			}
+			timeout.Reset(5 * time.Second)
 		}
 
 		if err := t.writeMsg(msg); err != nil {
@@ -504,7 +514,7 @@ func (t *connection) receiverRead(data []byte) (bool, error) {
 ReceiverReadLoop:
 	for {
 		select {
-		case <-t.shutdownChan:
+		case <-t.receiverShutdownChan:
 			err = errHardCloseRequested
 			break ReceiverReadLoop
 		default:
@@ -570,13 +580,7 @@ func (t *connection) Acknowledge(events []*event.Event) {
 // Receivers do not gracefully shutdown from our side, only remote side, so this is called to stop receiving more data
 // For Transports this is used to teardown due to a problem
 func (t *connection) Teardown() {
-	t.shutdownMutex.Lock()
-	defer t.shutdownMutex.Unlock()
-	if t.shutdown {
-		return
-	}
-	t.shutdown = true
-	close(t.shutdownChan)
+	close(t.receiverShutdownChan)
 }
 
 // SendChan returns the sendChan

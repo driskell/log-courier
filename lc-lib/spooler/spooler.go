@@ -186,10 +186,8 @@ func (s *Spooler) resetTimer() {
 	s.timerStart = time.Now()
 
 	// Stop the timer, and ensure the channel is empty before restarting it
-	s.timer.Stop()
-	select {
-	case <-s.timer.C:
-	default:
+	if !s.timer.Stop() {
+		<-s.timer.C
 	}
 	s.timer.Reset(s.genConfig.SpoolTimeout)
 }
@@ -204,9 +202,11 @@ func (s *Spooler) reloadConfig(cfg *config.Config) bool {
 		if !s.sendSpool() {
 			return false
 		}
-		s.timerStart = time.Now()
-		s.timer.Reset(s.genConfig.SpoolTimeout)
+		s.resetTimer()
 	} else {
+		if !s.timer.Stop() {
+			<-s.timer.C
+		}
 		s.timer.Reset(passed - s.genConfig.SpoolTimeout)
 	}
 

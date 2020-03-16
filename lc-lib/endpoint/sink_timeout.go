@@ -49,7 +49,9 @@ func (s *Sink) TimeoutChan() <-chan time.Time {
 // resetTimeoutTimer resets the TimeoutTimer() channel for the next timeout
 func (s *Sink) resetTimeoutTimer() {
 	if s.timeoutList.Len() == 0 {
-		s.timeoutTimer.Stop()
+		if !s.timeoutTimer.Stop() {
+			<-s.timeoutTimer.C
+		}
 		return
 	}
 
