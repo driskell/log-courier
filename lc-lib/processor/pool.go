@@ -133,6 +133,7 @@ func (p *Pool) Run() {
 						// All routines complete
 						break PipelineLoop
 					}
+					continue
 				}
 				inProgress--
 				if inputChan == nil {

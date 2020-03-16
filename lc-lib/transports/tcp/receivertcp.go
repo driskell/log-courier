@@ -71,7 +71,7 @@ func (t *receiverTCP) controllerRoutine() {
 			break
 		}
 
-		log.Error("Receiver error, resetting: %s", err)
+		log.Error("[%s] Receiver error, resetting: %s", t.pool.Server(), err)
 
 		if t.retryWait() {
 			break
@@ -80,7 +80,7 @@ func (t *receiverTCP) controllerRoutine() {
 
 	t.closeConnections()
 
-	log.Info("Receiver shutdown")
+	log.Info("[%s] Receiver exiting", t.pool.Server())
 }
 
 // retryWait waits the backoff timeout before attempting to listen again
