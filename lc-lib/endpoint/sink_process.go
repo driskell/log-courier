@@ -68,7 +68,7 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 				continue
 			}
 
-			// Still in the config, ask the OnFish handler if we should re-add it
+			// Still in the config, ask the OnFinish handler if we should re-add it
 			if s.OnFinish(endpoint) {
 				s.AddEndpoint(server, addresspool.NewPool(server), endpoint.finishOnFail)
 			}
