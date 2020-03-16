@@ -366,17 +366,15 @@ func (t *connection) sender() error {
 						t.lastSequence = ack.sequence
 					}
 
-					timeout.Reset(5 * time.Second)
+					// Reset timeout
+					if timeoutChan != nil {
+						if !timeout.Stop() {
+							<-timeout.C
+						}
+						timeout.Reset(5 * time.Second)
+					}
 					log.Debugf("[%s < %s] Sending acknowledgement for payload %x sequence %d", t.poolServer, t.socket.RemoteAddr().String(), ack.nonce, ack.sequence)
 				}
-			}
-
-			// Reset timeout
-			if timeoutChan != nil {
-				if !timeout.Stop() {
-					<-timeout.C
-				}
-				timeout.Reset(5 * time.Second)
 			}
 		}
 
