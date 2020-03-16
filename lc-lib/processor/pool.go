@@ -19,7 +19,6 @@ package processor
 import (
 	"context"
 	"encoding/json"
-	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
@@ -34,14 +33,19 @@ type Pool struct {
 	shutdownChan <-chan struct{}
 	configChan   <-chan *config.Config
 
-	wait      sync.WaitGroup
 	pipelines *Config
+	sequencer *event.Sequencer
+	fanout    chan *event.Bundle
+	collector chan *event.Bundle
 }
 
 // NewPool creates a new processor pool
 func NewPool(app *core.App) *Pool {
 	return &Pool{
-		input: make(chan []*event.Event, 16), // TODO: Make configurable?
+		input:     make(chan []*event.Event, 16), // TODO: Make configurable?
+		sequencer: event.NewSequencer(),
+		fanout:    make(chan *event.Bundle, 4),
+		collector: make(chan *event.Bundle, 4),
 	}
 }
 
@@ -74,26 +78,54 @@ func (p *Pool) Init(cfg *config.Config) error {
 // Run starts the processing routines
 func (p *Pool) Run() {
 	for {
+		var newConfig *config.Config
 		ctx, shutdownFunc := context.WithCancel(context.Background())
+		shutdown := false
+		routineCount := 4
 
-		for i := 0; i < 4; i++ {
-			p.wait.Add(1)
-			go p.processorRoutine(ctx.Done(), nil)
+		for i := 0; i < routineCount; i++ {
+			go p.processorRoutine(ctx)
 		}
 
-		p.wait.Add(1)
-		newConfig := p.processorRoutine(nil, p.configChan)
-		if newConfig == nil {
-			// If primary exits without config reload data it means we're shutting down
-			// All other routines will follow shortly
+	PipelineLoop:
+		for {
+			select {
+			case <-p.shutdownChan:
+				shutdown = true
+			case newConfig = <-p.configChan:
+				// Request shutdown so we can restart with new configuration
+				shutdownFunc()
+			case events := <-p.input:
+				bundle := event.NewBundle(events)
+				p.sequencer.Track(bundle)
+				select {
+				case <-p.shutdownChan:
+				case p.fanout <- bundle:
+				}
+			case bundle := <-p.collector:
+				if bundle == nil {
+					// A routine shutdown
+					routineCount--
+				}
+				if routineCount == 0 {
+					// All routines complete
+					break PipelineLoop
+				}
+				result := p.sequencer.Enforce(bundle)
+				for _, bundle := range result {
+					select {
+					case <-p.shutdownChan:
+						shutdown = true
+					case p.output <- bundle.Events():
+					}
+				}
+			}
+		}
+
+		if shutdown {
 			shutdownFunc()
-			p.wait.Wait()
 			break
 		}
-
-		// Soft stop all other routines and restart
-		shutdownFunc()
-		p.wait.Wait()
 
 		p.pipelines = FetchConfig(newConfig)
 	}
@@ -103,36 +135,30 @@ func (p *Pool) Run() {
 }
 
 // processorRoutine runs a single routine for processing
-func (p *Pool) processorRoutine(softShutdownChan <-chan struct{}, configChan <-chan *config.Config) *config.Config {
-	defer func() {
-		p.wait.Done()
-	}()
-
+func (p *Pool) processorRoutine(ctx context.Context) *config.Config {
 	for {
 		select {
 		case <-p.shutdownChan:
 			return nil
-		case <-softShutdownChan:
+		case <-ctx.Done():
 			return nil
-		case newConfig := <-configChan:
-			// Return the new configuration
-			return newConfig
-		case events := <-p.input:
-			if events == nil {
-				// Finished!
+		case bundle := <-p.fanout:
+			if bundle == nil {
+				p.collector <- nil
 				return nil
 			}
 
 			start := time.Now()
+			events := bundle.Events()
 			for idx, event := range events {
 				events[idx] = p.processEvent(event)
 			}
+			log.Debugf("Processed %d events in %v", bundle.Len(), time.Since(start))
 
-			log.Debugf("Processed %d events in %v", len(events), time.Since(start))
 			select {
 			case <-p.shutdownChan:
 				return nil
-			case p.output <- events:
+			case p.collector <- bundle:
 			}
 		}
 	}
