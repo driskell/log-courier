@@ -106,6 +106,7 @@ func (p *Pool) Run() {
 				if events == nil {
 					shutdown = true
 					close(p.fanout)
+					inputChan = nil
 					continue
 				}
 				// Max number of calls to p.fanout must not exceed 2xroutine
