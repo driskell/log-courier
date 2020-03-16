@@ -2,29 +2,26 @@
 
 The filter codec strips out unwanted events, shipping only those desired.
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
-
-- [Example](#example)
-- [Options](#options)
-  - [`"patterns"`](#patterns)
-  - [`"match"`](#match)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+- [Filter Codec](#filter-codec)
+  - [Example](#example)
+  - [Options](#options)
+    - [`"patterns"`](#%22patterns%22)
+    - [`"match"`](#%22match%22)
 
 ## Example
 
-	{
-		"name": "filter",
-		"patterns": [ "^(.*connect from.*)$", "^(.*status=sent.*)$" ]
-	}
+```json
+{
+  "name": "filter",
+  "patterns": [ "^(.*connect from.*)$", "^(.*status=sent.*)$" ]
+}
+```
 
 ## Options
 
 ### `"patterns"`
 
-*Array of Strings. Required*
+Array of Strings. Required
 
 A set of regular expressions to match against each line.
 
@@ -33,7 +30,7 @@ number of matches occurred (dictated by the `match` configuration that defaults
 to `any`), the event is shipped. Patterns with higher hit rates should be
 specified first when `match` is `any`.
 
-The pattern syntax is detailed at https://code.google.com/p/re2/wiki/Syntax.
+The pattern syntax is detailed at <https://code.google.com/p/re2/wiki/Syntax.>
 
 To negate a pattern such that a line is considered to match when the pattern
 does not match, prefix the pattern with an exclamation mark ("!"). For example,
@@ -47,8 +44,8 @@ start of the pattern. For example, "=!useful!" would match a line containing,
 
 ### `"match"`
 
-*String. Optional. Default: "any"*  
-*Available values: "any", "all"*
+String. Optional. Default: "any"  
+Available values: "any", "all"
 
 Specifies whether matching a single pattern will ship an event, or if all
 patterns must match before shipping occurs.

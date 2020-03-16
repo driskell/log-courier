@@ -1,19 +1,14 @@
 # Command Line Arguments
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
-
-- [Overview](#overview)
-- [`-config=<path>`](#-configpath)
-- [`-config-test`](#-config-test)
-- [`-cpuprofile=<path>`](#-cpuprofilepath)
-- [`-from-beginning`](#-from-beginning)
-- [`-list-supported`](#-list-supported)
-- [`-stdin`](#-stdin)
-- [`-version`](#-version)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+- [Command Line Arguments](#command-line-arguments)
+  - [Overview](#overview)
+  - [`-config=<path>`](#configpath)
+  - [`-config-test`](#config-test)
+  - [`-cpuprofile=<path>`](#cpuprofilepath)
+  - [`-from-beginning`](#from-beginning)
+  - [`-list-supported`](#list-supported)
+  - [`-stdin`](#stdin)
+  - [`-version`](#version)
 
 ## Overview
 
@@ -23,7 +18,7 @@ The `log-courier` command accepts various command line arguments.
 
 The path to the JSON configuration file to load.
 
-```
+```shell
 log-courier -config=/etc/log-courier/log-courier.json
 ```
 

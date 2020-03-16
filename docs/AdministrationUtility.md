@@ -1,26 +1,21 @@
 # Administration Utility
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
-
-- [Overview](#overview)
-- [Available Commands](#available-commands)
-  - [`help`](#help)
-  - [`status`](#status)
-  - [`prospector [status | files [id]]`](#prospector-status--files-id)
-  - [`publisher [status | endpoints [id]]`](#publisher-status--endpoints-id)
-  - [`reload`](#reload)
-  - [`version`](#version)
-  - [`debug`](#debug)
-- [Command Line Options](#command-line-options)
-  - [`-config`](#-config)
-  - [`-connect`](#-connect)
-  - [`-quiet`](#-quiet)
-  - [`-version`](#-version)
-  - [`-watch`](#-watch)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+- [Administration Utility](#administration-utility)
+  - [Overview](#overview)
+  - [Available Commands](#available-commands)
+    - [`help`](#help)
+    - [`status`](#status)
+    - [`prospector [status | files [id]]`](#prospector-status--files-id)
+    - [`publisher [status | endpoints [id]]`](#publisher-status--endpoints-id)
+    - [`reload`](#reload)
+    - [`version`](#version)
+    - [`debug`](#debug)
+  - [Command Line Options](#command-line-options)
+    - [`-config`](#config)
+    - [`-connect`](#connect)
+    - [`-quiet`](#quiet)
+    - [`-version`](#version-1)
+    - [`-watch`](#watch)
 
 ## Overview
 
@@ -84,14 +79,14 @@ The `lc-admin` command accepts the following command line options.
 
 ### `-config`
 
-*RPM/DEB Package Default: /etc/log-courier/log-courier.yaml*
+RPM/DEB Package Default: /etc/log-courier/log-courier.yaml
 
 Load the given configuration file and connect to the `admin` `listen address`
 specified inside it. Ignored if `-connect` is specified.
 
 ### `-connect`
 
-*Default: tcp:127.0.0.1:1234*
+Default: tcp:127.0.0.1:1234
 
 Connect to the REST API using the specified address. Any `-config` option is
 ignored if `-connect` is used.
@@ -111,18 +106,18 @@ Examples:
 
 ### `-quiet`
 
-*Default: false*
+Default: false
 
 Quietly execute the command line argument and output only the result.
 
 ### `-version`
 
-*Default: false*
+Default: false
 
 Display the Log Courier client version.
 
 ### `-watch`
 
-*Default: false*
+Default: false
 
 Repeat the command specified on the command line every second

@@ -1,17 +1,12 @@
 # Logstash Integration
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
-
-- [Overview](#overview)
-- [Installation](#installation)
-  - [Logstash Plugin Manager](#logstash-plugin-manager)
-  - [Manual installation](#manual-installation)
-  - [Local-only Installation](#local-only-installation)
-- [Configuration](#configuration)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+- [Logstash Integration](#logstash-integration)
+  - [Overview](#overview)
+  - [Installation](#installation)
+    - [Logstash Plugin Manager](#logstash-plugin-manager)
+    - [Manual installation](#manual-installation)
+    - [Local-only Installation](#local-only-installation)
+  - [Configuration](#configuration)
 
 ## Overview
 
@@ -75,9 +70,9 @@ transfer them across. Follow the instructions for Manual Installation and
 install the dependency gems first using the same instructions as for the Log
 Courier gem.
 
-* https://rubygems.org/gems/ffi-rzmq-core
-* https://rubygems.org/gems/ffi-rzmq
-* https://rubygems.org/gems/multi_json
+- <https://rubygems.org/gems/ffi-rzmq-core>
+- <https://rubygems.org/gems/ffi-rzmq>
+- <https://rubygems.org/gems/multi_json>
 
 ## Configuration
 
@@ -94,36 +89,36 @@ configuration for the input plugin follows.
 
 The following options are available for the input plugin:
 
-* transport - "tcp", "tls", "plainzmq" or "zmq" (default: "tls")
-* address - Interface address to listen on (defaults to all interfaces)
-* port - The port number to listen on
-* ssl_certificate - Path to server SSL certificate (tls)
-* ssl_key - Path to server SSL private key (tls)
-* ssl_key_passphrase - Password for ssl_key (tls, optional)
-* ssl_verify - If true, verifies client certificates (tls, default false)
-* ssl_verify_default_ca - Accept client certificates signed by systems root CAs
+- transport - "tcp", "tls", "plainzmq" or "zmq" (default: "tls")
+- address - Interface address to listen on (defaults to all interfaces)
+- port - The port number to listen on
+- ssl_certificate - Path to server SSL certificate (tls)
+- ssl_key - Path to server SSL private key (tls)
+- ssl_key_passphrase - Password for ssl_key (tls, optional)
+- ssl_verify - If true, verifies client certificates (tls, default false)
+- ssl_verify_default_ca - Accept client certificates signed by systems root CAs
 (tls)
-* ssl_verify_ca - Path to an SSL CA certificate to use for client certificate
+- ssl_verify_ca - Path to an SSL CA certificate to use for client certificate
 verification (tls)
-* curve_secret_key - CurveZMQ secret key for the server (zmq)
-* max_packet_size - The maximum packet size to accept (default 10485760,
+- curve_secret_key - CurveZMQ secret key for the server (zmq)
+- max_packet_size - The maximum packet size to accept (default 10485760,
 corresponds to Log Courier's `"spool max bytes"`)
-* peer_recv_queue - The size of the internal queue for each peer
-* add_peer_fields - Add "peer" field to events that identifies source host, and
+- peer_recv_queue - The size of the internal queue for each peer
+- add_peer_fields - Add "peer" field to events that identifies source host, and
 "peer_ssl_dn" for TLS peers with client certificates
 
 The following options are available for the output plugin:
 
-* addresses - Address to connect to in array format (only the first address will
+- addresses - Address to connect to in array format (only the first address will
 be used at the moment)
-* port - Port to connect to
-* ssl_ca - Path to SSL certificate to verify server certificate
-* ssl_certificate - Path to client SSL certificate (optional)
-* ssl_key - Path to client SSL private key (optional)
-* ssl_key_passphrase - Password for ssl_key (optional)
-* spool_size - Maximum number of events to spool before a flush is forced
+- port - Port to connect to
+- ssl_ca - Path to SSL certificate to verify server certificate
+- ssl_certificate - Path to client SSL certificate (optional)
+- ssl_key - Path to client SSL private key (optional)
+- ssl_key_passphrase - Password for ssl_key (optional)
+- spool_size - Maximum number of events to spool before a flush is forced
 (default 1024)
-* idle_timeout - Maximum time in seconds to wait for a full spool before
+- idle_timeout - Maximum time in seconds to wait for a full spool before
 flushing anyway (default 5)
 
 NOTE: The tcp, plainzmq and zmq transports are not implemented in the output

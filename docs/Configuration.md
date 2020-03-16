@@ -4,59 +4,60 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [Overview](#overview)
-- [YAML Format](#yaml-format)
-- [JSON Format](#json-format)
-- [Examples](#examples)
-- [Reloading](#reloading)
-- [Field Types](#field-types)
-  - [String, Number, Boolean, Array, Dictionary](#string-number-boolean-array-dictionary)
-  - [Duration](#duration)
-  - [Fileglob](#fileglob)
-- [Stream Configuration](#stream-configuration)
-  - [`add host field`](#add-host-field)
-  - [`add offset field`](#add-offset-field)
-  - [`add path field`](#add-path-field)
-  - [`add timezone field`](#add-timezone-field)
-  - [`codecs`](#codecs)
-  - [`dead time`](#dead-time)
-  - [`fields`](#fields)
-- [`admin`](#admin)
-  - [`enabled`](#enabled)
-  - [`listen address`](#listen-address)
-- [`files`](#files)
-  - [`paths`](#paths)
-- [`general`](#general)
-  - [`log file`](#log-file)
-  - [`global fields`](#global-fields)
-  - [`host`](#host)
-  - [`log level`](#log-level)
-  - [`log stdout`](#log-stdout)
-  - [`log syslog`](#log-syslog)
-  - [`line buffer bytes`](#line-buffer-bytes)
-  - [`max line bytes`](#max-line-bytes)
-  - [`persist directory`](#persist-directory)
-  - [`prospect interval`](#prospect-interval)
-  - [`spool max bytes`](#spool-max-bytes)
-  - [`spool size`](#spool-size)
-  - [`spool timeout`](#spool-timeout)
-- [`includes`](#includes)
-- [`network`](#network)
-  - [`failure backoff`](#failure-backoff)
-  - [`failure backoff max`](#failure-backoff-max)
-  - [`max pending payloads`](#max-pending-payloads)
-  - [`method`](#method)
-  - [`reconnect backoff`](#reconnect-backoff)
-  - [`reconnect backoff max`](#reconnect-backoff-max)
-  - [`rfc 2782 srv`](#rfc-2782-srv)
-  - [`rfc 2782 service`](#rfc-2782-service)
-  - [`servers`](#servers)
-  - [`ssl ca`](#ssl-ca)
-  - [`ssl certificate`](#ssl-certificate)
-  - [`ssl key`](#ssl-key)
-  - [`timeout`](#timeout)
-  - [`transport`](#transport)
-- [`stdin`](#stdin)
+- [Log Courier Configuration](#log-courier-configuration)
+  - [Overview](#overview)
+  - [YAML Format](#yaml-format)
+  - [JSON Format](#json-format)
+  - [Examples](#examples)
+  - [Reloading](#reloading)
+  - [Field Types](#field-types)
+    - [String, Number, Boolean, Array, Dictionary](#string-number-boolean-array-dictionary)
+    - [Duration](#duration)
+    - [Fileglob](#fileglob)
+  - [Stream Configuration](#stream-configuration)
+    - [`add host field`](#add-host-field)
+    - [`add offset field`](#add-offset-field)
+    - [`add path field`](#add-path-field)
+    - [`add timezone field`](#add-timezone-field)
+    - [`codecs`](#codecs)
+    - [`dead time`](#dead-time)
+    - [`fields`](#fields)
+  - [`admin`](#admin)
+    - [`enabled`](#enabled)
+    - [`listen address`](#listen-address)
+  - [`files`](#files)
+    - [`paths`](#paths)
+  - [`general`](#general)
+    - [`log file`](#log-file)
+    - [`global fields`](#global-fields)
+    - [`host`](#host)
+    - [`log level`](#log-level)
+    - [`log stdout`](#log-stdout)
+    - [`log syslog`](#log-syslog)
+    - [`line buffer bytes`](#line-buffer-bytes)
+    - [`max line bytes`](#max-line-bytes)
+    - [`persist directory`](#persist-directory)
+    - [`prospect interval`](#prospect-interval)
+    - [`spool max bytes`](#spool-max-bytes)
+    - [`spool size`](#spool-size)
+    - [`spool timeout`](#spool-timeout)
+  - [`includes`](#includes)
+  - [`network`](#network)
+    - [`failure backoff`](#failure-backoff)
+    - [`failure backoff max`](#failure-backoff-max)
+    - [`max pending payloads`](#max-pending-payloads)
+    - [`method`](#method)
+    - [`reconnect backoff`](#reconnect-backoff)
+    - [`reconnect backoff max`](#reconnect-backoff-max)
+    - [`rfc 2782 srv`](#rfc-2782-srv)
+    - [`rfc 2782 service`](#rfc-2782-service)
+    - [`servers`](#servers)
+    - [`ssl ca`](#ssl-ca)
+    - [`ssl certificate`](#ssl-certificate)
+    - [`ssl key`](#ssl-key)
+    - [`timeout`](#timeout)
+    - [`transport`](#transport)
+  - [`stdin`](#stdin)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -69,9 +70,9 @@ When loading a configuration file, the format is determined by the file
 extension. If the file extension is not recognised, Log Courier reports an
 error.
 
-* `.yaml` and `.yml` - YAML
-* `.json` - JSON
-* `.conf` - JSON
+- `.yaml` and `.yml` - YAML
+- `.json` - JSON
+- `.conf` - JSON
 
 ## YAML Format
 
@@ -89,7 +90,7 @@ accordingly.
 
 It is best explained with an example:
 
-```
+```yaml
 network:
   servers:
     - "10.0.0.1:12345"
@@ -113,7 +114,7 @@ another block, or a list of something. Lists are comma-separated lists of these
 and are wrapped in `[` and `]`. The configuration file is formed by a
 single block, as shown below.
 
-```
+```json
 {
   "network": {
     "servers": [ "10.0.0.1:12345", "10.0.0.2:12345" ],
@@ -130,7 +131,7 @@ characters until the end of the line to be ignored. Block comments start with
 a forwarder slash and an asterisk and cause all characters, including new lines,
 to be ignored until an asterisk followed by a forwarder slash is encountered.
 
-```
+```json
 {
     "general": {
         # General configuration here
@@ -150,12 +151,12 @@ to be ignored until an asterisk followed by a forwarder slash is encountered.
 Several configuration examples are available for perusal in the
 [examples folder](examples). Examples use the preferred format of YAML.
 
-* [Ship a single log file](examples/example-single.yaml)
-* [Ship a folder of log files](examples/example-folder.yaml)
-* [Ship from STDIN](examples/example-stdin.yaml)
-* [Ship logs with extra field information](examples/example-fields.yaml)
-* [Multiline log processing](examples/example-multiline.yaml)
-* [Multiple codecs](examples/example-multiple-codecs.yaml)
+- [Ship a single log file](examples/example-single.yaml)
+- [Ship a folder of log files](examples/example-folder.yaml)
+- [Ship from STDIN](examples/example-stdin.yaml)
+- [Ship logs with extra field information](examples/example-fields.yaml)
+- [Multiline log processing](examples/example-multiline.yaml)
+- [Multiple codecs](examples/example-multiple-codecs.yaml)
 
 An example [JSON configuration](examples/example-json.conf) is also available
 that follows a single log file.
@@ -168,7 +169,12 @@ Log Courier can reload its configuration without the need for a restart. It will
 do this upon receiving the SIGHUP signal. To send this signal, run the following
 command replacing 1234 with the Process ID of Log Courier.
 
-    kill -HUP 1234
+```shell
+kill -HUP 1234
+```
+
+Packaged versions of Log Courier will usually include a service wrapper so you
+can use `systemctl` or `service` to request a reload.
 
 Log Courier will reopen its own log file if one has been configured, allowing
 native log rotation to take place.
@@ -200,19 +206,19 @@ value`, separated by a comma.
 This can be either a number or a string describing the duration. A number will
 always be interpreted in seconds.
 
-* `5` = 5 seconds
-* `300` = 5 minutes (which is 300 seconds)
-* `5s` = 5 seconds
-* `15m` = 15 minutes
+- `5` = 5 seconds
+- `300` = 5 minutes (which is 300 seconds)
+- `5s` = 5 seconds
+- `15m` = 15 minutes
 
 ### Fileglob
 
 A fileglob is a string representing a file pattern.
 
 The pattern format used is detailed at
-http://golang.org/pkg/path/filepath/#Match and is shown below for reference:
+<http://golang.org/pkg/path/filepath/#Match> and is shown below for reference:
 
-```
+```text
 term:
     '*'         matches any sequence of non-Separator characters
     '?'         matches any single non-Separator character
@@ -227,10 +233,10 @@ character-range:
     lo '-' hi   matches character c for lo <= c <= hi
 ```
 
-* `/var/log/*.log`
-* `/var/log/program/log_????.log`
-* `/var/log/httpd/access.log`
-* `/var/log/httpd/access.log.[0-9]`
+- `/var/log/*.log`
+- `/var/log/program/log_????.log`
+- `/var/log/httpd/access.log`
+- `/var/log/httpd/access.log.[0-9]`
 
 ## Stream Configuration
 
@@ -241,14 +247,14 @@ adding extra fields.
 
 ### `add host field`
 
-*Boolean. Optional. Default: true*
+Boolean. Optional. Default: true
 
 Adds an automatic "host" field to generated events that contains the `host`
 value from the general configuration section.
 
 ### `add offset field`
 
-*Boolean. Optional. Default: true*
+Boolean. Optional. Default: true
 
 Adds an automatic "offset" field to generated events that contains the current
 offset in the current data stream.
@@ -260,22 +266,22 @@ will be changed to false.*
 
 ### `add path field`
 
-*Boolean. Optional. Default: true*
+Boolean. Optional. Default: true
 
 Adds an automatic "path" field to generated events that contains the path to the
 current data stream. For stdin, this field is set to a hyphen, "-".
 
 ### `add timezone field`
 
-*Boolean. Optional. Default: false*
+Boolean. Optional. Default: false
 
 Adds an automatic "timezone" field to generated events that contains the local
 machine's local timezone in the format, "-0700 MST".
 
 ### `codecs`
 
-*Codec configuration. Optional. Default: Single `plain` codec  
-Configuration reload will only affect new or resumed files*
+Codec configuration. Optional. Default: Single `plain` codec  
+Configuration reload will only affect new or resumed files
 
 *Depending on how log-courier was built, some codecs may not be available. Run
 `log-courier -list-supported` to see the list of codecs available in a specific
@@ -293,19 +299,19 @@ filtering those that aren't required.
 All configurations are an array of dictionaries with at least a "name" key.
 Additional options can be provided if the specified codec allows.
 
-* `[ { "name": "codec-name" } ]`
-* `[ { "name": "codec-name", "option1": "value", "option2": "42" } ]`
-* `[ { "name": "first-name" }, { "name": "second-name" } ]`
+- `[ { "name": "codec-name" } ]`
+- `[ { "name": "codec-name", "option1": "value", "option2": "42" } ]`
+- `[ { "name": "first-name" }, { "name": "second-name" } ]`
 
 Aside from "plain", the following codecs are available at this time.
 
-* [Filter](codecs/Filter.md)
-* [Multiline](codecs/Multiline.md)
+- [Filter](codecs/Filter.md)
+- [Multiline](codecs/Multiline.md)
 
 ### `dead time`
 
-*Duration. Optional. Default: "1h"  
-Configuration reload will only affect new or resumed files*
+Duration. Optional. Default: "1h"  
+Configuration reload will only affect new or resumed files
 
 If a log file has not been modified in this time period, it will be closed and
 Log Courier will simply watch it for modifications. If the file is modified it
@@ -317,17 +323,17 @@ ensure old log files are not kept open preventing deletion.
 
 ### `fields`
 
-*Dictionary. Optional  
-Configuration reload will only affect new or resumed files*
+Dictionary. Optional  
+Configuration reload will only affect new or resumed files
 
 Extra fields to attach to events prior to shipping. These can be simple strings,
 numbers or even arrays and dictionaries.
 
 Examples:
 
-* `{ "type": "syslog" }`
-* `{ "type": "apache", "server_names": [ "example.com", "www.example.com" ] }`
-* `{ "type": "program", "program": { "exec": "program.py", "args": [ "--run", "--daemon" ] } }`
+- `{ "type": "syslog" }`
+- `{ "type": "apache", "server_names": [ "example.com", "www.example.com" ] }`
+- `{ "type": "program", "program": { "exec": "program.py", "args": [ "--run", "--daemon" ] } }`
 
 ## `admin`
 
@@ -336,17 +342,17 @@ Courier and allows you to configure the interface to listen on.
 
 ### `enabled`
 
-*Boolean. Optional. Default: false  
-Requires restart*
+Boolean. Optional. Default: false  
+Requires restart
 
 Enables the REST interface. The `lc-admin` utility can be used to connect to
 this.
 
 ### `listen address`
 
-*String. Required when `enabled` is true.  
+String. Required when `enabled` is true.  
 Default: tcp:127.0.0.1:1234  
-RPM/DEB Package Default: unix:/var/run/log-courier/admin.socket*
+RPM/DEB Package Default: unix:/var/run/log-courier/admin.socket
 
 The address the REST interface should listen on must be in the format
 `transport:address`.
@@ -358,24 +364,26 @@ unix domain socket. If no transport name is specified, "tcp" is assumed.
 
 Examples:
 
-    127.0.0.1:1234
-    tcp:127.0.0.1:1234
-    unix:/var/run/log-courier/admin.socket
+```text
+127.0.0.1:1234
+tcp:127.0.0.1:1234
+unix:/var/run/log-courier/admin.socket
+```
 
 ## `files`
 
 The files configuration lists the file groups that contain the logs you wish to
 ship. It is an array of file group configurations.
 
-```
-    [
-        {
-            # First file group
-        },
-        {
-            # Second file group
-        }
-    ]
+```json
+[
+    {
+        # First file group
+    },
+    {
+        # Second file group
+    }
+]
 ```
 
 In addition to the configuration parameters specified below, each file group may
@@ -383,7 +391,7 @@ also have [Stream Configuration](#stream-configuration) parameters specified.
 
 ### `paths`
 
-*Array of Fileglobs. Required*
+Array of Fileglobs. Required
 
 At least one Fileglob must be specified and all matching files for all provided
 globs will be monitored.
@@ -401,9 +409,9 @@ line argument.*
 
 Examples:
 
-* `[ "/var/log/*.log" ]`
-* `[ "/var/log/program/log_????.log" ]`
-* `[ "/var/log/httpd/access.log", "/var/log/httpd/access.log.[0-9]" ]`
+ -`[ "/var/log/*.log" ]`
+ -`[ "/var/log/program/log_????.log" ]`
+ -`[ "/var/log/httpd/access.log", "/var/log/httpd/access.log.[0-9]" ]`
 
 ## `general`
 
@@ -413,15 +421,15 @@ of new log files.
 
 ### `log file`
 
-*Filepath. Optional  
-Requires restart*
+Filepath. Optional  
+Requires restart
 
 A log file to save Log Courier's internal log into. May be used in conjunction with `log stdout` and `log syslog`.
 
 ### `global fields`
 
-*Dictionary. Optional  
-Configuration reload will only affect new or resumed files*
+Dictionary. Optional  
+Configuration reload will only affect new or resumed files
 
 Extra fields to attach to events prior to shipping. This is identical in
 behaviour to the `fields` Stream Configuration and applies globally to the
@@ -429,8 +437,8 @@ behaviour to the `fields` Stream Configuration and applies globally to the
 
 ### `host`
 
-*String. Optional. Default: System FQDN.  
-Configuration reload will only affect new or resumed files*
+String. Optional. Default: System FQDN.  
+Configuration reload will only affect new or resumed files
 
 Every event has an automatic field, "host", that contains the current system
 FQDN. Using this option allows a custom value to be given to the "host" field
@@ -438,23 +446,23 @@ instead of the system FQDN.
 
 ### `log level`
 
-*String. Optional. Default: "info".  
+String. Optional. Default: "info".  
 Available values: "critical", "error", "warning", "notice", "info", "debug"  
-Requires restart*
+Requires restart
 
 The minimum level of detail to produce in Log Courier's internal log.
 
 ### `log stdout`
 
-*Boolean. Optional. Default: true  
-Requires restart*
+Boolean. Optional. Default: true  
+Requires restart
 
 Enables sending of Log Courier's internal log to the console (stdout). May be used in conjunction with `log syslog` and `log file`.
 
 ### `log syslog`
 
-*Boolean. Optional. Default: false  
-Requires restart*
+Boolean. Optional. Default: false  
+Requires restart
 
 Enables sending of Log Courier's internal log to syslog. May be used in conjunction with `log stdout` and `log file`.
 
@@ -462,7 +470,7 @@ Enables sending of Log Courier's internal log to syslog. May be used in conjunct
 
 ### `line buffer bytes`
 
-*Number. Optional. Default: 16384*
+Number. Optional. Default: 16384
 
 The size of the line buffer used when reading files.
 
@@ -472,7 +480,7 @@ just above the 90th percentile (or average) line length.
 
 ### `max line bytes`
 
-*Number. Optional. Default: 1048576*
+Number. Optional. Default: 1048576
 
 The maxmimum line length to process. If a line exceeds this length, it will be
 split across multiple events. Each split line will have a "tag" field added
@@ -486,9 +494,9 @@ This setting can not be greater than the `spool max bytes` setting.
 
 ### `persist directory`
 
-*String. Required  
+String. Required  
 RPM/DEB Package Default: /var/lib/log-courier
-Requires restart*
+Requires restart
 
 The directory that Log Courier should store its persistence data in.
 
@@ -499,14 +507,14 @@ acknowledges receipt of the events.
 
 ### `prospect interval`
 
-*Duration. Optional. Default: 10*
+Duration. Optional. Default: 10
 
 How often Log Courier should check for changes on the filesystem, such as the
 appearance of new log files, rotations and deletions.
 
 ### `spool max bytes`
 
-*Number. Optional. Default: 10485760*
+Number. Optional. Default: 10485760
 
 The maximum size of an event spool, before compression. If an incomplete spool
 does not have enough room for the next event, it will be flushed immediately.
@@ -518,7 +526,7 @@ The maximum value for this setting is 2147483648 (2 GiB).
 
 ### `spool size`
 
-*Number. Optional. Default: 1024*
+Number. Optional. Default: 1024
 
 How many events to spool together and flush at once. This improves efficiency
 when processing large numbers of events by submitting them for processing in
@@ -534,27 +542,31 @@ useful only in very specific circumstances.*
 
 ### `spool timeout`
 
-*Duration. Optional. Default: 5*
+Duration. Optional. Default: 5
 
 The maximum amount of time to wait for a full spool. If an incomplete spool is
 not filled within this time limit, the spool will be flushed immediately.
 
 ## `includes`
 
-*Array of Fileglobs. Optional*
+Array of Fileglobs. Optional
 
 Includes should be an array of additional file group configuration files to
 read. Each configuration file should follow the format of the `files` section.
 
-    "includes": [ "/etc/log-courier/conf.d/*.conf" ]
+```json
+"includes": [ "/etc/log-courier/conf.d/*.conf" ]
+```
 
 A file at `/etc/log-courier/conf.d/apache.conf` could then contain the
 following.
 
-    [ {
-        "paths": [ "/var/log/httpd/access.log" ],
-        "fields": { "type": "access_log" }
-    } ]
+```json
+[ {
+    "paths": [ "/var/log/httpd/access.log" ],
+    "fields": { "type": "access_log" }
+} ]
+```
 
 ## `network`
 
@@ -563,7 +575,7 @@ what transport and security to use.
 
 ### `failure backoff`
 
-*Duration. Optional. Default: 0*
+Duration. Optional. Default: 0
 
 Pause this long before allowing a failed endpoint to be used again. On each
 consecutive failure, the pause is exponentially increased.
@@ -579,14 +591,14 @@ from being used again immediately and slowing down the entire pipeline.)
 
 ### `failure backoff max`
 
-*Duration. Optional. Default: 300s*
+Duration. Optional. Default: 300s
 
 The maximum time to wait before using a failed endpoint again. This prevents the
 exponential increase of `failure backoff` from becoming too high.
 
 ### `max pending payloads`
 
-*Number. Optional. Default: 4*
+Number. Optional. Default: 4
 
 The maximum number of spools that can be in transit to a single endpoint at any
 one time. Each spool will be kept in memory until the remote endpoint
@@ -603,8 +615,8 @@ cause excessive memory usage.*
 
 ### `method`
 
-*String. Optional. Default: "random"
-Available values: "random", "failover", "loadbalance"*
+String. Optional. Default: "random"
+Available values: "random", "failover", "loadbalance"
 
 Specified the method to use when managing multiple `servers`.
 
@@ -628,8 +640,8 @@ available endpoints.
 
 ### `reconnect backoff`
 
-*Duration. Optional. Default: 0  
-Available when `transport` is one of: `tcp`, `tls`*
+Duration. Optional. Default: 0  
+Available when `transport` is one of: `tcp`, `tls`
 
 Pause this long before reconnecting to a endpoint. If the remote endpoint is
 completely down, this slows down the rate of reconnection attempts. On each
@@ -641,22 +653,22 @@ consecutive failure.
 
 ### `reconnect backoff max`
 
-*Duration. Optional. Default: 300s  
-Available when `transport` is one of: `tcp`, `tls`*
+Duration. Optional. Default: 300s  
+Available when `transport` is one of: `tcp`, `tls`
 
 The maximum time to wait between reconnect attempts. This prevents the
 exponential increase of `reconnect backoff` from becoming too high.
 
 ### `rfc 2782 srv`
 
-*Boolean. Optional. Default: true*
+Boolean. Optional. Default: true
 
 When performing SRV DNS lookups for entries in the [`servers`](#servers) list,
 use RFC 2782 style lookups of the form `_service._proto.example.com`.
 
 ### `rfc 2782 service`
 
-*String. Optional. Default: "courier"*
+String. Optional. Default: "courier"
 
 Specifies the service to request when using RFC 2782 style SRV lookups. Using
 the default, "courier", an "@example.com" endpoint entry would result in a
@@ -664,42 +676,42 @@ lookup for `_courier._tcp.example.com`.
 
 ### `servers`
 
-*Array of Strings. Required*
+Array of Strings. Required
 
 Sets the list of endpoints to send logs to. Accepted formats for each endpoint
 entry are:
 
-* `ipaddress:port`
-* `hostname:port` (A DNS lookup is performed)
-* `@hostname` (A SRV DNS lookup is performed, with further DNS lookups if
+- `ipaddress:port`
+- `hostname:port` (A DNS lookup is performed)
+- `@hostname` (A SRV DNS lookup is performed, with further DNS lookups if
 required)
 
 How multiple endpoints are managed is defined by the `method` configuration.
 
 ### `ssl ca`
 
-*Filepath. Required  
-Available when `transport` is one of: `tls`*
+Filepath. Required  
+Available when `transport` is one of: `tls`
 
 Path to a PEM encoded certificate file to use to verify the connected endpoint.
 
 ### `ssl certificate`
 
-*Filepath. Optional  
-Available when `transport` is one of: `tls`*
+Filepath. Optional  
+Available when `transport` is one of: `tls`
 
 Path to a PEM encoded certificate file to use as the client certificate.
 
 ### `ssl key`
 
-*Filepath. Required with `ssl certificate`  
-Available when `transport` is one of: `tls`*
+Filepath. Required with `ssl certificate`  
+Available when `transport` is one of: `tls`
 
 Path to a PEM encoded private key to use with the client certificate.
 
 ### `timeout`
 
-*Duration. Optional. Default: 15*
+Duration. Optional. Default: 15
 
 This is the maximum time Log Courier will wait for a endpoint to respond to a
 request after logs were send to it. If the endpoint does not respond within this
@@ -707,8 +719,8 @@ time period the connection will be closed and reset.
 
 ### `transport`
 
-*String. Optional. Default: "tls"  
-Available values: "tcp", "tls"*
+String. Optional. Default: "tls"  
+Available values: "tcp", "tls"
 
 <!-- *Depending on how log-courier was built, some transports may not be available.
 Run `log-courier -list-supported` to see the list of transports available in

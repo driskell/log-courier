@@ -1,15 +1,10 @@
 # Public Repositories
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
-
-- [Overview](#overview)
-- [Redhat / CentOS](#redhat--centos)
-- [Ubuntu](#ubuntu)
-- [Older Version 1.x Packages](#older-version-1x-packages)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+- [Public Repositories](#public-repositories)
+  - [Overview](#overview)
+  - [Redhat / CentOS](#redhat--centos)
+  - [Ubuntu](#ubuntu)
+  - [Older Version 1.x Packages](#older-version-1x-packages)
 
 ## Overview
 

@@ -1,13 +1,8 @@
 # SSL Certificate Utility
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
-
-- [Overview](#overview)
-- [Usage](#usage)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+- [SSL Certificate Utility](#ssl-certificate-utility)
+  - [Overview](#overview)
+  - [Usage](#usage)
 
 ## Overview
 
@@ -24,7 +19,7 @@ utility will be automatically built alongside the `log-courier` binary.
 To generate a private key and certificate pair, run the `lc-tlscert` utility.
 You will receive a prompt like below.
 
-```
+```text
 Specify the Common Name for the certificate. The common name
 can be anything, but is usually set to the server's primary
 DNS name. Even if you plan to connect via IP address you
@@ -39,7 +34,7 @@ receiving events. For example, `logstash.corp.example.com`.
 The next step will be to enter the DNS names and IP addresses your Log Courier
 clients will use to connect to the server.
 
-```
+```text
 The next step is to add any additional DNS names and IP
 addresses that clients may use to connect to the server. If
 you plan to connect to the server via IP address and not DNS
@@ -63,7 +58,7 @@ browser will expect the certificate coming from the server to contain
 When you've finished, leaving the prompt empty and pressing enter will complete
 the process and you will be presented with a final question.
 
-```
+```text
 How long should the certificate be valid for? A year (365
 days) is usual but requires the certificate to be regenerated
 within a year or the certificate will cease working.
@@ -84,7 +79,7 @@ reduces the burden of replacing the certificate files on many many servers.
 Once the number of days is provided, a summary will appear before the key and
 certificate pair is generated.
 
-```
+```text
 Common name: logstash.corp.example.com
 DNS SANs:
     logstash.ext.example.com
@@ -101,7 +96,7 @@ Press any key to begin generating the self-signed certificate.
 Press any key to generate the certificate. The process may take a few seconds
 to complete. When completed you will be presented with the following.
 
-```
+```text
 Successfully generated certificate
     Certificate: selfsigned.crt
     Private Key: selfsigned.key
