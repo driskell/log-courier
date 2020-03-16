@@ -26,11 +26,10 @@ type receiverTCP struct {
 	backoff      *core.ExpBackoff
 
 	// Internal
-	tlsConfig  *tls.Config
-	connCount  int
-	connMutex  sync.Mutex
-	connWait   sync.WaitGroup
-	listenWait sync.WaitGroup
+	tlsConfig *tls.Config
+	connCount int
+	connMutex sync.Mutex
+	connWait  sync.WaitGroup
 }
 
 // ReloadConfig returns true if the transport needs to be restarted in order
@@ -56,14 +55,13 @@ func (t *receiverTCP) ReloadConfig(cfg *config.Config, factory transports.Receiv
 
 // startController starts the controller
 func (t *receiverTCP) startController() {
-	t.listenWait.Add(1)
 	go t.controllerRoutine()
 }
 
 // controllerRoutine managed restarting listening as things fail
 func (t *receiverTCP) controllerRoutine() {
 	defer func() {
-		t.listenWait.Done()
+		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
 	}()
 
 	for {
@@ -146,7 +144,6 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 // stop ends the accept loop
 func (t *receiverTCP) Shutdown() {
 	t.shutdownFunc()
-	t.listenWait.Wait()
 }
 
 // getTLSConfig returns TLS configuration for the connection
