@@ -29,12 +29,14 @@ const (
 	astStatePipeline astState = iota
 	astStateIf
 
-	defaultGeneralProcessorRoutines = 4
+	defaultGeneralProcessorRoutines    = 4
+	defaultGeneralProcessorDebugEvents = false
 )
 
 // General contains general configuration values
 type General struct {
-	ProcessorRoutines int `config:"processor routines"`
+	ProcessorRoutines int  `config:"processor routines"`
+	DebugEvents       bool `config:"debug events"`
 }
 
 // Config contains configuration for a processor pipeline
@@ -209,6 +211,7 @@ func init() {
 	config.RegisterGeneral("processor", func() interface{} {
 		return &General{
 			ProcessorRoutines: defaultGeneralProcessorRoutines,
+			DebugEvents:       defaultGeneralProcessorDebugEvents,
 		}
 	})
 

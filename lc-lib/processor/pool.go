@@ -33,11 +33,12 @@ type Pool struct {
 	shutdownChan <-chan struct{}
 	configChan   <-chan *config.Config
 
-	cfg       *config.Config
-	pipelines *Config
-	sequencer *event.Sequencer
-	fanout    chan *event.Bundle
-	collector chan *event.Bundle
+	cfg         *config.Config
+	pipelines   *Config
+	debugEvents bool
+	sequencer   *event.Sequencer
+	fanout      chan *event.Bundle
+	collector   chan *event.Bundle
 }
 
 // NewPool creates a new processor pool
@@ -70,8 +71,7 @@ func (p *Pool) SetConfigChan(configChan <-chan *config.Config) {
 
 // Init initialises
 func (p *Pool) Init(cfg *config.Config) error {
-	p.cfg = cfg
-	p.pipelines = FetchConfig(cfg)
+	p.applyConfig(cfg)
 	return nil
 }
 
@@ -155,8 +155,7 @@ func (p *Pool) Run() {
 			break
 		}
 
-		p.cfg = newConfig
-		p.pipelines = FetchConfig(newConfig)
+		p.applyConfig(newConfig)
 	}
 
 	close(p.output)
@@ -182,6 +181,7 @@ func (p *Pool) processorRoutine(ctx context.Context) *config.Config {
 			for idx, event := range events {
 				events[idx] = p.processEvent(event)
 			}
+
 			log.Debugf("Processed %d events in %v", bundle.Len(), time.Since(start))
 
 			select {
@@ -199,7 +199,16 @@ func (p *Pool) processEvent(evnt *event.Event) *event.Event {
 		evnt = entry.Process(evnt)
 	}
 	evnt.ClearCache()
-	eventJSON, _ := json.Marshal(evnt.Data())
-	log.Debugf("Final event: %s", eventJSON)
+	if p.debugEvents {
+		eventJSON, _ := json.Marshal(evnt.Data())
+		log.Debugf("Final event: %s", eventJSON)
+	}
 	return evnt
+}
+
+// applyConfig applies the given configuration
+func (p *Pool) applyConfig(cfg *config.Config) {
+	p.cfg = cfg
+	p.pipelines = FetchConfig(cfg)
+	p.debugEvents = cfg.GeneralPart("processor").(*General).DebugEvents
 }
