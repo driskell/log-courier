@@ -50,10 +50,8 @@ type transportTCP struct {
 	backoff        *core.ExpBackoff
 
 	// Internal
-	// sendMutex is so we can easily discard existing sendChan and its contents each time we reset
+	connMutex    sync.RWMutex
 	conn         *connection
-	sendMutex    sync.Mutex
-	sendChan     chan protocolMessage
 	supportsEVNT bool
 	shutdown     bool
 }
@@ -95,29 +93,26 @@ func (t *transportTCP) controllerRoutine() {
 
 	// Main connect loop
 	for {
-		var err error
-		var shutdown bool
-
-		err = t.connect()
+		conn, err := t.connect()
 		if err == nil {
-			t.sendMutex.Lock()
+			t.connMutex.Lock()
+			t.conn = conn
 			t.supportsEVNT = t.conn.SupportsEVNT()
-			t.sendChan = t.conn.SendChan()
-			shutdown = t.shutdown
-			t.sendMutex.Unlock()
+			shutdown := t.shutdown
+			t.connMutex.Unlock()
 
 			// Request immediate shutdown if we just noticed it
 			if shutdown {
-				t.sendChan <- nil
+				t.conn.SendMessage(nil)
 			}
 
 			err = t.conn.Run(t.startCallback)
 		}
 
-		t.sendMutex.Lock()
-		shutdown = t.shutdown
-		t.sendChan = nil
-		t.sendMutex.Unlock()
+		t.connMutex.Lock()
+		shutdown := t.shutdown
+		t.conn = nil
+		t.connMutex.Unlock()
 
 		if err != nil {
 			if err == errHardCloseRequested {
@@ -194,12 +189,12 @@ func (t *transportTCP) getTLSConfig() (tlsConfig *tls.Config) {
 }
 
 // connect selects the next address to use and triggers the connect
-func (t *transportTCP) connect() error {
+func (t *transportTCP) connect() (*connection, error) {
 	t.checkClientCertificates()
 
 	addr, err := t.pool.Next()
 	if err != nil {
-		return fmt.Errorf("Failed to select next address: %s", err)
+		return nil, fmt.Errorf("Failed to select next address: %s", err)
 	}
 
 	desc := t.pool.Desc()
@@ -208,7 +203,7 @@ func (t *transportTCP) connect() error {
 
 	socket, err := net.DialTimeout("tcp", addr.String(), t.netConfig.Timeout)
 	if err != nil {
-		return fmt.Errorf("Failed to connect to %s: %s", desc, err)
+		return nil, fmt.Errorf("Failed to connect to %s: %s", desc, err)
 	}
 
 	// Maxmium number of payloads we will queue - must be correct as otherwise
@@ -226,19 +221,19 @@ func (t *transportTCP) connect() error {
 	}
 
 	connContext := context.WithValue(t.ctx, contextIsClient, true)
-	t.conn = newConnection(connContext, connectionSocket, t.pool.Server(), t.eventChan, sendChan)
+
+	conn := newConnection(connContext, connectionSocket, t.pool.Server(), t.eventChan, sendChan)
 
 	log.Notice("[%s] Connected to %s", t.pool.Server(), desc)
-
-	return nil
+	return conn, nil
 }
 
 // Write a message to the transport - only valid after Started transport event received
 func (t *transportTCP) Write(payload *payload.Payload) error {
-	t.sendMutex.Lock()
-	defer t.sendMutex.Unlock()
-	if t.sendChan == nil {
-		return fmt.Errorf("Invalid connection state")
+	t.connMutex.Lock()
+	defer t.connMutex.Unlock()
+	if t.conn == nil {
+		return errors.New("Invalid connection state")
 	}
 	var msg protocolMessage
 	if t.supportsEVNT {
@@ -246,19 +241,17 @@ func (t *transportTCP) Write(payload *payload.Payload) error {
 	} else {
 		msg = &protocolJDAT{nonce: payload.Nonce, events: payload.Events()}
 	}
-	t.sendChan <- msg
-	return nil
+	return t.conn.SendMessage(msg)
 }
 
 // Ping the remote server - only valid after Started transport event received
 func (t *transportTCP) Ping() error {
-	t.sendMutex.Lock()
-	defer t.sendMutex.Unlock()
-	if t.sendChan == nil {
+	t.connMutex.Lock()
+	defer t.connMutex.Unlock()
+	if t.conn == nil {
 		return errors.New("Invalid connection state")
 	}
-	t.sendChan <- &protocolPING{}
-	return nil
+	return t.conn.SendMessage(&protocolPING{})
 }
 
 // Fail the transport
@@ -272,10 +265,10 @@ func (t *transportTCP) Fail() {
 // Shutdown the transport - only valid after Started transport event received
 func (t *transportTCP) Shutdown() {
 	// Sending nil triggers graceful shutdown
-	t.sendMutex.Lock()
-	defer t.sendMutex.Unlock()
-	if t.sendChan != nil {
-		t.sendChan <- nil
+	t.connMutex.Lock()
+	defer t.connMutex.Unlock()
+	if t.conn != nil {
+		t.conn.SendMessage(nil)
 	}
 	t.shutdown = true
 }

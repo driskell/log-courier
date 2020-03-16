@@ -48,22 +48,24 @@ var errHardCloseRequested = errors.New("Connection shutdown was requested")
 
 type connection struct {
 	// Constructor
-	ctx        context.Context
-	socket     connectionSocket
-	poolServer string
-	eventChan  chan<- transports.Event
-	sendChan   chan protocolMessage
-	// shutdownChan requests sender to hard close, optionally due to an error
-	shutdownChan chan error
+	ctx          context.Context
+	socket       connectionSocket
+	poolServer   string
+	eventChan    chan<- transports.Event
+	sendChan     chan protocolMessage
+	shutdownChan chan struct{}
+	shutdown     bool
 
 	// TODO: Merge with context - become clientContext
 	supportsEvnt bool
 	rwBuffer     bufio.ReadWriter
 
-	// senderShutdownChan requests sender to begin to gracefully shutdown
+	// Used to allow shutdown to be triggered from any routine via single close
+	shutdownMutex sync.RWMutex
+	// senderErr stores exit error from sender
+	senderErr error
+	// senderShutdownChan requests sender to begin to gracefully shutdown - called from receiver when EOF
 	senderShutdownChan chan struct{}
-	// senderFailedChan receives error from sender so receiver can hard close
-	senderFailedChan chan error
 	// wait can be used to wait for all routines to complete
 	wait sync.WaitGroup
 	// finalErr contains the final error for this connection after TearDown completed
@@ -86,7 +88,7 @@ func newConnection(ctx context.Context, socket connectionSocket, poolServer stri
 		poolServer:   poolServer,
 		eventChan:    eventChan,
 		sendChan:     sendChan,
-		shutdownChan: make(chan error),
+		shutdownChan: make(chan struct{}),
 	}
 }
 
@@ -106,8 +108,6 @@ func (t *connection) Run(startedCallback func()) error {
 
 	// Shutdown chan can block - it is only ever closed
 	t.senderShutdownChan = make(chan struct{})
-	// Failure chan must be able to store the sender's single closing error, for receiver to (optionally) collect later
-	t.senderFailedChan = make(chan error, 1)
 
 	if err := t.socket.Setup(); err != nil {
 		return err
@@ -131,49 +131,20 @@ func (t *connection) Run(startedCallback func()) error {
 	go t.senderRoutine()
 	err := t.receiver()
 	if err != nil {
-		// Pass to sender to trigger hard close due to failure
+		// Request sender shutdown due to receiver error
 		close(t.senderShutdownChan)
 	}
-	if !t.isClient() {
-		// Close partialAckChan to allow sender to shutdown if it is monitoring it and waiting for receiver
-		close(t.partialAckChan)
-	}
+	// Wait for sender to complete
 	t.wait.Wait()
 
+	// If we had no error, did sender save one when it shutdown?
+	// This is already the receiver error if receiver collected it and shutdown
+	// If receiver EOF though and then we had a sender issue, take that error
 	if err == nil {
-		select {
-		case err = <-t.senderFailedChan:
-		default:
-		}
+		err = t.senderErr
 	}
 
 	return err
-}
-
-// senderRoutine wraps the sender into a routine and handles error communication
-func (t *connection) senderRoutine() {
-	defer func() {
-		t.wait.Done()
-	}()
-
-	var err error
-	if err = t.sender(); err != nil {
-		// Forward error to receiver if the sender failed so it can hard close
-		t.senderFailedChan <- err
-	}
-
-	if !t.isClient() {
-		// If sender was requested to shutdown by receiver, then stop now
-		// Otherwise, wait in case receiver tries to request further sending through partial Ack, and if it does, force it to close, but only if we did not already
-		select {
-		case <-t.senderShutdownChan:
-		case <-t.partialAckChan:
-			if err == nil {
-				err = errHardCloseRequested
-				t.senderFailedChan <- errHardCloseRequested
-			}
-		}
-	}
 }
 
 // serverNegotiation works out the protocol version supported by the remote
@@ -194,8 +165,8 @@ func (t *connection) serverNegotiation() error {
 			// Backwards compatible path with older log-courier which do not perform a negotiation
 			t.partialAckChan <- message
 			event := transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
-			if shutdown, err := t.sendEvent(event); shutdown || err != nil {
-				return err
+			if t.sendEvent(event) {
+				return errHardCloseRequested
 			}
 			// Now go async
 			return nil
@@ -247,12 +218,26 @@ func (t *connection) clientNegotiation() error {
 	return nil
 }
 
+// senderRoutine wraps the sender into a routine and handles error communication
+func (t *connection) senderRoutine() {
+	defer func() {
+		t.wait.Done()
+	}()
+
+	t.senderErr = t.sender()
+
+	// Sender exits after graceful shutdown from receiver EOF
+	// Or it exist due to a problem
+	// Therefore, always force shutdown here of receiver if it wasn't already
+	// This will unblock everything, including attempts to send data that won't now complete
+	// as they all monitor the main shutdown channel
+	t.Teardown()
+}
+
 // sender handles socket writes
 func (t *connection) sender() error {
 	var timeout *time.Timer
 	var timeoutChan <-chan time.Time
-	var ackChan <-chan protocolMessage
-	var shutdownChan <-chan struct{}
 
 	if !t.isClient() {
 		// TODO: Configurable? It's very low impact on anything though... NB: Repeated below
@@ -260,29 +245,23 @@ func (t *connection) sender() error {
 		timeout.Stop()
 	}
 
-	ackChan = t.partialAckChan
-	shutdownChan = t.senderShutdownChan
+	ackChan := t.partialAckChan
+	senderShutdownChan := t.senderShutdownChan
 
 	for {
 		var msg protocolMessage
 
 		select {
-		case <-shutdownChan:
+		case <-senderShutdownChan:
 			if len(t.partialAcks) == 0 {
-				// No outstanding acknowldgements, so let's shutdown gracefully
+				// No outstanding acknowledgements, so let's shutdown gracefully
 				return t.socket.Close()
 			}
 			// Flag as closing, we will end as soon as last acknowledge sent
 			log.Debugf("[%s < %s] Shutdown is waiting for acknowledgement for %d payloads", t.poolServer, t.socket.RemoteAddr().String(), len(t.partialAcks))
-			shutdownChan = nil
+			senderShutdownChan = nil
 			continue
 		case message := <-ackChan:
-			if message == nil {
-				// Channel was closed, likely due to receiver closing, stop listening and continue until graceful completion (or error from shutdownChan)
-				ackChan = nil
-				continue
-			}
-
 			if partialAck, ok := message.(eventsMessage); ok {
 				// Stop receiving if we now have 10
 				t.partialAcks = append(t.partialAcks, partialAck)
@@ -358,7 +337,7 @@ func (t *connection) sender() error {
 
 						// Still need timer?
 						if len(t.partialAcks) == 0 {
-							if shutdownChan == nil {
+							if senderShutdownChan == nil {
 								// Finished! Call Close() to trigger final flush then exit
 								// Safe as receiver is no longer running
 								// This can timeout too so forward back any error...
@@ -394,12 +373,44 @@ func (t *connection) sender() error {
 	}
 }
 
+// writeMsg sends a message
+func (t *connection) writeMsg(msg protocolMessage) error {
+	// Write deadline is managed by our net.Conn wrapper that TLS will call
+	// into and keeps retrying writes until timeout or error
+	err := msg.Write(t)
+	if err == nil {
+		err = t.rwBuffer.Flush()
+	}
+	if err != nil {
+		if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+			// Fail the transport
+			return err
+		}
+	}
+	return nil
+}
+
+// sendEvent ships an event structure whilst also monitoring for
+// any shutdown signal. Returns true if shutdown was signalled
+// Does not monitor send thread errors here since we are blocking internally
+// with a fully received message so let's get that handled first before
+// triggering any teardown due to sender error
+func (t *connection) sendEvent(transportEvent transports.Event) bool {
+	select {
+	case <-t.shutdownChan:
+		return true
+	case t.eventChan <- transportEvent:
+	}
+	return false
+}
+
 // receiver handles socket reads
 // Returns nil error on shutdown, or an actual error
 func (t *connection) receiver() error {
 	for {
 		message, err := t.readMsg()
 		if message == nil {
+			// Message is nil and err nil on EOF, return err or nil back
 			return err
 		}
 
@@ -429,8 +440,8 @@ func (t *connection) receiver() error {
 			return fmt.Errorf("Unknown protocol message %T", message)
 		}
 
-		if shutdown, err := t.sendEvent(event); shutdown || err != nil {
-			return err
+		if shutdown := t.sendEvent(event); shutdown {
+			return nil
 		}
 	}
 }
@@ -484,23 +495,6 @@ func (t *connection) readMsg() (protocolMessage, error) {
 	return newFunc(t, bodyLength)
 }
 
-// writeMsg sends a message
-func (t *connection) writeMsg(msg protocolMessage) error {
-	// Write deadline is managed by our net.Conn wrapper that TLS will call
-	// into and keeps retrying writes until timeout or error
-	err := msg.Write(t)
-	if err == nil {
-		err = t.rwBuffer.Flush()
-	}
-	if err != nil {
-		if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
-			// Fail the transport
-			return err
-		}
-	}
-	return nil
-}
-
 // receiverRead will repeatedly read from the socket until the given byte array
 // is filled, or sender signals an error
 func (t *connection) receiverRead(data []byte) (bool, error) {
@@ -510,10 +504,7 @@ func (t *connection) receiverRead(data []byte) (bool, error) {
 ReceiverReadLoop:
 	for {
 		select {
-		case err = <-t.senderFailedChan:
-			// Shutdown via sender due to error
-			break ReceiverReadLoop
-		case err = <-t.shutdownChan:
+		case <-t.shutdownChan:
 			err = errHardCloseRequested
 			break ReceiverReadLoop
 		default:
@@ -546,20 +537,6 @@ ReceiverReadLoop:
 	return true, err
 }
 
-// sendEvent ships an event structure whilst also monitoring for
-// any shutdown signal. Returns true if shutdown was signalled
-// Does not monitor send thread errors here since we are blocking internally
-// with a fully received message so let's get that handled first before
-// triggering any teardown due to sender error
-func (t *connection) sendEvent(transportEvent transports.Event) (bool, error) {
-	select {
-	case err := <-t.shutdownChan:
-		return true, err
-	case t.eventChan <- transportEvent:
-	}
-	return false, nil
-}
-
 // isClient returns true if this is a client side connection
 func (t *connection) isClient() bool {
 	contextValue := t.ctx.Value(contextIsClient)
@@ -568,6 +545,53 @@ func (t *connection) isClient() bool {
 	}
 
 	return contextValue.(bool)
+}
+
+// Acknowledge handles acknowledgement transmission once an event is complete
+// It implements Acknowledger interface on the connection so any events we receive
+// we can process acknowledge for
+func (t *connection) Acknowledge(events []*event.Event) {
+	position := events[0].Context().Value(contextEventPos).(*eventPosition)
+	for _, event := range events[1:] {
+		nextPosition := event.Context().Value(contextEventPos).(*eventPosition)
+		if nextPosition.nonce != position.nonce {
+			err := t.SendMessage(&protocolACKN{nonce: position.nonce, sequence: position.sequence})
+			if err != nil {
+				return
+			}
+		}
+		position = nextPosition
+	}
+	t.SendMessage(&protocolACKN{nonce: position.nonce, sequence: position.sequence})
+}
+
+// Teardown ends the connection
+// It will end the receiver to stop receiving data
+// Receivers do not gracefully shutdown from our side, only remote side, so this is called to stop receiving more data
+// For Transports this is used to teardown due to a problem
+func (t *connection) Teardown() {
+	t.shutdownMutex.Lock()
+	defer t.shutdownMutex.Unlock()
+	if t.shutdown {
+		return
+	}
+	t.shutdown = true
+	close(t.shutdownChan)
+}
+
+// SendChan returns the sendChan
+func (t *connection) SendMessage(message protocolMessage) error {
+	select {
+	case <-t.shutdownChan:
+		return errors.New("Invalid connection state")
+	case t.sendChan <- message:
+	}
+	return nil
+}
+
+// SupportsEVNT returns true if this connection supports EVNT messages
+func (t *connection) SupportsEVNT() bool {
+	return t.supportsEvnt
 }
 
 // Read will receive the body of a message
@@ -586,32 +610,4 @@ func (t *connection) Read(message []byte) (int, error) {
 // Used by protocol structures to send a message
 func (t *connection) Write(data []byte) (int, error) {
 	return t.rwBuffer.Write(data)
-}
-
-// Acknowledge handles acknowledgement transmission once an event is complete
-func (t *connection) Acknowledge(events []*event.Event) {
-	position := events[0].Context().Value(contextEventPos).(*eventPosition)
-	for _, event := range events[1:] {
-		nextPosition := event.Context().Value(contextEventPos).(*eventPosition)
-		if nextPosition.nonce != position.nonce {
-			t.sendChan <- &protocolACKN{nonce: position.nonce, sequence: position.sequence}
-		}
-		position = nextPosition
-	}
-	t.sendChan <- &protocolACKN{nonce: position.nonce, sequence: position.sequence}
-}
-
-// Teardown ends the connection using the reset/shutdown channel, if you called setshutdownChan you can do this yourself
-func (t *connection) Teardown() {
-	close(t.shutdownChan)
-}
-
-// SendChan returns the sendChan
-func (t *connection) SendChan() chan protocolMessage {
-	return t.sendChan
-}
-
-// SupportsEVNT returns true if this connection supports EVNT messages
-func (t *connection) SupportsEVNT() bool {
-	return t.supportsEvnt
 }

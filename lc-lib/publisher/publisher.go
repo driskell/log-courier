@@ -170,6 +170,9 @@ func (p *Publisher) runOnce() bool {
 			// TODO: What about out of sync ACK?
 			return true
 		}
+	case <-p.endpointSink.TimeoutChan():
+		// Process triggered timeouts
+		p.endpointSink.ProcessTimeouts()
 	case spool := <-p.ifSpoolChan:
 		// When inputs close, sources are all closed
 		if spool == nil {
@@ -205,9 +208,6 @@ func (p *Publisher) runOnce() bool {
 		// No ready endpoint, wait for one
 		p.nextSpool = spool
 		p.ifSpoolChan = nil
-	case <-p.endpointSink.TimeoutChan():
-		// Process triggered timeouts
-		p.endpointSink.ProcessTimeouts()
 	case <-p.measurementTimer.C:
 		p.takeMeasurements()
 		p.measurementTimer.Reset(time.Second)
@@ -410,7 +410,7 @@ func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 	}
 }
 
-// forceEndpointFailure is called by Publisher to force an endpoint to enter
+// forceEndpointFailure is called to force an endpoint to enter
 // the failed status. It reports the error and then processes the failure.
 func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
 	p.endpointSink.ForceFailure(endpoint)
