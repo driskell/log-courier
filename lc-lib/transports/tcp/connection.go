@@ -182,6 +182,8 @@ func (t *connection) serverNegotiation() error {
 	if message == nil {
 		if err == nil {
 			err = io.EOF
+		} else if err == errHardCloseRequested {
+			return err
 		}
 		return fmt.Errorf("Unexpected end of negotiation: %s", err)
 	}
@@ -218,6 +220,8 @@ func (t *connection) clientNegotiation() error {
 	if message == nil {
 		if err == nil {
 			err = io.EOF
+		} else if err == errHardCloseRequested {
+			return err
 		}
 		return fmt.Errorf("Unexpected end of negotiation: %s", err)
 	}
