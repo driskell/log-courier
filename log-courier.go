@@ -30,7 +30,6 @@ import (
 	_ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/plain"
 
-	_ "github.com/driskell/log-courier/lc-lib/transports/es"
 	_ "github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
