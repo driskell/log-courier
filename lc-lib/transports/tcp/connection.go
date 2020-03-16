@@ -303,6 +303,7 @@ func (t *connection) sender() error {
 			// Partial ack
 			log.Debugf("[%s < %s] Sending partial acknowledgement for payload %x sequence %d", t.poolServer, t.socket.RemoteAddr().String(), t.partialAcks[0].Nonce(), t.lastSequence)
 			msg = &protocolACKN{nonce: t.partialAcks[0].Nonce(), sequence: t.lastSequence}
+			timeout.Reset(5 * time.Second)
 		case msg = <-t.sendChan:
 			// Is this the end message? nil? No more to send?
 			if msg == nil {
@@ -367,14 +368,14 @@ func (t *connection) sender() error {
 					log.Debugf("[%s < %s] Sending acknowledgement for payload %x sequence %d", t.poolServer, t.socket.RemoteAddr().String(), ack.nonce, ack.sequence)
 				}
 			}
-		}
 
-		// Reset timeout
-		if timeoutChan != nil {
-			if !timeout.Stop() {
-				<-timeout.C
+			// Reset timeout
+			if timeoutChan != nil {
+				if !timeout.Stop() {
+					<-timeout.C
+				}
+				timeout.Reset(5 * time.Second)
 			}
-			timeout.Reset(5 * time.Second)
 		}
 
 		if err := t.writeMsg(msg); err != nil {
