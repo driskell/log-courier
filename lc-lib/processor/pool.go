@@ -96,6 +96,12 @@ func (p *Pool) Run() {
 				// Request shutdown so we can restart with new configuration
 				shutdownFunc()
 			case events := <-p.input:
+				// Closed input means shutting down gracefully
+				if events == nil {
+					shutdown = true
+					close(p.fanout)
+					continue
+				}
 				bundle := event.NewBundle(events)
 				p.sequencer.Track(bundle)
 				select {
