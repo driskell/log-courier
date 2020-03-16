@@ -215,7 +215,11 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	defer t.connWait.Done()
 
 	if err := conn.Run(nil); err != nil {
-		log.Error("[%s < %s] Connection failed: %s", t.pool.Server(), socket.RemoteAddr().String(), err)
+		if err == errHardCloseRequested {
+			log.Info("[%s < %s] Connection shutdown requested", t.pool.Server(), socket.RemoteAddr().String())
+		} else {
+			log.Error("[%s < %s] Connection failed: %s", t.pool.Server(), socket.RemoteAddr().String(), err)
+		}
 	} else {
 		log.Info("[%s < %s] Connection closed gracefully", t.pool.Server(), socket.RemoteAddr().String())
 	}

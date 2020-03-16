@@ -44,7 +44,7 @@ const (
 )
 
 // errHardCloseRequested is used to signal hard close requested
-var errHardCloseRequested = errors.New("Hard close requested")
+var errHardCloseRequested = errors.New("Connection shutdown was requested")
 
 type connection struct {
 	// Constructor
@@ -53,8 +53,8 @@ type connection struct {
 	poolServer string
 	eventChan  chan<- transports.Event
 	sendChan   chan protocolMessage
-	// shutdownOrResetChan requests sender to hard close, optionally due to an error
-	shutdownOrResetChan chan error
+	// shutdownChan requests sender to hard close, optionally due to an error
+	shutdownChan chan error
 
 	// TODO: Merge with context - become clientContext
 	supportsEvnt bool
@@ -81,18 +81,13 @@ type connection struct {
 
 func newConnection(ctx context.Context, socket connectionSocket, poolServer string, eventChan chan<- transports.Event, sendChan chan protocolMessage) *connection {
 	return &connection{
-		ctx:                 ctx,
-		socket:              socket,
-		poolServer:          poolServer,
-		eventChan:           eventChan,
-		sendChan:            sendChan,
-		shutdownOrResetChan: make(chan error),
+		ctx:          ctx,
+		socket:       socket,
+		poolServer:   poolServer,
+		eventChan:    eventChan,
+		sendChan:     sendChan,
+		shutdownChan: make(chan error),
 	}
-}
-
-// setShutdownOrResetChan sets a channel to use for reset/shutdown (send error to reset, close to shutdown)
-func (t *connection) setShutdownOrResetChan(shutdownOrResetChan chan error) {
-	t.shutdownOrResetChan = shutdownOrResetChan
 }
 
 // Run starts the connection and all its routines
@@ -514,7 +509,7 @@ ReceiverReadLoop:
 		case err = <-t.senderFailedChan:
 			// Shutdown via sender due to error
 			break ReceiverReadLoop
-		case <-t.shutdownOrResetChan:
+		case err = <-t.shutdownChan:
 			err = errHardCloseRequested
 			break ReceiverReadLoop
 		default:
@@ -554,7 +549,7 @@ ReceiverReadLoop:
 // triggering any teardown due to sender error
 func (t *connection) sendEvent(transportEvent transports.Event) (bool, error) {
 	select {
-	case err := <-t.shutdownOrResetChan:
+	case err := <-t.shutdownChan:
 		return true, err
 	case t.eventChan <- transportEvent:
 	}
@@ -602,9 +597,9 @@ func (t *connection) Acknowledge(events []*event.Event) {
 	t.sendChan <- &protocolACKN{nonce: position.nonce, sequence: position.sequence}
 }
 
-// Teardown ends the connection using the reset/shutdown channel, if you called setShutdownOrResetChan you can do this yourself
+// Teardown ends the connection using the reset/shutdown channel, if you called setshutdownChan you can do this yourself
 func (t *connection) Teardown() {
-	close(t.shutdownOrResetChan)
+	close(t.shutdownChan)
 }
 
 // SendChan returns the sendChan

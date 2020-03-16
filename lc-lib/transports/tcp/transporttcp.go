@@ -120,7 +120,11 @@ func (t *transportTCP) controllerRoutine() {
 		t.sendMutex.Unlock()
 
 		if err != nil {
-			log.Errorf("[%s] Transport error, disconnected: %s", t.pool.Server(), err)
+			if err == errHardCloseRequested {
+				log.Info("[%s] Transport shutdown requested", t.pool.Server())
+			} else {
+				log.Errorf("[%s] Transport error, disconnected: %s", t.pool.Server(), err)
+			}
 			if t.finishOnFail || shutdown {
 				return
 			}
