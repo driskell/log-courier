@@ -50,7 +50,12 @@ func (s *Sink) TimeoutChan() <-chan time.Time {
 func (s *Sink) resetTimeoutTimer() {
 	if s.timeoutList.Len() == 0 {
 		if !s.timeoutTimer.Stop() {
-			<-s.timeoutTimer.C
+			// Receive is externally handled so we don't really know if we took the value
+			// Attempt to clear it but don't block
+			select {
+			case <-s.timeoutTimer.C:
+			default:
+			}
 		}
 		return
 	}

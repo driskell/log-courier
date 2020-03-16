@@ -116,7 +116,7 @@ SpoolerLoop:
 						break SpoolerLoop
 					}
 
-					s.resetTimer()
+					s.resetTimer(false)
 					s.spoolSize += len(newEvent.Bytes()) + eventHeaderSize
 					s.spool = append(s.spool, newEvent)
 
@@ -134,7 +134,7 @@ SpoolerLoop:
 						break SpoolerLoop
 					}
 
-					s.resetTimer()
+					s.resetTimer(false)
 				}
 			}
 		case <-s.timer.C:
@@ -147,7 +147,7 @@ SpoolerLoop:
 				}
 			}
 
-			s.resetTimer()
+			s.resetTimer(true)
 		case <-s.shutdownChan:
 			break SpoolerLoop
 		case config := <-s.configChan:
@@ -182,11 +182,11 @@ func (s *Spooler) sendSpool() bool {
 }
 
 // resetTimer resets the time needed to wait before automatically flushing
-func (s *Spooler) resetTimer() {
+func (s *Spooler) resetTimer(didReceive bool) {
 	s.timerStart = time.Now()
 
 	// Stop the timer, and ensure the channel is empty before restarting it
-	if !s.timer.Stop() {
+	if !didReceive && !s.timer.Stop() {
 		<-s.timer.C
 	}
 	s.timer.Reset(s.genConfig.SpoolTimeout)
@@ -202,7 +202,7 @@ func (s *Spooler) reloadConfig(cfg *config.Config) bool {
 		if !s.sendSpool() {
 			return false
 		}
-		s.resetTimer()
+		s.resetTimer(false)
 	} else {
 		if !s.timer.Stop() {
 			<-s.timer.C
