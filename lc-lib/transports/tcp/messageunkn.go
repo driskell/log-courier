@@ -30,6 +30,11 @@ func newProtocolUNKN(conn *connection, bodyLength uint32) (protocolMessage, erro
 	return &protocolUNKN{}, nil
 }
 
+// Type returns a human-readable name for the message type
+func (p *protocolUNKN) Type() string {
+	return "UNKN"
+}
+
 // Write writes a payload to the socket
 func (p *protocolUNKN) Write(conn *connection) error {
 	// Encapsulate the message

@@ -43,6 +43,10 @@ func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, erro
 		return nil, fmt.Errorf("Protocol error: Corrupt message (JDAT size %d < 17)", bodyLength)
 	}
 
+	if bodyLength > 10485760 {
+		return nil, fmt.Errorf("Protocol error: Message body too large (%d > 10485760)", bodyLength)
+	}
+
 	data := make([]byte, bodyLength)
 	if _, err := conn.Read(data); err != nil {
 		return nil, err
@@ -94,6 +98,11 @@ func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, erro
 	}
 
 	return &protocolJDAT{nonce: nonce, events: events}, nil
+}
+
+// Type returns a human-readable name for the message type
+func (p *protocolJDAT) Type() string {
+	return "JDAT"
 }
 
 // Write writes a payload to the socket

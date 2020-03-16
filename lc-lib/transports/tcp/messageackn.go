@@ -42,6 +42,11 @@ func newProtocolACKN(conn *connection, bodyLength uint32) (protocolMessage, erro
 	return &protocolACKN{nonce: nonce, sequence: sequence}, nil
 }
 
+// Type returns a human-readable name for the message type
+func (p *protocolACKN) Type() string {
+	return "ACKN"
+}
+
 // Write writes a payload to the connection
 func (p *protocolACKN) Write(conn *connection) error {
 	// Encapsulate the ack into a message

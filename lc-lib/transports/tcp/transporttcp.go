@@ -95,18 +95,22 @@ func (t *transportTCP) controllerRoutine() {
 	for {
 		conn, err := t.connect()
 		if err == nil {
-			t.connMutex.Lock()
-			t.conn = conn
-			t.supportsEVNT = t.conn.SupportsEVNT()
-			shutdown := t.shutdown
-			t.connMutex.Unlock()
+			err = conn.Run(func() {
+				// Send a started signal to say we're ready
+				t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Started)
 
-			// Request immediate shutdown if we just noticed it
-			if shutdown {
-				t.conn.SendMessage(nil)
-			}
+				t.connMutex.Lock()
+				t.conn = conn
+				t.supportsEVNT = t.conn.SupportsEVNT()
+				shutdown := t.shutdown
+				t.connMutex.Unlock()
 
-			err = t.conn.Run(t.startCallback)
+				// Request immediate shutdown if we just noticed it - shutdown
+				// will not have registered this if t.conn was not previously set as needed
+				if shutdown {
+					t.conn.SendMessage(nil)
+				}
+			})
 		}
 
 		t.connMutex.Lock()
@@ -156,12 +160,6 @@ func (t *transportTCP) reconnectWait() bool {
 	}
 
 	return false
-}
-
-// startCallback is called by the connection when it is fully connected and handshake completed
-func (t *transportTCP) startCallback() {
-	// Send a started signal to say we're ready
-	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Started)
 }
 
 // getTLSConfig returns the TLS configuration for the connection
@@ -267,7 +265,7 @@ func (t *transportTCP) Shutdown() {
 	// Sending nil triggers graceful shutdown
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
-	if t.conn != nil {
+	if !t.shutdown && t.conn != nil {
 		t.conn.SendMessage(nil)
 	}
 	t.shutdown = true

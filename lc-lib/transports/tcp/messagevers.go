@@ -29,7 +29,7 @@ type protocolVERS struct {
 func createProtocolVERS() protocolMessage {
 	protocolFlags := make([]byte, 1)
 	// SupportsEVNT flag
-	protocolFlags[0] = protocolFlags[0] & 0x01
+	protocolFlags[0] = protocolFlags[0] | 0x01
 	return &protocolVERS{
 		protocolFlags: protocolFlags,
 	}
@@ -47,6 +47,11 @@ func newProtocolVERS(t *connection, bodyLength uint32) (protocolMessage, error) 
 	}
 
 	return &protocolVERS{protocolFlags: protocolFlags}, nil
+}
+
+// Type returns a human-readable name for the message type
+func (p *protocolVERS) Type() string {
+	return "VERS"
 }
 
 // Write writes a payload to the socket
@@ -70,5 +75,6 @@ func (p *protocolVERS) Write(conn *connection) error {
 
 // SupportsEVNT returns true if the remote side supports the enhanced message
 func (p *protocolVERS) SupportsEVNT() bool {
+	log.Debug("VERS: %v", p.protocolFlags)
 	return len(p.protocolFlags) > 0 && p.protocolFlags[0]&0x01 == 0x01
 }

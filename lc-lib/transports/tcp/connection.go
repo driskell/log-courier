@@ -85,14 +85,18 @@ type connection struct {
 }
 
 func newConnection(ctx context.Context, socket connectionSocket, poolServer string, eventChan chan<- transports.Event, sendChan chan protocolMessage) *connection {
-	return &connection{
-		ctx:          ctx,
-		socket:       socket,
-		poolServer:   poolServer,
-		eventChan:    eventChan,
-		sendChan:     sendChan,
-		shutdownChan: make(chan struct{}),
+	ret := &connection{
+		ctx:                  ctx,
+		socket:               socket,
+		poolServer:           poolServer,
+		eventChan:            eventChan,
+		sendChan:             sendChan,
+		shutdownChan:         make(chan struct{}),
+		receiverShutdownChan: make(chan struct{}),
+		senderShutdownChan:   make(chan struct{}),
 	}
+
+	return ret
 }
 
 // Run starts the connection and all its routines
@@ -108,9 +112,6 @@ func (t *connection) Run(startedCallback func()) error {
 
 	t.rwBuffer.Reader = bufio.NewReader(t.socket)
 	t.rwBuffer.Writer = bufio.NewWriter(t.socket)
-
-	t.receiverShutdownChan = make(chan struct{})
-	t.senderShutdownChan = make(chan struct{})
 
 	if err := t.socket.Setup(); err != nil {
 		return err
@@ -442,7 +443,7 @@ func (t *connection) receiver() error {
 			case eventsMessage:
 				// Start the sender partial acks - this blocks if too many outstanding which stops us receiving more
 				t.partialAckChan <- message
-				log.Debugf("[%s < %s] Received payload %x with %d events", t.poolServer, t.socket.RemoteAddr().String(), messageImpl.Nonce(), len(messageImpl.Events()))
+				log.Debugf("[%s < %s] Received %s payload %x with %d events", t.poolServer, t.socket.RemoteAddr().String(), messageImpl.Type(), messageImpl.Nonce(), len(messageImpl.Events()))
 				event = transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
 			}
 		}
@@ -475,11 +476,6 @@ func (t *connection) readMsg() (protocolMessage, error) {
 
 	// Grab length of message
 	bodyLength := binary.BigEndian.Uint32(header[4:8])
-
-	// Sanity
-	if bodyLength > 10485760 {
-		return nil, fmt.Errorf("Message body too large (%s: %d > 10485760)", header[0:4], bodyLength)
-	}
 
 	var newFunc func(*connection, uint32) (protocolMessage, error)
 	switch {
@@ -605,19 +601,30 @@ func (t *connection) SupportsEVNT() bool {
 	return t.supportsEvnt
 }
 
-// Read will receive the body of a message
-// Returns both nil message and nil error on shutdown signal
-// Used by protocol structures to fetch extra message data
-// Always returns full requested message size, never partial
+// Read will receive data from the connection and implements io.Reader
+// Used by protocol structures to fetch message data
+// It should be noted that Read here will never return an incomplete read, and as such
+// the int return will always be the length of the message, unless an error occurs, in
+// which case it will be 0.
 func (t *connection) Read(message []byte) (int, error) {
 	if shutdown, err := t.receiverRead(message); shutdown || err != nil {
 		return 0, err
 	}
-
 	return len(message), nil
 }
 
-// write data to the outgoing buffer
+// ReadByte will receive one byte from the connection and implement io.ByteReader
+// Used by protocol structures to fetch message data
+// io.ByteReader is necessary for compression readers to not read too much
+func (t *connection) ReadByte() (byte, error) {
+	var message [1]byte
+	if _, err := t.Read(message[:]); err != nil {
+		return 0, err
+	}
+	return message[0], nil
+}
+
+// Write data to the connection and implements io.Reader
 // Used by protocol structures to send a message
 func (t *connection) Write(data []byte) (int, error) {
 	return t.rwBuffer.Write(data)

@@ -17,13 +17,13 @@
 package tcp
 
 import (
-	"bytes"
 	"compress/zlib"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/driskell/log-courier/lc-lib/event"
 )
@@ -39,18 +39,18 @@ func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, erro
 		return nil, errors.New("Protocol error: Unexpected JDAT message received on client connection")
 	}
 
-	if bodyLength < 17 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message (EVNT size %d < 17)", bodyLength)
+	if bodyLength != math.MaxUint32 {
+		return nil, fmt.Errorf("Protocol error: Corrupt message (EVNT size %d != %d)", bodyLength, math.MaxUint32)
 	}
 
-	data := make([]byte, bodyLength)
+	data := make([]byte, 16)
 	if _, err := conn.Read(data); err != nil {
 		return nil, err
 	}
 
-	nonce := string(data[:16])
+	nonce := string(data)
 
-	decompressor, err := zlib.NewReader(bytes.NewReader(data[16:]))
+	decompressor, err := zlib.NewReader(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +94,11 @@ func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, erro
 	}
 
 	return &protocolEVNT{nonce: nonce, events: events}, nil
+}
+
+// Type returns a human-readable name for the message type
+func (p *protocolEVNT) Type() string {
+	return "EVNT"
 }
 
 // Write writes a payload to the socket

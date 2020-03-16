@@ -30,6 +30,11 @@ func newProtocolHELO(conn *connection, bodyLength uint32) (protocolMessage, erro
 	return &protocolHELO{}, nil
 }
 
+// Type returns a human-readable name for the message type
+func (p *protocolHELO) Type() string {
+	return "HELO"
+}
+
 // Write writes a payload to the socket
 func (p *protocolHELO) Write(conn *connection) error {
 	// Encapsulate the HELO into a message

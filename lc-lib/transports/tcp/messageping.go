@@ -30,6 +30,11 @@ func newProtocolPING(conn *connection, bodyLength uint32) (protocolMessage, erro
 	return &protocolPING{}, nil
 }
 
+// Type returns a human-readable name for the message type
+func (p *protocolPING) Type() string {
+	return "PING"
+}
+
 // Write writes a payload to the socket
 func (p *protocolPING) Write(conn *connection) error {
 	// Encapsulate the ping into a message

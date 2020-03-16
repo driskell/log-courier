@@ -61,10 +61,12 @@ type listener interface {
 }
 
 type protocolMessage interface {
+	Type() string
 	Write(*connection) error
 }
 
 type eventsMessage interface {
+	protocolMessage
 	Nonce() string
 	Events() []*event.Event
 }
