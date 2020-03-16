@@ -1,0 +1,11 @@
+[*]
+indent_style = tab
+tab_width = 4
+
+[*.md]
+indent_style = space
+tab_width = 2
+
+[*.(yml|yaml)]
+indent_style = space
+tab_width = 2

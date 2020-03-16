@@ -22,9 +22,14 @@ type protocolHELO struct {
 }
 
 // newProtocolHELO reads a new protocolHELO
-func newProtocolHELO(conn *connection, bodyLength uint32) (protocolMessage, error) {
-	if bodyLength != 0 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message HELO size %d != 0", bodyLength)
+func newProtocolHELO(t *connection, bodyLength uint32) (protocolMessage, error) {
+	if bodyLength > 32 {
+		return nil, fmt.Errorf("Protocol error: Corrupt message (HELO size %d > 32)", bodyLength)
+	}
+
+	protocolFlags := make([]byte, bodyLength)
+	if _, err := t.Read(protocolFlags); err != nil {
+		return nil, err
 	}
 
 	return &protocolHELO{}, nil
