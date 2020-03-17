@@ -28,7 +28,7 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile:LC_FACT_DEFAULT_CONFIGURATION_FILE
+//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile
 
 var (
 	log *logging.Logger

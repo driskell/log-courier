@@ -33,7 +33,7 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile prospector.DefaultGeneralPersistDir admin.DefaultAdminBind processor.DefaultGeoIPActionDatabase
+//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile admin.DefaultAdminBind processor.DefaultGeoIPActionDatabase
 
 var (
 	app *core.App
