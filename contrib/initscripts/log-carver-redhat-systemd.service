@@ -1,0 +1,18 @@
+[Unit]
+Description=Log Carver, a lightweight log processor.
+After=syslog.target network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/sysconfig/log-carver
+ExecStartPre=/usr/sbin/log-carver $LOG_CARVER_ARGS -config-test
+ExecStart=/usr/sbin/log-carver $LOG_CARVER_ARGS
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s TERM $MAINPID
+PrivateTmp=true
+StandardError=syslog
+User=log-carver
+Group=log-carver
+
+[Install]
+WantedBy=multi-user.target
