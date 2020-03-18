@@ -89,6 +89,7 @@ func (p *Pipeline) registerSegment(segment pipelineSegment) {
 func (p *Pipeline) Run(config *config.Config) {
 	if err := p.initRoutines(config); err != nil {
 		log.Error("Pipeline failed: %s", err)
+		return
 	}
 
 	// Wait for sink to complete
