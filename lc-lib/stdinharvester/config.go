@@ -26,9 +26,21 @@ type StreamConfig struct {
 	harvester.StreamConfig `config:",embed"`
 }
 
-// Validate initialises the stdin stream configuration
-func (ssc *StreamConfig) Validate(p *config.Parser, path string) error {
-	return ssc.Init(p, path)
+// Defaults sets default values
+// Ensure we override the one from harvester.StreamConfig
+func (sc *StreamConfig) Defaults() {
+}
+
+// Init initialises the configuration
+// Ensure we override the one from harvester.StreamConfig
+func (sc *StreamConfig) Init(p *config.Parser, path string) error {
+	return nil
+}
+
+// Validate validates the stdin stream configuration
+// Ensure we override the one from harvester.StreamConfig
+func (sc *StreamConfig) Validate(p *config.Parser, path string) error {
+	return nil
 }
 
 func init() {

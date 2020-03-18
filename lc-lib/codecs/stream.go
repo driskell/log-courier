@@ -58,13 +58,13 @@ type Stream struct {
 type EventFunc func(int64, int64, map[string]interface{})
 
 // Defaults sets the default codec stream configuration
+// Ensure we override the one from event.StreamConfig
 func (sc *StreamConfig) Defaults() {
 	sc.AddOffsetField = defaultStreamAddOffsetField
 }
 
 // Validate does nothing for a codec stream
-// This is here to prevent double validation of event.StreamConfig whose
-// validation function would otherwise be inherited
+// Ensure we override the one from event.StreamConfig
 func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 	return nil
 }
@@ -79,7 +79,7 @@ func (sc *StreamConfig) Init(p *config.Parser, path string) (err error) {
 	for i := 0; i < len(sc.Codecs); i++ {
 		codec := &sc.Codecs[i]
 		if registrarFunc, ok := registeredCodecs[codec.Name]; ok {
-			if codec.Factory, err = registrarFunc(p, path, codec.Unused, codec.Name); err != nil {
+			if codec.Factory, err = registrarFunc(p, fmt.Sprintf("%scodecs[%d]/", path, i), codec.Unused, codec.Name); err != nil {
 				return
 			}
 		} else {

@@ -38,7 +38,7 @@ type PatternCollection struct {
 // Set the pattern list to use and whether to match "any" or "all"
 func (c *PatternCollection) Set(patterns []string, match string) error {
 	if len(patterns) == 0 {
-		return errors.New("At least one pattern must be specified.")
+		return errors.New("At least one pattern must be specified")
 	}
 
 	var err error
@@ -68,7 +68,7 @@ func (c *PatternCollection) Set(patterns []string, match string) error {
 	} else if match == "all" {
 		c.requiredMatches = len(patterns)
 	} else {
-		return fmt.Errorf("Unknown \"match\" value for multiline codec, '%s'.", match)
+		return fmt.Errorf("Unknown \"match\" value for multiline codec, '%s'", match)
 	}
 
 	return nil

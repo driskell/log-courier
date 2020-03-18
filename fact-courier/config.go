@@ -41,10 +41,17 @@ type Config struct {
 }
 
 // Defaults populates any default configurations
+// Ensure we override the one from event.StreamConfig
 func (c *Config) Defaults() {
 }
 
+// Init initialises the configuration
+// Ensure we override the one from event.StreamConfig
+func (c *Config) Init() {
+}
+
 // Validate will check the configuration and expand variables
+// Ensure we override the one from event.StreamConfig
 func (c *Config) Validate(p *config.Parser, path string) (err error) {
 	mapper := func(name string) string {
 		switch name {

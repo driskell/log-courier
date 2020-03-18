@@ -78,7 +78,7 @@ func NewMultilineCodecFactory(p *config.Parser, configPath string, unused map[st
 	}
 
 	if err = result.patterns.Set(result.Patterns, result.Match); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Invalid patterns for multiline codec at %s: %s", configPath, err)
 	}
 
 	if result.What == "" || result.What == "previous" {
@@ -86,7 +86,7 @@ func NewMultilineCodecFactory(p *config.Parser, configPath string, unused map[st
 	} else if result.What == "next" {
 		result.what = codecMultilineWhatNext
 	} else {
-		return nil, fmt.Errorf("Unknown \"what\" value for multiline codec, '%s'.", result.What)
+		return nil, fmt.Errorf("Unknown \"what\" value, '%s', for multiline codec at %s", result.What, configPath)
 	}
 
 	spoolMaxBytes := p.Config().GeneralPart("spooler").(*spooler.General).SpoolMaxBytes
@@ -98,7 +98,7 @@ func NewMultilineCodecFactory(p *config.Parser, configPath string, unused map[st
 	// We conciously allow a line 4 bytes longer what we would normally have as the limit
 	// This 4 bytes is the event header size. It's not worth considering though
 	if result.MaxMultilineBytes > spoolMaxBytes {
-		return nil, fmt.Errorf("max multiline bytes cannot be greater than /general/spool max bytes")
+		return nil, fmt.Errorf("Max multiline bytes for multiline codec at %s cannot be greater than /general/spool max bytes", configPath)
 	}
 
 	return result, nil

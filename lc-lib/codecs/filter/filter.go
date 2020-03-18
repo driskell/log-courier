@@ -17,7 +17,7 @@
 package codecs
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/codecs"
@@ -54,12 +54,8 @@ func NewFilterCodecFactory(p *config.Parser, configPath string, unused map[strin
 		return nil, err
 	}
 
-	if len(result.Patterns) == 0 {
-		return nil, errors.New("Filter codec pattern must be specified.")
-	}
-
 	if err = result.patterns.Set(result.Patterns, result.Match); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Invalid patterns for filter codec at %s: %s", configPath, err)
 	}
 
 	return result, nil

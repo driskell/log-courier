@@ -45,14 +45,22 @@ type StreamConfig struct {
 }
 
 // Defaults sets the default harvester stream configuration
+// Ensure we override the one from codecs.StreamConfig
 func (sc *StreamConfig) Defaults() {
 	sc.AddPathField = defaultStreamAddPathField
 	sc.DeadTime = defaultStreamDeadTime
 }
 
+// Init initialises the configuration
+// Ensure we override the one from codecs.StreamConfig
+func (sc *StreamConfig) Init(p *config.Parser, path string) error {
+	return nil
+}
+
 // Validate does nothing for a harvester stream
 // This is here to prevent double validation of event.StreamConfig whose
 // validation function would otherwise be inherited
+// Ensure we override the one from codecs.StreamConfig
 func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 	return nil
 }
