@@ -53,7 +53,9 @@ func (c *Config) Validate(p *config.Parser, path string) (err error) {
 
 // SetEntry sets a new root API entry
 func (c *Config) SetEntry(path string, entry api.Navigatable) {
-	c.apiRoot.(*apiRoot).SetEntry(path, entry)
+	if c.apiRoot != nil {
+		c.apiRoot.(*apiRoot).SetEntry(path, entry)
+	}
 }
 
 // FetchConfig returns the config from the given config

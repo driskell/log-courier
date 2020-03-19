@@ -17,6 +17,7 @@
 package main
 
 import (
+	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/publisher"
 	"github.com/driskell/log-courier/lc-lib/spooler"
@@ -38,6 +39,10 @@ var (
 func main() {
 	app = core.NewApp("Fact Courier", "fact-courier", core.LogCourierVersion)
 	app.StartUp()
+
+	if app.Config().Section("admin").(*admin.Config).Enabled {
+		app.Pipeline().AddService(admin.NewServer(app))
+	}
 
 	// TODO: Support arbitary scripts, not just Munin
 	app.Pipeline().AddSource(NewMuninCollector(app))

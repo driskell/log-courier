@@ -380,11 +380,6 @@ func (m *MuninRunner) handleOutputLine(line []byte) error {
 		return nil
 	}
 
-	floatValue, err := strconv.ParseFloat(string(value), 64)
-	if err != nil {
-		return err
-	}
-
 	var idx string
 	if m.multigraph == &noMultigraph {
 		idx = names[0]
@@ -395,6 +390,16 @@ func (m *MuninRunner) handleOutputLine(line []byte) error {
 	state, ok := m.state[idx]
 	if !ok {
 		return fmt.Errorf("Unknown field: %s", idx)
+	}
+
+	if string(value) == "U" {
+		log.Debug("[%s] Field %s skipped, value is U (unknown)", m.name, idx)
+		return nil
+	}
+
+	floatValue, err := strconv.ParseFloat(string(value), 64)
+	if err != nil {
+		return err
 	}
 
 	var duration float64

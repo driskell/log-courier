@@ -66,7 +66,16 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 func (sc *StreamConfig) Decorate(data map[string]interface{}) map[string]interface{} {
 	data["@timestamp"] = time.Now()
 	data["host"] = map[string]interface{}{"hostname": sc.genConfig.Host}
-	data["event"] = map[string]interface{}{"timezone": sc.timezone}
+
+	var (
+		eventEntry map[string]interface{}
+		ok         bool
+	)
+	if eventEntry, ok = data["event"].(map[string]interface{}); !ok {
+		eventEntry = map[string]interface{}{}
+		data["event"] = eventEntry
+	}
+	eventEntry["timezone"] = sc.timezone
 
 	// TODO: Deprecate
 	if sc.AddHostField {
