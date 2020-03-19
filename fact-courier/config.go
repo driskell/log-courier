@@ -51,7 +51,8 @@ func (c *Config) Defaults() {
 
 // Init initialises the configuration
 // Ensure we override the one from event.StreamConfig
-func (c *Config) Init(p *config.Parser, path string) {
+func (c *Config) Init(p *config.Parser, path string) error {
+	return nil
 }
 
 // Validate will check the configuration and expand variables
