@@ -76,7 +76,7 @@ func parseConfigArgs(args []string) map[string][]string {
 	for _, v := range args {
 		envSplit := strings.SplitN(v, ".", 2)
 		if len(envSplit) != 2 {
-			log.Fatalf("Config variable needs package specifier: %s", v)
+			envSplit = []string{".", envSplit[0]}
 		}
 
 		config[envSplit[0]] = append(config[envSplit[0]], envSplit[1])
@@ -88,6 +88,9 @@ func parseConfigArgs(args []string) map[string][]string {
 func generatePackageImports(config map[string][]string) string {
 	platformFile := "import (\n"
 	for pkg := range config {
+		if pkg == "." {
+			continue
+		}
 		platformFile += fmt.Sprintf("\t\"github.com/driskell/log-courier/lc-lib/%s\"\n", pkg)
 	}
 	platformFile += ")\n\n"
@@ -126,6 +129,10 @@ func generateInitSegment(pkg, name string) string {
 	}
 
 	platformFile := fmt.Sprintf("\t// %s\n", envName)
-	platformFile += fmt.Sprintf("\t%s.%s = \"${%s}\"\n", pkg, nameSplit[0], envName)
+	if pkg == "." {
+		platformFile += fmt.Sprintf("\t%s = \"${%s}\"\n", nameSplit[0], envName)
+	} else {
+		platformFile += fmt.Sprintf("\t%s.%s = \"${%s}\"\n", pkg, nameSplit[0], envName)
+	}
 	return platformFile
 }

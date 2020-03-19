@@ -28,7 +28,7 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile config.DefaultMuninConfigBase
+//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile DefaultMuninConfigBase
 
 var (
 	log *logging.Logger
