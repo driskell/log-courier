@@ -77,6 +77,8 @@ func (p *Pool) Init(cfg *config.Config) error {
 
 // Run starts the processing routines
 func (p *Pool) Run() {
+	shutdownChan := p.shutdownChan
+
 	for {
 		var newConfig *config.Config
 		ctx, shutdownFunc := context.WithCancel(context.Background())
@@ -96,11 +98,16 @@ func (p *Pool) Run() {
 	PipelineLoop:
 		for {
 			select {
-			case <-p.shutdownChan:
+			case <-shutdownChan:
 				shutdown = true
+				shutdownChan = nil
 			case newConfig = <-p.configChan:
 				// Request shutdown so we can restart with new configuration
 				shutdownFunc()
+				// Do not send any more events - as the processors are shutting down
+				// they will not enter the collector - so fanout could block as we have 2xroutine limit
+				// which assumes something inside the collector
+				inputChan = nil
 			case events := <-inputChan:
 				// Closed input means shutting down gracefully
 				if events == nil {
