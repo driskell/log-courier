@@ -23,8 +23,12 @@ import (
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
+var (
+	// DefaultMuninConfigBase can be modified during init
+	DefaultMuninConfigBase string = "/etc/munin"
+)
+
 const (
-	defaultMuninConfigBase    string = "/etc/munin"
 	defaultMuninConfigFile    string = "${munin config base}/munin-node.conf"
 	defaultMuninConfigPluginD string = "${munin config base}/plugin-conf.d"
 	defaultMuninPluginBase    string = "${munin config base}/plugins"
@@ -47,7 +51,7 @@ func (c *Config) Defaults() {
 
 // Init initialises the configuration
 // Ensure we override the one from event.StreamConfig
-func (c *Config) Init() {
+func (c *Config) Init(p *config.Parser, path string) {
 }
 
 // Validate will check the configuration and expand variables
@@ -71,7 +75,7 @@ func (c *Config) Validate(p *config.Parser, path string) (err error) {
 func init() {
 	config.RegisterSection("facts", func() interface{} {
 		return &Config{
-			MuninConfigBase:    defaultMuninConfigBase,
+			MuninConfigBase:    DefaultMuninConfigBase,
 			MuninConfigFile:    defaultMuninConfigFile,
 			MuninConfigPluginD: defaultMuninConfigPluginD,
 			MuninPluginBase:    defaultMuninPluginBase,
