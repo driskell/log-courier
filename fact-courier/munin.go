@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -129,12 +130,23 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 	fieldCount := len(result)
 
 	// Set timestamp, plugin name and other fields
-	result["@timestamp"] = timestamp.Format(time.RFC3339)
-	result["munin_plugin"] = runner.Name()
+	subject := map[string]interface{}{
+		"@timestamp": timestamp,
+		"type":       "metricsets",
+		"event": map[string]interface{}{
+			"dataset": fmt.Sprintf("fact-courier.munin.%s", runner.Name()),
+			"module":  runner.Name(),
+		},
+		"fact-courier": map[string]interface{}{
+			"munin": map[string]interface{}{
+				runner.Name(): result,
+			},
+		},
+	}
 
 	// Create a new munin event with nil context
-	result = m.factConfig.Decorate(result)
-	event := event.NewEvent(nil, nil, result)
+	subject = m.factConfig.Decorate(subject)
+	event := event.NewEvent(nil, nil, subject)
 
 	log.Debug("[%s] %d fields collected", runner.Name(), fieldCount)
 

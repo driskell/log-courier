@@ -358,20 +358,19 @@ func (h *Harvester) statCheck() error {
 
 // eventCallback receives events from the final codec and ships them to the output
 func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[string]interface{}) {
+	data["log"] = map[string]interface{}{"file": map[string]interface{}{"path": h.path}}
+
+	// TODO: Deprecate
 	if h.streamConfig.AddPathField {
 		data["path"] = h.path
 	}
 
 	// If we split any of the line data, tag it
 	if h.split {
-		if v, ok := data["tags"]; ok {
-			va, ok := v.([]string)
-			if ok {
-				va = append(va, "splitline")
-				data["tags"] = va
-			}
+		if v, ok := data["tags"].(event.Tags); ok {
+			data["tags"] = append(v, "splitline")
 		} else {
-			data["tags"] = []string{"splitline"}
+			data["tags"] = event.Tags{"splitline"}
 		}
 		h.split = false
 	}

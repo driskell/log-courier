@@ -123,8 +123,10 @@ func (cs *Stream) ProcessEvent(startOffset int64, endOffset int64, text string) 
 func (cs *Stream) eventCallback(startOffset int64, endOffset int64, text string) {
 	data := map[string]interface{}{
 		"message": text,
+		"log":     map[string]interface{}{"offset": startOffset},
 	}
 
+	// TODO: Deprecate
 	if cs.streamConfig.AddOffsetField {
 		data["offset"] = startOffset
 	}
