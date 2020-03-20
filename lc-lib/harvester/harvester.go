@@ -358,7 +358,8 @@ func (h *Harvester) statCheck() error {
 
 // eventCallback receives events from the final codec and ships them to the output
 func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[string]interface{}) {
-	data["log"] = map[string]interface{}{"file": map[string]interface{}{"path": h.path}}
+	// data["log"] is provided by codecs StreamConfig
+	data["log"].(map[string]interface{})["file"] = map[string]interface{}{"path": h.path}
 
 	// TODO: Deprecate
 	if h.streamConfig.AddPathField {

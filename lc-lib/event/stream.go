@@ -26,13 +26,11 @@ import (
 )
 
 const (
-	defaultStreamAddHostField     bool = true
 	defaultStreamAddTimezoneField bool = false
 )
 
 // StreamConfig holds the configuration for a log stream
 type StreamConfig struct {
-	AddHostField     bool                   `config:"add host field"`
 	AddTimezoneField bool                   `config:"add timezone field"`
 	Fields           map[string]interface{} `config:"fields"`
 
@@ -42,7 +40,6 @@ type StreamConfig struct {
 
 // Defaults initialises the default configuration for a log stream
 func (sc *StreamConfig) Defaults() {
-	sc.AddHostField = defaultStreamAddHostField
 	sc.AddTimezoneField = defaultStreamAddTimezoneField
 
 	sc.timezone = time.Now().Format("-0700 MST")
@@ -65,7 +62,10 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 // to the data that will eventually become an event
 func (sc *StreamConfig) Decorate(data map[string]interface{}) map[string]interface{} {
 	data["@timestamp"] = time.Now()
-	data["host"] = map[string]interface{}{"hostname": sc.genConfig.Host}
+	data["host"] = map[string]interface{}{
+		"name":     sc.genConfig.Host,
+		"hostname": sc.genConfig.Host,
+	}
 
 	var (
 		eventEntry map[string]interface{}
@@ -76,11 +76,6 @@ func (sc *StreamConfig) Decorate(data map[string]interface{}) map[string]interfa
 		data["event"] = eventEntry
 	}
 	eventEntry["timezone"] = sc.timezone
-
-	// TODO: Deprecate
-	if sc.AddHostField {
-		data["host"] = sc.genConfig.Host
-	}
 
 	// TODO: Deprecate
 	if sc.AddTimezoneField {
