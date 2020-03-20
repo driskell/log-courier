@@ -135,7 +135,10 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 		"type":       "metricsets",
 		"event": map[string]interface{}{
 			"dataset": fmt.Sprintf("fact-courier.munin.%s", runner.Name()),
-			"module":  runner.Name(),
+		},
+		"metricset": map[string]interface{}{
+			"module": "fact-courier",
+			"name":   fmt.Sprintf("munin.%s", runner.Name()),
 		},
 		"fact-courier": map[string]interface{}{
 			"munin": map[string]interface{}{
