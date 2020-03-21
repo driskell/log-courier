@@ -82,7 +82,7 @@ func (p *Pool) Run() {
 	for {
 		var newConfig *config.Config
 		ctx, shutdownFunc := context.WithCancel(context.Background())
-		shutdown := false
+		shutdown, reloading := false, false
 		routineCount := p.cfg.GeneralPart("processor").(*General).ProcessorRoutines
 		inProgress := 0
 		inputChan := p.input
@@ -107,6 +107,7 @@ func (p *Pool) Run() {
 				// Do not send any more events - as the processors are shutting down
 				// they will not enter the collector - so fanout could block as we have 2xroutine limit
 				// which assumes something inside the collector
+				reloading = true
 				inputChan = nil
 			case events := <-inputChan:
 				// Closed input means shutting down gracefully
@@ -126,8 +127,10 @@ func (p *Pool) Run() {
 				if inProgress >= routineCount*2 {
 					inputChan = nil
 				}
+
 				bundle := event.NewBundle(events)
 				p.sequencer.Track(bundle)
+
 				select {
 				case <-p.shutdownChan:
 				case p.fanout <- bundle:
@@ -142,15 +145,20 @@ func (p *Pool) Run() {
 					}
 					continue
 				}
+
 				inProgress--
-				if inputChan == nil {
+				if !reloading && !shutdown && inputChan == nil {
 					inputChan = p.input
 				}
+
 				result := p.sequencer.Enforce(bundle)
+
+			ForwardLoop:
 				for _, bundle := range result {
 					select {
 					case <-p.shutdownChan:
 						shutdown = true
+						break ForwardLoop
 					case p.output <- bundle.Events():
 					}
 				}
