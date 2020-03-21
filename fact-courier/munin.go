@@ -13,10 +13,6 @@ import (
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
-const (
-	collectionInterval = time.Minute
-)
-
 // MuninCollector facilitates the collection of statistics from a local
 // munin-node installation
 type MuninCollector struct {
@@ -78,10 +74,10 @@ func (m *MuninCollector) Run() {
 // This also ensures that every collection result has a single round timestamp
 // to ensure that Kibana graphing is neat with no gaps
 func (m *MuninCollector) runOnce() bool {
-	nextCollection := time.Now().Truncate(collectionInterval).Add(collectionInterval)
+	nextCollection := time.Now().Truncate(m.factConfig.CollectionInterval).Add(m.factConfig.CollectionInterval)
 	delay := nextCollection.Sub(time.Now())
-	if delay > collectionInterval {
-		delay = collectionInterval
+	if delay > m.factConfig.CollectionInterval {
+		delay = m.factConfig.CollectionInterval
 	} else if delay <= 0 {
 		delay = 0
 	}

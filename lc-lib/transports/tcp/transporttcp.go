@@ -134,10 +134,7 @@ func (t *transportTCP) controllerRoutine() {
 
 		select {
 		case <-t.controllerChan:
-			// Ignore any error in controller chan - we're already restarting
 		case t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Failed):
-			// If we had an error in controller chan, no need to flag in event chan we did error
-			// So this eventChan send should skip if we find one in controllerChan
 		}
 
 		if t.reconnectWait() {
@@ -252,23 +249,31 @@ func (t *transportTCP) Ping() error {
 	return t.conn.SendMessage(&protocolPING{})
 }
 
-// Fail the transport
+// Fail the transport / Shutdown hard
 func (t *transportTCP) Fail() {
-	select {
-	case t.controllerChan <- transports.ErrForcedFailure:
-	default:
+	t.connMutex.Lock()
+	defer t.connMutex.Unlock()
+	if !t.shutdown {
+		if t.conn != nil {
+			t.conn.Teardown()
+		}
+		t.shutdown = true
+		close(t.controllerChan)
 	}
 }
 
-// Shutdown the transport - only valid after Started transport event received
+// Shutdown the transport gracefully - only valid after Started transport event received
 func (t *transportTCP) Shutdown() {
 	// Sending nil triggers graceful shutdown
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
-	if !t.shutdown && t.conn != nil {
-		t.conn.SendMessage(nil)
+	if !t.shutdown {
+		if t.conn != nil {
+			t.conn.SendMessage(nil)
+		}
+		t.shutdown = true
+		close(t.controllerChan)
 	}
-	t.shutdown = true
 }
 
 // checkClientCertificates logs a warning if it finds any certificates that are

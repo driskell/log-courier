@@ -18,6 +18,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
@@ -29,19 +30,21 @@ var (
 )
 
 const (
-	defaultMuninConfigFile    string = "${munin config base}/munin-node.conf"
-	defaultMuninConfigPluginD string = "${munin config base}/plugin-conf.d"
-	defaultMuninPluginBase    string = "${munin config base}/plugins"
+	defaultMuninConfigFile    string        = "${munin config base}/munin-node.conf"
+	defaultMuninConfigPluginD string        = "${munin config base}/plugin-conf.d"
+	defaultMuninPluginBase    string        = "${munin config base}/plugins"
+	defaultCollectionInterval time.Duration = time.Minute
 )
 
 // Config holds the Fact Courier configuration, and the Stream configuration
 type Config struct {
 	event.StreamConfig `config:",embed"`
 
-	MuninConfigBase    string `config:"munin config base"`
-	MuninConfigFile    string `config:"munin config file"`
-	MuninConfigPluginD string `config:"munin config plugind"`
-	MuninPluginBase    string `config:"munin plugin base"`
+	MuninConfigBase    string        `config:"munin config base"`
+	MuninConfigFile    string        `config:"munin config file"`
+	MuninConfigPluginD string        `config:"munin config plugind"`
+	MuninPluginBase    string        `config:"munin plugin base"`
+	CollectionInterval time.Duration `config:"collection interval"`
 }
 
 // Defaults populates any default configurations
@@ -80,6 +83,7 @@ func init() {
 			MuninConfigFile:    defaultMuninConfigFile,
 			MuninConfigPluginD: defaultMuninConfigPluginD,
 			MuninPluginBase:    defaultMuninPluginBase,
+			CollectionInterval: defaultCollectionInterval,
 		}
 	})
 }
