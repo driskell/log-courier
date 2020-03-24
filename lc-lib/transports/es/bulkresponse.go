@@ -32,11 +32,25 @@ const (
 	parseStateResult
 )
 
+type bulkResponseError struct {
+	Type     string             `json:"type"`
+	Reason   string             `json:"reason"`
+	CausedBy *bulkResponseError `json:"caused_by"`
+}
+
+func (e *bulkResponseError) Error() string {
+	if e.CausedBy != nil {
+		return fmt.Sprintf("[%s] %s; Caused by %s", e.Type, e.Reason, e.CausedBy.Error())
+	}
+	return fmt.Sprintf("[%s] %s", e.Type, e.Reason)
+}
+
 type bulkResponse struct {
 	decoder     *json.Decoder
 	bulkRequest *bulkRequest
 
-	Took int
+	Took   int
+	Errors []*bulkResponseError
 }
 
 // newBulkResponse parses a bulk response and returns a structure representing it
@@ -118,6 +132,11 @@ func (b *bulkResponse) parseItems() error {
 			return errors.New("Expected 'items' entry to be an object")
 		}
 
+		// Should have met the end?
+		if ended {
+			return fmt.Errorf("Too many results received")
+		}
+
 		// All bulk operations are index, so expect index object
 		key, err := b.parseKeyOrEnd()
 		if err != nil {
@@ -136,6 +155,10 @@ func (b *bulkResponse) parseItems() error {
 		}
 
 		// Now we can discard everything except result
+		var (
+			status     uint16 = 200
+			errorValue *bulkResponseError
+		)
 		for {
 			key, err := b.parseKeyOrEnd()
 			if err != nil {
@@ -145,21 +168,45 @@ func (b *bulkResponse) parseItems() error {
 				break
 			}
 			if *key == "result" {
-				if ended {
-					return fmt.Errorf("Too many results received")
-				}
-				var result string
-				if err := b.decoder.Decode(&result); err != nil {
+				if err := b.consumeValue(); err != nil {
 					return err
 				}
-				// Mark status of the event in the request so we can possibly resend
-				cursor, ended = b.bulkRequest.Mark(cursor, result == "created")
+			} else if *key == "error" {
+				errorValue = &bulkResponseError{}
+				if err := b.decoder.Decode(errorValue); err != nil {
+					return err
+				}
+				// I believe older versions of ES do not have status field, so simulate 400 just in case which will not retry
+				if status == 200 {
+					status = 400
+				}
+			} else if *key == "status" {
+				if err := b.decoder.Decode(&status); err != nil {
+					return err
+				}
 			} else {
 				if err := b.consumeValue(); err != nil {
 					return err
 				}
 			}
 		}
+
+		// Status?
+		discard := true
+		if status < 200 || status > 299 {
+			// Should have an error
+			if errorValue == nil {
+				errorValue = &bulkResponseError{Type: fmt.Sprintf("Status %d with no error", status), Reason: "none"}
+			}
+			b.Errors = append(b.Errors, errorValue)
+			// 400 are not retryable so leave it as error we discard for, retry everything else
+			if status != 400 {
+				discard = false
+			}
+		}
+
+		// Mark status of the event in the request so we can possibly resend
+		cursor, ended = b.bulkRequest.Mark(cursor, discard)
 
 		// Now end the inner object which should contain only "index"
 		key, err = b.parseKeyOrEnd()

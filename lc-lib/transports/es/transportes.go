@@ -392,10 +392,16 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 		return fmt.Errorf("Response failed to parse: %s", err)
 	}
 
+	if len(response.Errors) != 0 {
+		for _, errorValue := range response.Errors {
+			log.Warning("[%s:%d] Failed to index event: %s", t.pool.Server(), id, errorValue.Error())
+		}
+	}
+
 	if request.Remaining() == 0 {
-		log.Debug("[%s:%d] Elasticsearch request successful (took %d; created %d)", t.pool.Server(), id, response.Took, request.Created()-created)
+		log.Debug("[%s:%d] Elasticsearch request complete (took %d; created %d; errors %d)", t.pool.Server(), id, response.Took, request.Created()-created, len(response.Errors))
 	} else {
-		log.Warning("[%s:%d] Elasticsearch request partially successful (took %d, created %d)", t.pool.Server(), id, response.Took, request.Created()-created)
+		log.Warning("[%s:%d] Elasticsearch request partially complete (took %d; created %d; errors %d; retrying %d)", t.pool.Server(), id, response.Took, request.Created()-created, len(response.Errors), request.Remaining())
 	}
 	return nil
 }

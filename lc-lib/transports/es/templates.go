@@ -62,7 +62,7 @@ const (
 				"dynamic": true,
 				"properties": {
 					"name": { "type": "keyword", "ignore_above": 1024 },
-					"hostname": { "type": "keyword", "ignore_above": 1024 },
+					"hostname": { "type": "keyword", "ignore_above": 1024 }
 				}
 			},
 			"source": {
@@ -128,7 +128,7 @@ const (
 					"dynamic": true,
 					"properties": {
 						"name": { "type": "keyword", "ignore_above": 1024 },
-						"hostname": { "type": "keyword", "ignore_above": 1024 },
+						"hostname": { "type": "keyword", "ignore_above": 1024 }
 					}
 				},
 				"source": {
@@ -193,7 +193,7 @@ const (
 					"dynamic": true,
 					"properties": {
 						"name": { "type": "keyword", "ignore_above": 1024 },
-						"hostname": { "type": "keyword", "ignore_above": 1024 },
+						"hostname": { "type": "keyword", "ignore_above": 1024 }
 					}
 				},
 				"source": {

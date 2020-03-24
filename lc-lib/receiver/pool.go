@@ -97,9 +97,14 @@ ReceiverLoop:
 				r.output <- eventImpl.Events()
 			case *transports.StatusEvent:
 				if eventImpl.StatusChange() == transports.Finished {
-					delete(r.receivers, eventImpl.Context().Value(poolContextListen).(string))
-					if len(r.receivers) == 0 && shutdownChan == nil {
-						break ReceiverLoop
+					// Only remove from our list if we're shutting down and equal nil
+					// Those entries that shutdown but are not nil are likely a config reload that brought it back after a previous shutdown so ignore the one that shuts down
+					key := eventImpl.Context().Value(poolContextListen).(string)
+					if existing, has := r.receivers[key]; has && existing == nil {
+						delete(r.receivers, key)
+						if len(r.receivers) == 0 && shutdownChan == nil {
+							break ReceiverLoop
+						}
 					}
 				}
 			}
@@ -113,16 +118,21 @@ ReceiverLoop:
 // updateReceivers updates the list of running receivers
 func (r *Pool) updateReceivers(newConfig *config.Config) {
 	receiversConfig := transports.FetchReceiversConfig(newConfig)
-	existingReceivers := r.receivers
 	newReceivers := make(map[string]transports.Receiver)
 	for _, cfgEntry := range receiversConfig {
 		if cfgEntry.Enabled {
 			for _, listen := range cfgEntry.Listen {
+				if _, has := newReceivers[listen]; has {
+					log.Warning("Ignoring duplicate receiver listen address: %s", listen)
+					continue
+				}
 				if r.receivers != nil {
-					if existing, has := r.receivers[listen]; has {
+					// If already exists and isn't nil (which means shutting down) then reload config
+					if existing, has := r.receivers[listen]; has && existing != nil {
 						// Receiver already exists, update its configuration
 						existing.ReloadConfig(newConfig, cfgEntry.Factory)
-						delete(existingReceivers, listen)
+						delete(r.receivers, listen)
+						newReceivers[listen] = existing
 						continue
 					}
 				}
@@ -135,8 +145,9 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 
 	// Anything left in existing receivers was not updated so should be shutdown
 	if r.receivers != nil {
-		for _, receiver := range r.receivers {
+		for key, receiver := range r.receivers {
 			receiver.Shutdown()
+			newReceivers[key] = nil
 		}
 	}
 
@@ -145,7 +156,8 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 
 // shutdown stops all receivers
 func (r *Pool) shutdown() {
-	for _, receiver := range r.receivers {
+	for key, receiver := range r.receivers {
 		receiver.Shutdown()
+		r.receivers[key] = nil
 	}
 }
