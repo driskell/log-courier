@@ -234,7 +234,7 @@ func (t *connection) senderRoutine() {
 	t.senderErr = t.sender()
 
 	// Sender exits after graceful shutdown from receiver EOF
-	// Or it exist due to a problem
+	// Or it exits due to a problem
 	// Therefore, always force shutdown here of receiver if it wasn't already
 	// This will unblock everything, including attempts to send data that won't now complete
 	// as they all monitor the main shutdown channel
@@ -404,12 +404,9 @@ func (t *connection) writeMsg(msg protocolMessage) error {
 
 // sendEvent ships an event structure whilst also monitoring for
 // any shutdown signal. Returns true if shutdown was signalled
-// Does not monitor send thread errors here since we are blocking internally
-// with a fully received message so let's get that handled first before
-// triggering any teardown due to sender error
 func (t *connection) sendEvent(transportEvent transports.Event) bool {
 	select {
-	case <-t.shutdownChan:
+	case <-t.receiverShutdownChan:
 		return true
 	case t.eventChan <- transportEvent:
 	}
