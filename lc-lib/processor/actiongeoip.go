@@ -127,11 +127,7 @@ func (g *geoIPAction) Process(event *event.Event) *event.Event {
 	data["continent_name"] = record.Continent.Names["en"]
 	data["country_iso_code"] = record.Country.IsoCode
 	data["country_name"] = record.Country.Names["en"]
-	data["location"] = map[string]interface{}{
-		"type": "Point",
-		// This ordering matches the math coordinates of X Y, so is reversed compared to usual geo-coordinates practice
-		"coordinates": []float64{record.Location.Longitude, record.Location.Latitude},
-	}
+	data["location"] = []float64{record.Location.Longitude, record.Location.Latitude}
 	data["latitude"] = record.Location.Latitude
 	data["longitude"] = record.Location.Longitude
 	data["postal_code"] = record.Postal.Code
