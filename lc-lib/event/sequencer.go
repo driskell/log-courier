@@ -87,9 +87,9 @@ func (s *Sequencer) Enforce(bundle *Bundle) []*Bundle {
 					targetIdx++
 				}
 			}
-			for targetIdx := 0; targetIdx < len(s.delayed); targetIdx++ {
+			for idx := targetIdx; idx < len(s.delayed); idx++ {
 				// Free memory - but keep slice capacity
-				s.delayed[targetIdx] = nil
+				s.delayed[idx] = nil
 			}
 			s.delayed = s.delayed[:targetIdx]
 			if startSequence == s.outputSequence {
