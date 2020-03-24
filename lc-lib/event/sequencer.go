@@ -74,13 +74,24 @@ func (s *Sequencer) Enforce(bundle *Bundle) []*Bundle {
 		result := []*Bundle{bundle}
 		for {
 			startSequence := s.outputSequence
-			for _, entry := range s.delayed {
+			targetIdx := 0
+			for idx, entry := range s.delayed {
 				if entry.Value(bundleMarkSequencerPos).(uint64) == s.outputSequence {
 					s.outputSequence++
 					s.pending--
 					result = append(result, entry)
+				} else {
+					if targetIdx != idx {
+						s.delayed[targetIdx] = entry
+					}
+					targetIdx++
 				}
 			}
+			for targetIdx := 0; targetIdx < len(s.delayed); targetIdx++ {
+				// Free memory - but keep slice capacity
+				s.delayed[targetIdx] = nil
+			}
+			s.delayed = s.delayed[:targetIdx]
 			if startSequence == s.outputSequence {
 				break
 			}

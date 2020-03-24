@@ -70,7 +70,11 @@ func TestSequencerReversed(t *testing.T) {
 				t.Fatal("Unexpected early bundle return")
 			}
 			if s.Delayed() != 5-idx {
-				t.Fatal("Unexpected length return")
+				t.Fatal("Unexpected delayed count")
+			}
+		} else {
+			if s.Delayed() != 0 {
+				t.Fatal("Unexpected delayed count")
 			}
 		}
 		result = append(result, ret...)
