@@ -33,16 +33,21 @@ const (
 )
 
 type bulkResponseError struct {
-	Type     string             `json:"type"`
-	Reason   string             `json:"reason"`
-	CausedBy *bulkResponseError `json:"caused_by"`
+	Type      string                 `json:"type"`
+	Reason    string                 `json:"reason"`
+	CausedBy  *bulkResponseError     `json:"caused_by"`
+	EventData map[string]interface{} `json:"-"`
 }
 
 func (e *bulkResponseError) Error() string {
-	if e.CausedBy != nil {
-		return fmt.Sprintf("[%s] %s; Caused by %s", e.Type, e.Reason, e.CausedBy.Error())
+	data, err := json.Marshal(e.EventData)
+	if err != nil {
+		data = []byte(err.Error())
 	}
-	return fmt.Sprintf("[%s] %s", e.Type, e.Reason)
+	if e.CausedBy != nil {
+		return fmt.Sprintf("[%s] %s; Caused by %s; Event: %s", e.Type, e.Reason, e.CausedBy.Error(), data)
+	}
+	return fmt.Sprintf("[%s] %s; Event: %s", e.Type, e.Reason, data)
 }
 
 type bulkResponse struct {
@@ -198,6 +203,7 @@ func (b *bulkResponse) parseItems() error {
 			if errorValue == nil {
 				errorValue = &bulkResponseError{Type: fmt.Sprintf("Status %d with no error", status), Reason: "none"}
 			}
+			errorValue.EventData = b.bulkRequest.Event(cursor)
 			b.Errors = append(b.Errors, errorValue)
 			// 400 are not retryable so leave it as error we discard for, retry everything else
 			if status != 400 {

@@ -89,6 +89,14 @@ func (p *bulkRequest) AckSequence() uint32 {
 	return p.ackSequence
 }
 
+// Event returns the event data at the given cursor position, use nil for the beginning
+func (p *bulkRequest) Event(cursor *bulkRequestCursor) map[string]interface{} {
+	if cursor == nil {
+		return p.markCursor.pos[0].Data()
+	}
+	return cursor.pos[0].Data()
+}
+
 // Mark sets the status of the first outstanding event based on the given successful value
 // It returns a cursor which can then be passed in to mark the next item, and repeat
 // Pass in nil cursor to start from the beginning
