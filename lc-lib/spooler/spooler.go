@@ -50,7 +50,7 @@ func NewSpooler(app *core.App) *Spooler {
 	genConfig := app.Config().GeneralPart("spooler").(*General)
 	return &Spooler{
 		genConfig: genConfig,
-		input:     make(chan []*event.Event, 16), // TODO: Make configurable?
+		input:     make(chan []*event.Event, 1),
 		spool:     make([]*event.Event, 0, genConfig.SpoolSize),
 	}
 }

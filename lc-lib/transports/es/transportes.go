@@ -378,18 +378,15 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		bufio.NewReader(httpResponse.Body).WriteTo(ioutil.Discard)
-		httpResponse.Body.Close()
-	}()
+	body, _ := ioutil.ReadAll(httpResponse.Body)
+	httpResponse.Body.Close()
 	if httpResponse.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(httpResponse.Body)
 		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
-	response, err := newBulkResponse(httpResponse.Body, request)
+	response, err := newBulkResponse(body, request)
 	if err != nil {
-		return fmt.Errorf("Response failed to parse: %s", err)
+		return fmt.Errorf("Response failed to parse: %s [Body: %s]", err, body)
 	}
 
 	if len(response.Errors) != 0 {

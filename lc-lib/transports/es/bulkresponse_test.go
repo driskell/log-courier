@@ -17,14 +17,13 @@
 package es
 
 import (
-	"strings"
 	"testing"
 )
 
 func TestBulkResponseParse(t *testing.T) {
 	request := createTestBulkRequest(3, "2020-08-03", "2020-08-03")
-	responseString := `{"ignore":1,"again":"test","took":444,"more":false,"items":[{"index":{"in":5,"result":"created"}},{"index":{"result":"failed","out":false}},{"index":{"result":"created"}}],"last":"gone"}`
-	response, err := newBulkResponse(strings.NewReader(responseString), request)
+	responseString := `{"ignore":1,"again":"test","took":444,"more":false,"items":[{"index":{"in":5,"result":"created"}},{"index":{"error":{"type": "failed"},"status":404}},{"index":{"result":"created"}}],"last":"gone"}`
+	response, err := newBulkResponse([]byte(responseString), request)
 	if err != nil {
 		t.Errorf("Unexpected response parse error: %s", err)
 	}
@@ -36,10 +35,25 @@ func TestBulkResponseParse(t *testing.T) {
 	}
 }
 
+func TestBulkResponseParseSkip(t *testing.T) {
+	request := createTestBulkRequest(3, "2020-08-03", "2020-08-03")
+	responseString := `{"ignore":1,"again":"test","took":222,"more":false,"items":[{"index":{"in":5,"result":"created"}},{"index":{"error":{"type": "failed"},"status":400}},{"index":{"result":"created"}}],"last":"gone"}`
+	response, err := newBulkResponse([]byte(responseString), request)
+	if err != nil {
+		t.Errorf("Unexpected response parse error: %s", err)
+	}
+	if request.Remaining() != 0 {
+		t.Errorf("Unexpected remaining count: %d", request.Remaining())
+	}
+	if response.Took != 222 {
+		t.Errorf("Unexpected took value: %d", response.Took)
+	}
+}
+
 func TestBulkResponseParseTooFew(t *testing.T) {
 	request := createTestBulkRequest(3, "2020-08-03", "2020-08-03")
 	responseString := `{"more":false,"items":[{"index":{"result":"created"}}]}`
-	_, err := newBulkResponse(strings.NewReader(responseString), request)
+	_, err := newBulkResponse([]byte(responseString), request)
 	if err == nil {
 		t.Errorf("Unexpected response parse success")
 	}
@@ -47,8 +61,8 @@ func TestBulkResponseParseTooFew(t *testing.T) {
 
 func TestBulkResponseParseTookMissing(t *testing.T) {
 	request := createTestBulkRequest(3, "2020-08-03", "2020-08-03")
-	responseString := `{"more":false,"items":[{"index":{"result":"created"}},{"index":{"result":"failed"}},{"index":{"result":"created"}}]}`
-	response, err := newBulkResponse(strings.NewReader(responseString), request)
+	responseString := `{"more":false,"items":[{"index":{"result":"created"}},{"index":{"status":500,"error":{"type":"error"}}},{"index":{"result":"created"}}]}`
+	response, err := newBulkResponse([]byte(responseString), request)
 	if err != nil {
 		t.Errorf("Unexpected response parse error: %s", err)
 	}
@@ -63,7 +77,7 @@ func TestBulkResponseParseTookMissing(t *testing.T) {
 func TestBulkResponseParseTooMany(t *testing.T) {
 	request := createTestBulkRequest(1, "2020-08-03", "2020-08-03")
 	responseString := `{"more":false,"items":[{"index":{"result":"created"}},{"index":{"result":"failed"}},{"index":{"result":"created"}}]}`
-	_, err := newBulkResponse(strings.NewReader(responseString), request)
+	_, err := newBulkResponse([]byte(responseString), request)
 	if err == nil {
 		t.Errorf("Unexpected response parse success")
 	}
@@ -72,12 +86,12 @@ func TestBulkResponseParseTooMany(t *testing.T) {
 func TestBulkResponseParseSyntax(t *testing.T) {
 	request := createTestBulkRequest(1, "2020-08-03", "2020-08-03")
 	responseString := `{"more":false,"items":[{"index":{"result":"created"}}]}`
-	_, err := newBulkResponse(strings.NewReader(responseString), request)
+	_, err := newBulkResponse([]byte(responseString), request)
 	if err != nil {
 		t.Errorf("Unexpected response parse error: %s", err)
 	}
 	responseString = `{"more":false,"items":["index":{"result":"created"}}]}`
-	_, err = newBulkResponse(strings.NewReader(responseString), request)
+	_, err = newBulkResponse([]byte(responseString), request)
 	if err == nil {
 		t.Errorf("Unexpected response parse success")
 	}

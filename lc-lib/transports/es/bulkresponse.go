@@ -17,10 +17,10 @@
 package es
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 )
 
 const (
@@ -60,13 +60,13 @@ type bulkResponse struct {
 
 // newBulkResponse parses a bulk response and returns a structure representing it
 // It also marks the successful events inside the bulkRequest
-func newBulkResponse(response io.Reader, bulkRequest *bulkRequest) (*bulkResponse, error) {
+func newBulkResponse(body []byte, bulkRequest *bulkRequest) (*bulkResponse, error) {
 	ret := &bulkResponse{
-		decoder:     json.NewDecoder(response),
+		decoder:     json.NewDecoder(bytes.NewReader(body)),
 		bulkRequest: bulkRequest,
 	}
 	if err := ret.parse(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s [Body: %s]", err, body)
 	}
 	return ret, nil
 }
@@ -121,8 +121,10 @@ func (b *bulkResponse) parseItems() error {
 		return err
 	}
 
-	var cursor *bulkRequestCursor
-	var ended bool
+	var (
+		cursor *bulkRequestCursor
+		ended  bool
+	)
 
 	for {
 		// Expect object for each item
@@ -139,7 +141,7 @@ func (b *bulkResponse) parseItems() error {
 
 		// Should have met the end?
 		if ended {
-			return fmt.Errorf("Too many results received")
+			return errors.New("Too many results received")
 		}
 
 		// All bulk operations are index, so expect index object
@@ -220,12 +222,12 @@ func (b *bulkResponse) parseItems() error {
 			return err
 		}
 		if key != nil {
-			return fmt.Errorf("Unexpected additional key in an 'items' entry")
+			return errors.New("Unexpected additional key in an 'items' entry")
 		}
 	}
 
 	if !ended {
-		return fmt.Errorf("Too few results received")
+		return errors.New("Too few results received")
 	}
 
 	return nil

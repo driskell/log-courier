@@ -44,7 +44,7 @@ type Pool struct {
 // NewPool creates a new processor pool
 func NewPool(app *core.App) *Pool {
 	return &Pool{
-		input:     make(chan []*event.Event, 16), // TODO: Make configurable?
+		input:     make(chan []*event.Event, 1),
 		sequencer: event.NewSequencer(),
 	}
 }
