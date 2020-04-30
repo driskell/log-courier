@@ -54,6 +54,11 @@ func NewSink(config *config.Network) *Sink {
 		timeoutTimer: time.NewTimer(1 * time.Second),
 	}
 
+	ret.timeoutList.Init()
+	ret.readyList.Init()
+	ret.failedList.Init()
+	ret.orderedList.Init()
+
 	ret.timeoutTimer.Stop()
 
 	return ret
