@@ -159,6 +159,7 @@ func TestRequestMark(t *testing.T) {
 	if request.AckSequence() != 1 {
 		t.Errorf("Unexpected ack sequence: %d", request.AckSequence())
 	}
+	request.Reset()
 	result, err := ioutil.ReadAll(request)
 	if err != nil {
 		t.Errorf("Failed to encode: %s", err)
@@ -190,6 +191,55 @@ func TestRequestMark(t *testing.T) {
 		t.Errorf("Unexpected created count: %d", request.Created())
 	}
 	if request.AckSequence() != 3 {
+		t.Errorf("Unexpected ack sequence: %d", request.AckSequence())
+	}
+}
+
+func TestRequestMarkFailTwiceInvalidPos(t *testing.T) {
+	request := createTestBulkRequest(3, "2020-03-07", "2020-03-14")
+	if request.Event(nil) == nil {
+		t.Error("Unexpected missing event")
+	}
+	cursor, end := request.Mark(nil, false)
+	if end || cursor == nil {
+		t.Error("Unexpected end")
+	}
+	if request.Event(cursor) == nil {
+		t.Error("Unexpected missing event")
+	}
+	cursor, end = request.Mark(cursor, true)
+	if end || cursor == nil {
+		t.Error("Unexpected end")
+	}
+	if request.Event(cursor) == nil {
+		t.Error("Unexpected missing event")
+	}
+	cursor, end = request.Mark(cursor, false)
+	if !end || cursor != nil {
+		t.Error("Missing end")
+	}
+	request.Reset()
+	if request.Event(nil) == nil {
+		t.Error("Unexpected missing event")
+	}
+	cursor, end = request.Mark(nil, false)
+	if end || cursor == nil {
+		t.Error("Unexpected end")
+	}
+	if request.Event(cursor) == nil {
+		t.Error("Unexpected missing event")
+	}
+	cursor, end = request.Mark(cursor, true)
+	if !end || cursor != nil {
+		t.Error("Missing end")
+	}
+	if request.Remaining() != 1 {
+		t.Errorf("Unexpected remaining count: %d", request.Remaining())
+	}
+	if request.Created() != 2 {
+		t.Errorf("Unexpected created count: %d", request.Created())
+	}
+	if request.AckSequence() != 0 {
 		t.Errorf("Unexpected ack sequence: %d", request.AckSequence())
 	}
 }

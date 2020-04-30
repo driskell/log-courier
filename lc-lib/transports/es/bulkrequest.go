@@ -115,25 +115,29 @@ func (p *bulkRequest) Mark(cursor *bulkRequestCursor, successful bool) (*bulkReq
 		if len(currentCursor.pos) == 0 {
 			return nil, true
 		}
-		return currentCursor, false
+	} else {
+		currentCursor.pos[0] = nil
+		p.remaining--
+		p.created++
 	}
 
-	currentCursor.pos[0] = nil
-	p.remaining--
-	p.created++
 	for currentCursor.pos[0] == nil {
 		currentCursor.pos = currentCursor.pos[1:]
 		if !currentCursor.moved {
-			// A cursor is moved when it no longer matches the original
 			p.ackSequence++
-			p.markCursor.pos = currentCursor.pos
-			p.Reset()
 		}
 		if len(currentCursor.pos) == 0 {
-			return nil, true
+			break
 		}
 	}
 
+	if !currentCursor.moved {
+		p.markCursor.pos = currentCursor.pos
+	}
+
+	if len(currentCursor.pos) == 0 {
+		return nil, true
+	}
 	return currentCursor, false
 }
 
