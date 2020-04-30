@@ -75,6 +75,11 @@ func NewSink(config *transports.Config) *Sink {
 		OnStarted: func(*Endpoint) {},
 	}
 
+	ret.timeoutList.Init()
+	ret.readyList.Init()
+	ret.failedList.Init()
+	ret.orderedList.Init()
+
 	ret.timeoutTimer.Stop()
 
 	return ret
