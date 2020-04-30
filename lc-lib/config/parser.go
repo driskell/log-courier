@@ -506,6 +506,9 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 	}
 
 	if vRawConfig.IsValid() {
+		if vSlice.Len() != 0 {
+			vSlice = reflect.MakeSlice(vSlice.Type(), 0, 0)
+		}
 		for i := 0; i < vRawConfig.Len(); i++ {
 			vItem := reflect.New(vSlice.Type().Elem()).Elem()
 			// Dereference interface{} map value in incoming config to get the real item
