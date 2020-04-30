@@ -17,7 +17,6 @@
 package processor
 
 import (
-	"context"
 	"encoding/json"
 	"time"
 
@@ -81,7 +80,6 @@ func (p *Pool) Run() {
 
 	for {
 		var newConfig *config.Config
-		ctx, shutdownFunc := context.WithCancel(context.Background())
 		shutdown, reloading := false, false
 		routineCount := p.cfg.GeneralPart("processor").(*General).ProcessorRoutines
 		inProgress := 0
@@ -93,7 +91,7 @@ func (p *Pool) Run() {
 
 		log.Info("Processor starting %d routines", routineCount)
 		for i := 0; i < routineCount; i++ {
-			go p.processorRoutine(ctx, i)
+			go p.processorRoutine(i)
 		}
 
 	PipelineLoop:
@@ -105,7 +103,7 @@ func (p *Pool) Run() {
 				log.Info("Processor shutting down %d routines", routineCount)
 			case newConfig = <-p.configChan:
 				// Request shutdown so we can restart with new configuration
-				shutdownFunc()
+				close(p.fanout)
 				// Do not send any more events - as the processors are shutting down
 				// they will not enter the collector - so fanout could block as we have 2xroutine limit
 				// which assumes something inside the collector
@@ -168,7 +166,6 @@ func (p *Pool) Run() {
 		}
 
 		if shutdown {
-			shutdownFunc()
 			break
 		}
 
@@ -181,7 +178,7 @@ func (p *Pool) Run() {
 }
 
 // processorRoutine runs a single routine for processing
-func (p *Pool) processorRoutine(ctx context.Context, id int) {
+func (p *Pool) processorRoutine(id int) {
 	defer func() {
 		log.Info("[%d] Processor routine exiting", id)
 		p.collector <- nil
@@ -189,8 +186,6 @@ func (p *Pool) processorRoutine(ctx context.Context, id int) {
 	for {
 		select {
 		case <-p.shutdownChan:
-			return
-		case <-ctx.Done():
 			return
 		case bundle := <-p.fanout:
 			if bundle == nil {
