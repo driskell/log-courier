@@ -409,22 +409,8 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 	}
 
 	if vField.Type().String() == "time.Duration" {
-		var duration float64
-		vDuration := reflect.ValueOf(duration)
-
-		if vMapIndex.Type().AssignableTo(vDuration.Type()) {
-			duration = vMapIndex.Float()
-
-			if duration < math.MinInt64 || duration > math.MaxInt64 {
-				err = fmt.Errorf("Option %s%s must be a valid numeric or string duration", configPath, tag)
-				return
-			}
-
-			log.Debugf("populateEntry value: %f (%s%s)", duration, configPath, tag)
-			retValue = reflect.ValueOf(time.Duration(int64(duration)) * time.Second)
-		} else if vMapIndex.Kind() == reflect.String {
+		if vMapIndex.Kind() == reflect.String {
 			var parseDuration time.Duration
-
 			if parseDuration, err = time.ParseDuration(vMapIndex.String()); err != nil {
 				err = fmt.Errorf("Option %s%s was not understood: %s", configPath, tag, err)
 			}
@@ -432,10 +418,32 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 			log.Debugf("populateEntry value: %v (%s%s)", parseDuration, configPath, tag)
 			retValue = reflect.ValueOf(parseDuration)
 		} else {
-			err = fmt.Errorf("Option %s%s is not a valid duration (number of seconds or duration syntax)", configPath, tag)
-			return
-		}
+			var duration int64 = 0
+			switch vMapIndex.Kind() {
+			case reflect.Float64:
+				durationFloat := vMapIndex.Float()
+				if float64(int64(durationFloat)) != durationFloat {
+					err = fmt.Errorf("Option %s%s must be a valid 64-bit signed integer duration - provided value is out of range", configPath, tag)
+					return
+				}
+				duration = int64(durationFloat)
+			case reflect.Uint64, reflect.Uint:
+				durationUint := vMapIndex.Uint()
+				if uint64(int64(durationUint)) != durationUint {
+					err = fmt.Errorf("Option %s%s must be a valid 64-bit signed integer duration - provided value is out of range", configPath, tag)
+					return
+				}
+				duration = int64(durationUint)
+			case reflect.Int64, reflect.Int:
+				duration = vMapIndex.Int()
+			default:
+				err = fmt.Errorf("Option %s%s is not a valid duration (number of seconds or duration syntax)", configPath, tag)
+				return
+			}
 
+			log.Debugf("populateEntry value: %f (%s%s)", duration, configPath, tag)
+			retValue = reflect.ValueOf(time.Duration(duration) * time.Second)
+		}
 		return
 	}
 
