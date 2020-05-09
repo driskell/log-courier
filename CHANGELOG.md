@@ -1,5 +1,12 @@
 # Change Log
 
+## 2.0.6
+
+*9th May 2020*
+
+* Fix several issues when shutting down with outstanding payloads, to prevent
+hanging forever
+
 ## 2.0.5
 
 *18th February 2017*

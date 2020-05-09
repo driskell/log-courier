@@ -4,7 +4,7 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 2.0.4
+Version: 2.0.6
 Release: 1%{dist}
 License: Apache
 Group: System Environment/Libraries
@@ -13,11 +13,6 @@ URL: https://github.com/driskell/log-courier
 Source: https://github.com/driskell/log-courier/archive/v%{version}.zip
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 
-# Get this from the great Jason Brooks:
-#   https://copr.fedorainfracloud.org/coprs/jasonbrooks/docker/package/golang/
-# We could also get from a RedHat dev, but currently broken and leaking out 1.6:
-#   https://copr.fedorainfracloud.org/coprs/jcajka/golang1.5/package/golang/
-# For RHEL6, 1.5.1 can be obtained from EPEL, but it is not available to RHEL7
 BuildRequires: golang >= 1.5
 BuildRequires: git
 
@@ -157,6 +152,12 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
+* Sat May 9 2020 Jason Woods <devel@jasonwoods.me.uk> - 2.0.6-1
+- Upgrade to 2.0.6
+
+* Sat Feb 18 2017 Jason Woods <devel@jasonwoods.me.uk> - 2.0.5-1
+- Upgrade to 2.0.5
+
 * Fri Jun 10 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.4-1
 - Upgrade to 2.0.4
 

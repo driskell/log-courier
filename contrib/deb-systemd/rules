@@ -18,8 +18,8 @@ override_dh_auto_build:
 	mkdir -p _workspace/src/github.com/driskell
 	ln -nsf $$(pwd) _workspace/src/github.com/driskell/log-courier
 	cd "_workspace/src/github.com/driskell/log-courier"; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go generate . ./lc-admin; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go install . ./lc-admin ./lc-tlscert
+		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go/bin go generate . ./lc-admin; \
+		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go/bin go install . ./lc-admin ./lc-tlscert
 
 override_dh_auto_test:
 	# Maybe tests in future
