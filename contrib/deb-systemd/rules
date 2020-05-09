@@ -1,36 +1,28 @@
 #!/usr/bin/make -f
 
+# Configure golang
+export HOME := $(CURDIR)
+export DH_GOLANG_GO_GENERATE := 1
+export DH_GOLANG_BUILDPKG := github.com/driskell/log-courier github.com/driskell/log-courier/lc-admin github.com/driskell/log-courier/lc-tlscert
+
 # Configure platform specific defaults
-export LC_DEFAULT_CONFIGURATION_FILE=/etc/log-courier/log-courier.yaml
-export LC_DEFAULT_GENERAL_PERSIST_DIR=/var/lib/log-courier
-export LC_DEFAULT_ADMIN_BIND=unix:/var/run/log-courier/admin.socket
+export LC_DEFAULT_CONFIGURATION_FILE := /etc/log-courier/log-courier.yaml
+export LC_DEFAULT_GENERAL_PERSIST_DIR := /var/lib/log-courier
+export LC_DEFAULT_ADMIN_BIND := unix:/var/run/log-courier/admin.socket
 
 # Enable vendor experiment in the event of Go 1.5 then generate and build
-export GO15VENDOREXPERIMENT=1
+export GO15VENDOREXPERIMENT := 1
 
 %:
-	dh $@ --with=systemd
-
-override_dh_auto_clean:
-	# Nothing to do
-
-override_dh_auto_build:
-	mkdir -p _workspace/src/github.com/driskell
-	ln -nsf $$(pwd) _workspace/src/github.com/driskell/log-courier
-	cd "_workspace/src/github.com/driskell/log-courier"; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go/bin go generate . ./lc-admin; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go/bin go install . ./lc-admin ./lc-tlscert
-
-override_dh_auto_test:
-	# Maybe tests in future
+	dh $@ --with=systemd --builddirectory=_build --buildsystem=golang --with=golang
 
 override_dh_auto_install:
 	# Install binaries
 	mkdir -p debian/log-courier/usr/sbin
-	install -m 0755 _workspace/bin/log-courier debian/log-courier/usr/sbin/log-courier
+	install -m 0755 _build/bin/log-courier debian/log-courier/usr/sbin/log-courier
 	mkdir -p debian/log-courier/usr/bin
-	install -m 0755 _workspace/bin/lc-admin debian/log-courier/usr/bin/lc-admin
-	install -m 0755 _workspace/bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
+	install -m 0755 _build/bin/lc-admin debian/log-courier/usr/bin/lc-admin
+	install -m 0755 _build/bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
 
 	# Install example configuration
 	mkdir -p debian/log-courier/etc/log-courier/examples

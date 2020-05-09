@@ -1,12 +1,16 @@
 #!/usr/bin/make -f
 
+# Configure golang
+export HOME := $(CURDIR)
+export PATH := /usr/lib/go-1.5/bin:$(PATH)
+
 # Configure platform specific defaults
-export LC_DEFAULT_CONFIGURATION_FILE=/etc/log-courier/log-courier.yaml
-export LC_DEFAULT_GENERAL_PERSIST_DIR=/var/lib/log-courier
-export LC_DEFAULT_ADMIN_BIND=unix:/var/run/log-courier/admin.socket
+export LC_DEFAULT_CONFIGURATION_FILE := /etc/log-courier/log-courier.yaml
+export LC_DEFAULT_GENERAL_PERSIST_DIR := /var/lib/log-courier
+export LC_DEFAULT_ADMIN_BIND := unix:/var/run/log-courier/admin.socket
 
 # Enable vendor experiment in the event of Go 1.5 then generate and build
-export GO15VENDOREXPERIMENT=1
+export GO15VENDOREXPERIMENT := 1
 
 %:
 	dh $@
@@ -15,11 +19,12 @@ override_dh_auto_clean:
 	# Nothing to do
 
 override_dh_auto_build:
-	mkdir -p _workspace/src/github.com/driskell
-	ln -nsf $$(pwd) _workspace/src/github.com/driskell/log-courier
-	cd "_workspace/src/github.com/driskell/log-courier"; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go/bin go generate . ./lc-admin; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go/bin go install . ./lc-admin ./lc-tlscert
+	mkdir -p _workspace/src/github.com/driskell; \
+	ln -nsf $$(pwd) _workspace/src/github.com/driskell/log-courier; \
+	export GOPATH=$$(pwd)/_workspace; \
+	cd "$$GOPATH/src/github.com/driskell/log-courier"; \
+	go generate . ./lc-admin; \
+	go install . ./lc-admin ./lc-tlscert
 
 override_dh_auto_test:
 	# Maybe tests in future
