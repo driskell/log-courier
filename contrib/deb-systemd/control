@@ -3,7 +3,7 @@ Section: contrib/admin
 Priority: optional
 Standards-Version: 4.5.0
 Maintainer: Jason Woods (Driskell) <devel@jasonwoods.me.uk>
-Build-Depends: debhelper (>= 9.20160115), dh-systemd, dh-golang, golang-go (>= 1.13), git
+Build-Depends: debhelper (>= 9.20160115), golang-go, git
 XS-Go-Import-Path: github.com/driskell/log-courier
 
 Package: log-courier
