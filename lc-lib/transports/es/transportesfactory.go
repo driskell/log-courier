@@ -18,6 +18,7 @@ package es
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -38,21 +39,26 @@ const (
 var (
 	// TransportES is the transport name for ES HTTP
 	TransportES = "es"
+
+	defaultTemplatePatterns []string = []string{"logstash-*"}
 )
 
 // TransportESFactory holds the configuration from the configuration file
 // It allows creation of TransportES instances that use this configuration
 type TransportESFactory struct {
 	// Constructor
-	config    *config.Config
-	transport string
+	config                    *config.Config
+	transport                 string
+	templatePatternsJSON      string
+	templatePatternSingleJSON string
 
 	// Configuration
-	Routines     int           `config:"routines"`
-	Retry        time.Duration `config:"retry backoff"`
-	RetryMax     time.Duration `config:"retry backoff max"`
-	IndexPattern string        `config:"index pattern"`
-	TemplateFile string        `config:"template file"`
+	Routines         int           `config:"routines"`
+	Retry            time.Duration `config:"retry backoff"`
+	RetryMax         time.Duration `config:"retry backoff max"`
+	IndexPattern     string        `config:"index pattern"`
+	TemplateFile     string        `config:"template file"`
+	TemplatePatterns []string      `config:"template patterns"`
 
 	// Internal
 	template []byte
@@ -88,6 +94,23 @@ func NewTransportESFactory(p *config.Parser, configPath string, unUsed map[strin
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		if len(ret.TemplatePatterns) == 0 {
+			return nil, fmt.Errorf("'template patterns' is required when 'template file' is not set when using 'es' transport")
+		}
+
+		var result []byte
+		result, err = json.Marshal(ret.TemplatePatterns)
+		if err != nil {
+			panic(fmt.Sprintf("'template patterns' failed to encode: %s", err))
+		}
+		ret.templatePatternsJSON = string(result)
+
+		result, err = json.Marshal(ret.TemplatePatterns[0])
+		if err != nil {
+			panic(fmt.Sprintf("'template patterns' failed to encode: %s", err))
+		}
+		ret.templatePatternSingleJSON = string(result)
 	}
 
 	return ret, nil
@@ -99,6 +122,7 @@ func (f *TransportESFactory) Defaults() {
 	f.Retry = defaultRetry
 	f.RetryMax = defaultRetryMax
 	f.IndexPattern = defaultIndexPattern
+	f.TemplatePatterns = defaultTemplatePatterns
 }
 
 // NewTransport returns a new Transport interface using the settings from the

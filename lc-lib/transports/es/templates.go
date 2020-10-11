@@ -21,7 +21,7 @@ package es
 
 const (
 	esTemplate8 = `{
-	"index_patterns": "logstash-*",
+	"index_patterns": $INDEXPATTERNS$,
 	"version": 80001,
 	"settings": {
 		"index.refresh_interval": "5s",
@@ -87,7 +87,7 @@ const (
 	esTemplate7 = esTemplate8
 
 	esTemplate6 = `{
-	"template": "logstash-*",
+	"index_patterns": $INDEXPATTERNS$,
 	"version": 60001,
 	"settings": {
 		"index.refresh_interval": "5s"
@@ -151,7 +151,7 @@ const (
 }`
 
 	esTemplate5 = `{
-	"template": "logstash-*",
+	"template": $INDEXPATTERNSINGLE$,
 	"version": 50001,
 	"settings": {
 		"index.refresh_interval": "5s"

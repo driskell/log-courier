@@ -209,10 +209,15 @@ func (t *transportES) installTemplate() error {
 			break
 		case 5:
 			template = esTemplate5
+			if len(t.config.TemplatePatterns) > 1 {
+				return fmt.Errorf("Elasticsearch major version %d does not support multiple 'template patterns'", t.maxMajorVersion)
+			}
+			template = strings.ReplaceAll(template, "$INDEXPATTERNSINGLE$", t.config.templatePatternSingleJSON)
 			break
 		default:
 			return fmt.Errorf("Elasticsearch major version %d is unsupported", t.maxMajorVersion)
 		}
+		template = strings.ReplaceAll(template, "$INDEXPATTERNS$", t.config.templatePatternsJSON)
 		templateReader = strings.NewReader(template)
 		templateLen = len(template)
 	}
