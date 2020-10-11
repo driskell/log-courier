@@ -1,6 +1,7 @@
 # Log Courier Suite
 
-[![Build Status](https://img.shields.io/travis/driskell/log-courier/master.svg)](https://travis-ci.org/driskell/log-courier)
+[![Go 1.13 Build Status](https://img.shields.io/github/workflow/status/driskell/log-courier/Go%201.13.svg)](https://travis-ci.org/driskell/log-courier)
+[![Go 1.14 Build Status](https://img.shields.io/github/workflow/status/driskell/log-courier/Go%201.14.svg)](https://travis-ci.org/driskell/log-courier)
 [![Latest Release](https://img.shields.io/github/release/driskell/log-courier.svg)](https://github.com/driskell/log-courier/releases/latest)
 
 The Log Courier Suite is a set of lightweight tools created to ship and process
