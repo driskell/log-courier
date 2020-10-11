@@ -10,7 +10,6 @@ Logstash instances.
 - [Log Courier Suite](#log-courier-suite)
   - [Log Courier](#log-courier)
   - [Log Carver](#log-carver)
-  - [Fact Courier](#fact-courier)
   - [Philosophy](#philosophy)
   - [Documentation](#documentation)
     - [Installation](#installation)
@@ -46,16 +45,6 @@ target different actions against different events
 - Provides several actions: date, geoip, user_agent, kv, add_tag, remove_tag, set_field, unset_field
 - The set_field action supports Common Expression Language (CEL) for type conversions and string building
 - Transmits events to Elasticsearch using the bulk API
-
-## Fact Courier
-
-(Beta)
-
-Fact Courier is a lightweight shipper that runs Munin plugins, takes their results
-and transmits them as events to a remote Logstash or Log Carver instance.
-
-- Generates events from hundreds of Munin plugins
-- Transmits securely using TLS with server and (optionally) client verification
 
 ## Philosophy
 
