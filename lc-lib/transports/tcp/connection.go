@@ -141,6 +141,9 @@ func (t *connection) Run(startedCallback func()) error {
 	// Wait for sender to complete
 	t.wait.Wait()
 
+	// Cleanup
+	t.socket.Close()
+
 	// If we had no error, did sender save one when it shutdown?
 	// This is already the receiver error if receiver collected it and shutdown
 	// If receiver EOF though and then we had a sender issue, take that error
@@ -262,7 +265,7 @@ func (t *connection) sender() error {
 		case <-senderShutdownChan:
 			if len(t.partialAcks) == 0 {
 				// No outstanding acknowledgements, so let's shutdown gracefully
-				return t.socket.Close()
+				return nil
 			}
 			// Flag as closing, we will end as soon as last acknowledge sent
 			log.Debugf("[%s < %s] Shutdown is waiting for acknowledgement for %d payloads", t.poolServer, t.socket.RemoteAddr().String(), len(t.partialAcks))
@@ -346,11 +349,11 @@ func (t *connection) sender() error {
 						// Still need timer?
 						if len(t.partialAcks) == 0 {
 							if senderShutdownChan == nil {
-								// Finished! Call Close() to trigger final flush then exit
+								// Finished! End routine so we close connection to trigger final flush then exit
 								// Safe as receiver is no longer running
 								// This can timeout too so forward back any error...
 								log.Debugf("[%s < %s] All payloads acknowledged, shutting down", t.poolServer, t.socket.RemoteAddr().String())
-								return t.socket.Close()
+								return nil
 							}
 							if !timeout.Stop() {
 								<-timeout.C
@@ -394,10 +397,8 @@ func (t *connection) writeMsg(msg protocolMessage) error {
 		err = t.rwBuffer.Flush()
 	}
 	if err != nil {
-		if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
-			// Fail the transport
-			return err
-		}
+		// Fail the transport
+		return err
 	}
 	return nil
 }
