@@ -137,13 +137,14 @@ fi
 %{_sbindir}/log-courier
 %{_bindir}/lc-admin
 %{_bindir}/lc-tlscert
-%if 0%{?rhel} >= 7
-%{_unitdir}/log-courier.service
-%else
+%if 0%{?rhel} < 7
 %{_sysconfdir}/init.d/log-courier
 %endif
 
 %defattr(0644,root,root,0755)
+%if 0%{?rhel} >= 7
+%{_unitdir}/log-courier.service
+%endif
 %dir %{_sysconfdir}/log-courier
 %{_sysconfdir}/log-courier/examples
 %config(noreplace) %{_sysconfdir}/sysconfig/log-courier

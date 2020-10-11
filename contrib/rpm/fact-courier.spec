@@ -126,13 +126,14 @@ fi
 %files
 %defattr(0755,root,root,0755)
 %{_sbindir}/fact-courier
-%if 0%{?rhel} >= 7
-%{_unitdir}/fact-courier.service
-%else
+%if 0%{?rhel} < 7
 %{_sysconfdir}/init.d/fact-courier
 %endif
 
 %defattr(0644,root,root,0755)
+%if 0%{?rhel} >= 7
+%{_unitdir}/fact-courier.service
+%endif
 %dir %{_sysconfdir}/fact-courier
 %config(noreplace) %{_sysconfdir}/sysconfig/fact-courier
 
