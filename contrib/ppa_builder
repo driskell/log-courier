@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set +errexit
+set -eo pipefail
 
 # This script is used by the maintainer to push to Log Courier PPA
 # Usage:
@@ -20,7 +20,7 @@ if [ -z "$DRELEASE" ]; then
 fi
 
 # Grab version from nearest tag
-VERSION=$(cd log-courier || exit 1; git describe --abbrev=0)
+VERSION=$(cd log-courier; git describe --abbrev=0)
 VERSION=${VERSION#v}
 
 # Remove hyphens from version and replace with dot for deb as hyphens aren't
