@@ -6,6 +6,6 @@ tab_width = 4
 indent_style = space
 tab_width = 2
 
-[*.(yml|yaml)]
+[*.{yml,yaml}]
 indent_style = space
 tab_width = 2
