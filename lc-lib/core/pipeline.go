@@ -34,6 +34,7 @@ type Pipeline struct {
 	signalSources    chan struct{}
 	group            sync.WaitGroup
 	groupSources     sync.WaitGroup
+	groupServices    sync.WaitGroup
 	closeSinkOnce    sync.Once
 	closeServiceOnce sync.Once
 	configSinks      map[pipelineConfigSegment]chan *config.Config
@@ -115,8 +116,8 @@ func (p *Pipeline) initRoutines(config *config.Config) (err error) {
 			p.shutdownAll()
 			return
 		}
-		p.group.Add(1)
-		go p.run(&p.group, service.Run)
+		p.groupServices.Add(1)
+		go p.run(&p.groupServices, service.Run)
 	}
 	if err = p.sink.Init(config); err != nil {
 		p.shutdownAll()
@@ -177,11 +178,12 @@ func (p *Pipeline) Shutdown() {
 // Wait sleeps until the pipeline has completely shutdown
 func (p *Pipeline) Wait() {
 	p.groupSources.Wait()
+	p.group.Wait()
 	p.closeServiceOnce.Do(func() {
 		log.Notice("Services shutting down")
 		close(p.signal)
 	})
-	p.group.Wait()
+	p.groupServices.Wait()
 }
 
 // SendConfig broadcasts the given configuration to all segments
