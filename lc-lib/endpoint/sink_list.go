@@ -138,7 +138,7 @@ func (s *Sink) removeEndpoint(server string) {
 	// Remove any timer entry
 	if endpoint.Timeout.timeoutFunc != nil {
 		s.timeoutList.Remove(&endpoint.Timeout.timeoutElement)
-		s.resetTimeoutTimer()
+		s.resetTimeoutTimer(false)
 	}
 
 	s.mutex.Lock()

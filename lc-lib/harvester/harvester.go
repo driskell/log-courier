@@ -468,12 +468,13 @@ func (h *Harvester) readline() (string, int, error) {
 		}
 
 		// Backoff
-		if !h.backOffTimer.Stop() {
-			<-h.backOffTimer.C
-		}
 		h.backOffTimer.Reset(1 * time.Second)
 		select {
 		case <-h.stopChan:
+			// Stop backoff timer and drain it
+			if !h.backOffTimer.Stop() {
+				<-h.backOffTimer.C
+			}
 		case <-h.backOffTimer.C:
 		}
 	}

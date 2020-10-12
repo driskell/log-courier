@@ -47,16 +47,13 @@ func (s *Sink) TimeoutChan() <-chan time.Time {
 }
 
 // resetTimeoutTimer resets the TimeoutTimer() channel for the next timeout
-func (s *Sink) resetTimeoutTimer() {
+func (s *Sink) resetTimeoutTimer(didReceive bool) {
+	if !s.timeoutTimer.Stop() && !didReceive {
+		// Timer already expired, clean it
+		<-s.timeoutTimer.C
+	}
+
 	if s.timeoutList.Len() == 0 {
-		if !s.timeoutTimer.Stop() {
-			// Receive is externally handled so we don't really know if we took the value
-			// Attempt to clear it but don't block
-			select {
-			case <-s.timeoutTimer.C:
-			default:
-			}
-		}
 		return
 	}
 
@@ -89,7 +86,7 @@ func (s *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeout
 		s.timeoutList.InsertAfter(&timeout.timeoutElement, previous)
 	}
 
-	s.resetTimeoutTimer()
+	s.resetTimeoutTimer(false)
 }
 
 // ClearTimeout removes a timeout structure
@@ -103,6 +100,7 @@ func (s *Sink) ClearTimeout(timeout *Timeout) {
 }
 
 // ProcessTimeouts processes all pending timeouts
+// MUST be called directly after receiving on the TimeoutChan
 func (s *Sink) ProcessTimeouts() {
 	next := s.timeoutList.Front()
 	if next == nil {
@@ -123,5 +121,5 @@ func (s *Sink) ProcessTimeouts() {
 		}
 	}
 
-	s.resetTimeoutTimer()
+	s.resetTimeoutTimer(true)
 }

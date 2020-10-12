@@ -252,7 +252,9 @@ func (t *connection) sender() error {
 	if !t.isClient() {
 		// TODO: Configurable? It's very low impact on anything though... NB: Repeated below
 		timeout = time.NewTimer(5 * time.Second)
-		timeout.Stop()
+		if !timeout.Stop() {
+			<-timeout.C
+		}
 	}
 
 	ackChan := t.partialAckChan

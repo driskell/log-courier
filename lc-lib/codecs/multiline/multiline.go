@@ -255,7 +255,9 @@ DeadlineLoop:
 	for {
 		select {
 		case <-c.timerStop:
-			timer.Stop()
+			if !timer.Stop() {
+				<-timer.C
+			}
 
 			// Shutdown signal so end the routine
 			break DeadlineLoop
