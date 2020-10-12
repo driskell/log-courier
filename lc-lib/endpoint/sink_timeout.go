@@ -49,7 +49,7 @@ func (s *Sink) TimeoutChan() <-chan time.Time {
 // resetTimeoutTimer resets the TimeoutTimer() channel for the next timeout
 func (s *Sink) resetTimeoutTimer(didReceive bool) {
 	if !s.timeoutTimer.Stop() && !didReceive {
-		// Timer already expired, clean it
+		// Timer already expired and did not get received
 		<-s.timeoutTimer.C
 	}
 
@@ -86,7 +86,8 @@ func (s *Sink) RegisterTimeout(timeout *Timeout, duration time.Duration, timeout
 		s.timeoutList.InsertAfter(&timeout.timeoutElement, previous)
 	}
 
-	s.resetTimeoutTimer(false)
+	// If this is first time starting timer, then we did already receive from it, so flag didReceive
+	s.resetTimeoutTimer(previous == nil)
 }
 
 // ClearTimeout removes a timeout structure

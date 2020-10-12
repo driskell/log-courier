@@ -355,6 +355,10 @@ func (t *connection) sender() error {
 								log.Debugf("[%s < %s] All payloads acknowledged, shutting down", t.poolServer, t.socket.RemoteAddr().String())
 								return nil
 							}
+							// Should never reach here with timeout nil
+							if timeoutChan == nil {
+								panic("Unexpected timeout status, it was inactive when expected to be active")
+							}
 							if !timeout.Stop() {
 								<-timeout.C
 							}

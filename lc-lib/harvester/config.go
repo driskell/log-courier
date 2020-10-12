@@ -82,8 +82,9 @@ func (sc *StreamConfig) NewHarvester(ctx context.Context, path string, fileinfo 
 		meterTimer: time.NewTimer(10 * time.Second),
 	}
 
-	ret.eventStream = sc.NewStream(ret.eventCallback, offset)
 	<-ret.backOffTimer.C
+
+	ret.eventStream = sc.NewStream(ret.eventCallback, offset)
 
 	if path == Stdin {
 		// This is stdin

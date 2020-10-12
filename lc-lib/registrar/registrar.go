@@ -67,8 +67,9 @@ func NewRegistrar(persistDir string) *Registrar {
 		state:         make(map[context.Context]*FileState),
 	}
 
-	ret.statepath = path.Join(ret.persistdir, ret.statefile)
 	<-ret.writeTimer.C
+
+	ret.statepath = path.Join(ret.persistdir, ret.statefile)
 
 	return ret
 }

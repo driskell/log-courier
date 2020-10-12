@@ -80,8 +80,6 @@ func NewSink(config *transports.Config) *Sink {
 	ret.failedList.Init()
 	ret.orderedList.Init()
 
-	<-ret.timeoutTimer.C
-
 	return ret
 }
 
