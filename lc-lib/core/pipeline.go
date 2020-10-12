@@ -26,16 +26,17 @@ import (
 // It holds references to each "pipeline worker" and provides start/stop and
 // config reload and other features to them
 type Pipeline struct {
-	sources       []pipelineSourceSegment
-	sink          pipelineSinkSegment
-	processors    []pipelineProcessorSegment
-	services      []pipelineServiceSegment
-	signal        chan struct{}
-	signalSources chan struct{}
-	group         sync.WaitGroup
-	groupSources  sync.WaitGroup
-	closeOnce     sync.Once
-	configSinks   map[pipelineConfigSegment]chan *config.Config
+	sources          []pipelineSourceSegment
+	sink             pipelineSinkSegment
+	processors       []pipelineProcessorSegment
+	services         []pipelineServiceSegment
+	signal           chan struct{}
+	signalSources    chan struct{}
+	group            sync.WaitGroup
+	groupSources     sync.WaitGroup
+	closeSinkOnce    sync.Once
+	closeServiceOnce sync.Once
+	configSinks      map[pipelineConfigSegment]chan *config.Config
 }
 
 // NewPipeline creates a new pipeline
@@ -162,12 +163,12 @@ func (p *Pipeline) run(group *sync.WaitGroup, run func()) {
 // or if an error occurs during startup (which means sink didn't start yet - as that's last)
 func (p *Pipeline) shutdownAll() {
 	p.Shutdown()
-	close(p.signal)
+	p.Wait()
 }
 
 // Shutdown stops the pipeline, requesting sources to shutdown
 func (p *Pipeline) Shutdown() {
-	p.closeOnce.Do(func() {
+	p.closeSinkOnce.Do(func() {
 		log.Notice("Pipeline shutting down")
 		close(p.signalSources)
 	})
@@ -175,6 +176,11 @@ func (p *Pipeline) Shutdown() {
 
 // Wait sleeps until the pipeline has completely shutdown
 func (p *Pipeline) Wait() {
+	p.groupSources.Wait()
+	p.closeServiceOnce.Do(func() {
+		log.Notice("Services shutting down")
+		close(p.signal)
+	})
 	p.group.Wait()
 }
 
