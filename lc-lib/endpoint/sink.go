@@ -66,7 +66,7 @@ func NewSink(config *transports.Config) *Sink {
 		endpoints:    make(map[string]*Endpoint),
 		config:       config,
 		eventChan:    make(chan transports.Event, 10),
-		timeoutTimer: time.NewTimer(1 * time.Second),
+		timeoutTimer: time.NewTimer(0),
 
 		OnAck:     func(*Endpoint, *payload.Payload, bool, int) {},
 		OnFail:    func(*Endpoint) {},
@@ -80,9 +80,7 @@ func NewSink(config *transports.Config) *Sink {
 	ret.failedList.Init()
 	ret.orderedList.Init()
 
-	if !ret.timeoutTimer.Stop() {
-		<-ret.timeoutTimer.C
-	}
+	<-ret.timeoutTimer.C
 
 	return ret
 }

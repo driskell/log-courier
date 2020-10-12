@@ -68,9 +68,7 @@ func NewRegistrar(persistDir string) *Registrar {
 	}
 
 	ret.statepath = path.Join(ret.persistdir, ret.statefile)
-	if !ret.writeTimer.Stop() {
-		<-ret.writeTimer.C
-	}
+	<-ret.writeTimer.C
 
 	return ret
 }

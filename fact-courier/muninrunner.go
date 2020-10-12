@@ -68,15 +68,13 @@ func NewMuninRunner(scriptPath, name string) *MuninRunner {
 		user:          "nobody",
 		group:         "nobody",
 		additionalEnv: map[string]string{},
-		commandTimer:  time.NewTimer(time.Second),
+		commandTimer:  time.NewTimer(0),
 
 		state: map[string]*MuninState{},
 	}
 
-	// Stop timer and be sure to clear stale entry
-	if !m.commandTimer.Stop() {
-		<-m.commandTimer.C
-	}
+	// Empty the timer
+	<-m.commandTimer.C
 
 	return m
 }
