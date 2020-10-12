@@ -1,0 +1,32 @@
+name: SRPM
+
+on:
+  push:
+    tags:
+    - 'v*'
+
+jobs:
+  build-rpm:
+    name: Build SRPM
+    runs-on: ubuntu-latest
+    container:
+      image: centos:7
+    steps:
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+    - name: Build
+      working-directory: /github/home
+      env:
+        VERSION: ${{ github.ref }}
+      run: |
+        export VERSION="${VERSION#refs\/tags\/}"
+        yum install -y rpm-build yum-utils epel-release
+        rm -vf ${VERSION}.zip rpmbuild
+        ln -vnsf /github/workspace log-courier-${VERSION#v}
+        zip -r ${VERSION}.zip log-courier-${VERSION#v}
+        mkdir -vp rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+        mv -v ${VERSION}.zip rpmbuild/SOURCES/${VERSION}.zip
+        mv -v /github/workspace/contrib/rpm/log-courier.spec rpmbuild/SPECS
+        sed -i "s/^Version: .*$/Version: ${VERSION#v}/" rpmbuild/SPECS/log-courier.spec
+        yum-builddep -y rpmbuild/SPECS/log-courier.spec
+        rpmbuild -ba rpmbuild/SPECS/log-courier.spec
