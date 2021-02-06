@@ -2,27 +2,31 @@
 
 ## 2.5.0
 
-March 2020
+6th February 2021
 
 Log Courier
 
 - Fix a few issues that could cause Log Courier to hang unnecessarily during shutdown
+- Improvements to configuration parsing
+- Optimised registrar to only write periodically and not constantly
+- Buffers and compression streams are reused during event transmission to further reduce memory and garbage collection
 - Rebuilt the transport layer to use less routines per connection and negotiate a new method of event transmission that uses less memory
-- Rebuilt application initialisation to allow creation of separate binaries for different tasks running under the same pipelining principle
+- Rebuilt application initialisation to allow creation of separate binaries for different tasks running under the same pipelining principle and using similar transports (e.g. Log Carver)
+- Add option to enable ECS (Elastic Common Schema) for the builtin fields such as host and file path
+- Many more under-the-hood changes to make code more straight forward and to allow code sharing with Log Carver
 
 Log Carver
 
 - Initial beta release
-- Provides pipelines to process events
+- Can be used as a low memory/CPU substitute to Logstash for basic events
 - Supported processor actions include: date, geoip, user_agent, kv, add_tag, remove_tag, set_field, unset_field
 - The set_field action supports the Common Expression Language (CEL) for code-like expression support when setting fields
 - If/ElseIf/Else support in the pipeline using Common Expression Language (CEL) for code-like conditional expressions
+- Receives events over the Log Courier protocol from Log Courier clients
 - New ES transport to allow events to be sent directly to Elasticsearch
-
-Fact Courier
-
-- Initial beta release
-- Runs munin plugins and collects their output into events
+- Templates embedded for ES6+ that will automatically be inserted as "logstash"
+- It is recommended to use new indices and remove the "logstash" template from ES as fields are different and now follow ECS (Elastic Common Schema)
+- Configuration documentation is minimal but a minimal example can be found in the docs/examples folder, more will be added in time
 
 ## 2.0.5
 
