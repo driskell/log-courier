@@ -2,6 +2,7 @@
 
 set -eo pipefail
 
+VERSION=${VERSION#refs/tags/}
 RELEASE=1
 DRELEASE=1
 

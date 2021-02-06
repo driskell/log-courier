@@ -2,6 +2,8 @@
 
 set -eo pipefail
 
+VERSION=${VERSION#refs/tags/}
+
 echo "::group::Checking exists in $VERSION"
 if [ "${NAME}" != "log-courier" ] && [ ! -d "/github/workspace/${NAME}" ]; then
 	exit 0
