@@ -19,7 +19,7 @@ jobs:
       with:
         ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
     - name: Build and Submit
-      uses: ./.github/actions/rpm
+      uses: driskell/log-courier/.github/actions/rpm@master
       env:
         NAME: log-courier
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
@@ -35,7 +35,7 @@ jobs:
       with:
         ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
     - name: Build and Submit
-      uses: ./.github/actions/rpm
+      uses: driskell/log-courier/.github/actions/rpm@master
       env:
         NAME: log-carver
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
