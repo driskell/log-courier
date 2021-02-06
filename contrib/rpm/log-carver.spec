@@ -27,8 +27,7 @@ Requires: logrotate
 Requires: geolite2-city
 
 %description
-Log Courier is a lightweight tool created to ship log files speedily and
-securely, with low resource usage, to remote Logstash instances.
+Log Carver is a lightweight tool created to process events from Log Courier speedily and securely, with low resource usage.
 
 %prep
 %setup -q -n log-courier-%{version}

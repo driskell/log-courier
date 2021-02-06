@@ -26,8 +26,7 @@ BuildRequires: systemd
 Requires: logrotate
 
 %description
-Log Courier is a lightweight tool created to ship log files speedily and
-securely, with low resource usage, to remote Logstash instances.
+Log Courier is a lightweight tool created to ship log files speedily and securely, with low resource usage, to remote Logstash or Log Carver instances.
 
 %prep
 %setup -q -n %{name}-%{version}

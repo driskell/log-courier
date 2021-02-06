@@ -1,0 +1,44 @@
+#!/usr/bin/make -f
+
+# Configure platform specific defaults
+export LC_DEFAULT_CONFIGURATION_FILE=/etc/log-carver/log-carver.yaml
+export LC_DEFAULT_GEO_IP_ACTION_DATABASE=/usr/share/GeoIP/GeoLite2-City.mmdb
+export LC_DEFAULT_ADMIN_BIND=unix:/var/run/log-carver/admin.socket
+
+# Enable vendor experiment in the event of Go 1.5 then generate and build
+export GO15VENDOREXPERIMENT=1
+
+%:
+	dh $@ --with=systemd
+
+override_dh_auto_clean:
+	# Nothing to do
+
+override_dh_auto_build:
+	mkdir -p _workspace/src/github.com/driskell
+	ln -nsf $$(pwd) _workspace/src/github.com/driskell/log-courier
+	cd "_workspace/src/github.com/driskell/log-courier"; \
+		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go generate ./log-carver ./lc-admin; \
+		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go install ./log-carver ./lc-admin
+
+override_dh_auto_test:
+	# Maybe tests in future
+
+override_dh_auto_install:
+	# Install binaries
+	mkdir -p debian/log-carver/usr/sbin
+	install -m 0755 _workspace/bin/log-carver debian/log-carver/usr/sbin/log-carver
+
+	# Install upstart script
+	mkdir -p debian/log-carver/etc/init.d
+	install -m 0755 contrib/initscripts/debian-upstart.init debian/log-carver/etc/init.d/log-carver
+	mkdir -p debian/log-carver/etc/default
+	install -m 0644 contrib/initscripts/log-carver.env debian/log-carver/etc/default/log-carver
+
+	# Make the state dir
+	mkdir -p debian/log-carver/var/lib/log-carver
+
+	# Install copyright and docs
+	mkdir -p debian/log-carver/usr/share/doc/log-carver
+	install -m 0644 debian/copyright debian/log-carver/usr/share/doc/log-carver/copyright
+	cp -av docs/* debian/log-carver/usr/share/doc/log-carver/

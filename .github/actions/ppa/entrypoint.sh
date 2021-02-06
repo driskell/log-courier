@@ -13,7 +13,11 @@ fi
 echo '::endgroup::'
 
 echo "::group::Generating sources for $VERSION"
-GIT_DIR=/github/workspace/.git git archive --format=tar.gz --output ~/"${NAME}_${VERSION#v}.orig.tar.gz" --prefix "${NAME}/" "$VERSION"
+cd /github/workspace/
+git archive --format=tar.gz --output ~/"${NAME}_${VERSION#v}.orig.tar.gz" --prefix "${NAME}/" "$VERSION"
+go mod vendor
+tar -rzf ~/"${NAME}_${VERSION#v}.orig.tar.gz" vendor
+cd -
 tar -C ~ -xzf ~/"${NAME}_${VERSION#v}.orig.tar.gz"
 echo '::endgroup::'
 
@@ -27,17 +31,9 @@ for DIST in trusty xenial bionic eoan focal; do
 	echo "::group::Preparing debian package for $DIST"
 	rm -rf debian
 	if [ "$DIST" == "trusty" ]; then
-		if [ -d contrib/ppa/ ]; then
-			cp -rf contrib/ppa/deb-upstart debian
-		else
-			cp -rf contrib/deb-upstart debian
-		fi
+		cp -rf "/github/workspace/contrib/ppa/${NAME}-upstart" debian
 	else
-		if [ -d contrib/ppa/ ]; then
-			cp -rf contrib/ppa/deb-systemd debian
-		else
-			cp -rf contrib/deb-systemd debian
-		fi
+		cp -rf "/github/workspace/contrib/ppa/${NAME}-systemd" debian
 	fi
 	debchange \
 		--newversion "${VERSION#v}-${RELEASE}~${DIST}${DRELEASE}" \

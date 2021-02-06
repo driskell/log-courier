@@ -3,11 +3,9 @@ Section: contrib/admin
 Priority: optional
 Standards-Version: 3.9.5
 Maintainer: Jason Woods (RPM Signing Key) <devel@jasonwoods.me.uk>
-Build-Depends: debhelper (>= 9), dh-systemd, golang-1.5, git
+Build-Depends: debhelper (>= 9), golang-1.5, git
 
 Package: log-courier
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Log Courier
- Log Courier is a lightweight tool created to ship log files speedily and
- securely, with low resource usage, to remote Logstash instances.
+Description: Log Courier is a lightweight tool created to ship log files speedily and securely, with low resource usage, to remote Logstash or Log Carver instances.
