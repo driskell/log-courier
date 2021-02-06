@@ -22,7 +22,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/endpoint"
+	"github.com/driskell/log-courier/lc-lib/publisher/endpoint"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
