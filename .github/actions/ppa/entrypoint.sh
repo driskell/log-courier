@@ -7,17 +7,15 @@ RELEASE=1
 DRELEASE=1
 
 echo "::group::Checking exists in $VERSION"
-if [ "${NAME}" != "log-courier" ] && [ ! -d "/github/workspace/${NAME}" ]; then
+if [ "${NAME}" != "log-courier" ] && [ ! -d "${NAME}" ]; then
 	exit 0
 fi
 echo '::endgroup::'
 
 echo "::group::Generating sources for $VERSION"
-cd /github/workspace/
 git archive --format=tar.gz --output ~/"${NAME}_${VERSION#v}.orig.tar.gz" --prefix "${NAME}/" "$VERSION"
 go mod vendor
 tar -rzf ~/"${NAME}_${VERSION#v}.orig.tar.gz" vendor
-cd -
 tar -C ~ -xzf ~/"${NAME}_${VERSION#v}.orig.tar.gz"
 echo '::endgroup::'
 
@@ -31,9 +29,9 @@ for DIST in trusty xenial bionic eoan focal; do
 	echo "::group::Preparing debian package for $DIST"
 	rm -rf debian
 	if [ "$DIST" == "trusty" ]; then
-		cp -rf "/github/workspace/contrib/ppa/${NAME}-upstart" debian
+		cp -rf ".master/contrib/ppa/${NAME}-upstart" debian
 	else
-		cp -rf "/github/workspace/contrib/ppa/${NAME}-systemd" debian
+		cp -rf ".master/contrib/ppa/${NAME}-systemd" debian
 	fi
 	debchange \
 		--newversion "${VERSION#v}-${RELEASE}~${DIST}${DRELEASE}" \

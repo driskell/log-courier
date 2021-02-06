@@ -5,19 +5,17 @@ set -eo pipefail
 VERSION=${VERSION#refs/tags/}
 
 echo "::group::Checking exists in $VERSION"
-if [ "${NAME}" != "log-courier" ] && [ ! -d "/github/workspace/${NAME}" ]; then
+if [ "${NAME}" != "log-courier" ] && [ ! -d "${NAME}" ]; then
 	exit 0
 fi
 echo '::endgroup::'
 
 echo "::group::Generating sources for $VERSION"
 mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-cd /github/workspace
 git archive --format=zip --output ~/"rpmbuild/SOURCES/$VERSION.zip" --prefix "log-courier-${VERSION#v}/" "$VERSION"
 go mod vendor
 zip -r ~/"rpmbuild/SOURCES/$VERSION.zip" vendor
-cd -
-sed "s/Version: %%VERSION%%/Version: ${VERSION#v}/" <"/github/workspace/contrib/rpm/${NAME}.spec" >~/"rpmbuild/SPECS/${NAME}.spec"
+sed "s/Version: %%VERSION%%/Version: ${VERSION#v}/" <".master/contrib/rpm/${NAME}.spec" >~/"rpmbuild/SPECS/${NAME}.spec"
 echo '::endgroup::'
 
 echo '::group::Installing secrets'
