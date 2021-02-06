@@ -27,7 +27,6 @@ cat >~/.config/copr <<EOF
 copr_url = https://copr.fedorainfracloud.org
 EOF
 cat >>~/.config/copr <<<"$COPR_CLI"
-cat ~/.config/copr
 echo '::endgroup::'
 
 echo '::group::Building SRPM'
