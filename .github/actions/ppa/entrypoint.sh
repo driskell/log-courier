@@ -5,6 +5,12 @@ set -eo pipefail
 RELEASE=1
 DRELEASE=1
 
+echo "::group::Checking exists in $VERSION"
+if [ "${NAME}" != "log-courier" ] && [ ! -d "/github/workspace/${NAME}" ]; then
+	exit 0
+fi
+echo '::endgroup::'
+
 echo "::group::Generating sources for $VERSION"
 GIT_DIR=/github/workspace/.git git archive --format=tar.gz --output ~/"${NAME}_${VERSION#v}.orig.tar.gz" --prefix "${NAME}/" "$VERSION"
 tar -C ~ -xzf ~/"${NAME}_${VERSION#v}.orig.tar.gz"

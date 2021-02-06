@@ -2,6 +2,12 @@
 
 set -eo pipefail
 
+echo "::group::Checking exists in $VERSION"
+if [ "${NAME}" != "log-courier" ] && [ ! -d "/github/workspace/${NAME}" ]; then
+	exit 0
+fi
+echo '::endgroup::'
+
 echo "::group::Generating sources for $VERSION"
 mkdir -p ~/rpmbuild/{SOURCES,SPECS}
 GIT_DIR=/github/workspace/.git git archive --format=zip --output ~/"rpmbuild/SOURCES/$VERSION.zip" --prefix "${NAME}-${VERSION#v}/" "$VERSION"
