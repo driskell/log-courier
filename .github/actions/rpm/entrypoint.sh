@@ -31,7 +31,7 @@ rpmbuild -bs ~/"rpmbuild/SPECS/${NAME}.spec"
 echo '::endgroup::'
 
 echo '::group::Testing RPM build'
-rpmbuild --rebuild ~/"rpmbuild/SRPMS/${NAME}-*.src.rpm"
+rpmbuild --rebuild ~/"rpmbuild/SRPMS/${NAME}"-*.src.rpm
 echo '::endgroup::'
 
 echo '::group::Submitting to COPR'
