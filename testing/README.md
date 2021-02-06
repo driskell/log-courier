@@ -24,7 +24,7 @@
 
 ## Starting Log Courier
 
-    log-courier -config log-courier.yaml -config-debug
+    log-courier -config log-courier.yaml -config-debug -from-beginning
 
 ## Resetting Log Courier Resume
 

@@ -11,7 +11,7 @@ receivers:
   transport: tcp
 pipelines:
 - if: >-
-    event.type == "nginx"
+    has(event.type) && event.type == "nginx"
   then:
   - name: grok
     field: message
