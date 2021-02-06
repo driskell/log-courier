@@ -1,0 +1,32 @@
+general:
+  log syslog: false
+  log stdout: true
+  log level: debug
+receivers:
+- listen:
+  - 127.0.0.1:12345
+  transport: tcp
+- listen:
+  - 127.0.0.1:12346
+  transport: tcp
+pipelines:
+- if: >-
+    event.type == "nginx"
+  then:
+  - name: grok
+    field: message
+    remove: true
+    patterns:
+    - >-
+      ^(?P<clientip>%{IPV4}|%{IPV6}) (?P<identd>[^ ]+) (?P<auth>[^ ]+) \[%{HTTPDATE:timestamp}\] \"(?:(?P<verb>[^ ]+) (?P<request>([^ \"\\]+|\\.)+)(?: HTTP/%{NUMBER:httpversion:float})?|(?P<rawrequest>([^\"]|\\.)*))\" %{NUMBER:response:int} (?:%{NUMBER:bytes:int}|-) \"(?P<referrer>(?:[A-Za-z][A-Za-z+\-.]*://(?P<referrer_host>(?:[^\"\\/]+|\\[^/])*)(?:[^\"\\]+|\\.)*|(?:[^\"\\]+|\\.)*))\" \"(?P<useragent>(?:[^\"\\]+|\\.)*)\" \"(?P<forwardedfor>(?:[^\"\\]+|\\.)*)\"(?: %{NUMBER:requesttime:float}(?: \"(?P<https>(?:[^\"\\]+|\\.)*)\" \"(?P<upstream>(?:[^\"\\]+|\\.)*)\")?)?
+  - name: add_tag
+    tag: access_logs
+- else:
+  - name: add_tag
+    tag: unknown_event
+network:
+  transport: es
+  index pattern: >-
+    test-%{+2006.01.02}
+  servers:
+  - 127.0.0.1:9200
