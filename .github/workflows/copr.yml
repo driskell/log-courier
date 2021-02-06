@@ -16,6 +16,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+      with:
+        ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
     - name: Build and Submit
       uses: ./.github/actions/rpm
       env:
@@ -30,6 +32,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+      with:
+        ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
     - name: Build and Submit
       uses: ./.github/actions/rpm
       env:
