@@ -97,6 +97,7 @@ func (f *TransportTCPFactory) Validate(p *config.Parser, configPath string) (err
 		if len(f.SSLCertificate) > 0 || len(f.SSLKey) > 0 || len(f.SSLCA) > 0 {
 			return fmt.Errorf("'tcp' transport does not support 'ssl certificate', 'ssl key' or 'ssl ca' options")
 		}
+		return nil
 	}
 
 	if len(f.SSLCertificate) > 0 || len(f.SSLKey) > 0 {

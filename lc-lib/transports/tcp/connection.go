@@ -134,10 +134,8 @@ func (t *connection) Run(startedCallback func()) error {
 	t.wait.Add(1)
 	go t.senderRoutine()
 	err := t.receiver()
-	if err != nil {
-		// Request sender shutdown due to receiver error
-		close(t.senderShutdownChan)
-	}
+	// Request sender shutdown
+	close(t.senderShutdownChan)
 	// Wait for sender to complete
 	t.wait.Wait()
 
@@ -352,6 +350,9 @@ func (t *connection) sender() error {
 								// Finished! End routine so we close connection to trigger final flush then exit
 								// Safe as receiver is no longer running
 								// This can timeout too so forward back any error...
+								if err := t.writeMsg(msg); err != nil {
+									return err
+								}
 								log.Debugf("[%s < %s] All payloads acknowledged, shutting down", t.poolServer, t.socket.RemoteAddr().String())
 								return nil
 							}
@@ -468,8 +469,6 @@ func (t *connection) readMsg() (protocolMessage, error) {
 	if shutdown, err := t.receiverRead(header[:]); shutdown || err != nil {
 		if err != nil {
 			if err == io.EOF {
-				// Flag sender that we have no more data being received and it should begin to shutdown
-				close(t.senderShutdownChan)
 				return nil, nil
 			}
 		}

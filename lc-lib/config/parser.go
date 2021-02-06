@@ -348,11 +348,7 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 	if vField.Kind() == reflect.Struct || (vField.Kind() == reflect.Ptr && vField.Elem().Kind() == reflect.Struct) {
 		retValue = vField
 		ptrValue := retValue
-		if vField.Kind() == reflect.Ptr {
-			if !vField.Elem().IsValid() {
-				retValue = reflect.New(vField.Type().Elem())
-			}
-		} else {
+		if vField.Kind() != reflect.Ptr {
 			ptrValue = ptrValue.Addr()
 		}
 		// Call with pointer to enable lifecycle methods if any
