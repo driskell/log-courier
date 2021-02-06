@@ -4,7 +4,7 @@
 
 Summary: Log Courier
 Name: log-courier
-Version: 2.5.0
+Version: %%VERSION%%
 Release: 1%{dist}
 License: Apache
 Group: System Environment/Libraries
@@ -13,11 +13,6 @@ URL: https://github.com/driskell/log-courier
 Source: https://github.com/driskell/log-courier/archive/v%{version}.zip
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 
-# Get this from the great Jason Brooks:
-#   https://copr.fedorainfracloud.org/coprs/jasonbrooks/docker/package/golang/
-# We could also get from a RedHat dev, but currently broken and leaking out 1.6:
-#   https://copr.fedorainfracloud.org/coprs/jcajka/golang1.5/package/golang/
-# For RHEL6, 1.5.1 can be obtained from EPEL, but it is not available to RHEL7
 BuildRequires: golang >= 1.5
 BuildRequires: git
 
@@ -53,6 +48,14 @@ export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
 export GO15VENDOREXPERIMENT=1
 go generate .
 go install . ./lc-admin ./lc-tlscert
+
+%check
+export GOPATH=$(pwd)/_workspace
+VERSION=$($GOPATH/bin/log-courier --version)
+VERSION=${VERSION#Log Courier version }
+if [ "$VERSION" != "%{version}" ]; then
+	exit 1
+fi
 
 %install
 export GOPATH=$(pwd)/_workspace
@@ -159,8 +162,14 @@ fi
 %ghost %{_var}/lib/log-courier/.log-courier
 
 %changelog
-* Tue Jun 28 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.5.0-1
+* Sat Feb 06 2021 Jason Woods <devel@jasonwoods.me.uk> - 2.5.0-1
 - Upgrade to 2.5.0
+
+* Sun May 10 2020 Jason Woods <devel@jasonwoods.me.uk> - 2.0.6-1
+- Upgrade to 2.0.6
+
+* Sat Feb 18 2017 Jason Woods <devel@jasonwoods.me.uk> - 2.0.5-1
+- Upgrade to 2.0.5
 
 * Fri Jun 10 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.0.4-1
 - Upgrade to 2.0.4

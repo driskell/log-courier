@@ -1,0 +1,5 @@
+name: PPA
+description: Release to PPA
+runs:
+  using: docker
+  image: Dockerfile

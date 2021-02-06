@@ -1,5 +1,4 @@
 /.bundle
-/.vagrant
 /*.gem
 /bin
 /fact-courier/platform.go

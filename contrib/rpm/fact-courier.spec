@@ -1,11 +1,13 @@
+# NOTE: Unlikely to be maintained and won't be referenced in docs - this was an experiment
+
 # Debug packaging does not work due to the go build building in extra debug sections RPM does not understand
 # Maybe we patch something later to fix this, but for now just don't build a debug package
 %define debug_package %{nil}
 
 Summary: Fact Courier
 Name: fact-courier
-Version: 2.5.0
-Release: 2%{dist}
+Version: %%VERSION%%
+Release: 1%{dist}
 License: Apache
 Group: System Environment/Libraries
 Packager: Jason Woods <packages@jasonwoods.me.uk>
@@ -13,11 +15,6 @@ URL: https://github.com/driskell/log-courier
 Source: https://github.com/driskell/log-courier/archive/v%{version}.zip
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 
-# Get this from the great Jason Brooks:
-#   https://copr.fedorainfracloud.org/coprs/jasonbrooks/docker/package/golang/
-# We could also get from a RedHat dev, but currently broken and leaking out 1.6:
-#   https://copr.fedorainfracloud.org/coprs/jcajka/golang1.5/package/golang/
-# For RHEL6, 1.5.1 can be obtained from EPEL, but it is not available to RHEL7
 BuildRequires: golang >= 1.5
 BuildRequires: git
 
@@ -54,6 +51,14 @@ export LC_FACT_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/fact-courier/fact-couri
 export GO15VENDOREXPERIMENT=1
 go generate .
 go install ./fact-courier
+
+%check
+export GOPATH=$(pwd)/_workspace
+VERSION=$($GOPATH/bin/fact-courier --version)
+VERSION=${VERSION#Fact Courier version }
+if [ "$VERSION" != "%{version}" ]; then
+	exit 1
+fi
 
 %install
 export GOPATH=$(pwd)/_workspace
@@ -144,8 +149,5 @@ fi
 %endif
 
 %changelog
-* Mon Jul 11 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.5.0-2
-- Tweaks
-
 * Tue Jun 28 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.5.0-1
 - Fact Courier

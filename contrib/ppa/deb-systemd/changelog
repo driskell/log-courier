@@ -1,3 +1,15 @@
+log-courier (2.0.6-1) UNRELEASED; urgency=low
+
+  * Upgrade to v2.0.6
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Sun, 10 May 2020 00:00:00 +0100
+
+log-courier (2.0.5-1) UNRELEASED; urgency=low
+
+  * Upgrade to v2.0.5
+
+ -- Jason Woods (Driskell) <devel@jasonwoods.me.uk>  Sat, 18 Feb 2017 00:00:00 +0100
+
 log-courier (2.0.4-1) UNRELEASED; urgency=low
 
   * Upgrade to v2.0.4

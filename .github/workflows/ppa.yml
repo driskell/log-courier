@@ -1,0 +1,25 @@
+name: COPR
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag
+        required: true
+  release:
+    types: [published]
+
+jobs:
+  release-log-courier:
+    name: Release Log Courier
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Build and Submit
+      uses: ./.github/actions/ppa
+      env:
+        NAME: log-courier
+        VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+        COPR_CLI: ${{ secrets.COPR_CLI }}
+        GNU_PG: ${{ secrets.GNU_PG }}
