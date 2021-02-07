@@ -41,23 +41,21 @@ are called directly.
 # Configure platform specific defaults
 export LC_FACT_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/fact-courier/fact-courier.yaml
 
-export GOBIN=$(pwd)/bin
+export GOBIN=%{_builddir}/bin
 go -mod=vendor generate .
 go -mod=vendor install ./fact-courier
 
 %check
-VERSION=$($GOBIN/fact-courier --version)
+VERSION=$(%{_builddir}/bin/fact-courier --version)
 VERSION=${VERSION#Fact Courier version }
 if [ "$VERSION" != "%{version}" ]; then
 	exit 1
 fi
 
 %install
-export GOBIN=$(pwd)/bin
-
 # Install binaries
 mkdir -p %{buildroot}%{_sbindir}
-install -m 0755 $GOBIN/fact-courier %{buildroot}%{_sbindir}/fact-courier
+install -m 0755 %{_builddir}/bin/fact-courier %{buildroot}%{_sbindir}/fact-courier
 
 # Install config directory
 mkdir -p %{buildroot}%{_sysconfdir}/fact-courier

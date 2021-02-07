@@ -38,23 +38,21 @@ export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-carver/log-carver.yaml
 export LC_DEFAULT_GEO_IP_ACTION_DATABASE=/usr/share/GeoIP/GeoLite2-City.mmdb
 export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-carver/admin.socket
 
-export GOBIN=$(pwd)/bin
+export GOBIN=%{_builddir}/bin
 go generate -mod=vendor ./log-carver ./lc-admin
 go install -mod=vendor ./log-carver ./lc-admin
 
 %check
-VERSION=$($GOBIN/log-carver --version)
+VERSION=$(%{_builddir}/bin/log-carver --version)
 VERSION=${VERSION#Log Carver version }
 if [ "$VERSION" != "%{version}" ]; then
 	exit 1
 fi
 
 %install
-export GOBIN=$(pwd)/bin
-
 # Install binaries
 mkdir -p %{buildroot}%{_sbindir}
-install -m 0755 $GOBIN/log-carver %{buildroot}%{_sbindir}/log-carver
+install -m 0755 %{_builddir}/bin/log-carver %{buildroot}%{_sbindir}/log-carver
 
 # Install config directory
 mkdir -p %{buildroot}%{_sysconfdir}/log-carver

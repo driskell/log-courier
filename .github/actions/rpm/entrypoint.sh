@@ -14,7 +14,8 @@ echo "::group::Generating sources for $VERSION"
 mkdir -p ~/rpmbuild/{SOURCES,SPECS}
 git archive --format=zip --output ~/"rpmbuild/SOURCES/$VERSION.zip" --prefix "log-courier-${VERSION#v}/" "$VERSION"
 go mod vendor
-zip -qr ~/"rpmbuild/SOURCES/$VERSION.zip" vendor
+ln -nsf . "log-courier-${VERSION#v}"
+zip -qr ~/"rpmbuild/SOURCES/$VERSION.zip" "log-courier-${VERSION#v}/vendor"
 sed "s/Version: %%VERSION%%/Version: ${VERSION#v}/" <".master/contrib/rpm/${NAME}.spec" >~/"rpmbuild/SPECS/${NAME}.spec"
 echo '::endgroup::'
 

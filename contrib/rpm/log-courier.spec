@@ -37,26 +37,24 @@ export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-courier/log-courier.yaml
 export LC_DEFAULT_GENERAL_PERSIST_DIR=%{_var}/lib/log-courier
 export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
 
-export GOBIN=$(pwd)/bin
+export GOBIN=%{_builddir}/bin
 go generate -mod=vendor .
 go install -mod=vendor . ./lc-admin ./lc-tlscert
 
 %check
-VERSION=$($GOBIN/log-courier --version)
+VERSION=$(%{_builddir}/bin/log-courier --version)
 VERSION=${VERSION#Log Courier version }
 if [ "$VERSION" != "%{version}" ]; then
 	exit 1
 fi
 
 %install
-export GOBIN=$(pwd)/bin
-
 # Install binaries
 mkdir -p %{buildroot}%{_sbindir}
-install -m 0755 $GOBIN/log-courier %{buildroot}%{_sbindir}/log-courier
+install -m 0755 %{_builddir}/bin/log-courier %{buildroot}%{_sbindir}/log-courier
 mkdir -p %{buildroot}%{_bindir}
-install -m 0755 "$GOBIN/lc-admin" %{buildroot}%{_bindir}/lc-admin
-install -m 0755 "$GOBIN/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
+install -m 0755 "%{_builddir}/bin/lc-admin" %{buildroot}%{_bindir}/lc-admin
+install -m 0755 "%{_builddir}/bin/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
 
 # Install example configuration
 mkdir -p %{buildroot}%{_sysconfdir}/log-courier %{buildroot}%{_sysconfdir}/log-courier/examples/
