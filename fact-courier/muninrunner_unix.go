@@ -14,7 +14,7 @@ func (m *MuninRunner) applyCommandUser(command *exec.Cmd, username string, cache
 		return err
 	}
 
-	uidInt, _ := strconv.Atoi(uid)
+	uidInt, _ := strconv.ParseUint(uid, 10, 32)
 	command.SysProcAttr.Credential.Uid = uint32(uidInt)
 
 	log.Debug("[%s] Uid: %d", m.name, uint32(uidInt))
@@ -29,7 +29,7 @@ func (m *MuninRunner) applyCommandGroup(command *exec.Cmd, groupname string, cac
 		return err
 	}
 
-	gidInt, _ := strconv.Atoi(gid)
+	gidInt, _ := strconv.ParseUint(gid, 10, 32)
 	command.SysProcAttr.Credential.Gid = uint32(gidInt)
 
 	log.Debug("[%s] Gid: %d", m.name, uint32(gidInt))

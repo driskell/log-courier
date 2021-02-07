@@ -271,7 +271,8 @@ func (e *Event) AddTag(tag string) {
 	idx := sort.SearchStrings(tags, tag)
 	if idx >= length {
 		data["tags"] = append(tags, tag)
-	} else if tags[idx] != tag {
+	} else if tags[idx] != tag && length < 1024 {
+		// Max 1024 tags - this also prevents CWE-190 from CodeQL (Size computation for allocation may overflow) due to length+1 without bound check
 		if length+1 > cap(tags) {
 			oldTags := tags
 			tags = make(Tags, length+1)
