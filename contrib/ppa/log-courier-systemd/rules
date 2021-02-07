@@ -5,6 +5,9 @@ include /usr/share/dpkg/pkg-info.mk
 	dh $@ --with=systemd
 
 override_dh_auto_clean:
+	# Nothing to do
+
+override_dh_auto_build:
 	# We pre-compiled through cross-compilation already in the source, so just switch to the correct pre-compiled bin
 	# This is so we could use latest Go to compile
 	# Although we can get 1.15 on focal we cannot get anything near it on trusty (oldest supported release)
@@ -18,9 +21,6 @@ override_dh_auto_test:
 	if [ "$$VERSION" != "${DEB_VERSION_UPSTREAM}" ]; then \
 		exit 1; \
 	fi
-
-override_dh_auto_test:
-	# Maybe tests in future
 
 override_dh_auto_install:
 	# Install binaries
