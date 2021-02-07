@@ -38,32 +38,26 @@ are called directly.
 %setup -q -n log-courier-%{version}
 
 %build
-# Build a go workspace
-mkdir -p _workspace/src/github.com/driskell
-ln -nsf $(pwd) _workspace/src/github.com/driskell/log-courier
-export GOPATH=$(pwd)/_workspace
-cd "$GOPATH/src/github.com/driskell/log-courier"
-
 # Configure platform specific defaults
 export LC_FACT_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/fact-courier/fact-courier.yaml
 
+export GOBIN=$(pwd)/bin
 go -mod=vendor generate .
 go -mod=vendor install ./fact-courier
 
 %check
-export GOPATH=$(pwd)/_workspace
-VERSION=$($GOPATH/bin/fact-courier --version)
+VERSION=$($GOBIN/fact-courier --version)
 VERSION=${VERSION#Fact Courier version }
 if [ "$VERSION" != "%{version}" ]; then
 	exit 1
 fi
 
 %install
-export GOPATH=$(pwd)/_workspace
+export GOBIN=$(pwd)/bin
 
 # Install binaries
 mkdir -p %{buildroot}%{_sbindir}
-install -m 0755 $GOPATH/bin/fact-courier %{buildroot}%{_sbindir}/fact-courier
+install -m 0755 $GOBIN/fact-courier %{buildroot}%{_sbindir}/fact-courier
 
 # Install config directory
 mkdir -p %{buildroot}%{_sysconfdir}/fact-courier
