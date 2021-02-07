@@ -26,12 +26,16 @@ import (
 )
 
 const (
+	defaultStreamAddHostField     bool = true
 	defaultStreamAddTimezoneField bool = false
+	defaultEnableECS              bool = false
 )
 
 // StreamConfig holds the configuration for a log stream
 type StreamConfig struct {
+	AddHostField     bool                   `config:"add host field"`
 	AddTimezoneField bool                   `config:"add timezone field"`
+	EnableECS        bool                   `config:"enable ecs"`
 	Fields           map[string]interface{} `config:"fields"`
 
 	genConfig *config.General
@@ -40,7 +44,9 @@ type StreamConfig struct {
 
 // Defaults initialises the default configuration for a log stream
 func (sc *StreamConfig) Defaults() {
+	sc.AddHostField = defaultStreamAddHostField
 	sc.AddTimezoneField = defaultStreamAddTimezoneField
+	sc.EnableECS = defaultEnableECS
 
 	sc.timezone = time.Now().Format("-0700 MST")
 }
@@ -62,24 +68,31 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 // to the data that will eventually become an event
 func (sc *StreamConfig) Decorate(data map[string]interface{}) map[string]interface{} {
 	data["@timestamp"] = time.Now()
-	data["host"] = map[string]interface{}{
-		"name":     sc.genConfig.Host,
-		"hostname": sc.genConfig.Host,
+	if sc.AddHostField {
+		if sc.EnableECS {
+			data["host"] = map[string]interface{}{
+				"name":     sc.genConfig.Host,
+				"hostname": sc.genConfig.Host,
+			}
+		} else {
+			data["host"] = sc.genConfig.Host
+		}
 	}
 
-	var (
-		eventEntry map[string]interface{}
-		ok         bool
-	)
-	if eventEntry, ok = data["event"].(map[string]interface{}); !ok {
-		eventEntry = map[string]interface{}{}
-		data["event"] = eventEntry
-	}
-	eventEntry["timezone"] = sc.timezone
-
-	// TODO: Deprecate
 	if sc.AddTimezoneField {
-		data["timezone"] = sc.timezone
+		if sc.EnableECS {
+			var (
+				eventEntry map[string]interface{}
+				ok         bool
+			)
+			if eventEntry, ok = data["event"].(map[string]interface{}); !ok {
+				eventEntry = map[string]interface{}{}
+				data["event"] = eventEntry
+			}
+			eventEntry["timezone"] = sc.timezone
+		} else {
+			data["timezone"] = sc.timezone
+		}
 	}
 
 	for k := range sc.genConfig.GlobalFields {

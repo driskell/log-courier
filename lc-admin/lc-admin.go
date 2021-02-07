@@ -30,7 +30,7 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile prospector.DefaultGeneralPersistDir admin.DefaultAdminBind
+//go:generate go run -mod=vendor ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile prospector.DefaultGeneralPersistDir admin.DefaultAdminBind
 
 type commandProcessor interface {
 	ProcessCommand(string) bool

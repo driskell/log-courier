@@ -53,7 +53,7 @@ const platformHeader = `// THIS IS A GO GENERATED FILE
 // Useful for package maintainers
 func main() {
 	if len(os.Args) < 3 {
-		log.Fatalf("Usage: go run <path-to-lc-lib>/config/generate.go -- <target> <package-name> <configs>...")
+		log.Fatalf("Usage: go run -mod=vendor <path-to-lc-lib>/config/generate.go -- <target> <package-name> <configs>...")
 	}
 
 	targetFile := os.Args[1] + ".go"
