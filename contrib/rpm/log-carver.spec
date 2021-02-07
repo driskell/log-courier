@@ -136,5 +136,5 @@ fi
 %endif
 
 %changelog
-* Sat Feb 6 2021 Jason Woods <devel@jasonwoods.me.uk> - 2.5.0-1
-- First Log Carver version, 2.5.0
+* Sat Feb 6 2021 Jason Woods <devel@jasonwoods.me.uk> - 2.5.2-1
+- First Log Carver version, 2.5.2
