@@ -2,6 +2,7 @@
 
 [![Go 1.13 Build Status](https://img.shields.io/github/workflow/status/driskell/log-courier/Go%201.13.svg?label=Go%201.13)](https://travis-ci.org/driskell/log-courier)
 [![Go 1.14 Build Status](https://img.shields.io/github/workflow/status/driskell/log-courier/Go%201.14.svg?label=Go%201.14)](https://travis-ci.org/driskell/log-courier)
+[![Go 1.15 Build Status](https://img.shields.io/github/workflow/status/driskell/log-courier/Go%201.15.svg?label=Go%201.15)](https://travis-ci.org/driskell/log-courier)
 [![Latest Release](https://img.shields.io/github/release/driskell/log-courier.svg)](https://github.com/driskell/log-courier/releases/latest)
 
 The Log Courier Suite is a set of lightweight tools created to ship and process
@@ -46,6 +47,7 @@ target different actions against different events
 - Provides several actions: date, geoip, user_agent, kv, add_tag, remove_tag, set_field, unset_field
 - The set_field action supports Common Expression Language (CEL) for type conversions and string building
 - Transmits events to Elasticsearch using the bulk API
+- A small example configuration can be found [here](docs/examples/example-carver.yaml)
 
 ## Philosophy
 
