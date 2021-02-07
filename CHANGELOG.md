@@ -1,5 +1,14 @@
 # Change Log
 
+## 2.5.1
+
+7th February 2021
+
+Log Courier / Log Carver
+
+- Fix vendoring issue of a dependency that was blocking package builds
+- No binary changes to Log Courier / Log Carver
+
 ## 2.5.0
 
 6th February 2021
