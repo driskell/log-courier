@@ -1,12 +1,5 @@
 #!/usr/bin/make -f
-
-# Configure platform specific defaults
-export LC_DEFAULT_CONFIGURATION_FILE=/etc/log-courier/log-courier.yaml
-export LC_DEFAULT_GENERAL_PERSIST_DIR=/var/lib/log-courier
-export LC_DEFAULT_ADMIN_BIND=unix:/var/run/log-courier/admin.socket
-
-# Enable vendor experiment in the event of Go 1.5 then generate and build
-export GO15VENDOREXPERIMENT=1
+include /usr/share/dpkg/pkg-info.mk
 
 %:
 	dh $@
@@ -15,13 +8,19 @@ override_dh_auto_clean:
 	# Nothing to do
 
 override_dh_auto_build:
-	export PATH=$$PATH:/usr/lib/go-1.5/bin; \
-	export GOBIN=$$(pwd)/bin; \
-		go generate . ./lc-admin; \
-		go install . ./lc-admin ./lc-tlscert
+	# We pre-compiled through cross-compilation already in the source, so just switch to the correct pre-compiled bin
+	# This is so we could use latest Go to compile
+	# Although we can get 1.15 on focal we cannot get anything near it on trusty (oldest supported release)
+	# Thus, until that is EOL (or someone reports this as broken), this is the best way to compile
+	mv "bin-${DEB_HOST_ARCH}" bin
 
 override_dh_auto_test:
-	# Maybe tests in future
+	VERSION=$$(bin/log-courier --version); \
+	VERSION=$${VERSION#Log Courier version }; \
+	echo "$$VERSION"; \
+	if [ "$$VERSION" != "${DEB_VERSION_UPSTREAM}" ]; then \
+		exit 1; \
+	fi
 
 override_dh_auto_install:
 	# Install binaries

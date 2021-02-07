@@ -3,7 +3,7 @@ Section: contrib/admin
 Priority: optional
 Standards-Version: 3.9.5
 Maintainer: Jason Woods (Driskell) <devel@jasonwoods.me.uk>
-Build-Depends: debhelper (>= 9), golang-1.5, git
+Build-Depends: debhelper (>= 9), git, dpkg-dev
 
 Package: log-courier
 Architecture: any

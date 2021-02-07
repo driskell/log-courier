@@ -1,24 +1,23 @@
 #!/usr/bin/make -f
-
-# Configure platform specific defaults
-export LC_DEFAULT_CONFIGURATION_FILE=/etc/log-carver/log-carver.yaml
-export LC_DEFAULT_GEO_IP_ACTION_DATABASE=/usr/share/GeoIP/GeoLite2-City.mmdb
-export LC_DEFAULT_ADMIN_BIND=unix:/var/run/log-carver/admin.socket
-
-# Enable vendor experiment in the event of Go 1.5 then generate and build
-export GO15VENDOREXPERIMENT=1
+include /usr/share/dpkg/pkg-info.mk
 
 %:
 	dh $@ --with=systemd
 
 override_dh_auto_clean:
-	# Nothing to do
+	# We pre-compiled through cross-compilation already in the source, so just switch to the correct pre-compiled bin
+	# This is so we could use latest Go to compile
+	# Although we can get 1.15 on focal we cannot get anything near it on trusty (oldest supported release)
+	# Thus, until that is EOL (or someone reports this as broken), this is the best way to compile
+	mv "bin-${DEB_HOST_ARCH}" bin
 
-override_dh_auto_build:
-	export PATH=$$PATH:/usr/lib/go-1.5/bin; \
-	export GOBIN=$$(pwd)/bin; \
-		go generate ./log-carver ./lc-admin; \
-		go install ./log-carver ./lc-admin
+override_dh_auto_test:
+	VERSION=$$(bin/log-carver --version); \
+	VERSION=$${VERSION#Log Carver version }; \
+	echo "$$VERSION"; \
+	if [ "$$VERSION" != "${DEB_VERSION_UPSTREAM}" ]; then \
+		exit 1; \
+	fi
 
 override_dh_auto_test:
 	# Maybe tests in future
