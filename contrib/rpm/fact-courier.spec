@@ -137,7 +137,3 @@ fi
 %ghost %{_var}/run/fact-courier/fact-courier.pid
 %dir %attr(0700,fact-courier,fact-courier) %{_var}/run/fact-courier
 %endif
-
-%changelog
-* Tue Jun 28 2016 Jason Woods <devel@jasonwoods.me.uk> - 2.5.0-1
-- Fact Courier
