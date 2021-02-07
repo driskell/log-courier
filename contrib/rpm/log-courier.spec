@@ -149,3 +149,7 @@ fi
 %endif
 %dir %{_var}/lib/log-courier
 %ghost %{_var}/lib/log-courier/.log-courier
+
+%changelog
+ * Sat Feb 06 2021 Jason Woods <devel@jasonwoods.me.uk> - 2.5.2-1
+ - Upgrade to 2.5.2
