@@ -40,7 +40,7 @@ func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, erro
 	}
 
 	if bodyLength != math.MaxUint32 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message (EVNT size %d != %d)", bodyLength, math.MaxUint32)
+		return nil, fmt.Errorf("Protocol error: Corrupt message (EVNT size %d != %d)", bodyLength, uint32(math.MaxUint32))
 	}
 
 	data := make([]byte, 16)

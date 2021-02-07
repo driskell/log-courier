@@ -1,8 +1,22 @@
 # Change Log
 
+## 2.5.2
+
+7th February 2021
+
+Log Courier / Log Carver
+
+- Fix integer overflow preventing 32-bit compilation
+
 ## 2.5.1
 
 7th February 2021
+
+Log Courier
+
+- Restore backwards compatibility with v2.0.6 by removing ECS fields that were added in v2.5.0
+- New configuration option to enable ECS fields: `enable ecs`
+- ECS fields now also obey the corresponding `add xxx` configuration options
 
 Log Courier / Log Carver
 
