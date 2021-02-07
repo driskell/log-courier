@@ -43,8 +43,8 @@ export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-courier/log-courier.yaml
 export LC_DEFAULT_GENERAL_PERSIST_DIR=%{_var}/lib/log-courier
 export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
 
-go -mod=vendor generate .
-go -mod=vendor install . ./lc-admin ./lc-tlscert
+go generate -mod=vendor .
+go install -mod=vendor . ./lc-admin ./lc-tlscert
 
 %check
 export GOPATH=$(pwd)/_workspace

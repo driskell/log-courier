@@ -44,8 +44,8 @@ export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-carver/log-carver.yaml
 export LC_DEFAULT_GEO_IP_ACTION_DATABASE=/usr/share/GeoIP/GeoLite2-City.mmdb
 export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-carver/admin.socket
 
-go -mod=vendor generate ./log-carver ./lc-admin
-go -mod=vendor install ./log-carver ./lc-admin
+go generate -mod=vendor ./log-carver ./lc-admin
+go install -mod=vendor ./log-carver ./lc-admin
 
 %check
 export GOPATH=$(pwd)/_workspace
