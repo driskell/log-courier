@@ -6,6 +6,10 @@ on:
       tag:
         description: Tag
         required: true
+      drelease:
+        description: Dist Release
+        required: true
+        default: '1'
   release:
     types: [published]
 
