@@ -15,11 +15,10 @@ override_dh_auto_clean:
 	# Nothing to do
 
 override_dh_auto_build:
-	mkdir -p _workspace/src/github.com/driskell
-	ln -nsf $$(pwd) _workspace/src/github.com/driskell/log-courier
-	cd "_workspace/src/github.com/driskell/log-courier"; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go generate . ./lc-admin; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go install . ./lc-admin ./lc-tlscert
+	export PATH=$$PATH:/usr/lib/go-1.5/bin; \
+	export GOBIN=$$(pwd)/bin; \
+		go generate . ./lc-admin; \
+		go install . ./lc-admin ./lc-tlscert
 
 override_dh_auto_test:
 	# Maybe tests in future
@@ -27,10 +26,10 @@ override_dh_auto_test:
 override_dh_auto_install:
 	# Install binaries
 	mkdir -p debian/log-courier/usr/sbin
-	install -m 0755 _workspace/bin/log-courier debian/log-courier/usr/sbin/log-courier
+	install -m 0755 bin/log-courier debian/log-courier/usr/sbin/log-courier
 	mkdir -p debian/log-courier/usr/bin
-	install -m 0755 _workspace/bin/lc-admin debian/log-courier/usr/bin/lc-admin
-	install -m 0755 _workspace/bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
+	install -m 0755 bin/lc-admin debian/log-courier/usr/bin/lc-admin
+	install -m 0755 bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
 
 	# Install example configuration
 	mkdir -p debian/log-courier/etc/log-courier/examples

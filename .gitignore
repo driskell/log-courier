@@ -7,5 +7,5 @@
 /node_modules
 /platform.go
 /spec/tmp
-/vendor/bundle
+/vendor
 /.vscode

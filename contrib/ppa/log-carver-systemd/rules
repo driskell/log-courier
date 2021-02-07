@@ -15,11 +15,10 @@ override_dh_auto_clean:
 	# Nothing to do
 
 override_dh_auto_build:
-	mkdir -p _workspace/src/github.com/driskell
-	ln -nsf $$(pwd) _workspace/src/github.com/driskell/log-courier
-	cd "_workspace/src/github.com/driskell/log-courier"; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go generate ./log-carver ./lc-admin; \
-		GOPATH=$$(pwd)/_workspace PATH=$$PATH:/usr/lib/go-1.5/bin go install ./log-carver ./lc-admin
+	export PATH=$$PATH:/usr/lib/go-1.5/bin; \
+	export GOBIN=$$(pwd)/bin; \
+		go generate ./log-carver ./lc-admin; \
+		go install ./log-carver ./lc-admin
 
 override_dh_auto_test:
 	# Maybe tests in future
@@ -27,7 +26,7 @@ override_dh_auto_test:
 override_dh_auto_install:
 	# Install binaries
 	mkdir -p debian/log-carver/usr/sbin
-	install -m 0755 _workspace/bin/log-carver debian/log-carver/usr/sbin/log-carver
+	install -m 0755 bin/log-carver debian/log-carver/usr/sbin/log-carver
 
 	# Install upstart and systemd scripts
 	mkdir -p debian/log-carver/etc/init.d debian/log-carver/lib/systemd/system
