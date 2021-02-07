@@ -134,7 +134,3 @@ fi
 %dir %attr(0700,log-carver,log-carver) %{_var}/run/log-carver
 %ghost %{_var}/run/log-carver/admin.socket
 %endif
-
-%changelog
-* Sat Feb 6 2021 Jason Woods <devel@jasonwoods.me.uk> - 2.5.2-1
-- First Log Carver version, 2.5.2
