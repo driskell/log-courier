@@ -14,7 +14,7 @@ echo '::endgroup::'
 
 if [ "${DRELEASE}" != 1 ]; then
 	echo "::group::Downloading original source for ${VERSION#v}-${RELEASE} from previous release"
-	wget -q "https://launchpad.net/~devel-k/+archive/ubuntu/log-courier2/+sourcefiles/log-courier/${VERSION#v}-${RELEASE}~trusty$(( DRELEASE - 1 ))/log-courier_${VERSION#v}.orig.tar.gz" -O ~/"${NAME}_${VERSION#v}.orig.tar.gz"
+	wget -q "https://launchpad.net/~devel-k/+archive/ubuntu/log-courier2/+sourcefiles/log-courier/${VERSION#v}-${RELEASE}~trusty$(( DRELEASE - 1 ))/${NAME}_${VERSION#v}.orig.tar.gz" -O ~/"${NAME}_${VERSION#v}.orig.tar.gz"
 	echo '::endgroup::'
 else
 	echo "::group::Generating sources for $VERSION"
@@ -53,7 +53,7 @@ CF713BECBB9DA51E892E8AD0117FF0FC7420BA3F:6:
 EOF
 echo '::endgroup::'
 
-for DIST in trusty xenial bionic eoan focal; do
+for DIST in trusty xenial bionic focal; do
 	echo "::group::Preparing debian package for $DIST"
 	rm -rf ~/"${NAME}"
 	cd ~
