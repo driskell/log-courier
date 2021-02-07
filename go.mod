@@ -3,7 +3,6 @@ module github.com/driskell/log-courier
 go 1.13
 
 require (
-	github.com/fatih/camelcase v1.0.0
 	github.com/google/cel-go v0.3.2
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/oschwald/geoip2-golang v1.4.0
