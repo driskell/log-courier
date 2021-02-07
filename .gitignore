@@ -9,3 +9,4 @@
 /spec/tmp
 /vendor
 /.vscode
+/.secrets
