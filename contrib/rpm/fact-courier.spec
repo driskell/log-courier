@@ -47,10 +47,8 @@ cd "$GOPATH/src/github.com/driskell/log-courier"
 # Configure platform specific defaults
 export LC_FACT_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/fact-courier/fact-courier.yaml
 
-# Enable vendor experiment in the event of Go 1.5 then generate and build
-export GO15VENDOREXPERIMENT=1
-go generate .
-go install ./fact-courier
+go -mod=vendor generate .
+go -mod=vendor install ./fact-courier
 
 %check
 export GOPATH=$(pwd)/_workspace
