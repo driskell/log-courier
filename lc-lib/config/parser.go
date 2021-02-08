@@ -79,12 +79,12 @@ func (p *Parser) Populate(config interface{}, rawConfig interface{}, configPath 
 
 // PopulateSlice populates dynamic configuration, like Populate, but by
 // appending to a slice instead of writing into a structure
-func (p *Parser) PopulateSlice(configSlice interface{}, rawConfig []interface{}, configPath string) (err error) {
+func (p *Parser) PopulateSlice(configSlice interface{}, rawConfig []interface{}, configPath string, reportUnused bool) (err error) {
 	vRawConfig := reflect.ValueOf(rawConfig)
 	vConfig := reflect.ValueOf(configSlice).Elem()
 
 	var retSlice reflect.Value
-	retSlice, err = p.populateSlice(vConfig, vRawConfig, configPath)
+	retSlice, err = p.populateSlice(vConfig, vRawConfig, configPath, reportUnused)
 	if err == nil {
 		vConfig.Set(retSlice)
 	}
@@ -123,7 +123,7 @@ func (p *Parser) populateStruct(vConfig reflect.Value, vRawConfig reflect.Value,
 	// Initialise defaults and register any validation function
 	p.prepareValue(vConfig, configPath)
 
-	if err = p.populateStructInner(vConfig, vRawConfig, configPath); err != nil {
+	if err = p.populateStructInner(vConfig, vRawConfig, configPath, reportUnused); err != nil {
 		return
 	}
 
@@ -144,9 +144,9 @@ func (p *Parser) populateStruct(vConfig reflect.Value, vRawConfig reflect.Value,
 }
 
 // populateStructInner handles structure population and also creation in case of pointers
-func (p *Parser) populateStructInner(vConfig reflect.Value, vRawConfig reflect.Value, configPath string) (err error) {
+func (p *Parser) populateStructInner(vConfig reflect.Value, vRawConfig reflect.Value, configPath string, reportUnused bool) (err error) {
 	if vConfig.Kind() == reflect.Ptr {
-		return p.populateStructInner(vConfig.Elem(), vRawConfig, configPath)
+		return p.populateStructInner(vConfig.Elem(), vRawConfig, configPath, reportUnused)
 	}
 
 	// When taking fields into struct we must be a struct
@@ -202,7 +202,7 @@ FieldLoop:
 				dynamicKeys := vField.MapKeys()
 				for _, key := range dynamicKeys {
 					var retValue reflect.Value
-					if retValue, err = p.populateEntry(vField.MapIndex(key).Elem(), vRawConfig, configPath, key.String()); err != nil {
+					if retValue, err = p.populateEntry(vField.MapIndex(key).Elem(), vRawConfig, configPath, key.String(), reportUnused); err != nil {
 						return
 					}
 					// If nothing was provided, don't store anything, so we keep defaults
@@ -237,7 +237,7 @@ FieldLoop:
 
 				// Populate the slice - trim the forward slash from the config path end too
 				var retSlice reflect.Value
-				retSlice, err = p.populateSlice(vField, vRawConfig, configPath[:len(configPath)-1])
+				retSlice, err = p.populateSlice(vField, vRawConfig, configPath[:len(configPath)-1], reportUnused)
 				if err != nil {
 					return
 				}
@@ -261,7 +261,7 @@ FieldLoop:
 		}
 
 		var retValue reflect.Value
-		if retValue, err = p.populateEntry(vField, vRawConfig, configPath, tag); err != nil {
+		if retValue, err = p.populateEntry(vField, vRawConfig, configPath, tag, reportUnused); err != nil {
 			return
 		}
 
@@ -323,7 +323,7 @@ func (p *Parser) getMapIndex(vRawConfig reflect.Value, tag string) reflect.Value
 
 // populateEntry handles population of a single entry, working out whether it
 // can assign directly or needs to process as a struct
-func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, configPath string, tag string) (retValue reflect.Value, err error) {
+func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, configPath string, tag string, reportUnused bool) (retValue reflect.Value, err error) {
 	log.Debugf("populateEntry: %s (%s%s)", vField.Type().String(), configPath, tag)
 
 	// Strip pointers - but only if not a ptr to struct
@@ -333,7 +333,7 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 			vField = reflect.New(vField.Type().Elem())
 		}
 		var innerValue reflect.Value
-		if innerValue, err = p.populateEntry(vField.Elem(), vRawConfig, configPath, tag); err != nil {
+		if innerValue, err = p.populateEntry(vField.Elem(), vRawConfig, configPath, tag, reportUnused); err != nil {
 			return
 		}
 		retValue = innerValue.Addr()
@@ -352,14 +352,14 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 			ptrValue = ptrValue.Addr()
 		}
 		// Call with pointer to enable lifecycle methods if any
-		if err := p.populateStruct(ptrValue, vMapIndex, fmt.Sprintf("%s%s/", configPath, tag), true); err != nil {
+		if err := p.populateStruct(ptrValue, vMapIndex, fmt.Sprintf("%s%s/", configPath, tag), reportUnused); err != nil {
 			return reflect.Value{}, err
 		}
 		return
 	}
 
 	if vField.Kind() == reflect.Slice {
-		retValue, err = p.populateSlice(vField, vMapIndex, fmt.Sprintf("%s%s", configPath, tag))
+		retValue, err = p.populateSlice(vField, vMapIndex, fmt.Sprintf("%s%s", configPath, tag), reportUnused)
 		return
 	}
 
@@ -494,7 +494,7 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 
 // populateSlice is used to populate an array of configuration structures using
 // an array from the configuration file
-func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, configPath string) (retSlice reflect.Value, err error) {
+func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, configPath string, reportUnused bool) (retSlice reflect.Value, err error) {
 	log.Debugf("populateSlice: %s (%s)", vSlice.Type().String(), configPath)
 
 	if vRawConfig.IsValid() && vRawConfig.Kind() != reflect.Slice {
@@ -521,7 +521,7 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 				configItem = configItem.Elem()
 			}
 			var retValue reflect.Value
-			if retValue, err = p.populateEntry(vItem, configItem, fmt.Sprintf("%s[%d]", configPath, i), ""); err != nil {
+			if retValue, err = p.populateEntry(vItem, configItem, fmt.Sprintf("%s[%d]", configPath, i), "", reportUnused); err != nil {
 				return
 			}
 			vSlice = reflect.Append(vSlice, retValue)

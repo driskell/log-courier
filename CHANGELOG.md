@@ -1,5 +1,14 @@
 # Change Log
 
+## 2.5.3
+
+8th February 2021
+
+Log Courier
+
+- Fix `lc-admin` missing default configuration on RPM builds
+- Fix `lc-admin` reporting unknown configuration options it should never be concerned with
+
 ## 2.5.2
 
 7th February 2021

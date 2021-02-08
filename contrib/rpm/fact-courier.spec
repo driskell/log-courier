@@ -42,7 +42,7 @@ are called directly.
 export LC_FACT_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/fact-courier/fact-courier.yaml
 
 export GOBIN=%{_builddir}/bin
-go -mod=vendor generate .
+go -mod=vendor generate ./fact-courier
 go -mod=vendor install ./fact-courier
 
 %check

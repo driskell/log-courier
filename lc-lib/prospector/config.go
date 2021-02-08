@@ -89,7 +89,7 @@ func (ic IncludeConfig) Validate(p *config.Parser, path string) (err error) {
 			}
 
 			// Append to files configuration
-			if err = p.PopulateSlice(p.Config().Section("files").(*Config), rawInclude, fmt.Sprintf("%s/%s", path, include)); err != nil {
+			if err = p.PopulateSlice(p.Config().Section("files").(*Config), rawInclude, fmt.Sprintf("%s/%s", path, include), true); err != nil {
 				return
 			}
 		}

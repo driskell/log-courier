@@ -27,10 +27,11 @@ import (
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
+	"gopkg.in/op/go-logging.v1"
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run -mod=vendor ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile prospector.DefaultGeneralPersistDir admin.DefaultAdminBind
+//go:generate go run -mod=vendor ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile admin.DefaultAdminBind
 
 type commandProcessor interface {
 	ProcessCommand(string) bool
@@ -42,6 +43,7 @@ type lcAdmin struct {
 	legacy       bool
 	adminConnect string
 	configFile   string
+	configDebug  bool
 
 	client *admin.Client
 }
@@ -79,6 +81,7 @@ func (a *lcAdmin) startUp() {
 	flag.BoolVar(&a.legacy, "legacy", false, "connect to version 1.x Log Courier instances")
 	flag.StringVar(&a.adminConnect, "connect", "", "the Log Courier instance to connect to")
 	flag.StringVar(&a.configFile, "config", config.DefaultConfigurationFile, "read the Log Courier connection address from the given configuration file (ignored if connect specified)")
+	flag.BoolVar(&a.configDebug, "config-debug", false, "Enable configuration parsing debug logs on the console")
 
 	flag.Parse()
 
@@ -91,7 +94,15 @@ func (a *lcAdmin) startUp() {
 		fmt.Printf("Log Courier client version %s\n", core.LogCourierVersion)
 	}
 
+	// Enable config logging if requested
+	if a.configDebug {
+		logging.SetLevel(logging.DEBUG, "config")
+	}
 	a.loadConfig()
+	// Enable config logging if requested
+	if a.configDebug {
+		logging.SetLevel(logging.INFO, "config")
+	}
 
 	fmt.Println("")
 }

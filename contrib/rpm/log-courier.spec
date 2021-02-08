@@ -38,7 +38,7 @@ export LC_DEFAULT_GENERAL_PERSIST_DIR=%{_var}/lib/log-courier
 export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
 
 export GOBIN=%{_builddir}/bin
-go generate -mod=vendor .
+go generate -mod=vendor . ./lc-admin ./lc-tlscert
 go install -mod=vendor . ./lc-admin ./lc-tlscert
 
 %check
