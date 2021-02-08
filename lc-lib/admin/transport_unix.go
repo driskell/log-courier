@@ -37,7 +37,7 @@ func (d *unixDialer) Dial(network string, addr string) (net.Conn, error) {
 }
 
 func (d *unixDialer) Host() string {
-	return d.uaddr.Name
+	return "unix-socket"
 }
 
 func connectUnix(transport, path string) (netDialer, error) {

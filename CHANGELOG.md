@@ -1,5 +1,13 @@
 # Change Log
 
+## 2.5.4
+
+8th February 2021
+
+Log Courier
+
+- Resolve `lc-admin` regression with unix sockets - it now reports `unix-socket` instead of `log-courier-address`
+
 ## 2.5.3
 
 8th February 2021
