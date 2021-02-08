@@ -43,6 +43,7 @@ type Client struct {
 	transport     *http.Transport
 	client        *http.Client
 	remoteVersion string
+	fakeHost      string
 }
 
 // NewClient returns a new Client interface for the given endpoint
@@ -70,6 +71,8 @@ func (c *Client) initClient() error {
 	if err != nil {
 		return err
 	}
+
+	c.fakeHost = dialerStruct.Host()
 
 	c.transport = &http.Transport{
 		Dial: func(network string, addr string) (net.Conn, error) {
@@ -104,7 +107,7 @@ func (c *Client) Request(path string) (string, error) {
 		return c.Call(path, url.Values{})
 	}
 
-	resp, err := c.client.Get("http://log-courier-address/" + path + "?w=pretty")
+	resp, err := c.client.Get("http://" + c.fakeHost + "/" + path + "?w=pretty")
 	if err != nil {
 		return "", err
 	}
@@ -114,7 +117,7 @@ func (c *Client) Request(path string) (string, error) {
 
 // Call performs a remote action and returns the result
 func (c *Client) Call(path string, values url.Values) (string, error) {
-	resp, err := c.client.PostForm("http://log-courier-address/"+path+"?w=pretty", values)
+	resp, err := c.client.PostForm("http://"+c.fakeHost+"/"+path+"?w=pretty", values)
 	if err != nil {
 		return "", err
 	}

@@ -8,6 +8,7 @@ Log Courier
 
 - Fix `lc-admin` missing default configuration on RPM builds
 - Fix `lc-admin` reporting unknown configuration options it should never be concerned with
+- Fix `lc-admin` reporting `log-courier-address` as the address in errors
 
 ## 2.5.2
 

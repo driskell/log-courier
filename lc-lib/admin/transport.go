@@ -24,6 +24,7 @@ import (
 
 type netDialer interface {
 	Dial(string, string) (net.Conn, error)
+	Host() string
 }
 
 type netListener interface {
