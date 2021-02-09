@@ -2,6 +2,23 @@ source 'https://rubygems.org'
 
 gemspec
 
+# Reference a bundled version - the latest versions are not published as they are unchanged
+# This ensures we do not bring in old vulnerable dependencies that Dependabot will not like
+# https://github.com/elastic/logstash/issues/9083
+logstash_path = ENV["LOGSTASH_PATH"]
+if logstash_path.nil?
+	homebrew_version = Dir.entries('/usr/local/Cellar/logstash-oss').select { |entry| not %w[. ..].include? entry }.first
+	if not homebrew_version.nil?
+		logstash_path = '/usr/local/Cellar/logstash-oss/' + homebrew_version + '/libexec'
+	end
+end
+if logstash_path.nil?
+	logstash_path = '/usr/local/logstash/libexec'
+end
+
+gem 'logstash-core', :path => "#{logstash_path}/logstash-core"
+gem 'logstash-core-plugin-api', :path => "#{logstash_path}/logstash-core-plugin-api"
+
 group :development do
   gem 'rake'
 end
