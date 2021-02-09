@@ -171,10 +171,10 @@ func (p *Prospector) runOnce() bool {
 				continue
 			}
 			delete(p.prospectorindex, info.file)
-			info.orphaned = orphanedMaybe
+			info.maybeOrphaned()
 		}
 		if info.orphaned == orphanedMaybe {
-			info.orphaned = orphanedYes
+			info.setOrphaned()
 			p.registrarSpool.Add(registrar.NewDeletedEvent(info.ctx))
 		}
 	}
@@ -252,7 +252,7 @@ func (p *Prospector) processFile(file string, cfg *FileConfig) {
 		if isKnown {
 			if info.status != statusInvalid {
 				// The current entry is not an error, orphan it so we can log one
-				info.orphaned = orphanedMaybe
+				info.maybeOrphaned()
 			} else if info.err.Error() == err.Error() {
 				// The same error occurred - don't log it again
 				info.update(nil, p.iteration)
@@ -323,7 +323,7 @@ func (p *Prospector) processFile(file string, cfg *FileConfig) {
 	} else {
 		if !info.identity.SameAs(fileinfo) {
 			// Keep the old file in case we find it again shortly
-			info.orphaned = orphanedMaybe
+			info.maybeOrphaned()
 
 			if previous, previousinfo := p.lookupFileIds(file, fileinfo); previous != "" {
 				// Symlinks could mean we see the same file twice - skip if we have

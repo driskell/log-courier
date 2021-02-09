@@ -71,7 +71,7 @@ type Harvester struct {
 	output          chan<- []*event.Event
 	file            *os.File
 	backOffTimer    *time.Timer
-	meterTimer      *time.Timer
+	blockedTimer    *time.Timer
 	split           bool
 	reader          *LineReader
 	staleOffset     int64
@@ -79,21 +79,24 @@ type Harvester struct {
 	lastStaleOffset int64
 	isStream        bool
 
-	lastReadTime         time.Time
-	lastMeasurement      time.Time
-	lastCheck            time.Time
+	lastReadTime    time.Time
+	lastMeasurement time.Time
+	lastCheck       time.Time
+
+	// Cross routine access (lock required)
+	orphaned             bool
+	orphanTime           time.Time
 	lastLineCount        uint64
 	lastByteCount        uint64
 	secondsWithoutEvents int
-
-	lineSpeed  float64
-	byteSpeed  float64
-	lineCount  uint64
-	byteCount  uint64
-	lastEOFOff *int64
-	lastEOF    *time.Time
-	lastSize   int64
-	lastOffset int64
+	lineSpeed            float64
+	byteSpeed            float64
+	lineCount            uint64
+	byteCount            uint64
+	lastEOFOff           *int64
+	lastEOF              *time.Time
+	lastSize             int64
+	lastOffset           int64
 }
 
 // SetOutput sets the harvester output
@@ -186,19 +189,15 @@ func (h *Harvester) harvest() (int64, error) {
 
 // performRead performs a single read operation
 func (h *Harvester) performRead() error {
-	text, bytesread, err := h.readline()
-
-	// Is a measurement due?
-	if duration := time.Since(h.lastMeasurement); duration >= time.Second {
-		if measureErr := h.takeMeasurements(duration, false); measureErr != nil {
-			if measureErr == errFileTruncated {
-				h.handleTruncation()
-				return nil
-			}
-			return measureErr
+	if measureErr := h.takeMeasurements(false); measureErr != nil {
+		if measureErr == errFileTruncated {
+			h.handleTruncation()
+			return nil
 		}
+		return measureErr
 	}
 
+	text, bytesread, err := h.readline()
 	if err == nil {
 		lineOffset := h.offset
 		h.offset += int64(bytesread)
@@ -261,7 +260,13 @@ func (h *Harvester) handleTruncation() {
 	h.eventStream.Reset()
 }
 
-func (h *Harvester) takeMeasurements(duration time.Duration, isPipelineBlocked bool) error {
+func (h *Harvester) takeMeasurements(isPipelineBlocked bool) error {
+	// Is a measurement due?
+	duration := time.Since(h.lastMeasurement)
+	if duration < time.Second {
+		return nil
+	}
+
 	h.lastMeasurement = time.Now()
 
 	// Has enough time passed for periodic checks?
@@ -291,8 +296,7 @@ func (h *Harvester) takeMeasurements(duration time.Duration, isPipelineBlocked b
 	}
 
 	if doChecks && !h.isStream {
-		var err error
-		if err = h.statCheck(); err != nil {
+		if err := h.statCheck(isPipelineBlocked); err != nil {
 			return err
 		}
 	}
@@ -327,8 +331,9 @@ func (h *Harvester) takeMeasurements(duration time.Duration, isPipelineBlocked b
 	return nil
 }
 
-// statCheck checks for truncation and returns the file size of the file
-func (h *Harvester) statCheck() error {
+// statCheck checks for truncation and updates the file status used for completion amount
+// It also monitors for dead_time and closes orphaned files that have been open too long
+func (h *Harvester) statCheck(isPipelineBlocked bool) error {
 	info, err := h.file.Stat()
 	if err != nil {
 		log.Errorf("Unexpected error checking status of %s: %s", h.path, err)
@@ -344,16 +349,33 @@ func (h *Harvester) statCheck() error {
 	// race where we hit EOF but as we Stat() the mtime is updated - this mtime
 	// is the one we monitor in order to resume checking, so we need to check it
 	// didn't already update
-	if age := time.Since(h.lastReadTime); age > h.streamConfig.DeadTime && h.fileinfo.ModTime() == info.ModTime() {
-		log.Info("Stopping harvest of %s; last change was %v ago", h.path, age-(age%time.Second))
-		// TODO: dead_action implementation here
-		return errStopRequested
+	if !isPipelineBlocked && h.fileinfo.ModTime() == info.ModTime() {
+		if age := time.Since(h.lastReadTime); age > h.streamConfig.DeadTime {
+			log.Infof("Stopping harvest of %s; last successful read was %v ago (\"dead time\")", h.path, age-(age%time.Second))
+			// TODO: dead_action implementation here
+			return errStopRequested
+		}
 	}
 
 	// Store latest stat()
 	h.fileinfo = info
 
-	return nil
+	// If we're holding a deleted file open (orphaned) and dead_time passes, abort and lose the file
+	// This scenario is only reached if a file is held open by a blocked/slow pipeline
+	if h.streamConfig.HoldTime > 0 && h.isOrphaned() {
+		if age := time.Since(h.orphanTime); age > h.streamConfig.HoldTime {
+			completion := h.calculateCompletion()
+			if completion >= 100 {
+				readAge := time.Since(h.lastReadTime)
+				log.Infof("Stopping harvest of %s; file was deleted %v ago (\"hold time\"); all data was processed; last change was %v ago", h.path, age-(age%time.Second), readAge-(readAge%time.Second))
+			} else {
+				log.Warningf("DATA LOST: Stopping harvest of %s; file was deleted %v ago (\"hold time\"); data had not completed processing due to a slow pipeline; only %.2f%% of the file was processed", h.path, age-(age%time.Second), completion)
+			}
+			err = errStopRequested
+		}
+	}
+
+	return err
 }
 
 // eventCallback receives events from the final codec and ships them to the output
@@ -361,7 +383,7 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[s
 	if h.streamConfig.AddPathField {
 		if h.streamConfig.EnableECS {
 			if !h.streamConfig.AddOffsetField {
-
+				data["log"] = map[string]interface{}{}
 			}
 			// data["log"] is provided by codecs StreamConfig
 			data["log"].(map[string]interface{})["file"] = map[string]interface{}{"path": h.path}
@@ -391,13 +413,17 @@ EventLoop:
 			break EventLoop
 		case h.output <- []*event.Event{newEvent}:
 			break EventLoop
-		case <-h.meterTimer.C:
-			// TODO: Configurable meter timer? Same as statCheck?
-			h.meterTimer.Reset(10 * time.Second)
+		case <-h.blockedTimer.C:
+			h.blockedTimer.Reset(1 * time.Second)
 
-			// Take measurements if enough time has elapsed since the last measurement
-			if duration := time.Since(h.lastMeasurement); duration >= time.Second {
-				if measureErr := h.takeMeasurements(duration, true); measureErr == errStopRequested {
+			if measureErr := h.takeMeasurements(true); measureErr != nil {
+				switch measureErr {
+				case errFileTruncated:
+					// Handle on next line read
+					continue
+				case errStopRequested:
+				default:
+					// Stop
 					break EventLoop
 				}
 			}
@@ -405,6 +431,7 @@ EventLoop:
 	}
 }
 
+// prepareHarvester opens the file and makes sure we opened the same one and did not race with a roll over
 func (h *Harvester) prepareHarvester() error {
 	// Streams don't need opening or checking
 	if h.isStream {
@@ -486,6 +513,34 @@ func (h *Harvester) readline() (string, int, error) {
 	return "", 0, io.EOF
 }
 
+// SetOrphaned tells the harvest it is orphaned
+func (h *Harvester) SetOrphaned() {
+	h.mutex.Lock()
+	h.orphaned = true
+	h.orphanTime = time.Now()
+	h.mutex.Unlock()
+}
+
+// calculateCompletion returns completion percentage of the file
+func (h *Harvester) calculateCompletion() float64 {
+	defer func() {
+		h.mutex.RUnlock()
+	}()
+	h.mutex.RLock()
+	if h.lastOffset >= h.lastSize {
+		return 100
+	}
+	return float64(h.lastOffset) * 100 / float64(h.lastSize)
+}
+
+// isOrphaned returns if orphaned
+func (h *Harvester) isOrphaned() bool {
+	h.mutex.RLock()
+	orphaned := h.orphaned
+	h.mutex.RUnlock()
+	return orphaned
+}
+
 // APIEncodable returns an admin API entry with harvester status
 func (h *Harvester) APIEncodable() api.Encodable {
 	h.mutex.RLock()
@@ -497,13 +552,13 @@ func (h *Harvester) APIEncodable() api.Encodable {
 	apiEncodable.SetEntry("current_offset", api.Number(h.lastOffset))
 	apiEncodable.SetEntry("stale_bytes", api.Number(h.staleBytes))
 	apiEncodable.SetEntry("last_known_size", api.Number(h.lastSize))
-
-	if h.lastOffset >= h.lastSize {
-		apiEncodable.SetEntry("completion", api.Float(100.))
+	if h.orphaned {
+		apiEncodable.SetEntry("orphaned", api.Number(1))
 	} else {
-		completion := float64(h.lastOffset) * 100 / float64(h.lastSize)
-		apiEncodable.SetEntry("completion", api.Float(completion))
+		apiEncodable.SetEntry("orphaned", api.Number(0))
 	}
+
+	apiEncodable.SetEntry("completion", api.Float(h.calculateCompletion()))
 	if h.lastEOFOff == nil {
 		apiEncodable.SetEntry("last_eof_offset", api.Null)
 	} else {
