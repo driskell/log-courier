@@ -43,17 +43,18 @@ func (e *AckEvent) process(state map[Entry]*FileState) {
 
 	var lastEntry Entry
 	var lastState *FileState
+	var isFound bool
 	for _, event := range e.events {
 		ctx := event.Context()
 		entry := ctx.Value(ContextEntry).(Entry)
+		log.Debug("%v", entry)
 		if lastEntry == nil || lastEntry != entry {
-			var isFound bool
-			lastState, isFound = state[entry]
-			if !isFound {
-				// This is probably stdin then or a deleted file we can't resume
-				continue
-			}
 			lastEntry = entry
+			lastState, isFound = state[entry]
+		}
+		if !isFound {
+			// This is probably stdin then or a deleted file we can't resume
+			continue
 		}
 
 		endOffset := ctx.Value(ContextEndOffset).(int64)
