@@ -39,8 +39,6 @@ const (
 )
 
 type prospectorInfo struct {
-	// ctx will be unique instance for each tracked file, and can be used
-	// to uniquely identify a stream
 	ctx          context.Context
 	file         string
 	identity     registrar.FileIdentity
@@ -54,30 +52,33 @@ type prospectorInfo struct {
 }
 
 func newProspectorInfoFromFileState(file string, filestate *registrar.FileState) *prospectorInfo {
-	return &prospectorInfo{
-		ctx:          context.Background(),
+	info := &prospectorInfo{
 		file:         file,
 		identity:     filestate,
 		status:       statusResume,
 		finishOffset: filestate.Offset,
 	}
+	info.ctx = context.WithValue(context.Background(), registrar.ContextEntry, registrar.Entry(info))
+	return info
 }
 
 func newProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *prospectorInfo {
-	return &prospectorInfo{
-		ctx:      context.Background(),
+	info := &prospectorInfo{
 		file:     file,
 		identity: registrar.NewFileInfo(fileinfo), // fileinfo is nil for stdin
 	}
+	info.ctx = context.WithValue(context.Background(), registrar.ContextEntry, registrar.Entry(info))
+	return info
 }
 
 func newProspectorInfoInvalid(file string, err error) *prospectorInfo {
-	return &prospectorInfo{
-		ctx:    context.Background(),
+	info := &prospectorInfo{
 		file:   file,
 		err:    err,
 		status: statusInvalid,
 	}
+	info.ctx = context.WithValue(context.Background(), registrar.ContextEntry, registrar.Entry(info))
+	return info
 }
 
 func (pi *prospectorInfo) isRunning() bool {

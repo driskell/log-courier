@@ -17,36 +17,35 @@
 package registrar
 
 import (
-	"context"
 	"os"
 )
 
 // DiscoverEvent informs the registrar of a new file whose state needs to be
 // persisted to the state file
 type DiscoverEvent struct {
-	ctx      context.Context
+	entry    Entry
 	source   string
 	offset   int64
 	fileinfo os.FileInfo
 }
 
 // NewDiscoverEvent creates a new discovery event
-func NewDiscoverEvent(ctx context.Context, source string, offset int64, fileinfo os.FileInfo) *DiscoverEvent {
+func NewDiscoverEvent(entry Entry, source string, offset int64, fileinfo os.FileInfo) *DiscoverEvent {
 	return &DiscoverEvent{
-		ctx:      ctx,
+		entry:    entry,
 		source:   source,
 		offset:   offset,
 		fileinfo: fileinfo,
 	}
 }
 
-func (e *DiscoverEvent) process(state map[context.Context]*FileState) {
+func (e *DiscoverEvent) process(state map[Entry]*FileState) {
 	log.Debug("Registrar received a new file event for %s", e.source)
 
 	// A new file we need to save offset information for so we can resume
-	state[e.ctx] = &FileState{
+	state[e.entry] = &FileState{
 		Source: &e.source,
 		Offset: e.offset,
 	}
-	state[e.ctx].PopulateFileIds(e.fileinfo)
+	state[e.entry].PopulateFileIds(e.fileinfo)
 }

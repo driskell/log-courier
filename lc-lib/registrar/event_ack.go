@@ -17,8 +17,6 @@
 package registrar
 
 import (
-	"context"
-
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
@@ -36,27 +34,34 @@ func NewAckEvent(events []*event.Event) *AckEvent {
 }
 
 // process persists the ack event into the registrar state by storing the offset
-func (e *AckEvent) process(state map[context.Context]*FileState) {
+func (e *AckEvent) process(state map[Entry]*FileState) {
 	if len(e.events) == 1 {
 		log.Debug("Registrar received offsets for %d log entries", len(e.events))
 	} else {
 		log.Debug("Registrar received offsets for %d log entries", len(e.events))
 	}
 
+	var lastEntry Entry
+	var lastState *FileState
+	var isFound bool
 	for _, event := range e.events {
 		ctx := event.Context()
-		endOffset := ctx.Value(ContextEndOffset).(int64)
-
-		_, isFound := state[ctx]
+		entry := ctx.Value(ContextEntry).(Entry)
+		log.Debug("%v", entry)
+		if lastEntry == nil || lastEntry != entry {
+			lastEntry = entry
+			lastState, isFound = state[entry]
+		}
 		if !isFound {
 			// This is probably stdin then or a deleted file we can't resume
 			continue
 		}
 
-		if state[ctx].Offset > endOffset {
-			log.Debug("Registrar is reverting the offset for %s from %d to %d", *state[ctx].Source, state[ctx].Offset, endOffset)
+		endOffset := ctx.Value(ContextEndOffset).(int64)
+		if lastState.Offset > endOffset {
+			log.Debug("Registrar is reverting the offset for %s from %d to %d", *lastState.Source, lastState.Offset, endOffset)
 		}
 
-		state[ctx].Offset = endOffset
+		lastState.Offset = endOffset
 	}
 }

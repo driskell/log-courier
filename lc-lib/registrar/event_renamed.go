@@ -16,34 +16,30 @@
 
 package registrar
 
-import (
-	"context"
-)
-
 // RenamedEvent informs the registrar of a file rename that needs to be
 // reflected within the state file
 type RenamedEvent struct {
-	ctx    context.Context
+	entry  Entry
 	source string
 }
 
 // NewRenamedEvent creates a new rename event
-func NewRenamedEvent(ctx context.Context, source string) *RenamedEvent {
+func NewRenamedEvent(entry Entry, source string) *RenamedEvent {
 	return &RenamedEvent{
-		ctx:    ctx,
+		entry:  entry,
 		source: source,
 	}
 }
 
-func (e *RenamedEvent) process(state map[context.Context]*FileState) {
-	_, isFound := state[e.ctx]
+func (e *RenamedEvent) process(state map[Entry]*FileState) {
+	_, isFound := state[e.entry]
 	if !isFound {
 		// This is probably stdin or a deleted file we can't resume
 		return
 	}
 
-	log.Debug("Registrar received a rename event for %s -> %s", state[e.ctx].Source, e.source)
+	log.Debug("Registrar received a rename event for %s -> %s", state[e.entry].Source, e.source)
 
 	// Update the stored file name
-	state[e.ctx].Source = &e.source
+	state[e.entry].Source = &e.source
 }

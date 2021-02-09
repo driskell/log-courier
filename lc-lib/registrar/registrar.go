@@ -20,7 +20,6 @@
 package registrar
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,15 +34,22 @@ import (
 type Context string
 
 const (
+	// ContextEntry is the unique entry identifier for an event
+	ContextEntry Context = "entry"
+
 	// ContextEndOffset is the end offset that registrar saves
 	// This should be present in all event contexts that registrar needs to persist
 	ContextEndOffset Context = "endOffset"
 )
 
+// Entry represents a single identifiable stream that needs to be persisted
+// We do not use the file path because roll overs and deletions can mean we are processing two files for some time with the same path, one deleted
+type Entry interface{}
+
 // LoadPreviousFunc is a callback implemented by a consumer of the Registrar,
 // and is called for each part of a loaded previous state when LoadPrevious is
 // called
-type LoadPreviousFunc func(string, *FileState) (context.Context, error)
+type LoadPreviousFunc func(string, *FileState) (Entry, error)
 
 // Registrar persists file offsets to a file that can be read again on startup
 // to resume where we left off
@@ -54,7 +60,7 @@ type Registrar struct {
 	persistdir    string
 	statefile     string
 	statepath     string
-	state         map[context.Context]*FileState
+	state         map[Entry]*FileState
 }
 
 // NewRegistrar creates a new Registrar associated with a file in a directory
@@ -64,7 +70,7 @@ func NewRegistrar(persistDir string) *Registrar {
 		writeTimer:    time.NewTimer(0),
 		persistdir:    persistDir,
 		statefile:     ".log-courier",
-		state:         make(map[context.Context]*FileState),
+		state:         make(map[Entry]*FileState),
 	}
 
 	<-ret.writeTimer.C
@@ -122,14 +128,14 @@ func (r *Registrar) LoadPrevious(callbackFunc LoadPreviousFunc) (havePrevious bo
 	decoder.Decode(&data)
 	f.Close()
 
-	r.state = make(map[context.Context]*FileState, len(data))
+	r.state = make(map[Entry]*FileState, len(data))
 
-	var ctx context.Context
+	var entry Entry
 	for file, state := range data {
-		if ctx, err = callbackFunc(file, state); err != nil {
+		if entry, err = callbackFunc(file, state); err != nil {
 			return
 		}
-		r.state[ctx] = state
+		r.state[entry] = state
 	}
 
 	// Test we can successfully save new states by attempting to save now

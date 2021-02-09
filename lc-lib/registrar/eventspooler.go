@@ -16,13 +16,9 @@
 
 package registrar
 
-import (
-	"context"
-)
-
 // EventProcessor is implemented by all register events
 type EventProcessor interface {
-	process(state map[context.Context]*FileState)
+	process(state map[Entry]*FileState)
 }
 
 // EventSpooler buffers registrar events for bulk sends
