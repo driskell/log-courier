@@ -10,6 +10,7 @@ Logstash instances.
 - [Log Courier Suite](#log-courier-suite)
   - [Log Courier](#log-courier)
   - [Log Carver](#log-carver)
+  - [Compatible Logstash Versions](#compatible-logstash-versions)
   - [Philosophy](#philosophy)
   - [Documentation](#documentation)
     - [Installation](#installation)
@@ -46,6 +47,15 @@ target different actions against different events
 - The set_field action supports Common Expression Language (CEL) for type conversions and string building
 - Transmits events to Elasticsearch using the bulk API
 - A small example configuration can be found [here](docs/examples/example-carver.yaml)
+
+## Compatible Logstash Versions
+
+Log Courier is compatible with most Logstash versions with a single exception.
+
+* `>=7.4.0` and `<7.6.0` use a version of JRuby that has a bug making it incompatible
+  and causes log-courier events to stop processing after an indeterminable amount
+  of time (see #370) - please upgrade to 7.6.0 which updates JRuby to a compatible
+  version.
 
 ## Philosophy
 

@@ -80,6 +80,13 @@ Log Carver
 - It is recommended to use new indices and remove the "logstash" template from ES as fields are different and now follow ECS (Elastic Common Schema)
 - Configuration documentation is minimal but a minimal example can be found in the docs/examples folder, more will be added in time
 
+## 2.0.6
+
+*9th May 2020*
+
+* Fix several issues when shutting down with outstanding payloads, to prevent
+hanging forever
+
 ## 2.0.5
 
 18th February 2017
