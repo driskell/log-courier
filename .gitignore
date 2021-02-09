@@ -1,12 +1,9 @@
-/.bundle
-/*.gem
 /bin
 /fact-courier/platform.go
 /lc-admin/platform.go
 /log-carver/platform.go
 /node_modules
 /platform.go
-/spec/tmp
 /vendor
 /.vscode
 /.secrets
