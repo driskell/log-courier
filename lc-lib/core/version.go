@@ -17,4 +17,4 @@
 package core
 
 // LogCourierVersion is the library version number
-const LogCourierVersion string = "2.5.4"
+const LogCourierVersion string = "2.5.5"
