@@ -137,3 +137,12 @@ func (pi *prospectorInfo) update(fileinfo os.FileInfo, iteration uint32) {
 
 	pi.lastSeen = iteration
 }
+
+func (pi *prospectorInfo) maybeOrphaned() {
+	pi.orphaned = orphanedMaybe
+}
+
+func (pi *prospectorInfo) setOrphaned() {
+	pi.orphaned = orphanedYes
+	pi.harvester.SetOrphaned()
+}

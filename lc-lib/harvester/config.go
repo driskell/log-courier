@@ -30,6 +30,7 @@ import (
 const (
 	defaultStreamAddPathField bool          = true
 	defaultStreamDeadTime     time.Duration = 1 * time.Hour
+	defaultStreamHoldTime     time.Duration = 96 * time.Hour
 
 	defaultGeneralLineBufferBytes int64 = 16384
 	defaultGeneralMaxLineBytes    int64 = 1048576
@@ -42,6 +43,7 @@ type StreamConfig struct {
 
 	AddPathField bool          `config:"add path field"`
 	DeadTime     time.Duration `config:"dead time"`
+	HoldTime     time.Duration `config:"hold time"`
 }
 
 // Defaults sets the default harvester stream configuration
@@ -49,6 +51,7 @@ type StreamConfig struct {
 func (sc *StreamConfig) Defaults() {
 	sc.AddPathField = defaultStreamAddPathField
 	sc.DeadTime = defaultStreamDeadTime
+	sc.HoldTime = defaultStreamHoldTime
 }
 
 // Init initialises the configuration
@@ -78,8 +81,7 @@ func (sc *StreamConfig) NewHarvester(ctx context.Context, path string, fileinfo 
 		offset:       offset,
 		lastEOF:      nil,
 		backOffTimer: time.NewTimer(0),
-		// TODO: Configurable meter timer? Use same as statCheck timer
-		meterTimer: time.NewTimer(10 * time.Second),
+		blockedTimer: time.NewTimer(1 * time.Second),
 	}
 
 	<-ret.backOffTimer.C

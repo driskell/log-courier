@@ -21,6 +21,7 @@
     - [`add timezone field`](#add-timezone-field)
     - [`codecs`](#codecs)
     - [`dead time`](#dead-time)
+    - [`hold_time`](#hold_time)
     - [`fields`](#fields)
   - [`admin`](#admin)
     - [`enabled`](#enabled)
@@ -313,13 +314,25 @@ Aside from "plain", the following codecs are available at this time.
 Duration. Optional. Default: "1h"  
 Configuration reload will only affect new or resumed files
 
-If a log file has not been modified in this time period, it will be closed and
-Log Courier will simply watch it for modifications. If the file is modified it
-will be reopened.
+If a log file has not been successfuly read from this time period, it will be
+closed and Log Courier will simply watch it for modifications. If the file is
+modified it will be reopened.
 
-If a log file that is being harvested is deleted, it will remain on disk until
-Log Courier closes it. Therefore it is important to keep this value sensible to
-ensure old log files are not kept open preventing deletion.
+### `hold_time`
+
+Duration. Optional. Default: "96h"
+Configuration reload will only affect new or resumed files
+
+If a log file is deleted, and this amount of time has passed and Log Courier still
+has the file open, the file will be closed regardless of whether data will be lost.
+
+This is a failsafe to ensure that a blocked pipeline does not cause deleted files
+to be held open indefinitely, eventually causing the disk space to fill. This will
+mean that disk usage cannot be used to detect issues sending logs and so additional
+monitoring may be needed to detect this.
+
+Set to 0 to disable and keep files open indefinitely until all data inside them is
+sent and the dead_time passes.
 
 ### `fields`
 
