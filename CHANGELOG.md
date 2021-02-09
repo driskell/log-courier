@@ -1,14 +1,15 @@
 # Change Log
 
-## 2.6.0
+## 2.5.5
 
 Future
 
 Log Courier
 
+- Fix severe registrar corruption that prevented Log Courier from resuming files at the correct offset
+- Fixed a crash when `add offset field` is set to false and `enable ecs` is set to true
 - Implement `hold time` configuration option with a default of 96 hours. Log Courier will now, by default, only hold open deleted files for a maximum of 96 hours after deletion is detected, regardless of whether its contents finish processing. A warning is logged if data has been lost when the file closed. This ensures disks do not fill when the pipeline is blocked. 96 hours was chosen as the default to allow a minimum of a few days to detect and repair a pipeline issue, as some roll over configurations delete the file during the very first rollover to replace it with a compressed version.
 - The `dead time` configuration will no longer be checked if the pipeline is completely blocked. Previously, it would be processed during complete pipeline blockage only, meaning a deleted file could be closed and data lost if the pipeline was completely blocked for the specified `dead time` period. This was unintended behaviour and would not trigger if the pipeline was extremely slow as the `dead time` would reset upon each successful read. Documentation has also been updated to clarify that `dead time` is not based on the modification time of the file, but the time of the last successful read when the pipeline is moving, however slow that may be.
-- Fixed a crash when `add offset field` is set to false and `enable ecs` is set to true
 
 ## 2.5.4
 

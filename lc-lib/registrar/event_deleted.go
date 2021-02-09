@@ -16,32 +16,28 @@
 
 package registrar
 
-import (
-	"context"
-)
-
 // DeletedEvent informs the registrar of a file deletion so it can remove
 // unnecessary states from the state file
 type DeletedEvent struct {
-	ctx context.Context
+	entry Entry
 }
 
 // NewDeletedEvent creates a new deletion event
-func NewDeletedEvent(ctx context.Context) *DeletedEvent {
+func NewDeletedEvent(entry Entry) *DeletedEvent {
 	return &DeletedEvent{
-		ctx: ctx,
+		entry: entry,
 	}
 }
 
 // process persists the deletion event into the state
-func (e *DeletedEvent) process(state map[context.Context]*FileState) {
-	if _, ok := state[e.ctx]; ok {
-		log.Debug("Registrar received a deletion event for %s", *state[e.ctx].Source)
+func (e *DeletedEvent) process(state map[Entry]*FileState) {
+	if _, ok := state[e.entry]; ok {
+		log.Debug("Registrar received a deletion event for %s", *state[e.entry].Source)
 	} else {
 		log.Warning("Registrar received a deletion event for an unknown context")
 	}
 
 	// Purge the registrar entry - means the file is deleted so we can't resume
 	// This keeps the state clean so it doesn't build up after thousands of log files
-	delete(state, e.ctx)
+	delete(state, e.entry)
 }
