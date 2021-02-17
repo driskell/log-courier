@@ -57,7 +57,7 @@ func (c *checkMultiline) incorrectLineCount(lines int, message string) {
 	c.t.Errorf("Expected: %d", len(c.expect))
 }
 
-func (c *checkMultiline) EventCallback(startOffset int64, endOffset int64, text string) {
+func (c *checkMultiline) EventCallback(startOffset int64, endOffset int64, data map[string]interface{}) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -80,7 +80,11 @@ func (c *checkMultiline) EventCallback(startOffset int64, endOffset int64, text 
 		c.t.Errorf("Expected: %d", c.expect[c.lines].end)
 	}
 
-	if text != c.expect[c.lines].text {
+	text, ok := data["message"].(string)
+	if !ok {
+		c.t.Error("Text missing for line: ", line)
+		c.t.Errorf("Expected: [%s]", c.formatPrintable(c.expect[c.lines].text))
+	} else if text != c.expect[c.lines].text {
 		c.t.Error("Text incorrect for line: ", line)
 		c.t.Errorf("Got:      [%s]", c.formatPrintable(text))
 		c.t.Errorf("Expected: [%s]", c.formatPrintable(c.expect[c.lines].text))
@@ -102,6 +106,10 @@ func (c *checkMultiline) CheckFinalCount() {
 	c.CheckCurrentCount(len(c.expect), "Incorrect line count received")
 }
 
+func codecEvent(codec codecs.Codec, startOffset int64, endOffset int64, data string) {
+	codec.ProcessEvent(startOffset, endOffset, map[string]interface{}{"message": data})
+}
+
 func TestMultilinePrevious(t *testing.T) {
 	check := &checkMultiline{
 		expect: []checkMultilineExpect{
@@ -120,10 +128,10 @@ func TestMultilinePrevious(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	check.CheckFinalCount()
 
@@ -150,10 +158,10 @@ func TestMultilinePreviousNegate(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	check.CheckFinalCount()
 
@@ -182,10 +190,10 @@ func TestMultilinePreviousTimeout(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	// Allow a second
 	time.Sleep(time.Second)
@@ -221,10 +229,10 @@ func TestMultilineNext(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	check.CheckFinalCount()
 
@@ -252,10 +260,10 @@ func TestMultilineNextNegate(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	check.CheckFinalCount()
 
@@ -284,10 +292,10 @@ func TestMultilineMaxBytes(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0, 16, "DEBUG First line")
-	codec.Event(17, 28, "second line")
-	codec.Event(29, 39, "third line")
-	codec.Event(40, 55, "DEBUG Next line")
+	codecEvent(codec, 0, 16, "DEBUG First line")
+	codecEvent(codec, 17, 28, "second line")
+	codecEvent(codec, 29, 39, "third line")
+	codecEvent(codec, 40, 55, "DEBUG Next line")
 
 	check.CheckFinalCount()
 
@@ -321,10 +329,10 @@ func TestMultilineMaxBytesOverflow(t *testing.T) {
 	// Also ensure we can split a single long line multiple times (issue #188)
 	// Lastly, ensure we flush immediately if we receive max multiline bytes
 	// rather than carrying over a full buffer and then crashing (issue #118)
-	codec.Event(0, 17, "START67890abcdefg")
-	codec.Event(18, 30, "1234567890ab")
-	codec.Event(31, 39, "c1234567")
-	codec.Event(40, 45, "START")
+	codecEvent(codec, 0, 17, "START67890abcdefg")
+	codecEvent(codec, 18, 30, "1234567890ab")
+	codecEvent(codec, 31, 39, "c1234567")
+	codecEvent(codec, 40, 45, "START")
 
 	check.CheckFinalCount()
 
@@ -352,12 +360,12 @@ func TestMultilineReset(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
 	codec.Reset()
-	codec.Event(4, 5, "DEBUG Next line")
-	codec.Event(6, 7, "ANOTHER line")
-	codec.Event(8, 9, "DEBUG Last line")
+	codecEvent(codec, 4, 5, "DEBUG Next line")
+	codecEvent(codec, 6, 7, "ANOTHER line")
+	codecEvent(codec, 8, 9, "DEBUG Last line")
 
 	check.CheckFinalCount()
 
@@ -385,10 +393,10 @@ func TestMultilineMultiplePattern(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	check.CheckFinalCount()
 
@@ -416,10 +424,10 @@ func TestMultilineMultiplePatternAll(t *testing.T) {
 	)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	check.CheckFinalCount()
 

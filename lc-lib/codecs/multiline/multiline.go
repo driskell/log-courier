@@ -18,7 +18,6 @@ package codecs
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -54,7 +53,7 @@ type CodecMultiline struct {
 
 	endOffset     int64
 	startOffset   int64
-	buffer        []string
+	buffer        []map[string]interface{}
 	bufferLines   int64
 	bufferLen     int64
 	timerLock     sync.Mutex
@@ -145,11 +144,20 @@ func (c *CodecMultiline) Reset() {
 	c.bufferLines = 0
 }
 
-// Event is called by a Harvester when a new line event occurs on a file.
+// ProcessEvent is called by a Harvester when a new line event occurs on a file.
 // Multiline processing takes place and when a complete multiline event is found
 // as described by the configuration it is shipped to the callback
-func (c *CodecMultiline) Event(startOffset int64, endOffset int64, text string) {
-	// TODO(driskell): If we are using previous and we match on the very first line read,
+func (c *CodecMultiline) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) {
+	// TODO: Option to set the field
+	text, ok := data["message"].(string)
+	// TODO: MustResolve? Does message exist?
+	if ok {
+		// Empty, ignore
+		c.endOffset = endOffset
+		return
+	}
+
+	// TODO:(driskell) If we are using previous and we match on the very first line read,
 	// then this is because we've started in the middle of a multiline event (the first line
 	// should never match) - so we could potentially offer an option to discard this.
 	// The benefit would be that when using previoustimeout, we could discard any extraneous
@@ -184,7 +192,8 @@ func (c *CodecMultiline) Event(startOffset int64, endOffset int64, text string) 
 
 		c.endOffset = endOffset - overflow
 
-		c.buffer = append(c.buffer, text[:cut])
+		data["message"] = text[:cut]
+		c.buffer = append(c.buffer, data)
 		c.bufferLines++
 		c.bufferLen += cut
 
@@ -201,7 +210,7 @@ func (c *CodecMultiline) Event(startOffset int64, endOffset int64, text string) 
 
 	c.endOffset = endOffset
 
-	c.buffer = append(c.buffer, text)
+	c.buffer = append(c.buffer, data)
 	c.bufferLines++
 	c.bufferLen += textLen
 
@@ -223,7 +232,8 @@ func (c *CodecMultiline) flush() {
 		return
 	}
 
-	text := strings.Join(c.buffer, "\n")
+	// TODO: Finish multiline merge
+	data := map[string]interface{}{} // event.MergeEvents(c.buffer)
 
 	// Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
 	c.lastOffset = c.endOffset
@@ -231,7 +241,7 @@ func (c *CodecMultiline) flush() {
 	c.bufferLen = 0
 	c.bufferLines = 0
 
-	c.callbackFunc(c.startOffset, c.endOffset, text)
+	c.callbackFunc(c.startOffset, c.endOffset, data)
 }
 
 // Meter is called by the Harvester to request accounting
