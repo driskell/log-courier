@@ -145,5 +145,7 @@ func (pi *prospectorInfo) maybeOrphaned() {
 
 func (pi *prospectorInfo) setOrphaned() {
 	pi.orphaned = orphanedYes
-	pi.harvester.SetOrphaned()
+	if pi.running {
+		pi.harvester.SetOrphaned()
+	}
 }
