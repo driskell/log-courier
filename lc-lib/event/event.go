@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -191,6 +192,12 @@ func (e *Event) MustResolve(path string, set interface{}) interface{} {
 func (e *Event) Resolve(path string, set interface{}) (output interface{}, err error) {
 	currentMap := e.Data()
 	lastIndex := 0
+	// Begin with simple lookup - if we're not looking up something[xxx] and are looking up something
+	// then we can avoid the regex
+	if strings.IndexRune(path, '[') == -1 {
+		output, err = e.simpleResolve(e.data, path, set)
+		return
+	}
 	results := keyMatcher.FindAllStringSubmatchIndex(path, -1)
 	for j := 0; j < len(results); j++ {
 		// Must always join together
@@ -205,27 +212,7 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 		name := path[nameStart:nameEnd]
 		if j == len(results)-1 {
 			// Last item, so will always be a value
-			if value, ok := currentMap[name]; ok {
-				output = value
-			}
-			if set != nil {
-				if builtin, ok := currentMap[name].(Builtin); ok {
-					if set == ResolveParamUnset {
-						return nil, fmt.Errorf("Builtin entry '%s' cannot be unset", path)
-					}
-					result, err := builtin.VerifySet(set)
-					if err != nil {
-						return nil, err
-					}
-					currentMap[name] = result
-				} else {
-					if set == ResolveParamUnset {
-						delete(currentMap, name)
-					} else {
-						currentMap[name] = set
-					}
-				}
-			}
+			output, err = e.simpleResolve(currentMap, name, set)
 		} else {
 			// Calculate next inner
 			// Can't use non-map, ignore as if it didn't exist, and keep validating
@@ -252,6 +239,32 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 	}
 	if lastIndex != len(path) {
 		return nil, fmt.Errorf("Invalid field: %s", path)
+	}
+	return
+}
+
+// simpleResolve is used by Resolve for the last leg (or the only leg if a simple top-level lookup)
+func (e *Event) simpleResolve(currentMap map[string]interface{}, path string, set interface{}) (output interface{}, err error) {
+	if value, ok := currentMap[path]; ok {
+		output = value
+	}
+	if set != nil {
+		if builtin, ok := currentMap[path].(Builtin); ok {
+			if set == ResolveParamUnset {
+				return nil, fmt.Errorf("Builtin entry '%s' cannot be unset", path)
+			}
+			result, err := builtin.VerifySet(set)
+			if err != nil {
+				return nil, err
+			}
+			currentMap[path] = result
+		} else {
+			if set == ResolveParamUnset {
+				delete(currentMap, path)
+			} else {
+				currentMap[path] = set
+			}
+		}
 	}
 	return
 }
