@@ -108,8 +108,9 @@ func TestLineReadOverflowTooLong(t *testing.T) {
 	reader := NewLineReader(data, 10, 21)
 
 	checkLine(t, reader, string("12345678901234567890"), 21, nil)
-	checkLine(t, reader, string("123456789012345678901"), 21, ErrMaxDataSizeExceeded)
-	checkLine(t, reader, string("234567890"), 10, nil)
+	checkLine(t, reader, string("123456789012345678901"), 21, ErrMaxDataSizeTruncation)
+	// A continuation from a maxsizeexceeded should return same error so we can tag accordingly it is incomplete
+	checkLine(t, reader, string("234567890"), 10, ErrMaxDataSizeTruncation)
 	checkLine(t, reader, string("12345678901234567890"), 21, nil)
 	checkLine(t, reader, "", 0, io.EOF)
 	checkBufferedLen(t, reader, 0)
@@ -122,8 +123,9 @@ func TestLineReadTooLong(t *testing.T) {
 	reader := NewLineReader(data, 100, 21)
 
 	checkLine(t, reader, string("12345678901234567890"), 21, nil)
-	checkLine(t, reader, string("123456789012345678901"), 21, ErrMaxDataSizeExceeded)
-	checkLine(t, reader, string("234567890"), 10, nil)
+	checkLine(t, reader, string("123456789012345678901"), 21, ErrMaxDataSizeTruncation)
+	// A continuation from a maxsizeexceeded should return same error so we can tag accordingly it is incomplete
+	checkLine(t, reader, string("234567890"), 10, ErrMaxDataSizeTruncation)
 	checkLine(t, reader, string("12345678901234567890"), 21, nil)
 	checkLine(t, reader, "", 0, io.EOF)
 	checkBufferedLen(t, reader, 0)

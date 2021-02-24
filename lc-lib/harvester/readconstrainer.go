@@ -16,7 +16,9 @@
 
 package harvester
 
-import "io"
+import (
+	"io"
+)
 
 // readConstrainer provides an io.Reader that has a maximum limit
 // This is used by other readers that need to keep memory under control
@@ -42,13 +44,19 @@ func (r *readConstrainer) setMaxRead(maxRead int) int {
 }
 
 // Read reads data from the reader up until the maximum read size has been
-// reached, at which point it returns ErrMaxDataSizeExceeded
+// reached, at which point it returns an error
 func (r *readConstrainer) Read(b []byte) (int, error) {
 	if r.maxRead == 0 {
 		return 0, ErrMaxDataSizeExceeded
 	}
 
-	n, err := r.rd.Read(b[:r.maxRead])
+	var n int
+	var err error
+	if cap(b) < r.maxRead {
+		n, err = r.rd.Read(b)
+	} else {
+		n, err = r.rd.Read(b[:r.maxRead])
+	}
 	r.maxRead -= n
 	return n, err
 }

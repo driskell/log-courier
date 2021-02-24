@@ -23,15 +23,16 @@ import (
 
 // LineReader is a read interface that tails and returns lines
 type LineReader struct {
-	rd       io.Reader
-	buf      []byte
-	overflow [][]byte
-	size     int
-	maxLine  int
-	curMax   int
-	start    int
-	end      int
-	err      error
+	rd             io.Reader
+	buf            []byte
+	overflow       [][]byte
+	size           int
+	maxLine        int
+	curMax         int
+	start          int
+	end            int
+	err            error
+	isContinuation bool
 }
 
 // NewLineReader creates a new line reader structure reading from the given
@@ -93,7 +94,7 @@ func (lr *LineReader) ReadItem() (map[string]interface{}, int, error) {
 		if lr.end-lr.start >= lr.curMax {
 			line = lr.buf[lr.start : lr.start+lr.curMax]
 			lr.start += lr.curMax
-			err = ErrMaxDataSizeExceeded
+			err = ErrMaxDataSizeTruncation
 			break
 		}
 
@@ -117,17 +118,29 @@ func (lr *LineReader) ReadItem() (map[string]interface{}, int, error) {
 		lr.curMax = lr.maxLine
 	}
 
-	// Line will always end in LF, but check also for CR
-	var newLine int
+	var event map[string]interface{}
 	length := len(line)
-	if length > 1 && line[length-2] == '\r' {
-		newLine = 2
+	if err == ErrMaxDataSizeTruncation {
+		event = map[string]interface{}{
+			"message": string(line),
+		}
+		lr.isContinuation = true
 	} else {
-		newLine = 1
-	}
-
-	event := map[string]interface{}{
-		"message": string(line[:length-newLine]),
+		// Line will always end in LF, but check also for CR
+		var newLine int
+		if length > 1 && line[length-2] == '\r' {
+			newLine = 2
+		} else {
+			newLine = 1
+		}
+		event = map[string]interface{}{
+			"message": string(line[:length-newLine]),
+		}
+		// If this is the continuation from a previously cut line - also return max data exceeded just so it can be tagged accordingly
+		if lr.isContinuation {
+			lr.isContinuation = false
+			err = ErrMaxDataSizeTruncation
+		}
 	}
 
 	return event, length, err

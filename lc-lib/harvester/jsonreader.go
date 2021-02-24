@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2016 Jason Woods.
+ * Copyright 2014-2021 Jason Woods.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ type JSONReader struct {
 	rd      *readConstrainer
 	dec     *json.Decoder
 	maxSize int
-	split   bool
+	level   int
 }
 
 // NewJSONReader returns a new JSONReader for the specified reader.
@@ -39,9 +39,10 @@ type JSONReader struct {
 func NewJSONReader(rd io.Reader, size int, maxSize int) *JSONReader {
 	ret := &JSONReader{
 		rd:      newReadConstrainer(rd, maxSize),
-		dec:     json.NewDecoder(rd),
 		maxSize: maxSize,
 	}
+
+	ret.dec = json.NewDecoder(ret.rd)
 
 	return ret
 }
@@ -66,36 +67,26 @@ func (jr *JSONReader) BufferedLen() int {
 }
 
 // ReadItem returns the next JSON structure from the file
-// Returns ErrMaxDataSizeExceed if the data was cut short because it was longer
-// than the maximum data length allowed. In this case, the data will be raw in a
-// single field called "data". Subsequent returned data will also be raw and a
-// continuation of the cut data, with the final segment returning nil error
+// Returns ErrMaxDataSizeExceed if the data cannot be completed read because it is longer
+// than the maximum data length allowed
 func (jr *JSONReader) ReadItem() (map[string]interface{}, int, error) {
-	if jr.split {
-		return jr.readRaw()
-	}
-
 	var event map[string]interface{}
 
 	err := jr.dec.Decode(&event)
-	if err == io.EOF {
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
 		// We can never use this decoder again as it stores the EOF error
 		// Create a new one with the old buffer
 		jr.refreshDecoder()
-		return nil, 0, err
+		return nil, 0, io.EOF
 	}
 
 	if err != nil {
-		if err == ErrMaxDataSizeExceeded {
-			jr.split = true
-			jr.refreshDecoder()
-			return jr.readRaw()
-		}
 		return nil, 0, err
 	}
 
-	// Reset max read size
-	length := jr.maxSize - jr.rd.setMaxRead(jr.maxSize)
+	// Reset max read size, but account for data already in the decoders buffer
+	newMax := jr.maxSize - jr.BufferedLen()
+	length := newMax - jr.rd.setMaxRead(newMax)
 
 	// If the JSON buffer grew beyond our preferred size, renew it
 	if length > jr.maxSize {
@@ -103,9 +94,4 @@ func (jr *JSONReader) ReadItem() (map[string]interface{}, int, error) {
 	}
 
 	return event, length, nil
-}
-
-func (jr *JSONReader) readRaw() (map[string]interface{}, int, error) {
-	// TODO: Finish
-	return nil, 0, io.EOF
 }

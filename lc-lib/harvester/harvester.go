@@ -73,7 +73,7 @@ type Harvester struct {
 	backOffTimer    *time.Timer
 	blockedTimer    *time.Timer
 	split           bool
-	reader          *LineReader
+	reader          Reader
 	staleOffset     int64
 	staleBytes      int64
 	lastStaleOffset int64
@@ -167,7 +167,11 @@ func (h *Harvester) harvest() (int64, error) {
 	}
 
 	// The buffer size limits the maximum line length we can read, including terminator
-	h.reader = NewLineReader(h.file, int(h.genConfig.LineBufferBytes), int(h.genConfig.MaxLineBytes))
+	if h.streamConfig.Reader == "line" {
+		h.reader = NewLineReader(h.file, int(h.genConfig.LineBufferBytes), int(h.genConfig.MaxLineBytes))
+	} else {
+		h.reader = NewJSONReader(h.file, int(h.genConfig.LineBufferBytes), int(h.genConfig.MaxLineBytes))
+	}
 
 	// Prepare internal data
 	h.lastReadTime = time.Now()
@@ -283,7 +287,7 @@ func (h *Harvester) takeMeasurements(isPipelineBlocked bool) error {
 		if !isPipelineBlocked && h.reader.BufferedLen() != 0 {
 			if h.staleOffset == h.offset && h.lastStaleOffset != h.offset+int64(h.reader.BufferedLen()) {
 				log.Warningf(
-					"There are %d bytes at the end of %s and no line ending has been written in over 10 seconds, please check the application",
+					"There are %d bytes of incomplete data at the end of %s with no new data in over 10 seconds, please check the application is writing full events",
 					h.reader.BufferedLen(),
 					h.path,
 				)
@@ -475,7 +479,7 @@ func (h *Harvester) readitem() (map[string]interface{}, int, error) {
 	item, length, err := h.reader.ReadItem()
 
 	if item != nil {
-		if err == ErrMaxDataSizeExceeded {
+		if err == ErrMaxDataSizeTruncation {
 			h.split = true
 			err = nil
 		}

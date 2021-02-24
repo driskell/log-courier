@@ -21,9 +21,12 @@ import (
 )
 
 var (
-	// ErrMaxDataSizeExceeded is returned when the read data was longer than the
-	// maximum allowed size
-	ErrMaxDataSizeExceeded = errors.New("maximum data size exceeded")
+	// ErrMaxDataSizeTruncation is returned when the read data was longer than the
+	// maximum allowed size and had to be truncated
+	ErrMaxDataSizeTruncation = errors.New("data exceeded \"max line bytes\" and was truncated")
+
+	// ErrMaxLineBytesExceeded is reported when max line bytes is exceeded in an unrecoverable way
+	ErrMaxDataSizeExceeded = errors.New("data exceeds \"max line bytes\" and prevents the file from being processed")
 )
 
 // Reader is implemented by the various harvester readers and reads events from
