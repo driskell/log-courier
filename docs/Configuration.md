@@ -355,6 +355,7 @@ Examples:
 
 String. Optional. Default: "line".  
 Available Values: "line", "json".
+Since 2.6.0
 
 Specifies the reader to use for the files.
 
