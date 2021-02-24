@@ -18,6 +18,7 @@ package codecs
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,7 +54,7 @@ type CodecMultiline struct {
 
 	endOffset     int64
 	startOffset   int64
-	buffer        []map[string]interface{}
+	buffer        []string
 	bufferLines   int64
 	bufferLen     int64
 	timerLock     sync.Mutex
@@ -150,8 +151,7 @@ func (c *CodecMultiline) Reset() {
 func (c *CodecMultiline) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) {
 	// TODO: Option to set the field
 	text, ok := data["message"].(string)
-	// TODO: MustResolve? Does message exist?
-	if ok {
+	if !ok {
 		// Empty, ignore
 		c.endOffset = endOffset
 		return
@@ -192,8 +192,7 @@ func (c *CodecMultiline) ProcessEvent(startOffset int64, endOffset int64, data m
 
 		c.endOffset = endOffset - overflow
 
-		data["message"] = text[:cut]
-		c.buffer = append(c.buffer, data)
+		c.buffer = append(c.buffer, text[:cut])
 		c.bufferLines++
 		c.bufferLen += cut
 
@@ -210,7 +209,7 @@ func (c *CodecMultiline) ProcessEvent(startOffset int64, endOffset int64, data m
 
 	c.endOffset = endOffset
 
-	c.buffer = append(c.buffer, data)
+	c.buffer = append(c.buffer, text)
 	c.bufferLines++
 	c.bufferLen += textLen
 
@@ -232,8 +231,7 @@ func (c *CodecMultiline) flush() {
 		return
 	}
 
-	// TODO: Finish multiline merge
-	data := map[string]interface{}{} // event.MergeEvents(c.buffer)
+	data := map[string]interface{}{"message": strings.Join(c.buffer, "\n")}
 
 	// Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
 	c.lastOffset = c.endOffset
