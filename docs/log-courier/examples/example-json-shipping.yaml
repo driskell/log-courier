@@ -1,0 +1,10 @@
+files:
+  - paths:
+      - /var/log/magento/reports/*
+    reader: json
+    fields:
+      type: magento
+network:
+  servers:
+    - localhost:5043
+  transport: tcp

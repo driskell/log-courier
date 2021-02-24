@@ -11,11 +11,11 @@
     - [`version`](#version)
     - [`debug`](#debug)
   - [Command Line Options](#command-line-options)
-    - [`-config`](#config)
-    - [`-connect`](#connect)
-    - [`-quiet`](#quiet)
-    - [`-version`](#version-1)
-    - [`-watch`](#watch)
+    - [`-config`](#-config)
+    - [`-connect`](#-connect)
+    - [`-quiet`](#-quiet)
+    - [`-version`](#-version)
+    - [`-watch`](#-watch)
 
 ## Overview
 
@@ -24,9 +24,9 @@ running Log Courier instance to monitor and control log shipping, using the REST
 API.
 
 To enable the Log Courier REST API, set the admin
-[`enabled`](Configuration.md#enabled) configuration entry to `true`. To specify
+[`enabled`](log-courier/Configuration.md#enabled) configuration entry to `true`. To specify
 a custom listen address, set the admin
-[`listen address`](Configuration.md#listen-address) option.
+[`listen address`](log-courier/Configuration.md#listen-address) option.
 
 *NOTE: `lc-admin` version 2.0.0 and above  cannot connect to older 1.x Log
 Courier instances.*

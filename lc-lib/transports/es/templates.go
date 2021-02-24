@@ -20,6 +20,7 @@
 package es
 
 const (
+	// Elasticsearch 8.x
 	esTemplate8 = `{
 	"index_patterns": $INDEXPATTERNS$,
 	"version": 80001,
@@ -84,8 +85,10 @@ const (
 }
 `
 
+	// Elasticsearch 7.x (same as 8.x)
 	esTemplate7 = esTemplate8
 
+	// Elasticsearch 6.x
 	esTemplate6 = `{
 	"index_patterns": $INDEXPATTERNS$,
 	"version": 60001,
@@ -150,6 +153,7 @@ const (
 	}
 }`
 
+	// Elasticsearch 5.x
 	esTemplate5 = `{
 	"template": $INDEXPATTERNSINGLE$,
 	"version": 50001,
