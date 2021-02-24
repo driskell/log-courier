@@ -195,6 +195,9 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 	// Begin with simple lookup - if we're not looking up something[xxx] and are looking up something
 	// then we can avoid the regex
 	if strings.IndexRune(path, '[') == -1 {
+		if strings.IndexRune(path, ']') != -1 {
+			return nil, fmt.Errorf("Invalid field: %s", path)
+		}
 		output, err = e.simpleResolve(e.data, path, set)
 		return
 	}
