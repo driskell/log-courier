@@ -31,6 +31,7 @@ const (
 	defaultStreamAddPathField bool          = true
 	defaultStreamDeadTime     time.Duration = 1 * time.Hour
 	defaultStreamHoldTime     time.Duration = 96 * time.Hour
+	defaultStreamReader       string        = "line"
 
 	defaultGeneralLineBufferBytes int64 = 16384
 	defaultGeneralMaxLineBytes    int64 = 1048576
@@ -44,6 +45,7 @@ type StreamConfig struct {
 	AddPathField bool          `config:"add path field"`
 	DeadTime     time.Duration `config:"dead time"`
 	HoldTime     time.Duration `config:"hold time"`
+	Reader       string        `config:"reader"`
 }
 
 // Defaults sets the default harvester stream configuration
@@ -52,6 +54,7 @@ func (sc *StreamConfig) Defaults() {
 	sc.AddPathField = defaultStreamAddPathField
 	sc.DeadTime = defaultStreamDeadTime
 	sc.HoldTime = defaultStreamHoldTime
+	sc.Reader = defaultStreamReader
 }
 
 // Init initialises the configuration
@@ -65,6 +68,10 @@ func (sc *StreamConfig) Init(p *config.Parser, path string) error {
 // validation function would otherwise be inherited
 // Ensure we override the one from codecs.StreamConfig
 func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
+	if sc.Reader != "line" && sc.Reader != "json" {
+		return fmt.Errorf("The specified reader, \"%s\", is unrecognised; the known readers are \"line\", \"json\"", sc.Reader)
+	}
+
 	return nil
 }
 

@@ -22,16 +22,21 @@ import (
 	"testing"
 )
 
-func checkLine(t *testing.T, reader *LineReader, expected []byte, expectedErr error) {
-	line, err := reader.ReadSlice()
-	if line != nil || expected != nil {
+func checkLine(t *testing.T, reader *LineReader, expected string, expectedLength int, expectedErr error) {
+	line, length, err := reader.ReadItem()
+	if line != nil || expectedErr == nil {
 		if line == nil {
 			t.Error("No line returned")
-		} else if expected == nil {
-			t.Errorf("Line data was not expected: [% X]", line)
-		} else if !bytes.Equal(line, expected) {
-			t.Errorf("Line data incorrect: [% X]", line)
+		} else if expectedLength == 0 {
+			t.Errorf("Line data was not expected: [%s]", line)
+		} else {
+			if message, ok := line["message"].(string); !ok || message != expected {
+				t.Errorf("Line data incorrect: [%s] (expected [%s])", message, expected)
+			}
 		}
+	}
+	if length != expectedLength {
+		t.Errorf("Unexpected length: %d (expected %d)", length, expectedLength)
 	}
 	if err != expectedErr {
 		t.Errorf("Unexpected error: %s", err)
@@ -50,9 +55,9 @@ func TestLineRead(t *testing.T) {
 	// New line read with 100 bytes, enough for the above
 	reader := NewLineReader(data, 100, 100)
 
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, nil, io.EOF)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, "", 0, io.EOF)
 	checkBufferedLen(t, reader, 0)
 }
 
@@ -62,9 +67,9 @@ func TestLineReadEmpty(t *testing.T) {
 	// New line read with 100 bytes, enough for the above
 	reader := NewLineReader(data, 100, 100)
 
-	checkLine(t, reader, []byte("\n"), nil)
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, nil, io.EOF)
+	checkLine(t, reader, string(""), 1, nil)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, "", 0, io.EOF)
 	checkBufferedLen(t, reader, 0)
 }
 
@@ -74,9 +79,9 @@ func TestLineReadIncomplete(t *testing.T) {
 	// New line read with 100 bytes, enough for the above
 	reader := NewLineReader(data, 100, 100)
 
-	checkLine(t, reader, []byte("\n"), nil)
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, nil, io.EOF)
+	checkLine(t, reader, string(""), 1, nil)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, "", 0, io.EOF)
 	checkBufferedLen(t, reader, 6)
 }
 
@@ -86,10 +91,10 @@ func TestLineReadOverflow(t *testing.T) {
 	// New line read with 21 bytes buffer but 100 max line to trigger overflow
 	reader := NewLineReader(data, 21, 100)
 
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, []byte("123456789012345678901234567890\n"), nil)
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, nil, io.EOF)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, string("123456789012345678901234567890"), 31, nil)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, "", 0, io.EOF)
 	checkBufferedLen(t, reader, 0)
 }
 
@@ -102,11 +107,12 @@ func TestLineReadOverflowTooLong(t *testing.T) {
 	// corrupt the entry
 	reader := NewLineReader(data, 10, 21)
 
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, []byte("123456789012345678901"), ErrLineTooLong)
-	checkLine(t, reader, []byte("234567890\n"), nil)
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, nil, io.EOF)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, string("123456789012345678901"), 21, ErrMaxDataSizeTruncation)
+	// A continuation from a maxsizeexceeded should return same error so we can tag accordingly it is incomplete
+	checkLine(t, reader, string("234567890"), 10, ErrMaxDataSizeTruncation)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, "", 0, io.EOF)
 	checkBufferedLen(t, reader, 0)
 }
 
@@ -116,10 +122,11 @@ func TestLineReadTooLong(t *testing.T) {
 	// New line read with ample buffer and 21 max line length
 	reader := NewLineReader(data, 100, 21)
 
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, []byte("123456789012345678901"), ErrLineTooLong)
-	checkLine(t, reader, []byte("234567890\n"), nil)
-	checkLine(t, reader, []byte("12345678901234567890\n"), nil)
-	checkLine(t, reader, nil, io.EOF)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, string("123456789012345678901"), 21, ErrMaxDataSizeTruncation)
+	// A continuation from a maxsizeexceeded should return same error so we can tag accordingly it is incomplete
+	checkLine(t, reader, string("234567890"), 10, ErrMaxDataSizeTruncation)
+	checkLine(t, reader, string("12345678901234567890"), 21, nil)
+	checkLine(t, reader, "", 0, io.EOF)
 	checkBufferedLen(t, reader, 0)
 }

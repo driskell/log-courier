@@ -8,12 +8,13 @@ option.
 
 - [Multiline Codec](#multiline-codec)
   - [Example](#example)
+  - [JSON Reader](#json-reader)
   - [Options](#options)
-    - [`"max multiline bytes"`](#%22max-multiline-bytes%22)
-    - [`"patterns"`](#%22patterns%22)
-    - [`"match"`](#%22match%22)
-    - [`"previous timeout"`](#%22previous-timeout%22)
-    - [`"what"`](#%22what%22)
+    - [`"max multiline bytes"`](#max-multiline-bytes)
+    - [`"patterns"`](#patterns)
+    - [`"match"`](#match)
+    - [`"previous timeout"`](#previous-timeout)
+    - [`"what"`](#what)
 
 ## Example
 
@@ -25,6 +26,10 @@ option.
   "previous timeout": "30s"
 }
 ```
+
+## JSON Reader
+
+If the `json` [`reader`](../Configuration.md#reader) is used, this codec will cause the loss of all fields except the `message` field, and any event that does not have a `message` field will be filtered and discarded. The output will be an event with a single field, `message`, containing the combined values of the matched lines according to the configuration.
 
 ## Options
 

@@ -53,8 +53,8 @@ type FinishStatus struct {
 	LastStat        os.FileInfo
 }
 
-// Harvester reads from a file, passes lines through a codec, and sends them
-// for spooling
+// Harvester reads data from a file with a read, passes events through a codec,
+// and then sends them for spooling
 type Harvester struct {
 	ctx   context.Context
 	mutex sync.RWMutex
@@ -73,7 +73,7 @@ type Harvester struct {
 	backOffTimer    *time.Timer
 	blockedTimer    *time.Timer
 	split           bool
-	reader          *LineReader
+	reader          Reader
 	staleOffset     int64
 	staleBytes      int64
 	lastStaleOffset int64
@@ -167,7 +167,11 @@ func (h *Harvester) harvest() (int64, error) {
 	}
 
 	// The buffer size limits the maximum line length we can read, including terminator
-	h.reader = NewLineReader(h.file, int(h.genConfig.LineBufferBytes), int(h.genConfig.MaxLineBytes))
+	if h.streamConfig.Reader == "line" {
+		h.reader = NewLineReader(h.file, int(h.genConfig.LineBufferBytes), int(h.genConfig.MaxLineBytes))
+	} else {
+		h.reader = NewJSONReader(h.file, int(h.genConfig.LineBufferBytes), int(h.genConfig.MaxLineBytes))
+	}
 
 	// Prepare internal data
 	h.lastReadTime = time.Now()
@@ -197,13 +201,13 @@ func (h *Harvester) performRead() error {
 		return measureErr
 	}
 
-	text, bytesread, err := h.readline()
+	item, bytesread, err := h.readitem()
 	if err == nil {
 		lineOffset := h.offset
 		h.offset += int64(bytesread)
 
 		// Codec is last - it forwards harvester state for us such as offset for resume
-		h.eventStream.ProcessEvent(lineOffset, h.offset, text)
+		h.eventStream.ProcessEvent(lineOffset, h.offset, item)
 
 		h.lastReadTime = time.Now()
 		h.lineCount++
@@ -255,7 +259,7 @@ func (h *Harvester) handleTruncation() {
 		log.Errorf("%d bytes of incomplete log data was lost due to file truncation", h.reader.BufferedLen())
 	}
 
-	// Reset line buffer and codec buffers
+	// Reset event buffer and codec buffers
 	h.reader.Reset()
 	h.eventStream.Reset()
 }
@@ -283,9 +287,9 @@ func (h *Harvester) takeMeasurements(isPipelineBlocked bool) error {
 		if !isPipelineBlocked && h.reader.BufferedLen() != 0 {
 			if h.staleOffset == h.offset && h.lastStaleOffset != h.offset+int64(h.reader.BufferedLen()) {
 				log.Warningf(
-					"%s has had %d stale byte(s) at the end with no line ending for over 10 seconds, please check the application",
-					h.path,
+					"There are %d bytes of incomplete data at the end of %s with no new data in over 10 seconds, please check the application is writing full events",
 					h.reader.BufferedLen(),
+					h.path,
 				)
 
 				h.lastStaleOffset = h.offset + int64(h.reader.BufferedLen())
@@ -392,7 +396,8 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[s
 		}
 	}
 
-	// If we split any of the line data, tag it
+	// If we split any of the event data, tag it
+	// TODO: This fails with multiline processing - it's too late
 	if h.split {
 		if v, ok := data["tags"].([]string); ok {
 			data["tags"] = append(v, "splitline")
@@ -466,36 +471,26 @@ func (h *Harvester) prepareHarvester() error {
 	return nil
 }
 
-// readline reads a single line from the file, handling mixed line endings
-// and detecting where lines were split due to being too big for the buffer
-func (h *Harvester) readline() (string, int, error) {
-	var newline int
+// readitem reads a single item from the file, detecting where an item was
+// split due to being too big for the buffer. It returns the item, the number
+// of bytes it consumed from the file. If an error occurs, no item will be
+// returned and only the error will be
+func (h *Harvester) readitem() (map[string]interface{}, int, error) {
+	item, length, err := h.reader.ReadItem()
 
-	line, err := h.reader.ReadSlice()
-
-	if line != nil {
-		if err == nil {
-			// Line will always end in '\n' if no error, but check also for CR
-			if len(line) > 1 && line[len(line)-2] == '\r' {
-				newline = 2
-			} else {
-				newline = 1
-			}
-		} else if err == ErrLineTooLong {
+	if item != nil {
+		if err == ErrMaxDataSizeTruncation {
 			h.split = true
 			err = nil
 		}
 
-		// Return the line along with the length including line ending
-		length := len(line)
-		// We use string() to copy the memory, which is a slice of the line buffer we need to re-use
-		return string(line[:length-newline]), length, err
+		return item, length, err
 	}
 
 	if err != nil {
 		if err != io.EOF {
 			// Pass back error to tear down harvester
-			return "", 0, err
+			return nil, 0, err
 		}
 
 		// Backoff
@@ -510,7 +505,7 @@ func (h *Harvester) readline() (string, int, error) {
 		}
 	}
 
-	return "", 0, io.EOF
+	return nil, 0, io.EOF
 }
 
 // SetOrphaned tells the harvest it is orphaned
