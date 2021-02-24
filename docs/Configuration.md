@@ -23,6 +23,8 @@
     - [`dead time`](#dead-time)
     - [`hold_time`](#hold_time)
     - [`fields`](#fields)
+    - [`reader`](#reader)
+    - [`reader` limits](#reader-limits)
   - [`admin`](#admin)
     - [`enabled`](#enabled)
     - [`listen address`](#listen-address)
@@ -322,6 +324,7 @@ modified it will be reopened.
 
 Duration. Optional. Default: "96h"
 Configuration reload will only affect new or resumed files
+Since 2.5.5
 
 If a log file is deleted, and this amount of time has passed and Log Courier still
 has the file open, the file will be closed regardless of whether data will be lost.
@@ -348,6 +351,23 @@ Examples:
 - `{ "type": "apache", "server_names": [ "example.com", "www.example.com" ] }`
 - `{ "type": "program", "program": { "exec": "program.py", "args": [ "--run", "--daemon" ] } }`
 
+### `reader`
+
+String. Optional. Default: "line".  
+Available Values: "line", "json".
+
+Specifies the reader to use for the files.
+
+"line": This reader will emit a single event for each line.
+
+"json": This reader will emit a single event for each JSON value in the file. This will occur even if the object does not have a new line or other whitespace following it, allowing for the reading of single json-object files with no line ending in the file. This is in contract to the "line" reader would wait for a line ending to be written. Only JSON objects are supported and the emitted event will contain all the fields and nested fields of that object.
+
+### `reader` limits
+
+"line": If the line exceeds the `max line bytes` configuration it will be truncated and emitted as multiple events, each of up to `max line bytes` in length. Each split line will have a "tag" field added containing the tag "splitline" to all events emitted for the line. If the `fields` configuration already contained a "tags" entry, and it is not an array, the "splitline" tag will not be added to maintain the requested value of "tags". The `line buffer bytes` is the amount of memory to allocate for each read from the file and should be sized for the median length of a line. Where a line is longer, additional memory will be allocated for that line before being released immediately. The default values are unlikely to need changing as they were chosen based on a variety of log types including syslogs, error logs and access logs.
+
+"json": If the object's encoding exceeds `max line bytes` in length the reader will abort with an error and cease processing of the file, as it will be unable to complete reading the object within known memory bounds, and therefore unable to locate the end of the object and the start of the next. Like the "line" reader, the `line buffer bytes` pre-allocates memory for reading and should be sized to the median size of an object in its JSON encoding.
+
 ## `admin`
 
 The admin configuration enables or disabled the REST interface within Log
@@ -363,8 +383,7 @@ this.
 
 ### `listen address`
 
-String. Required when `enabled` is true.  
-Default: tcp:127.0.0.1:1234  
+String. Required when `enabled` is true. Default: "tcp:127.0.0.1:1234"  
 RPM/DEB Package Default: unix:/var/run/log-courier/admin.socket
 
 The address the REST interface should listen on must be in the format
@@ -485,23 +504,13 @@ Enables sending of Log Courier's internal log to syslog. May be used in conjunct
 
 Number. Optional. Default: 16384
 
-The size of the line buffer used when reading files.
-
-If `max line bytes` is greater than this value, any lines that exceed this size
-will trigger additional memory allocations. This value should be set to a value
-just above the 90th percentile (or average) line length.
+See [`reader` limits](#reader-limits) for details.
 
 ### `max line bytes`
 
 Number. Optional. Default: 1048576
 
-The maxmimum line length to process. If a line exceeds this length, it will be
-split across multiple events. Each split line will have a "tag" field added
-containing the tag "splitline". The final part of the line will not have a "tag"
-field added.
-
-If the `fields` configuration already contained a "tags" entry, and it is an
-array, it will be appended to. Otherwise, the "tag" field will be left as is.
+See [`reader` limits](#reader-limits) for details.
 
 This setting can not be greater than the `spool max bytes` setting.
 
