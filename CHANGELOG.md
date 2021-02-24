@@ -13,6 +13,14 @@ Log Carver
 
 - Improved speed of root level field lookups in expressions
 
+## 2.5.6
+
+17th February 2021
+
+Log Courier
+
+- Resolve crash with orphaned file processing
+
 ## 2.5.5
 
 9th February 2021
