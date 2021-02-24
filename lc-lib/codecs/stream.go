@@ -104,7 +104,7 @@ func (sc *StreamConfig) NewStream(eventFunc EventFunc, startOffset int64) *Strea
 	eventCallback := stream.eventCallback
 	for i := len(sc.Codecs) - 1; i >= 0; i-- {
 		entry = NewCodec(sc.Codecs[i].Factory, eventCallback, startOffset)
-		eventCallback = entry.Event
+		eventCallback = entry.ProcessEvent
 		if i != 0 {
 			stream.codecChain[i-1] = entry
 		}
@@ -115,16 +115,12 @@ func (sc *StreamConfig) NewStream(eventFunc EventFunc, startOffset int64) *Strea
 }
 
 // ProcessEvent receives events that should be processed by the codec stream
-func (cs *Stream) ProcessEvent(startOffset int64, endOffset int64, text string) {
-	cs.firstCodec.Event(startOffset, endOffset, text)
+func (cs *Stream) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) {
+	cs.firstCodec.ProcessEvent(startOffset, endOffset, data)
 }
 
 // eventCallback receives events from the final codec and ships them to the output
-func (cs *Stream) eventCallback(startOffset int64, endOffset int64, text string) {
-	data := map[string]interface{}{
-		"message": text,
-	}
-
+func (cs *Stream) eventCallback(startOffset int64, endOffset int64, data map[string]interface{}) {
 	// TODO: Deprecate
 	if cs.streamConfig.AddOffsetField {
 		if cs.streamConfig.EnableECS {

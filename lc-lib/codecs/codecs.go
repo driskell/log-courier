@@ -25,7 +25,7 @@ import (
 type Codec interface {
 	Teardown() int64
 	Reset()
-	Event(int64, int64, string)
+	ProcessEvent(int64, int64, map[string]interface{})
 	Meter()
 	APIEncodable() api.Encodable
 }
@@ -33,7 +33,7 @@ type Codec interface {
 // CallbackFunc is a callback function that a codec will call for each of its
 // "output" events. It could be called at any time by any routine (not
 // necessarily the routine providing the "input" events.)
-type CallbackFunc func(int64, int64, string)
+type CallbackFunc func(int64, int64, map[string]interface{})
 
 // codecFactory is the interface that all codec factories implement. The codec
 // factory should store the codec's configuration and, when NewCodec is called,

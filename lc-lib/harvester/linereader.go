@@ -18,36 +18,30 @@ package harvester
 
 import (
 	"bytes"
-	"errors"
 	"io"
-)
-
-var (
-	// ErrLineTooLong is returned when the read line was longer than the maximum
-	// allowed buffered length
-	ErrLineTooLong = errors.New("LineReader: line too long")
 )
 
 // LineReader is a read interface that tails and returns lines
 type LineReader struct {
-	rd       io.Reader
-	buf      []byte
-	overflow [][]byte
-	size     int
-	maxLine  int
-	curMax   int
-	start    int
-	end      int
-	err      error
+	rd             io.Reader
+	buf            []byte
+	overflow       [][]byte
+	size           int
+	maxLine        int
+	curMax         int
+	start          int
+	end            int
+	err            error
+	isContinuation bool
 }
 
 // NewLineReader creates a new line reader structure reading from the given
-// io.Reader with the given size buffer and the given maximum line size
-// If a line exceeds the maxmium line size it will be cut into segments, see
-// ReadSlice. If the maximum line size is greater than the given buffer size,
-// lines that are larger than the buffer will overflow into additional
-// memory allocations. Therefore, the buffer size should be sized to handle the
-// most common line lengths.
+// io.Reader with the given size persistent buffer and the given maximum line
+// size. If a line exceeds the maxmium line size it will be cut into segments.
+// If the maximum line size is greater than the given buffer size, lines that
+// are larger than the buffer will overflow into additional memory allocations
+// which are later discarded. Therefore, the buffer size should be sized to
+// handle the most common line lengths.
 func NewLineReader(rd io.Reader, size int, maxLine int) *LineReader {
 	lr := &LineReader{
 		rd:      rd,
@@ -73,11 +67,11 @@ func (lr *LineReader) BufferedLen() int {
 	return lr.end - lr.start
 }
 
-// ReadSlice returns a line as a byte slice
-// Returns ErrLineTooLong if the line was cut short because it was longer than
-// the maximum line length allowed. Subsequent returned lines will be a
+// ReadItem returns a line event from the file
+// Returns ErrMaxDataSizeExceed if the line was cut short because it was longer
+// than the maximum line length allowed. Subsequent returned lines will be a
 // continuation of the cut line, with the final segment returning nil error
-func (lr *LineReader) ReadSlice() ([]byte, error) {
+func (lr *LineReader) ReadItem() (map[string]interface{}, int, error) {
 	var err error
 	var line []byte
 
@@ -94,13 +88,13 @@ func (lr *LineReader) ReadSlice() ([]byte, error) {
 		}
 
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		if lr.end-lr.start >= lr.curMax {
 			line = lr.buf[lr.start : lr.start+lr.curMax]
 			lr.start += lr.curMax
-			err = ErrLineTooLong
+			err = ErrMaxDataSizeTruncation
 			break
 		}
 
@@ -123,7 +117,33 @@ func (lr *LineReader) ReadSlice() ([]byte, error) {
 		lr.overflow = nil
 		lr.curMax = lr.maxLine
 	}
-	return line, err
+
+	var event map[string]interface{}
+	length := len(line)
+	if err == ErrMaxDataSizeTruncation {
+		event = map[string]interface{}{
+			"message": string(line),
+		}
+		lr.isContinuation = true
+	} else {
+		// Line will always end in LF, but check also for CR
+		var newLine int
+		if length > 1 && line[length-2] == '\r' {
+			newLine = 2
+		} else {
+			newLine = 1
+		}
+		event = map[string]interface{}{
+			"message": string(line[:length-newLine]),
+		}
+		// If this is the continuation from a previously cut line - also return max data exceeded just so it can be tagged accordingly
+		if lr.isContinuation {
+			lr.isContinuation = false
+			err = ErrMaxDataSizeTruncation
+		}
+	}
+
+	return event, length, err
 }
 
 // fill reads from the reader and fills the buffer, shifting all unread bytes to

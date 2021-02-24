@@ -20,8 +20,14 @@ func createFilterCodec(unused map[string]interface{}, callback codecs.CallbackFu
 	return codecs.NewCodec(factory, callback, 0)
 }
 
-func checkFilter(startOffset int64, endOffset int64, text string) {
-	filterLines = append(filterLines, text)
+func checkFilter(startOffset int64, endOffset int64, data map[string]interface{}) {
+	if message, ok := data["message"].(string); ok {
+		filterLines = append(filterLines, message)
+	}
+}
+
+func codecEvent(codec codecs.Codec, startOffset int64, endOffset int64, data string) {
+	codec.ProcessEvent(startOffset, endOffset, map[string]interface{}{"message": data})
 }
 
 func TestFilter(t *testing.T) {
@@ -32,10 +38,10 @@ func TestFilter(t *testing.T) {
 	}, checkFilter, t)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	if len(filterLines) != 1 {
 		t.Error("Wrong line count received")
@@ -57,10 +63,10 @@ func TestFilterNegate(t *testing.T) {
 	}, checkFilter, t)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	if len(filterLines) != 3 {
 		t.Error("Wrong line count received")
@@ -86,10 +92,10 @@ func TestFilterMultiple(t *testing.T) {
 	}, checkFilter, t)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	if len(filterLines) != 2 {
 		t.Error("Wrong line count received")
@@ -114,10 +120,10 @@ func TestFilterMultipleAll(t *testing.T) {
 	}, checkFilter, t)
 
 	// Send some data
-	codec.Event(0, 1, "DEBUG First line")
-	codec.Event(2, 3, "NEXT line DEBUG another line")
-	codec.Event(4, 5, "ANOTHER line")
-	codec.Event(6, 7, "DEBUG Next line")
+	codecEvent(codec, 0, 1, "DEBUG First line")
+	codecEvent(codec, 2, 3, "NEXT line DEBUG another line")
+	codecEvent(codec, 4, 5, "ANOTHER line")
+	codecEvent(codec, 6, 7, "DEBUG Next line")
 
 	if len(filterLines) != 1 {
 		t.Error("Wrong line count received")

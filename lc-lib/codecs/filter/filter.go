@@ -81,19 +81,24 @@ func (c *CodecFilter) Teardown() int64 {
 func (c *CodecFilter) Reset() {
 }
 
-// Event is called by a Harvester when a new line event occurs on a file.
+// ProcessEvent is called by a Harvester when a new event occurs on a file
 // Filtering takes place and only accepted lines are shipped to the callback
-func (c *CodecFilter) Event(startOffset int64, endOffset int64, text string) {
-	// Only flush the event if it matches
-	matched := c.config.patterns.Match(text)
+func (c *CodecFilter) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) {
+	c.lastOffset = endOffset
 
-	if matched {
-		c.callbackFunc(startOffset, endOffset, text)
+	// TODO: Option to set the field
+	text, ok := data["message"].(string)
+	if !ok {
+		// TODO: Option to filter if does not exist?
+		text = ""
+	}
+
+	// Only flush the event if it matches
+	if matched := c.config.patterns.Match(text); matched {
+		c.callbackFunc(startOffset, endOffset, data)
 	} else {
 		c.filteredLines++
 	}
-
-	c.lastOffset = endOffset
 }
 
 // Meter is called by the Harvester to request accounting

@@ -1,5 +1,18 @@
 # Change Log
 
+## 2.6.0
+
+*Future*
+
+Log Courier
+
+- Added new `reader` configuration to `files` entries that defaults to `"line"`
+- Added a `"json"` `reader` that can read JSON files containing objects without line separators or line endings and decode them into events
+
+Log Carver
+
+- Improved speed of root level field lookups in expressions
+
 ## 2.5.6
 
 17th February 2021
