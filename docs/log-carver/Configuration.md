@@ -85,7 +85,7 @@ It is generally preferred to use YAML as comments are natively supported. Howeve
 
 End-of-line comments start with a pound sign outside of a string, and cause all characters until the end of the line to be ignored. Block comments start with a forwarder slash and an asterisk and cause all characters, including new lines, to be ignored until an asterisk followed by a forwarder slash is encountered.
 
-```json
+```text
 {
     "section": {
         # This is a comment
@@ -236,7 +236,7 @@ always be interpreted in seconds.
 
 ### Expression
 
-Expressions are used within [`Conditionals`](#conditionals) to perform tests and calculations. They can also be used for some actions. For example, an expression can be used for the [`SetField value option`](actions/SetField.md#value) in order to create a new value for a field.
+Expressions are used within [conditionals](#conditionals) to perform tests and calculations. They can also be used for some actions. For example, an expression can be used for the [SetField `value` option](actions/SetField.md#value) in order to create a new value for a field.
 
 An expression is an immutable operation so will not modify anything in the event, and is used to generate new values that may then be used by mutating actions, or tested for truthness within a conditional.
 
@@ -374,7 +374,7 @@ not filled within this time limit, the spool will be flushed immediately.
 
 ## `grok`
 
-The grok configuration allows customisation of the [`grok`](actions/Grok.md) action defaults.
+The grok configuration allows customisation of the [grok](actions/Grok.md) action defaults.
 
 ### `load defaults`
 
@@ -386,7 +386,7 @@ Log Carver comes built with a pre-defined set of named patterns based on Logstas
 
 Array of Strings. Optional
 
-A list of files to be loaded that contain named patterns to be used with grok actions. Log Carver is compatible with the format of Logstash's patterns files so they can provided. Please do note that Logstash patterns files will not work unmodified due to the differences in pattern syntax. See the [`grok`](actions/Grok.md) documentation for more details.
+A list of files to be loaded that contain named patterns to be used with grok actions. Log Carver is compatible with the format of Logstash's patterns files so they can provided. Please do note that Logstash patterns files will not work unmodified due to the differences in pattern syntax. See the [grok](actions/Grok.md) documentation for more details.
 
 The format is as follows, with a single pattern on each line, with the first word of the line being the name of the pattern and the pattern following the first space encountered.
 

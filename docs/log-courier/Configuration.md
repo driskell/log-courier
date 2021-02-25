@@ -84,7 +84,7 @@ It is generally preferred to use YAML as comments are natively supported. Howeve
 
 End-of-line comments start with a pound sign outside of a string, and cause all characters until the end of the line to be ignored. Block comments start with a forwarder slash and an asterisk and cause all characters, including new lines, to be ignored until an asterisk followed by a forwarder slash is encountered.
 
-```json
+```text
 {
     "section": {
         # This is a comment
@@ -739,7 +739,7 @@ program:
 
 It is worth noting that these fields will override any added via the various Stream Configuration options such as `add host field`.
 
-There are some fields that are reserved and require special treatment, such as `@timestamp` and `tags`. See the [`Events`](../Events.md) documentation for information on the structure of an event and the reserved fields.
+There are some fields that are reserved and require special treatment, such as `@timestamp` and `tags`. See the [Events](../Events.md) documentation for information on the structure of an event and the reserved fields.
 
 ### `hold time`
 
