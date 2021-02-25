@@ -29,8 +29,8 @@ const (
 
 // GrokConfig contains configuration for grok
 type GrokConfig struct {
-	LoadDefaults bool     `config:"load_defaults"`
-	PatternFiles []string `config:"pattern_files"`
+	LoadDefaults bool     `config:"load defaults"`
+	PatternFiles []string `config:"pattern files"`
 
 	Grok *grok.Grok
 }

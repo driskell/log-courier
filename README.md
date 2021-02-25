@@ -9,8 +9,8 @@ Logstash instances.
 
 - [Log Courier Suite](#log-courier-suite)
   - [Log Courier](#log-courier)
+    - [Compatible Logstash Versions](#compatible-logstash-versions)
   - [Log Carver](#log-carver)
-  - [Compatible Logstash Versions](#compatible-logstash-versions)
   - [Philosophy](#philosophy)
   - [Documentation](#documentation)
     - [Installation](#installation)
@@ -19,49 +19,35 @@ Logstash instances.
 
 ## Log Courier
 
-Log Courier is a lightweight shipper. It reads from log files and transmits events over
-the Courier protocol to a remote Logstash or Log Carver instance.
+Log Courier is a lightweight shipper. It reads from log files and transmits events over the Courier protocol to a remote Logstash or Log Carver instance.
 
-- Reads from files or the program input (`stdin`)
-- Follows log file rotations and movements
-- Compliments log events with [extra fields](docs/Configuration.md#fields)
-- [Reloads configuration](docs/Configuration.md#reloading) without restarting
-- Transmits securely using TLS with server and (optionally) client verification
-- Monitors shipping speed and status which can be read using the
-[Administration utility](docs/AdministrationUtility.md)
-- Pre-processes events on the sending side using codecs
-(e.g. [Multiline](docs/codecs/Multiline.md), [Filter](docs/codecs/Filter.md))
+- Reads from [files](docs/log-courier/Configuration.md#files) or the program [input](docs/log-courier/Configuration.md#stdin), following log file rotations and movements
+- Compliments log events with [additional fields](docs/log-courier/Configuration.md#fields)
+- Live [configuration reload](docs/log-courier/Configuration.md#reloading-configuration)
+- Transmits securely using TLS with server and [client verification](docs/log-courier/Configuration.md#ssl-certificate)
+- Codecs for client-side preprocessing of [multiline](docs/log-courier/codecs/Multiline.md) events and [filtering](docs/log-courier/codecs/Filter.md) of unwanted events
+- Native JSON [reader](docs/log-courier/Configuration.md#reader) to support JSON files, even those with no line-termination that makes line-based reading problematic
+
+### Compatible Logstash Versions
+
+Log Courier is compatible with most Logstash versions with a single exception. `>=7.4.0` and `<7.6.0` use a version of JRuby that has a bug making it incompatible and causes log-courier events to stop processing after an indeterminable amount of time (see #370) - please upgrade to 7.6.0 which updates JRuby to a compatible version.
 
 ## Log Carver
 
-(Beta)
+Log Carver is a lightweight event processor. It receives events over the Courier protocol and performs actions against them to manipulate them into the required format for storage within Elasticsearch, or further processing in Logstash. Connected clients do not receive acknowledgements until the events are acknowledged by the endpoint, whether that be Elasticsearch or another more centralised Log Carver, providing end-to-end guarantee.
 
-Log Carver is a lightweight event processor. It receives events over the Courier
-protocol and performs actions against them to manipulate them into the required
-format for storage within Elasticsearch, or further processing in Logstash.
-
-- Receives events securely using TLS with optional client verification
-- Supports Common Expression Language (CEL) conditional expressions in If/ElseIf/Else
-target different actions against different events
-- Provides several actions: date, geoip, user_agent, kv, add_tag, remove_tag, set_field, unset_field
-- The set_field action supports Common Expression Language (CEL) for type conversions and string building
-- Transmits events to Elasticsearch using the bulk API
-- A small example configuration can be found [here](docs/examples/example-carver.yaml)
-
-## Compatible Logstash Versions
-
-Log Courier is compatible with most Logstash versions with a single exception.
-
-* `>=7.4.0` and `<7.6.0` use a version of JRuby that has a bug making it incompatible
-  and causes log-courier events to stop processing after an indeterminable amount
-  of time (see #370) - please upgrade to 7.6.0 which updates JRuby to a compatible
-  version.
+- Receives events securely using TLS with [client verification](docs/log-carver/Configuration.md#ssl-client-ca-receiver)
+- Supports If/ElseIf/Else [conditionals](docs/log-carver/Configuration.md#conditionals) to process different events in different ways
+- Provides several powerful actions for [date processing](docs/log-carver/actions/Date.md), [grokking](docs/log-carver/actions/Grok.md), or simply [computing a new field](docs/log-carver/actions/SetField.md)
+- Support for complex [expressions](docs/log-carver/Configuration.md#expression) when setting fields or performing conditionals
+- Transmit events for storage using the [elasticsearch transport](docs/log-carver/Configuration.md#transport) immediately after processing
 
 ## Philosophy
 
-- At-least-once delivery of events, a Log Courier crash should never lose events
+- Keep resource usage low and predictable at all times
 - Be efficient, reliable and scalable
-- Keep resource usage low
+- At-least-once delivery of events, a crash should never lose events
+- Offer secure transports
 - Be easy to use
 
 ## Documentation
@@ -73,12 +59,16 @@ Log Courier is compatible with most Logstash versions with a single exception.
 
 ### Reference
 
+- [Log Courier Configuration](docs/log-courier/Configuration.md)
+- [Log Carver Configuration](docs/log-carver/Configuration.md)
+
 - [Administration Utility](docs/AdministrationUtility.md)
-- [Command Line Arguments](docs/CommandLineArguments.md)
-- [Configuration](docs/Configuration.md)
-- [Logstash Integration](docs/LogstashIntegration.md)
-- [SSL Certificate Utility](docs/SSLCertificateUtility.md)
 - [Change Log](CHANGELOG.md)
+- [Command Line Arguments](docs/CommandLineArguments.md)
+- [Event Format](docs/Events.md)
+- [Logstash Integration](docs/LogstashIntegration.md)
+- [Protocol Specification](docs/Protocol.md)
+- [SSL Certificate Utility](docs/SSLCertificateUtility.md)
 
 ## Upgrading from 1.x to 2.x
 

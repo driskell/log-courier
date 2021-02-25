@@ -399,7 +399,7 @@ func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[s
 	// If we split any of the event data, tag it
 	// TODO: This fails with multiline processing - it's too late
 	if h.split {
-		if v, ok := data["tags"].(event.Tags); ok {
+		if v, ok := data["tags"].([]string); ok {
 			data["tags"] = append(v, "splitline")
 		} else {
 			data["tags"] = event.Tags{"splitline"}

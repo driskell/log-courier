@@ -1,25 +1,25 @@
 # Filter Codec
 
-The filter codec strips out unwanted events, shipping only those desired.
+The `filter` codec strips out unwanted events, shipping only those desired.
 
 - [Filter Codec](#filter-codec)
   - [Example](#example)
   - [Options](#options)
-    - [`"patterns"`](#%22patterns%22)
-    - [`"match"`](#%22match%22)
+    - [`patterns`](#patterns)
+    - [`match`](#match)
 
 ## Example
 
-```json
-{
-  "name": "filter",
-  "patterns": [ "^(.*connect from.*)$", "^(.*status=sent.*)$" ]
-}
+```yaml
+- name: filter
+  patterns:
+  - "^(.*connect from.*)$"
+  - "^(.*status=sent.*)$"
 ```
 
 ## Options
 
-### `"patterns"`
+### `patterns`
 
 Array of Strings. Required
 
@@ -42,7 +42,7 @@ not negated, which then allows a literal match of an exclamation mark at the
 start of the pattern. For example, "=!useful!" would match a line containing,
 "!useful!".
 
-### `"match"`
+### `match`
 
 String. Optional. Default: "any"  
 Available values: "any", "all"

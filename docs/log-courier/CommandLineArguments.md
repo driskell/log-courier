@@ -2,13 +2,13 @@
 
 - [Command Line Arguments](#command-line-arguments)
   - [Overview](#overview)
-  - [`-config=<path>`](#configpath)
-  - [`-config-test`](#config-test)
-  - [`-cpuprofile=<path>`](#cpuprofilepath)
-  - [`-from-beginning`](#from-beginning)
-  - [`-list-supported`](#list-supported)
-  - [`-stdin`](#stdin)
-  - [`-version`](#version)
+  - [`-config=<path>`](#-configpath)
+  - [`-config-test`](#-config-test)
+  - [`-cpuprofile=<path>`](#-cpuprofilepath)
+  - [`-from-beginning`](#-from-beginning)
+  - [`-list-supported`](#-list-supported)
+  - [`-stdin`](#-stdin)
+  - [`-version`](#-version)
 
 ## Overview
 

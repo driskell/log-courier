@@ -1,0 +1,19 @@
+receivers:
+- listen:
+  - 0.0.0.0:12345
+pipelines:
+- name: grok
+  field: message
+  patterns:
+  - '(?P<timestamp>%{MONTH} +%{MONTHDAY} %{TIME}) (?:<%{NONNEGINT:facility}.%{NONNEGINT:priority}> )?%{IPORHOST:logsource}+(?: %{PROG:program}(?:\[%{POSINT:pid}\])?:|) %{GREEDYDATA:message}'
+- name: date
+  field: timestamp
+  remove: true
+  formats:
+  - 'Jan _2 15:04:05'
+  - '2006-01-02T15:04:05Z'
+network:
+  transport: es
+  index pattern: logs-%{+2006.01.02}
+  servers:
+  - 127.0.0.1:9200
