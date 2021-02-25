@@ -78,6 +78,13 @@ func NewTransportESFactory(p *config.Parser, configPath string, unUsed map[strin
 		return nil, err
 	}
 
+	if ret.Routines < 1 {
+		return nil, fmt.Errorf("'routines' cannot be less than 1")
+	}
+	if ret.Routines > 32 {
+		return nil, fmt.Errorf("'routines' cannot be more than 32")
+	}
+
 	if ret.IndexPattern == "" {
 		return nil, fmt.Errorf("'index pattern' cannot be empty when using 'es' transport")
 	}

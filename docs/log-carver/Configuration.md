@@ -16,10 +16,12 @@
     - [`enabled`](#enabled)
     - [`listen address`](#listen-address)
   - [`general`](#general)
+    - [`debug events`](#debug-events)
     - [`log file`](#log-file)
     - [`log level`](#log-level)
     - [`log stdout`](#log-stdout)
     - [`log syslog`](#log-syslog)
+    - [`processor routines`](#processor-routines)
     - [`spool max bytes`](#spool-max-bytes)
     - [`spool size`](#spool-size)
     - [`spool timeout`](#spool-timeout)
@@ -45,6 +47,8 @@
     - [`timeout`](#timeout)
     - [`transport`](#transport)
   - [`pipelines`](#pipelines)
+    - [Actions](#actions)
+    - [Conditionals](#conditionals)
   - [`receivers`](#receivers)
     - [`enabled` (receiver)](#enabled-receiver)
     - [`listen`](#listen)
@@ -107,9 +111,7 @@ In the case of a network configuration change, Log Carver will disconnect and re
 
 ## Examples
 
-A basic example configuration that will receive events using the Log Courier protocol on port 12345 is below. For each event it will perform a `grok` operation if they have a `type` field of `nginx` and then tag them with `access_logs`. Other logs with a different `type` field value will be tagged with `unknown_event`. It will bulk store the events in the local Elasticsearch cluster on port 9200, in indexes such as `test-2021.01.01` that roll-over each day.
-
-Note the `>-` syntax which allows you to put the pattern on the next line. New lines are turned into spaces too so you could wrap it where there is a space. This is entirely down to taste but may make for more readable configurations. [YAML Multiline](https://yaml-multiline.info) is a good research that can help in choosing the right block syntax for your use-case.
+A basic example configuration that will receive events using the Log Courier protocol on port 12345 is below. For each event it will perform a `grok` operation if they have a `type` field of `syslog` and then tag them with `syslogs`. Other logs with a different `type` field value will be tagged with `unknown_event`. It will bulk store the events in the local Elasticsearch cluster on port 9200, in indexes such as `test-2021.01.01` that roll-over each day.
 
 ```yaml
 receivers:
@@ -117,16 +119,14 @@ receivers:
   - 0.0.0.0:12345
 pipelines:
 - if: >-
-    event.type == "nginx"
+    event.type == "syslog"
   then:
   - name: grok
     field: message
-    remove: true
     patterns:
-    - >-
-      ^(?P<clientip>%{IPV4}|%{IPV6}) (?P<identd>[^ ]+) (?P<auth>[^ ]+) \[%{HTTPDATE:timestamp}\] \"(?:(?P<verb>[^ ]+) (?P<request>([^ \"\\]+|\\.)+)(?: HTTP/%{NUMBER:httpversion:float})?|(?P<rawrequest>([^\"]|\\.)*))\" %{NUMBER:response:int} (?:%{NUMBER:bytes:int}|-) \"(?P<referrer>(?:[A-Za-z][A-Za-z+\-.]*://(?P<referrer_host>(?:[^\"\\/]+|\\[^/])*)(?:[^\"\\]+|\\.)*|(?:[^\"\\]+|\\.)*))\" \"(?P<useragent>(?:[^\"\\]+|\\.)*)\" \"(?P<forwardedfor>(?:[^\"\\]+|\\.)*)\"(?: %{NUMBER:requesttime:float}(?: \"(?P<https>(?:[^\"\\]+|\\.)*)\" \"(?P<upstream>(?:[^\"\\]+|\\.)*)\")?)?
+    - '(?P<timestamp>%{MONTH} +%{MONTHDAY} %{TIME}) (?:<%{NONNEGINT:facility}.%{NONNEGINT:priority}> )?%{IPORHOST:logsource}+(?: %{PROG:program}(?:\[%{POSINT:pid}\])?:|) %{GREEDYDATA:message}'
   - name: add_tag
-    tag: access_logs
+    tag: syslogs
 - else:
   - name: add_tag
     tag: unknown_event
@@ -205,7 +205,7 @@ nested:
 
 Some notes:
 
-- The time format is specified by writing the reference time `Mon Jan 2 15:04:05 MST 2006` in the format you desire, such as `2006-01-02`, or `2nd January`. This works as all numerical components are distinct from each other (See: [Golang "time" package constants](https://golang.org/pkg/time/#pkg-constants)
+- The time format is specified by writing the reference time `Mon Jan 2 15:04:05 MST 2006` in the format you desire, such as `2006-01-02`, or `2nd January`. This works as all numerical components are distinct from each other (See: [Golang "time" package constants](https://golang.org/pkg/time/#pkg-constants))
 - If the field is not found, it is treated as an empty string, and so `hello %{missing}world` using the above event as an example would product `hello world`
 - An invalid time format will output the invalid time format pieces unchanged, so `February 2006` in the above example would return `February 2021`, whereas a valid time format of `January 2006` would return `May 2021`.
 
@@ -222,7 +222,7 @@ always be interpreted in seconds.
 ## `admin`
 
 The admin configuration enables or disabled the REST interface within Log
-Courier and allows you to configure the interface to listen on.
+Carver and allows you to configure the interface to listen on.
 
 ### `enabled`
 
@@ -235,7 +235,7 @@ this.
 ### `listen address`
 
 String. Required when `enabled` is true. Default: "tcp:127.0.0.1:1234"  
-RPM/DEB Package Default: unix:/var/run/log-courier/admin.socket
+RPM/DEB Package Default: unix:/var/run/log-carver/admin.socket
 
 The address the REST interface should listen on must be in the format
 `transport:address`.
@@ -250,21 +250,25 @@ Examples:
 ```text
 127.0.0.1:1234
 tcp:127.0.0.1:1234
-unix:/var/run/log-courier/admin.socket
+unix:/var/run/log-carver/admin.socket
 ```
 
 ## `general`
 
-The general configuration affects the general behaviour of Log Courier, such
-as where to store its persistence data or how often to scan for the appearence
-of new log files.
+The general configuration affects the general behaviour of Log Carver.
+
+### `debug events`
+
+Boolean. Optional. Default: false
+
+Enables debugging of event data. Events will be output to the logs in debug level messages after processing of the event is completed, to allow inspection of pipeline results.
 
 ### `log file`
 
 Filepath. Optional  
 Requires restart
 
-A log file to save Log Courier's internal log into. May be used in conjunction with `log stdout` and `log syslog`.
+A log file to save Log Carver's internal log into. May be used in conjunction with `log stdout` and `log syslog`.
 
 ### `log level`
 
@@ -272,23 +276,29 @@ String. Optional. Default: "info".
 Available values: "critical", "error", "warning", "notice", "info", "debug"  
 Requires restart
 
-The minimum level of detail to produce in Log Courier's internal log.
+The minimum level of detail to produce in Log Carver's internal log.
 
 ### `log stdout`
 
 Boolean. Optional. Default: true  
 Requires restart
 
-Enables sending of Log Courier's internal log to the console (stdout). May be used in conjunction with `log syslog` and `log file`.
+Enables sending of Log Carver's internal log to the console (stdout). May be used in conjunction with `log syslog` and `log file`.
 
 ### `log syslog`
 
 Boolean. Optional. Default: false  
 Requires restart
 
-Enables sending of Log Courier's internal log to syslog. May be used in conjunction with `log stdout` and `log file`.
+Enables sending of Log Carver's internal log to syslog. May be used in conjunction with `log stdout` and `log file`.
 
 *This option is ignored by Windows builds.*
+
+### `processor routines`
+
+Number. Optional. Default: 4. Min: 1. Max: 128
+
+The number of processor routines to start. Event spools are distributed across the processor routines for parallel processing. Increasing this may allow the usage of more CPUs and therefore faster processing of events.
 
 ### `spool max bytes`
 
@@ -318,7 +328,7 @@ not filled within this time limit, the spool will be flushed immediately.
 
 ## `network`
 
-The network configuration tells Log Carver where to store the logs, and also what transport and security to use.
+The network configuration tells Log Carver where to send the logs, and also what transport and security to use.
 
 ### `failure backoff`
 
@@ -445,7 +455,7 @@ lookup for `_courier._tcp.example.com`.
 
 ### `routines`
 
-Number. Optional. Default: 4
+Number. Optional. Default: 4. Min: 1. Max: 32
 Available when `transport` is `es`
 
 The number of bulk requests to perform at any one moment in time. Increasing this will make more simultaneous requests to Elasticsearch, increasing resource usage on that side, whilst increasing the speed of indexing.
@@ -505,7 +515,7 @@ Ignored if `template file` is specified, as you can specify the patterns inside 
 
 Duration. Optional. Default: 15
 
-This is the maximum time Log Courier will wait for a endpoint to respond to a
+This is the maximum time Log Carver will wait for a endpoint to respond to a
 request after logs were send to it. If the endpoint does not respond within this
 time period the connection will be closed and reset.
 
@@ -514,7 +524,7 @@ time period the connection will be closed and reset.
 String. Optional. Default: "tls"  
 Available values: "tcp", "tls", "es"
 
-*Depending on how log-courier was built, some transports may not be available. Run `log-courier -list-supported` to see the list of transports available in a specific build of log-courier.*
+*Depending on how log-carver was built, some transports may not be available. Run `log-carver -list-supported` to see the list of transports available in a specific build of log-carver.*
 
 Sets the transport to use when sending logs to the endpoints. "es" is recommended for most users.
 
@@ -526,11 +536,68 @@ internal networks. If in doubt, use the secure authenticating transport "tls".
 
 ## `pipelines`
 
-See examples.
+Array of Actions. Optional. Default none
+
+This is a list of actions to perform against every event passing through Log Carver. Parallelism is controlled by the [`processor routines`](#processor-routines) configuration and the results of the pipeline can be inspected in the logs when [`debug events`](#debug-events) is enabled.
+
+There are two types of entries that can appear in a pipeline. Actions, and Conditionals.
+
+### Actions
+
+Actions have a single consistent field, `name`, that denotes which action to take. Each action has a unique set of fields that configure its behaviour.
+
+For example:
+
+```yaml
+- name: action
+  option: value
+  option2: 42
+```
+
+Available actions are:
+
+- [Add Tag](actions/AddTag.md)
+- [Date](actions/Date.md)
+- [GeoIP](actions/GeoIP.md)
+- [Grok](actions/Grok.md)
+- [Key-Value](actions/KV.md)
+- [Remove Tag](actions/RemoveTag.md)
+- [Set Field](actions/SetField.md)
+- [Unset Field](actions/UnsetField.md)
+- [User Agent](actions/UserAgent.md)
+
+*Depending on how log-carver was built, some actions may not be available. Run `log-carver -list-supported` to see the list of actions available in a specific build of log-carver.*
+
+### Conditionals
+
+A conditional starts with an entry with an `if` and a `then`. The pipeline attached to `then` will only be executed for an event if the [Expression](#expressions) in the `if` is "truthy".
+
+An `if` conditional can optionally be followed by any number of `else if` with an alternative expression to evaluate and pipeline to execute if the first `if` did not execute. The `else if` does not evaluate its expression if the `if` was executed.
+
+Finally, there can optionally be a single `else`, with the pipeline attached to the `else` itself as opposed to an expression (there is no `then` for an `else`.)
+
+Actions can immediately follow Conditionals and will be executed for all events in that pipeline, and likewise Conditionals can immediately follow Actions.
+
+An example of all three is below.
+
+```yaml
+- if: expression
+  then:
+  # pipeline
+- else if: expression
+  then:
+  # pipeline
+- else:
+  # pipeline
+```
 
 ## `receivers`
 
+Array of Receivers. Optional.
+
 The receivers configuration specifies which transports Log Carver should listen on to receive events from.
+
+Each entry has the following properties.
 
 ### `enabled` (receiver)
 
@@ -581,7 +648,7 @@ If specified, limits the TLS version to the given value. When not specified, the
 String. Optional. Default: "tls"  
 Available values: "tcp", "tls"
 
-*Depending on how log-courier was built, some transports may not be available. Run `log-courier -list-supported` to see the list of transports available in a specific build of log-courier.*
+*Depending on how log-carver was built, some transports may not be available. Run `log-carver -list-supported` to see the list of transports available in a specific build of log-carver.*
 
 Sets the transport to use when receiving logs from the endpoint.
 

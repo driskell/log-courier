@@ -54,9 +54,8 @@ type ConfigASTEntry struct {
 
 // Validate the additional general configuration
 func (gc *General) Validate(p *config.Parser, path string) (err error) {
-	// Enforce maximum of 2 GB since event transmit length is uint32
-	if gc.ProcessorRoutines > 1024 {
-		err = fmt.Errorf("%sprocessor routines can not be greater than 1024", path)
+	if gc.ProcessorRoutines > 128 {
+		err = fmt.Errorf("%sprocessor routines can not be greater than 128", path)
 		return
 	}
 
@@ -85,6 +84,7 @@ func (c *Config) Init(p *config.Parser, path string) error {
 		// Slip an index before the / so users know which entry we're examining if error occurs
 		entry := c.Pipeline[idx]
 		entry.Path = fmt.Sprintf("%s[%d]/", path[:len(path)-1], idx)
+		idx++
 
 		// Tokenise
 		var entryToken astToken
@@ -98,6 +98,7 @@ func (c *Config) Init(p *config.Parser, path string) error {
 			entryToken = astTokenAction
 		}
 
+	StateMachine:
 		switch state {
 		case astStatePipeline:
 			if entryToken == astTokenAction {
@@ -105,7 +106,6 @@ func (c *Config) Init(p *config.Parser, path string) error {
 				if err != nil {
 					return err
 				}
-				idx++
 				c.AST = append(c.AST, ast)
 				break
 			}
@@ -114,24 +114,22 @@ func (c *Config) Init(p *config.Parser, path string) error {
 				elseIfEntries = nil
 				elseEntry = nil
 				state = astStateIf
-				idx++
 				break
 			}
 			return fmt.Errorf("Unexpected '%s' at %s", entryToken, entry.Path)
 		case astStateIf:
 			if entryToken == astTokenElseIf {
 				elseIfEntries = append(elseIfEntries, entry)
-				idx++
 				break
 			}
 			if entryToken == astTokenElse {
 				elseEntry = entry
-				idx++
 			}
 			state = astStatePipeline
 			if err := constructLogic(); err != nil {
 				return err
 			}
+			goto StateMachine
 		}
 	}
 	if state == astStateIf {
