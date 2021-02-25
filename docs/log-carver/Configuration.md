@@ -85,7 +85,7 @@ It is generally preferred to use YAML as comments are natively supported. Howeve
 
 End-of-line comments start with a pound sign outside of a string, and cause all characters until the end of the line to be ignored. Block comments start with a forwarder slash and an asterisk and cause all characters, including new lines, to be ignored until an asterisk followed by a forwarder slash is encountered.
 
-```json
+```text
 {
     "section": {
         # This is a comment
