@@ -739,7 +739,7 @@ program:
 
 It is worth noting that these fields will override any added via the various Stream Configuration options such as `add host field`.
 
-There are some fields that are reserved and require special treatment, such as `@timestamp` and `tags`. See the [`Events`](../Events.md) documentation for information on the structure of an event and the reserved fields.
+There are some fields that are reserved and require special treatment, such as `@timestamp` and `tags`. See the [Events](../Events.md) documentation for information on the structure of an event and the reserved fields.
 
 ### `hold time`
 
