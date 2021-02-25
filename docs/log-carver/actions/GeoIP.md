@@ -20,7 +20,7 @@ The `geoip` action parses an IP address into coordinates using a MaxMind GeoIP d
 
 ### `database`
 
-String. Optional. Default system dependant
+Filepath. Optional. Default system dependant
 
 The path to the MaxMind GeoIP City database. The packaged versions of Log Carver depend on a package that will install this database for you, and the configuration will default to using that database. You can override the path using this configuration. Where Log Carver is built manually this becomes required.
 

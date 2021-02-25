@@ -12,6 +12,7 @@
     - [String, Number, Boolean, Array, Dictionary](#string-number-boolean-array-dictionary)
     - [Pattern String](#pattern-string)
     - [Duration](#duration)
+    - [Expression](#expression)
   - [`admin`](#admin)
     - [`enabled`](#enabled)
     - [`listen address`](#listen-address)
@@ -33,13 +34,15 @@
     - [`failure backoff max`](#failure-backoff-max)
     - [`index pattern`](#index-pattern)
     - [`max pending payloads`](#max-pending-payloads)
+    - [`max tls version`](#max-tls-version)
     - [`method`](#method)
+    - [`min tls version`](#min-tls-version)
     - [`reconnect backoff`](#reconnect-backoff)
     - [`reconnect backoff max`](#reconnect-backoff-max)
     - [`retry backoff`](#retry-backoff)
     - [`retry backoff max`](#retry-backoff-max)
-    - [`rfc 2782 srv`](#rfc-2782-srv)
     - [`rfc 2782 service`](#rfc-2782-service)
+    - [`rfc 2782 srv`](#rfc-2782-srv)
     - [`routines`](#routines)
     - [`servers`](#servers)
     - [`ssl ca`](#ssl-ca)
@@ -55,13 +58,13 @@
   - [`receivers`](#receivers)
     - [`enabled` (receiver)](#enabled-receiver)
     - [`listen`](#listen)
-    - [`ssl certificate` (receiver)](#ssl-certificate-receiver)
-    - [`ssl key` (receiver)](#ssl-key-receiver)
-    - [`ssl client ca` (receiver)](#ssl-client-ca-receiver)
-    - [`verify peers` (receiver)](#verify-peers-receiver)
-    - [`min tls version` (receiver)](#min-tls-version-receiver)
     - [`max tls version` (receiver)](#max-tls-version-receiver)
+    - [`min tls version` (receiver)](#min-tls-version-receiver)
+    - [`ssl certificate` (receiver)](#ssl-certificate-receiver)
+    - [`ssl client ca` (receiver)](#ssl-client-ca-receiver)
+    - [`ssl key` (receiver)](#ssl-key-receiver)
     - [`transport` (receiver)](#transport-receiver)
+    - [`verify peers` (receiver)](#verify-peers-receiver)
 
 ## Overview
 
@@ -221,6 +224,37 @@ always be interpreted in seconds.
 - `300` = 5 minutes (which is 300 seconds)
 - `5s` = 5 seconds
 - `15m` = 15 minutes
+
+### Expression
+
+Expressions are used within [`Conditionals`](#conditionals) to perform tests and calculations. They can also be used for some actions. For example, an expression can be used for the [`SetField value option`](actions/SetField.md#value) in order to create a new value for a field.
+
+An expression is an immutable operation so will not modify anything in the event, and is used to generate new values that may then be used by mutating actions, or tested for truthness within a conditional.
+
+Expressions use the [Common Expression Language](https://github.com/google/cel-spec/blob/master/doc/langdef.md). Of particular use will be the [Macros](https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros) (such as `has`, `map` and `filter`) and [Operators and Functions](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) (such as `+`, `!=`, `startsWith` and `int`)
+
+```js
+// Test if a field exists, returns a boolean true if it does
+has(event.field)
+
+// Map the tags and return a list of prefixed versions
+event.tags.map(tag, "prefix_" + tag)
+
+// Filter the tags to remove unwanted tag and return a new list of tags
+event.tags.filter(tag, tag != "unwanted")
+
+// Return a string which concatonates two fields with a space between them
+event.message + " " + event.field
+
+// Multiply an integer value
+event.integer * 100
+
+// Coerce a string field to an integer then subtract 100
+int(event.integer) - 100
+
+// Test if a field starts with something
+event.message.startsWith("ERROR ")
+```
 
 ## `admin`
 
@@ -402,6 +436,14 @@ sending anymore.
 enough to maintain throughput even on high latency links and low enough not to
 cause excessive memory usage.*
 
+### `max tls version`
+
+String. Optional. Default: ""
+Available values: 1.0, 1.1, 1.2, 1.3
+Available when `transport` is `tls`
+
+If specified, limits the TLS version to the given value. When not specified, the TLS version is only limited by the versions supported by Golang at build time. At the time of writing, this was 1.3.
+
 ### `method`
 
 String. Optional. Default: "random"
@@ -426,6 +468,14 @@ available and closing any connections to less preferred endpoints.
 Faster endpoints will receive more events than slower endpoints. The strategy
 for load balancing is dynamic based on the acknowledgement latency of the
 available endpoints.
+
+### `min tls version`
+
+String. Optional. Default: 1.2
+Available values: 1.0, 1.1, 1.2, 1.3
+Available when `transport` is `tls`
+
+Sets the minimum TLS version allowed for connections on this transport. The TLS handshake will fail for any connection that is unable to negotiate a minimum of this version of TLS.
 
 ### `reconnect backoff`
 
@@ -464,13 +514,6 @@ Available when `transport` is `es`
 
 The maximum time to wait between retry attempts. This prevents the exponential increase of `retry backoff` from becoming too high.
 
-### `rfc 2782 srv`
-
-Boolean. Optional. Default: true
-
-When performing SRV DNS lookups for entries in the [`servers`](#servers) list,
-use RFC 2782 style lookups of the form `_service._proto.example.com`.
-
 ### `rfc 2782 service`
 
 String. Optional. Default: "courier"
@@ -478,6 +521,13 @@ String. Optional. Default: "courier"
 Specifies the service to request when using RFC 2782 style SRV lookups. Using
 the default, "courier", an "@example.com" endpoint entry would result in a
 lookup for `_courier._tcp.example.com`.
+
+### `rfc 2782 srv`
+
+Boolean. Optional. Default: true
+
+When performing SRV DNS lookups for entries in the [`servers`](#servers) list,
+use RFC 2782 style lookups of the form `_service._proto.example.com`.
 
 ### `routines`
 
@@ -596,7 +646,7 @@ Available actions are:
 
 ### Conditionals
 
-A conditional starts with an entry with an `if` and a `then`. The pipeline attached to `then` will only be executed for an event if the [Expression](#expressions) in the `if` is "truthy".
+A conditional starts with an entry with an `if` and a `then`. The pipeline attached to `then` will only be executed for an event if the [Expression](#expression) in the `if` is "truthy".
 
 An `if` conditional can optionally be followed by any number of `else if` with an alternative expression to evaluate and pipeline to execute if the first `if` did not execute. The `else if` does not evaluate its expression if the `if` was executed.
 
@@ -642,25 +692,6 @@ Sets the list of endpoints to listen on. Accepted formats for each endpoint entr
 - `@hostname` (A SRV DNS lookup is performed, with further DNS lookups if
 required)
 
-### `ssl certificate` (receiver)
-
-### `ssl key` (receiver)
-
-### `ssl client ca` (receiver)
-
-### `verify peers` (receiver)
-
-Boolean. Optional. Default: true
-Available when `transport` is `tls`
-
-### `min tls version` (receiver)
-
-String. Optional. Default: 1.2
-Available values: 1.0, 1.1, 1.2, 1.3
-Available when `transport` is `tls`
-
-Sets the minimum TLS version allowed for connections on this transport. The TLS handshake will fail for any client that is unable to negotiate a minimum of this version of TLS.
-
 ### `max tls version` (receiver)
 
 String. Optional. Default: ""
@@ -668,6 +699,37 @@ Available values: 1.0, 1.1, 1.2, 1.3
 Available when `transport` is `tls`
 
 If specified, limits the TLS version to the given value. When not specified, the TLS version is only limited by the versions supported by Golang at build time. At the time of writing, this was 1.3.
+
+### `min tls version` (receiver)
+
+String. Optional. Default: 1.2
+Available values: 1.0, 1.1, 1.2, 1.3
+Available when `transport` is `tls`
+
+Sets the minimum TLS version allowed for connections on this transport. The TLS handshake will fail for any connection that is unable to negotiate a minimum of this version of TLS.
+
+### `ssl certificate` (receiver)
+
+Filepath. Optional
+Available when `transport` is `tls`
+
+Path to a PEM encoded certificate file to use as the server certificate.
+
+This is the counterpart of Log Courier's [`ssl ca`](../log-courier/Configuration.md#ssl-ca).
+
+### `ssl client ca` (receiver)
+
+Array of Filepaths. Optional
+Available when `transport` is `tls`
+
+A list of paths to PEM encoded client certificate authorities that can be used to verify client certificates. This is the counterpart to Log Courier's [`ssl certificate`](../log-courier/Configuration.md#ssl-certificate).
+
+### `ssl key` (receiver)
+
+Filepath. Optional
+Available when `transport` is `tls`
+
+Path to a PEM encoded private key to use with the server certificate.
 
 ### `transport` (receiver)
 
@@ -681,3 +743,14 @@ Sets the transport to use when receiving logs from the endpoint.
 "tcp" is an **insecure** equivalent to "tls" that does not encrypt traffic or
 authenticate the identity of endpoints. This should only be used on trusted
 internal networks. If in doubt, use the secure authenticating transport "tls".
+
+### `verify peers` (receiver)
+
+Boolean. Optional. Default: true
+Available when `transport` is `tls`
+
+When `ssl client ca` entries are configured for client certificate verification, the default is to require all connections to provide a client certificate and to be verified. If this is set to false, clients will be able to connect without providing a client certificate or with any client certificate.
+
+This setting is ignored if `ssl client ca` is empty.
+
+**Setting this to false is insecure and should only be used for testing.**

@@ -19,11 +19,11 @@
   - [`general`](#general)
     - [`global fields`](#global-fields)
     - [`host`](#host)
+    - [`line buffer bytes`](#line-buffer-bytes)
     - [`log file`](#log-file)
     - [`log level`](#log-level)
     - [`log stdout`](#log-stdout)
     - [`log syslog`](#log-syslog)
-    - [`line buffer bytes`](#line-buffer-bytes)
     - [`max line bytes`](#max-line-bytes)
     - [`persist directory`](#persist-directory)
     - [`prospect interval`](#prospect-interval)
@@ -35,11 +35,13 @@
     - [`failure backoff`](#failure-backoff)
     - [`failure backoff max`](#failure-backoff-max)
     - [`max pending payloads`](#max-pending-payloads)
+    - [`max tls version`](#max-tls-version)
     - [`method`](#method)
+    - [`min tls version`](#min-tls-version)
     - [`reconnect backoff`](#reconnect-backoff)
     - [`reconnect backoff max`](#reconnect-backoff-max)
-    - [`rfc 2782 srv`](#rfc-2782-srv)
     - [`rfc 2782 service`](#rfc-2782-service)
+    - [`rfc 2782 srv`](#rfc-2782-srv)
     - [`servers`](#servers)
     - [`ssl ca`](#ssl-ca)
     - [`ssl certificate`](#ssl-certificate)
@@ -55,8 +57,8 @@
     - [`codecs`](#codecs)
     - [`dead time`](#dead-time)
     - [`enable ecs`](#enable-ecs)
-    - [`hold time`](#hold-time)
     - [`fields`](#fields)
+    - [`hold time`](#hold-time)
     - [`reader`](#reader)
     - [`reader` limits](#reader-limits)
 
@@ -297,6 +299,12 @@ Every event has an automatic field, "host", that contains the current system
 FQDN. Using this option allows a custom value to be given to the "host" field
 instead of the system FQDN.
 
+### `line buffer bytes`
+
+Number. Optional. Default: 16384
+
+See [`reader` limits](#reader-limits) for details.
+
 ### `log file`
 
 Filepath. Optional  
@@ -327,12 +335,6 @@ Requires restart
 Enables sending of Log Courier's internal log to syslog. May be used in conjunction with `log stdout` and `log file`.
 
 *This option is ignored by Windows builds.*
-
-### `line buffer bytes`
-
-Number. Optional. Default: 16384
-
-See [`reader` limits](#reader-limits) for details.
 
 ### `max line bytes`
 
@@ -462,6 +464,14 @@ sending anymore.
 enough to maintain throughput even on high latency links and low enough not to
 cause excessive memory usage.*
 
+### `max tls version`
+
+String. Optional. Default: ""
+Available values: 1.0, 1.1, 1.2, 1.3
+Available when `transport` is `tls`
+
+If specified, limits the TLS version to the given value. When not specified, the TLS version is only limited by the versions supported by Golang at build time. At the time of writing, this was 1.3.
+
 ### `method`
 
 String. Optional. Default: "random"
@@ -487,6 +497,14 @@ Faster endpoints will receive more events than slower endpoints. The strategy
 for load balancing is dynamic based on the acknowledgement latency of the
 available endpoints.
 
+### `min tls version`
+
+String. Optional. Default: 1.2
+Available values: 1.0, 1.1, 1.2, 1.3
+Available when `transport` is `tls`
+
+Sets the minimum TLS version allowed for connections on this transport. The TLS handshake will fail for any connection that is unable to negotiate a minimum of this version of TLS.
+
 ### `reconnect backoff`
 
 Duration. Optional. Default: 0  
@@ -508,13 +526,6 @@ Available when `transport` is one of: `tcp`, `tls`
 The maximum time to wait between reconnect attempts. This prevents the
 exponential increase of `reconnect backoff` from becoming too high.
 
-### `rfc 2782 srv`
-
-Boolean. Optional. Default: true
-
-When performing SRV DNS lookups for entries in the [`servers`](#servers) list,
-use RFC 2782 style lookups of the form `_service._proto.example.com`.
-
 ### `rfc 2782 service`
 
 String. Optional. Default: "courier"
@@ -522,6 +533,13 @@ String. Optional. Default: "courier"
 Specifies the service to request when using RFC 2782 style SRV lookups. Using
 the default, "courier", an "@example.com" endpoint entry would result in a
 lookup for `_courier._tcp.example.com`.
+
+### `rfc 2782 srv`
+
+Boolean. Optional. Default: true
+
+When performing SRV DNS lookups for entries in the [`servers`](#servers) list,
+use RFC 2782 style lookups of the form `_service._proto.example.com`.
 
 ### `servers`
 
@@ -540,21 +558,21 @@ How multiple endpoints are managed is defined by the `method` configuration.
 ### `ssl ca`
 
 Filepath. Required  
-Available when `transport` is one of: `tls`
+Available when `transport` is `tls`
 
 Path to a PEM encoded certificate file to use to verify the connected endpoint.
 
 ### `ssl certificate`
 
 Filepath. Optional  
-Available when `transport` is one of: `tls`
+Available when `transport` is `tls`
 
 Path to a PEM encoded certificate file to use as the client certificate.
 
 ### `ssl key`
 
 Filepath. Required with `ssl certificate`  
-Available when `transport` is one of: `tls`
+Available when `transport` is `tls`
 
 Path to a PEM encoded private key to use with the client certificate.
 
@@ -689,23 +707,6 @@ Enable Elastic Common Schema (ECS) fields in events. By default, events are gene
 
 See [Event Format](#event-format) for more information.
 
-### `hold time`
-
-Duration. Optional. Default: "96h"
-Configuration reload will only affect new or resumed files
-Since 2.5.5
-
-If a log file is deleted, and this amount of time has passed and Log Courier still
-has the file open, the file will be closed regardless of whether data will be lost.
-
-This is a failsafe to ensure that a blocked pipeline does not cause deleted files
-to be held open indefinitely, eventually causing the disk space to fill. This will
-mean that disk usage cannot be used to detect issues sending logs and so additional
-monitoring may be needed to detect this.
-
-Set to 0 to disable and keep files open indefinitely until all data inside them is
-sent and the dead_time passes.
-
 ### `fields`
 
 Dictionary. Optional  
@@ -739,6 +740,23 @@ program:
 It is worth noting that these fields will override any added via the various Stream Configuration options such as `add host field`.
 
 There are some fields that are reserved and require special treatment, such as `@timestamp` and `tags`. See the [`Events`](../Events.md) documentation for information on the structure of an event and the reserved fields.
+
+### `hold time`
+
+Duration. Optional. Default: "96h"
+Configuration reload will only affect new or resumed files
+Since 2.5.5
+
+If a log file is deleted, and this amount of time has passed and Log Courier still
+has the file open, the file will be closed regardless of whether data will be lost.
+
+This is a failsafe to ensure that a blocked pipeline does not cause deleted files
+to be held open indefinitely, eventually causing the disk space to fill. This will
+mean that disk usage cannot be used to detect issues sending logs and so additional
+monitoring may be needed to detect this.
+
+Set to 0 to disable and keep files open indefinitely until all data inside them is
+sent and the dead_time passes.
 
 ### `reader`
 

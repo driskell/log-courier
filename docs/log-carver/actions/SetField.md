@@ -28,6 +28,6 @@ The name of the field to set. Use `[]` to access nested fields, for example `nes
 
 ### `value`
 
-Pattern String. Required
+Expression. Required
 
-The value to set. [Pattern strings](../Configuration.md#pattern-string) are supported to allow the use of existing fields to build new ones.
+The value to set using an [Expression](../Configuration.md#expression).
