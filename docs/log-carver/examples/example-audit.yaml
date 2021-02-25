@@ -1,0 +1,30 @@
+receivers:
+- listen:
+  - 0.0.0.0:12345
+pipelines:
+- name: grok
+  field: message
+  patterns:
+  - 'type=(?P<audit_type>[^ ]+) msg=audit\(%{NUMBER:audit_epoch}:%{NUMBER:audit_counter}\): %{GREEDYDATA:message}'
+- name: date
+  field: audit_epoch
+  formats:
+  - UNIX
+- if: event.audit_type == "AVC"
+  then:
+  - name: grok
+    field: message
+    patterns:
+    - 'avc:  (?P<audit_result>[^ ](?: [^ ]|[^ ])*)  \{ (?P<audit_avc_info>[^}]+) \} for  %{GREEDYDATA:message}'
+  - name: kv
+    field: message
+    prefix: audit_AVC_
+- else:
+  - name: kv
+    field: message
+    prefix: audit_%{audit_type}_
+network:
+  transport: es
+  index pattern: audit-%{+2006.01.02}
+  servers:
+  - 127.0.0.1:9200

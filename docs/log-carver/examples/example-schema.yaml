@@ -1,0 +1,17 @@
+receivers:
+- listen:
+  - 0.0.0.0:12345
+pipelines:
+- if: has(event.host) && type(event.host) == string
+  then:
+  - name: set_field
+    field: 'host[name]'
+    value: 'event.host'
+  - name: set_field
+    field: 'host[hostname]'
+    value: 'event.host.name'
+network:
+  transport: es
+  index pattern: logstash-%{+2006.01.02}
+  servers:
+  - 127.0.0.1:9200

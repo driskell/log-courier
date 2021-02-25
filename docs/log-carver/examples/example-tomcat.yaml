@@ -1,0 +1,43 @@
+receivers:
+- listen:
+  - 0.0.0.0:12345
+pipelines:
+- name: grok
+  field: message
+  # 5 types:
+  #   21-Aug-2014 13:27:58 org.apache.catalina.core.StandardWrapperValve invoke\nSEVERE: Servlet.service..
+  #   Aug 21, 2014 1:27:58 PM org.apache.catalina.core.StandardWrapperValve invoke\nSEVERE: Servlet.service...
+  #   12345 21 Aug 2014 13:27:58:875 WARN  n.s.e.p.s.Something 127.0.0.1 - \nSome message...
+  #   [21-Aug 13:42:50] WARN  [tp-bio-8081-exec-374] n.s.e.p.s.ObjectGraphWalker - The configured....
+  #   2014-08-21 13:27:58\nFull thread dump...
+  #   2015-05-13T10:12:32.791+0100: [GC [ParNew
+  patterns:
+  - '(?ms)^(?P<timestamp>%{MONTHDAY}-%{MONTH}-%{YEAR} %{HOUR}:%{MINUTE}:%{SECOND}) (?P<reference>[^ ]+) (?P<where>[^\r\n]+)\r?\n(?P<loglevel>[^:]+): %{GREEDYDATA:message}"'
+  - '(?ms)^(?P<timestamp>%{MONTH} %{MONTHDAY}, %{YEAR} %{HOUR}:%{MINUTE}:%{SECOND} (?:AM|PM)) (?P<reference>[^ ]+) (?P<where>[^\r\n]+)\r?\n(?P<loglevel>[^:]+): %{GREEDYDATA:message}"'
+  - '(?ms)^[0-9]+ (?P<timestamp>%{MONTHDAY} %{MONTH} %{YEAR} %{HOUR}:%{MINUTE}:%{SECOND}:[0-9]+) (?P<loglevel>[^ ]+) +(?P<reference>[^ ]+) (?:%{IP:ip})? - (?:\r?\n)?%{GREEDYDATA:message}"'
+  - '(?ms)^\[(?P<timestamp>%{MONTHDAY}-%{MONTH} %{HOUR}:%{MINUTE}:%{SECOND})\] (?P<loglevel>[^ ]+) +(?:\[(?P<label>[^\]]*)\] )?(?P<reference>[^ ]+) - %{GREEDYDATA:message}"'
+  - '(?ms)^(?P<timestamp>%{YEAR}-%{MONTHNUM2}-%{MONTHDAY} %{HOUR}:%{MINUTE}:%{SECOND})\r?\n%{GREEDYDATA:message}"'
+  - '(?ms)^(?P<timestamp>%{TIMESTAMP_ISO8601}): %{GREEDYDATA:message}'
+- name: date
+  field: timestamp
+  remove: true
+  formats:
+  - '02-01-2006 15:04:05'
+  - 'Jan 02, 2006 3:04:05 PM'
+  - '02 Jan 2006 15:04:05'
+  - '02-Jan 15:04:05'
+  - '2006-01-02 15:04:05'
+  - '2006-01-02T15:04:05Z0700'
+- if: event.message.startsWith("Full thread dump")
+  then:
+  - name: add_tag
+    tag: thread_dump
+- else if: event.message.startsWith("[GC")
+  then:
+  - name: add_tag
+    tag: java_gc
+network:
+  transport: es
+  index pattern: logs-%{+2006.01.02}
+  servers:
+  - 127.0.0.1:9200

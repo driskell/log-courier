@@ -34,9 +34,9 @@ The name of the field to parse. Use `[]` to access nested fields, for example `n
 
 ### `prefix`
 
-String. Optional
+Pattern String. Optional
 
-Prefixes all added fields with the given prefix.
+Prefixes all added fields with the given prefix. The prefix can contain values from fields in the event using the [`Pattern String`](../Configuration.md#pattern-string) syntax.
 
 With a value of `prefix_`, the field value `number=100 nested[field]="testing"` would add the following new fields to the event.
 

@@ -158,6 +158,15 @@ network:
   ssl ca: /etc/log-courier/log-carver.crt
 ```
 
+Several more configuration examples are available for perusal in the
+[examples folder](examples), currently without notes. Examples use the preferred format of YAML.
+
+- [Using KV to parse SELinux audit logs](examples/example-audit.yaml)
+- [Processing nginx access logs with Grok, UserAgent and GeoIP](examples/example-nginx.yaml)
+- [Converting events to Elastic Common Schema](examples/example-schema.yaml)
+- [Grokking syslogs](examples/example-syslog.yaml)
+- [Handling multiple tomcat catalina log formats](examples/example-tomcat.yaml)
+
 The configuration is documented in full below.
 
 ## Index Templates
