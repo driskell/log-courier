@@ -25,6 +25,9 @@
     - [`spool max bytes`](#spool-max-bytes)
     - [`spool size`](#spool-size)
     - [`spool timeout`](#spool-timeout)
+  - [`grok`](#grok)
+    - [`load defaults`](#load-defaults)
+    - [`pattern files`](#pattern-files)
   - [`network`](#network)
     - [`failure backoff`](#failure-backoff)
     - [`failure backoff max`](#failure-backoff-max)
@@ -325,6 +328,29 @@ Duration. Optional. Default: 5
 
 The maximum amount of time to wait for a full spool. If an incomplete spool is
 not filled within this time limit, the spool will be flushed immediately.
+
+## `grok`
+
+The grok configuration allows customisation of the [`grok`](actions/Grok.md) action defaults.
+
+### `load defaults`
+
+Boolean. Optional. Default: true
+
+Log Carver comes built with a pre-defined set of named patterns based on Logstash's own patterns that can be referenced by grok action patterns. This configuration allows the defaults to be disabled so that a completely custom set can be provided instead.
+
+### `pattern files`
+
+Array of Strings. Optional
+
+A list of files to be loaded that contain named patterns to be used with grok actions. Log Carver is compatible with the format of Logstash's patterns files so they can provided. Please do note that Logstash patterns files will not work unmodified due to the differences in pattern syntax. See the [`grok`](actions/Grok.md) documentation for more details.
+
+The format is as follows, with a single pattern on each line, with the first word of the line being the name of the pattern and the pattern following the first space encountered.
+
+```text
+NAME ^pattern$
+MATCH another-pattern
+```
 
 ## `network`
 
