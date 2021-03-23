@@ -57,6 +57,9 @@ install -m 0755 %{_builddir}/bin/log-carver %{buildroot}%{_sbindir}/log-carver
 # Install config directory
 mkdir -p %{buildroot}%{_sysconfdir}/log-carver
 
+# Make the state dir
+mkdir -p %{buildroot}%{_var}/lib/log-carver
+
 # Install init script and related paraphernalia
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 
@@ -138,9 +141,10 @@ fi
 %{_docdir}/%{name}-%{version}
 %config(noreplace) %{_sysconfdir}/sysconfig/log-carver
 
-%defattr(0644,log-courier,log-courier,0755)
+%defattr(0644,log-carver,log-carver,0755)
 %if 0%{?rhel} < 7
 %ghost %{_var}/run/log-carver/log-carver.pid
 %dir %attr(0700,log-carver,log-carver) %{_var}/run/log-carver
 %ghost %{_var}/run/log-carver/admin.socket
 %endif
+%dir %{_var}/lib/log-carver
