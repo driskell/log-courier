@@ -57,7 +57,7 @@ install -m 0755 "%{_builddir}/bin/lc-admin" %{buildroot}%{_bindir}/lc-admin
 install -m 0755 "%{_builddir}/bin/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
 
 # Install config directory
-mkdir -p %{buildroot}%{_sysconfdir}/log-carver
+mkdir -p %{buildroot}%{_sysconfdir}/log-courier
 
 # Make the state dir
 mkdir -p %{buildroot}%{_var}/lib/log-courier
