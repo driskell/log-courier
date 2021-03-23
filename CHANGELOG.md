@@ -2,10 +2,11 @@
 
 ## 2.6.0
 
-*Future*
+23rd February 2021
 
 Log Courier
 
+- Fix broken `includes` configuration that was broken in 2.5.0 and add preventative tests
 - Added new `reader` configuration to `files` entries that defaults to `"line"`
 - Added a `"json"` `reader` that can read JSON files containing objects without line separators or line endings and decode them into events
 
