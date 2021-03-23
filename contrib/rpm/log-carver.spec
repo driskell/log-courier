@@ -62,7 +62,11 @@ mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 
 # Install docs
 mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
-install -m 0644 docs/log-courier/* %{buildroot}%{_docdir}/%{name}-%{version}/
+install -m 0644 docs/log-carver/*.md %{buildroot}%{_docdir}/%{name}-%{version}/
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/actions
+install -m 0644 docs/log-carver/actions/*.md %{buildroot}%{_docdir}/%{name}-%{version}/actions/
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/examples
+install -m 0644 docs/log-carver/examples/*.md %{buildroot}%{_docdir}/%{name}-%{version}/examples/
 
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}

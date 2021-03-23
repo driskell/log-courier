@@ -65,7 +65,11 @@ mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 
 # Install docs
 mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
-install -m 0644 docs/log-courier/* %{buildroot}%{_docdir}/%{name}-%{version}/
+install -m 0644 docs/log-courier/*.md %{buildroot}%{_docdir}/%{name}-%{version}/
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/codecs
+install -m 0644 docs/log-courier/codecs/*.md %{buildroot}%{_docdir}/%{name}-%{version}/codecs/
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/examples
+install -m 0644 docs/log-courier/examples/*.md %{buildroot}%{_docdir}/%{name}-%{version}/examples/
 
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
