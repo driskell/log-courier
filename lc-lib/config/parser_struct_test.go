@@ -145,18 +145,24 @@ var TestParserPopulateStructCallbacksCalled []string
 type TestParserPopulateStructCallbacksFixture struct {
 	Value        string
 	ValueWithKey int `config:"keyed"`
+	DefaultsTest int
+	InitTest     int
+	ValidateTest int
 }
 
-func (f TestParserPopulateStructCallbacksFixture) Defaults() {
+func (f *TestParserPopulateStructCallbacksFixture) Defaults() {
+	f.DefaultsTest = 3
 	TestParserPopulateStructCallbacksCalled = append(TestParserPopulateStructCallbacksCalled, "defaults")
 }
 
-func (f TestParserPopulateStructCallbacksFixture) Init(p *Parser, path string) error {
+func (f *TestParserPopulateStructCallbacksFixture) Init(p *Parser, path string) error {
+	f.InitTest = 2
 	TestParserPopulateStructCallbacksCalled = append(TestParserPopulateStructCallbacksCalled, "init")
 	return nil
 }
 
-func (f TestParserPopulateStructCallbacksFixture) Validate(p *Parser, path string) error {
+func (f *TestParserPopulateStructCallbacksFixture) Validate(p *Parser, path string) error {
+	f.ValidateTest = 1
 	TestParserPopulateStructCallbacksCalled = append(TestParserPopulateStructCallbacksCalled, "validate")
 	return nil
 }
@@ -186,6 +192,16 @@ func TestParserPopulateStructCallbacks(t *testing.T) {
 	if !reflect.DeepEqual(TestParserPopulateStructCallbacksCalled, []string{"defaults", "init", "validate"}) {
 		t.Errorf("Unexpected or missing callback; Expected: %v Received: %v", []string{"defaults", "init", "validate"}, TestParserPopulateStructCallbacksCalled)
 	}
+
+	if item.DefaultsTest != 3 {
+		t.Error("Assignment from Defaults callback did not persist")
+	}
+	if item.InitTest != 2 {
+		t.Error("Assignment from Init callback did not persist")
+	}
+	if item.ValidateTest != 1 {
+		t.Error("Assignment from Validate callback did not persist")
+	}
 }
 
 type TestParserPopulateStructCallbacksInitErrorFixture struct {
@@ -193,7 +209,7 @@ type TestParserPopulateStructCallbacksInitErrorFixture struct {
 	ValueWithKey int `config:"keyed"`
 }
 
-func (f TestParserPopulateStructCallbacksInitErrorFixture) Init(p *Parser, path string) error {
+func (f *TestParserPopulateStructCallbacksInitErrorFixture) Init(p *Parser, path string) error {
 	return io.EOF
 }
 
@@ -218,7 +234,7 @@ type TestParserPopulateStructCallbacksValidateErrorFixture struct {
 	ValueWithKey int `config:"keyed"`
 }
 
-func (f TestParserPopulateStructCallbacksValidateErrorFixture) Validate(p *Parser, path string) error {
+func (f *TestParserPopulateStructCallbacksValidateErrorFixture) Validate(p *Parser, path string) error {
 	return io.EOF
 }
 

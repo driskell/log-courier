@@ -40,7 +40,7 @@ const (
 // StreamConfig holds the configuration for a stream of logs produced by a
 // harvester
 type StreamConfig struct {
-	codecs.StreamConfig `config:",embed"`
+	*codecs.StreamConfig `config:",embed"`
 
 	AddPathField bool          `config:"add path field"`
 	DeadTime     time.Duration `config:"dead time"`

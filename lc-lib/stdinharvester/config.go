@@ -23,7 +23,7 @@ import (
 
 // StreamConfig is the stream configuration for the stdin stream
 type StreamConfig struct {
-	harvester.StreamConfig `config:",embed"`
+	*harvester.StreamConfig `config:",embed"`
 }
 
 // Defaults sets default values

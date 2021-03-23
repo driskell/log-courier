@@ -34,9 +34,7 @@ var (
 )
 
 const (
-	defaultStreamAddOffsetField bool          = true
-	defaultStreamAddPathField   bool          = true
-	defaultStreamDeadTime       time.Duration = 1 * time.Hour
+	defaultStreamDeadTime time.Duration = 1 * time.Hour
 
 	defaultGeneralProspectInterval time.Duration = 10 * time.Second
 )
@@ -44,7 +42,7 @@ const (
 // FileConfig holds the configuration for a set of paths that share the same
 // stream configuration
 type FileConfig struct {
-	harvester.StreamConfig `config:",embed"`
+	*harvester.StreamConfig `config:",embed"`
 
 	DeadTime time.Duration `config:"dead time"`
 	Paths    []string      `config:"paths"`
@@ -59,8 +57,6 @@ type Config []*FileConfig
 
 // Defaults sets up the FileConfig defaults prior to population
 func (fc *FileConfig) Defaults() {
-	fc.AddOffsetField = defaultStreamAddOffsetField
-	fc.AddPathField = defaultStreamAddPathField
 	fc.DeadTime = defaultStreamDeadTime
 }
 

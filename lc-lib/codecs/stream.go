@@ -40,9 +40,9 @@ type Stub struct {
 
 // StreamConfig holds the configuration for a log stream that supports codecs
 type StreamConfig struct {
-	event.StreamConfig `config:",embed"`
-	AddOffsetField     bool   `config:"add offset field"`
-	Codecs             []Stub `config:"codecs"`
+	*event.StreamConfig `config:",embed"`
+	AddOffsetField      bool   `config:"add offset field"`
+	Codecs              []Stub `config:"codecs"`
 }
 
 // Stream represents a single stream of events that involves a codec chain
