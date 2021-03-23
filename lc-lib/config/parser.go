@@ -54,6 +54,11 @@ func (p *Parser) Populate(config interface{}, rawConfig interface{}, configPath 
 	vRawConfig := reflect.ValueOf(rawConfig)
 	vConfig := reflect.ValueOf(config)
 
+	// Disallow struct values
+	if vConfig.Kind() != reflect.Ptr {
+		panic("Cannot call Populate on struct value, must be pointer")
+	}
+
 	return p.populateStruct(vConfig, vRawConfig, configPath, reportUnused)
 }
 
@@ -478,7 +483,7 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 // populateSlice is used to populate an array of configuration structures using
 // an array from the configuration file
 func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, configPath string, reportUnused bool) (retSlice reflect.Value, err error) {
-	log.Debugf("populateSlice: %s (%s) %v", vSlice.Type().String(), configPath, vRawConfig)
+	log.Debugf("populateSlice: %s (%s)", vSlice.Type().String(), configPath)
 
 	if vSlice.Kind() == reflect.Ptr {
 		var innerSlice reflect.Value

@@ -68,6 +68,10 @@ func TestParserPopulateReportUnused(t *testing.T) {
 		t.FailNow()
 	}
 
+	if item.ValueWithKey != 678 {
+		t.Errorf("Unexpected value of ValueWithKey property: %d", item.ValueWithKey)
+	}
+
 	// Verify that we exhausted from the map - this isn't a bug it's how we process values
 	if _, ok := input["keyed"]; ok {
 		t.Errorf("Parsing did not remove used value from map")
@@ -84,9 +88,6 @@ func TestParserPopulateReportUnused(t *testing.T) {
 }
 
 func TestParserPopulateStructNoPointer(t *testing.T) {
-	// TODO: Fix - it seems the vField.CanSet is false if we pass a struct wrapped in interface, which makes sense as it's a value based pass - we should runtime error this
-	t.Skip()
-
 	config := NewConfig()
 	parser := NewParser(config)
 
@@ -94,12 +95,15 @@ func TestParserPopulateStructNoPointer(t *testing.T) {
 		"keyed": 678,
 	}
 
+	defer func() {
+		err := recover()
+		if err == nil {
+			t.Errorf("Parsing with struct that cannot be set (no pointer) succeeded unexpectedly")
+		}
+	}()
+
 	item := TestParserPopulateStructFixture{}
-	err := parser.Populate(item, input, "/", false)
-	if err == nil {
-		t.Errorf("Parsing with struct that cannot be set (no pointer) succeeded unexpectedly")
-		t.FailNow()
-	}
+	parser.Populate(item, input, "/", false)
 }
 
 type TestParserPopulateEmbeddedStructFixture struct {
@@ -136,11 +140,11 @@ func TestParserPopulateEmbeddedStruct(t *testing.T) {
 }
 
 type TestParserPopulateStructSliceInStructFixture struct {
-	Slice          []TestParserPopulateStructFixture  `config:"slice"`
-	SliceOfPointer []*TestParserPopulateStructFixture `config:"slicep"`
-	// TODO: See the test function body
-	// SliceOfPointerPointer []**TestParserPopulateStructFixture `config:"slicepp"`
-	// PointerSlice          *[]TestParserPopulateStructFixture  `config:"pslice"`
+	Slice                 []TestParserPopulateStructFixture   `config:"slice"`
+	SliceOfPointer        []*TestParserPopulateStructFixture  `config:"slicep"`
+	SliceOfPointerPointer []**TestParserPopulateStructFixture `config:"slicepp"`
+	PointerSlice          *[]TestParserPopulateStructFixture  `config:"pslice"`
+	PointerSliceOfPointer *[]*TestParserPopulateStructFixture `config:"pslicep"`
 }
 
 func TestParserPopulateStructSliceInStruct(t *testing.T) {
@@ -225,32 +229,38 @@ func TestParserPopulateStructSliceInStruct(t *testing.T) {
 			t.Errorf("Unexpected value in SliceOfPointer property at location %d: %d", index, item.SliceOfPointer[index].ValueWithKey)
 		}
 	}
-	// TODO: This currently panics because we're not allocating the values the pointers are pointing to - it should refuse or allocate properly
-	// if len(item.SliceOfPointerPointer) != 2 {
-	// 	t.Errorf("Unexpected size of Slice property: %d", len(item.SliceOfPointerPointer))
-	// }
-	// for index := 0; index < len(item.SliceOfPointerPointer); index++ {
-	// 	if (*item.SliceOfPointerPointer[index]).ValueWithKey != 100*(index+1) {
-	// 		t.Errorf("Unexpected value in SliceOfPointerPointer property at location %d: %d", index, (*item.SliceOfPointerPointer[index]).ValueWithKey)
-	// 	}
-	// }
-	// if len(*item.PointerSlice) != 2 {
-	// 	t.Errorf("Unexpected size of Slice property: %d", len(*item.PointerSlice))
-	// }
-	// for index := 0; index < len(*item.PointerSlice); index++ {
-	// 	if (*item.PointerSlice)[index].ValueWithKey != 100*(index+1) {
-	// 		t.Errorf("Unexpected value in Slice property at location %d: %d", index, (*item.PointerSlice)[index].ValueWithKey)
-	// 	}
-	// }
+	if len(item.SliceOfPointerPointer) != 6 {
+		t.Errorf("Unexpected size of Slice property: %d", len(item.SliceOfPointerPointer))
+	}
+	for index := 0; index < len(item.SliceOfPointerPointer); index++ {
+		if (*item.SliceOfPointerPointer[index]).ValueWithKey != 100*(index+1) {
+			t.Errorf("Unexpected value in SliceOfPointerPointer property at location %d: %d", index, (*item.SliceOfPointerPointer[index]).ValueWithKey)
+		}
+	}
+	if len(*item.PointerSlice) != 2 {
+		t.Errorf("Unexpected size of Slice property: %d", len(*item.PointerSlice))
+	}
+	for index := 0; index < len(*item.PointerSlice); index++ {
+		if (*item.PointerSlice)[index].ValueWithKey != 100*(index+1) {
+			t.Errorf("Unexpected value in Slice property at location %d: %d", index, (*item.PointerSlice)[index].ValueWithKey)
+		}
+	}
+	if len(*item.PointerSliceOfPointer) != 2 {
+		t.Errorf("Unexpected size of Slice property: %d", len(*item.PointerSliceOfPointer))
+	}
+	for index := 0; index < len(*item.PointerSliceOfPointer); index++ {
+		if (*item.PointerSliceOfPointer)[index].ValueWithKey != 100*(index+1) {
+			t.Errorf("Unexpected value in Slice property at location %d: %d", index, (*item.PointerSliceOfPointer)[index].ValueWithKey)
+		}
+	}
 }
 
 type TestParserPopulateValueSliceInStructFixture struct {
-	Slice []string `config:"slice"`
-	// TODO: See the test function body
-	// SliceOfPointer []*string `config:"slicep"`
-	// TODO: See the test function body
-	// SliceOfPointerPointer []**string `config:"slicepp"`
-	// PointerSlice          *[]string  `config:"pslice"`
+	Slice                 []string   `config:"slice"`
+	SliceOfPointer        []*string  `config:"slicep"`
+	SliceOfPointerPointer []**string `config:"slicepp"`
+	PointerSlice          *[]string  `config:"pslice"`
+	PointerSliceOfPointer *[]*string `config:"pslicep"`
 }
 
 func TestParserPopulateValueSliceInStruct(t *testing.T) {
@@ -281,43 +291,47 @@ func TestParserPopulateValueSliceInStruct(t *testing.T) {
 			t.Errorf("Unexpected value in Slice property at location %d: %s", index, item.Slice[index])
 		}
 	}
-	// TODO: This currently panics because it doesn't know about allocating string pointers
-	// if len(item.SliceOfPointer) != 2 {
-	// 	t.Errorf("Unexpected size of Slice property: %d", len(item.SliceOfPointer))
-	// }
-	// for index := 0; index < len(item.SliceOfPointer); index++ {
-	// 	value := strconv.FormatInt((int64)(100*(index+1)), 10)
-	// 	if *item.SliceOfPointer[index] != value {
-	// 		t.Errorf("Unexpected value in SliceOfPointer property at location %d: %s", index, *item.SliceOfPointer[index])
-	// 	}
-	// }
-	// TODO: This currently panics because we're not allocating the values the pointers are pointing to - it should refuse or allocate properly
-	// if len(item.SliceOfPointerPointer) != 2 {
-	// 	t.Errorf("Unexpected size of Slice property: %d", len(item.SliceOfPointerPointer))
-	// }
-	// for index := 0; index < len(item.SliceOfPointerPointer); index++ {
-	// 	value := strconv.FormatInt((int64)(100*(index+1)), 10)
-	// 	if **item.SliceOfPointerPointer[index] != value {
-	// 		t.Errorf("Unexpected value in SliceOfPointerPointer property at location %d: %s", index, *(*item.SliceOfPointerPointer[index]))
-	// 	}
-	// }
-	// if len(*item.PointerSlice) != 2 {
-	// 	t.Errorf("Unexpected size of Slice property: %d", len(*item.PointerSlice))
-	// }
-	// for index := 0; index < len(*item.PointerSlice); index++ {
-	// 	value := strconv.FormatInt((int64)(100*(index+1)), 10)
-	// 	if (*item.PointerSlice)[index] != value {
-	// 		t.Errorf("Unexpected value in Slice property at location %d: %s", index, (*item.PointerSlice)[index])
-	// 	}
-	// }
+	if len(item.SliceOfPointer) != 2 {
+		t.Errorf("Unexpected size of Slice property: %d", len(item.SliceOfPointer))
+	}
+	for index := 0; index < len(item.SliceOfPointer); index++ {
+		value := strconv.FormatInt((int64)(100*(index+1)), 10)
+		if *item.SliceOfPointer[index] != value {
+			t.Errorf("Unexpected value in SliceOfPointer property at location %d: %s", index, *item.SliceOfPointer[index])
+		}
+	}
+	if len(item.SliceOfPointerPointer) != 6 {
+		t.Errorf("Unexpected size of Slice property: %d", len(item.SliceOfPointerPointer))
+	}
+	for index := 0; index < len(item.SliceOfPointerPointer); index++ {
+		value := strconv.FormatInt((int64)(100*(index+1)), 10)
+		if **item.SliceOfPointerPointer[index] != value {
+			t.Errorf("Unexpected value in SliceOfPointerPointer property at location %d: %s", index, *(*item.SliceOfPointerPointer[index]))
+		}
+	}
+	if len(*item.PointerSlice) != 2 {
+		t.Errorf("Unexpected size of Slice property: %d", len(*item.PointerSlice))
+	}
+	for index := 0; index < len(*item.PointerSlice); index++ {
+		value := strconv.FormatInt((int64)(100*(index+1)), 10)
+		if (*item.PointerSlice)[index] != value {
+			t.Errorf("Unexpected value in Slice property at location %d: %s", index, (*item.PointerSlice)[index])
+		}
+	}
+	if len(*item.PointerSliceOfPointer) != 2 {
+		t.Errorf("Unexpected size of Slice property: %d", len(*item.PointerSliceOfPointer))
+	}
+	for index := 0; index < len(*item.PointerSliceOfPointer); index++ {
+		value := strconv.FormatInt((int64)(100*(index+1)), 10)
+		if *(*item.PointerSliceOfPointer)[index] != value {
+			t.Errorf("Unexpected value in Slice property at location %d: %s", index, *(*item.PointerSliceOfPointer)[index])
+		}
+	}
 }
 
 type TestParserPopulateSliceStructFixture []TestParserPopulateStructFixture
 
 func TestParserPopulateSliceStruct(t *testing.T) {
-	// TODO: This entire thing panics
-	t.SkipNow()
-
 	config := NewConfig()
 	parser := NewParser(config)
 
@@ -376,9 +390,6 @@ func TestParserPopulateSliceStruct(t *testing.T) {
 type TestParserPopulateSliceOfPointerStructFixture []*TestParserPopulateStructFixture
 
 func TestParserPopulateSliceOfPointerStruct(t *testing.T) {
-	// TODO: This entire thing panics
-	t.SkipNow()
-
 	config := NewConfig()
 	parser := NewParser(config)
 
@@ -437,9 +448,6 @@ func TestParserPopulateSliceOfPointerStruct(t *testing.T) {
 type TestParserPopulateSliceOfPointerPointerStructFixture []**TestParserPopulateStructFixture
 
 func TestParserPopulateSliceOfPointerPointerStruct(t *testing.T) {
-	// TODO: This entire thing panics
-	t.SkipNow()
-
 	config := NewConfig()
 	parser := NewParser(config)
 
