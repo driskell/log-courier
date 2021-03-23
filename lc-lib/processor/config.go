@@ -98,6 +98,7 @@ func (c *Config) Init(p *config.Parser, path string) error {
 			entryToken = astTokenAction
 		}
 
+	StateMachine:
 		switch state {
 		case astStatePipeline:
 			if entryToken == astTokenAction {
@@ -128,6 +129,10 @@ func (c *Config) Init(p *config.Parser, path string) error {
 				return err
 			}
 			state = astStatePipeline
+			if entryToken != astTokenElse {
+				// We didn't use the token, process it now
+				goto StateMachine
+			}
 		}
 	}
 	if state == astStateIf {

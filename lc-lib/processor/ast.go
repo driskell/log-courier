@@ -53,7 +53,7 @@ type astLogic struct {
 // Init the branch
 func (l *astLogic) Init(p *config.Parser, path string) (err error) {
 	if l.ifProgram, err = ParseExpression(l.IfExpr); err != nil {
-		return fmt.Errorf("Condition failed to parse: [%s] -> %s", l.IfExpr, err)
+		return fmt.Errorf("Condition failed to parse at %s: [%s] -> %s", path, l.IfExpr, err)
 	}
 	return nil
 }
@@ -97,7 +97,7 @@ type logicBranchElseIf struct {
 // Init the branch
 func (l *logicBranchElseIf) Init(p *config.Parser, path string) (err error) {
 	if l.elseIfProgram, err = ParseExpression(l.ElseIfExpr); err != nil {
-		return fmt.Errorf("Condition failed to parse: [%s] -> %s", l.ElseIfExpr, err)
+		return fmt.Errorf("Condition failed to parse at %s: [%s] -> %s", path, l.ElseIfExpr, err)
 	}
 	return nil
 }

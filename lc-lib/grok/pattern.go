@@ -90,6 +90,10 @@ func (c *compiledPattern) Apply(message string, callback ApplyCallback) error {
 
 	for idx := 1; idx < len(results); idx++ {
 		name := c.names[idx]
+		if name == "" {
+			// Unnamed, skip
+			continue
+		}
 
 		var value interface{}
 		if typeHint, ok := c.types[name]; ok {

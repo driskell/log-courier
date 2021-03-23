@@ -58,11 +58,11 @@ func newGeoIPAction(p *config.Parser, configPath string, unused map[string]inter
 	}
 	action.lru, err = lru.New(1000)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to initialse GeoIP at %s: %s", configPath, err)
 	}
 	action.reader, err = geoip2.Open(action.Database)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to initialse GeoIP at %s: %s", configPath, err)
 	}
 	return action, nil
 }

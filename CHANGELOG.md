@@ -1,5 +1,15 @@
 # Change Log
 
+## 2.6.2
+
+23rd March 2021
+
+Log Carver
+
+- Further improvements and fixes to `if`/`else if`/`else` conditional parsing
+- Fix to `grok` action causing events with an empty field name
+- Improved configuration error reporting
+
 ## 2.6.1
 
 23rd March 2021
