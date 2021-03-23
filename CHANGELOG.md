@@ -2,7 +2,7 @@
 
 ## 2.6.0
 
-23rd February 2021
+23rd March 2021
 
 Log Courier
 
