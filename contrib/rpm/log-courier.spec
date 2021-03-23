@@ -56,21 +56,15 @@ mkdir -p %{buildroot}%{_bindir}
 install -m 0755 "%{_builddir}/bin/lc-admin" %{buildroot}%{_bindir}/lc-admin
 install -m 0755 "%{_builddir}/bin/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
 
+# Install config directory
+mkdir -p %{buildroot}%{_sysconfdir}/log-carver
+
 # Make the state dir
 mkdir -p %{buildroot}%{_var}/lib/log-courier
 touch %{buildroot}%{_var}/lib/log-courier/.log-courier
 
 # Install init script and related paraphernalia
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
-
-# Install docs
-mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
-install -m 0644 docs/log-courier/*.md %{buildroot}%{_docdir}/%{name}-%{version}/
-mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/codecs
-install -m 0644 docs/log-courier/codecs/*.md %{buildroot}%{_docdir}/%{name}-%{version}/codecs/
-mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/examples
-install -m 0644 docs/log-courier/examples/*.conf %{buildroot}%{_docdir}/%{name}-%{version}/examples/
-install -m 0644 docs/log-courier/examples/*.yaml %{buildroot}%{_docdir}/%{name}-%{version}/examples/
 
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
@@ -80,12 +74,20 @@ install -m 0644 contrib/initscripts/log-courier-systemd.env %{buildroot}%{_sysco
 mkdir -p %{buildroot}%{_sysconfdir}/init.d
 install -m 0755 contrib/initscripts/redhat-sysv.init %{buildroot}%{_sysconfdir}/init.d/log-courier
 install -m 0644 contrib/initscripts/log-courier.env %{buildroot}%{_sysconfdir}/sysconfig/log-courier
-
 # Make the run dir
 mkdir -p %{buildroot}%{_var}/run/log-courier
 touch %{buildroot}%{_var}/run/log-courier/admin.socket
 touch %{buildroot}%{_var}/run/log-courier/log-courier.pid
 %endif
+
+# Install docs
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
+install -m 0644 docs/log-courier/*.md %{buildroot}%{_docdir}/%{name}-%{version}/
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/codecs
+install -m 0644 docs/log-courier/codecs/*.md %{buildroot}%{_docdir}/%{name}-%{version}/codecs/
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/examples
+install -m 0644 docs/log-courier/examples/*.conf %{buildroot}%{_docdir}/%{name}-%{version}/examples/
+install -m 0644 docs/log-courier/examples/*.yaml %{buildroot}%{_docdir}/%{name}-%{version}/examples/
 
 %pre
 if ! getent group log-courier >/dev/null; then

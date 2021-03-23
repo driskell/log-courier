@@ -60,14 +60,6 @@ mkdir -p %{buildroot}%{_sysconfdir}/log-carver
 # Install init script and related paraphernalia
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
 
-# Install docs
-mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
-install -m 0644 docs/log-carver/*.md %{buildroot}%{_docdir}/%{name}-%{version}/
-mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/actions
-install -m 0644 docs/log-carver/actions/*.md %{buildroot}%{_docdir}/%{name}-%{version}/actions/
-mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/examples
-install -m 0644 docs/log-carver/examples/*.yaml %{buildroot}%{_docdir}/%{name}-%{version}/examples/
-
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
 install -m 0644 contrib/initscripts/log-carver-redhat-systemd.service %{buildroot}%{_unitdir}/log-carver.service
@@ -80,6 +72,14 @@ install -m 0644 contrib/initscripts/log-carver.env %{buildroot}%{_sysconfdir}/sy
 mkdir -p %{buildroot}%{_var}/run/log-carver
 touch %{buildroot}%{_var}/run/log-carver/log-carver.pid
 %endif
+
+# Install docs
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
+install -m 0644 docs/log-carver/*.md %{buildroot}%{_docdir}/%{name}-%{version}/
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/actions
+install -m 0644 docs/log-carver/actions/*.md %{buildroot}%{_docdir}/%{name}-%{version}/actions/
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/examples
+install -m 0644 docs/log-carver/examples/*.yaml %{buildroot}%{_docdir}/%{name}-%{version}/examples/
 
 %pre
 if ! getent group log-carver >/dev/null; then
