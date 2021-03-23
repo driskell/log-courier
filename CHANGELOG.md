@@ -1,12 +1,24 @@
 # Change Log
 
+## 2.6.1
+
+23rd March 2021
+
+Log Courier
+
+- Fixes for panics when loading configuration
+
+Log Carver
+
+- Fixes for `else` conditionals reporting as configuration errors
+
 ## 2.6.0
 
 23rd March 2021
 
 Log Courier
 
-- Fix broken `includes` configuration that was broken in 2.5.0 and add preventative tests
+- Fix broken `includes` configuration that was broken in 2.5.0 and add preventative tests (#380)
 - Added new `reader` configuration to `files` entries that defaults to `"line"`
 - Added a `"json"` `reader` that can read JSON files containing objects without line separators or line endings and decode them into events
 
