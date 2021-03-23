@@ -20,9 +20,12 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
+
+	"gopkg.in/op/go-logging.v1"
 )
 
 var (
@@ -91,6 +94,25 @@ func (c *Config) Section(name string) interface{} {
 	}
 
 	return ret
+}
+
+// parseConfiguration is a bootstrap around Parser
+func parseConfiguration(cfg *Config, rawConfig interface{}, reportUnused bool) error {
+	p := NewParser(cfg)
+	if err := p.Populate(cfg, rawConfig, "/", reportUnused); err != nil {
+		return err
+	}
+
+	err := p.validate()
+	if log.IsEnabledFor(logging.DEBUG) {
+		json, err := json.MarshalIndent(cfg, "", "\t")
+		if err == nil {
+			log.Debugf("Final configuration: %s", json)
+		} else {
+			log.Debugf("Final configuration could not be rendered as JSON: %s", err)
+		}
+	}
+	return err
 }
 
 // LoadFile detects the extension of the given file and loads it using the

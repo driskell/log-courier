@@ -17,7 +17,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -37,25 +36,6 @@ type Parser struct {
 // NewParser returns a new parser for the given configuration structure
 func NewParser(cfg *Config) *Parser {
 	return &Parser{cfg: cfg}
-}
-
-// parseConfiguration is a bootstrap around Parser
-func parseConfiguration(cfg *Config, rawConfig interface{}, reportUnused bool) error {
-	p := NewParser(cfg)
-	if err := p.Populate(cfg, rawConfig, "/", reportUnused); err != nil {
-		return err
-	}
-
-	err := p.validate()
-	if log.IsEnabledFor(logging.DEBUG) {
-		json, err := json.MarshalIndent(cfg, "", "\t")
-		if err == nil {
-			log.Debugf("Final configuration: %s", json)
-		} else {
-			log.Debugf("Final configuration could not be rendered as JSON: %s", err)
-		}
-	}
-	return err
 }
 
 // Config returns the root Config currently being parsed
@@ -79,16 +59,16 @@ func (p *Parser) Populate(config interface{}, rawConfig interface{}, configPath 
 
 // PopulateSlice populates dynamic configuration, like Populate, but by
 // appending to a slice instead of writing into a structure
-func (p *Parser) PopulateSlice(configSlice interface{}, rawConfig []interface{}, configPath string, reportUnused bool) (err error) {
+func (p *Parser) PopulateSlice(configSlice interface{}, rawConfig []interface{}, configPath string, reportUnused bool) (interface{}, error) {
 	vRawConfig := reflect.ValueOf(rawConfig)
-	vConfig := reflect.ValueOf(configSlice).Elem()
+	vConfig := reflect.ValueOf(configSlice)
 
-	var retSlice reflect.Value
-	retSlice, err = p.populateSlice(vConfig, vRawConfig, configPath, reportUnused)
-	if err == nil {
-		vConfig.Set(retSlice)
+	retSlice, err := p.populateSlice(vConfig, vRawConfig, configPath, reportUnused)
+	if err != nil {
+		return nil, err
 	}
-	return
+
+	return retSlice.Interface(), nil
 }
 
 // validate calls all the structure validations
@@ -148,6 +128,8 @@ func (p *Parser) populateStructInner(vConfig reflect.Value, vRawConfig reflect.V
 	if vConfig.Kind() == reflect.Ptr {
 		return p.populateStructInner(vConfig.Elem(), vRawConfig, configPath, reportUnused)
 	}
+
+	log.Debugf("populateStructInner: %s (%s)", vConfig.Type().String(), configPath)
 
 	// When taking fields into struct we must be a struct
 	if vConfig.Kind() != reflect.Struct {
@@ -495,7 +477,14 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 // populateSlice is used to populate an array of configuration structures using
 // an array from the configuration file
 func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, configPath string, reportUnused bool) (retSlice reflect.Value, err error) {
-	log.Debugf("populateSlice: %s (%s)", vSlice.Type().String(), configPath)
+	log.Debugf("populateSlice: %s (%s) %v", vSlice.Type().String(), configPath, vRawConfig)
+
+	if vSlice.Kind() == reflect.Ptr {
+		retSlice, err = p.populateSlice(vSlice.Elem(), vRawConfig, configPath, reportUnused)
+		newPtr := reflect.New(vSlice.Elem().Type())
+		newPtr.Elem().Set(retSlice)
+		return newPtr, err
+	}
 
 	if vRawConfig.IsValid() && vRawConfig.Kind() != reflect.Slice {
 		err = fmt.Errorf("Option %s must be an array", configPath)
@@ -510,9 +499,6 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 	}
 
 	if vRawConfig.IsValid() {
-		if vSlice.Len() != 0 {
-			vSlice = reflect.MakeSlice(vSlice.Type(), 0, 0)
-		}
 		for i := 0; i < vRawConfig.Len(); i++ {
 			vItem := reflect.New(vSlice.Type().Elem()).Elem()
 			// Dereference interface{} map value in incoming config to get the real item
