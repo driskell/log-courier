@@ -17,7 +17,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -34,28 +33,25 @@ type Parser struct {
 	validationPaths []string
 }
 
+// Preconfigured is implemented by configuration structures that are setup with a preconfigured value, and the Defaults method is called before parsing of configuration
+type Preconfigured interface {
+	Defaults()
+}
+
+// Initialising is implemented by configuration structures that need to perform additional tasks after configuration is parsed
+// This may include further parsing runs for structures with dynamic fields
+type Initialising interface {
+	Init(*Parser, string) error
+}
+
+// Validated is implemented by configuration structures that need validation, and the Validate method is called after parsing of all configuration
+type Validated interface {
+	Validate(*Parser, string) error
+}
+
 // NewParser returns a new parser for the given configuration structure
 func NewParser(cfg *Config) *Parser {
 	return &Parser{cfg: cfg}
-}
-
-// parseConfiguration is a bootstrap around Parser
-func parseConfiguration(cfg *Config, rawConfig interface{}, reportUnused bool) error {
-	p := NewParser(cfg)
-	if err := p.Populate(cfg, rawConfig, "/", reportUnused); err != nil {
-		return err
-	}
-
-	err := p.validate()
-	if log.IsEnabledFor(logging.DEBUG) {
-		json, err := json.MarshalIndent(cfg, "", "\t")
-		if err == nil {
-			log.Debugf("Final configuration: %s", json)
-		} else {
-			log.Debugf("Final configuration could not be rendered as JSON: %s", err)
-		}
-	}
-	return err
 }
 
 // Config returns the root Config currently being parsed
@@ -74,21 +70,26 @@ func (p *Parser) Populate(config interface{}, rawConfig interface{}, configPath 
 	vRawConfig := reflect.ValueOf(rawConfig)
 	vConfig := reflect.ValueOf(config)
 
+	// Disallow struct values
+	if vConfig.Kind() != reflect.Ptr {
+		panic("Cannot call Populate on struct value, must be pointer")
+	}
+
 	return p.populateStruct(vConfig, vRawConfig, configPath, reportUnused)
 }
 
 // PopulateSlice populates dynamic configuration, like Populate, but by
 // appending to a slice instead of writing into a structure
-func (p *Parser) PopulateSlice(configSlice interface{}, rawConfig []interface{}, configPath string, reportUnused bool) (err error) {
+func (p *Parser) PopulateSlice(configSlice interface{}, rawConfig []interface{}, configPath string, reportUnused bool) (interface{}, error) {
 	vRawConfig := reflect.ValueOf(rawConfig)
-	vConfig := reflect.ValueOf(configSlice).Elem()
+	vConfig := reflect.ValueOf(configSlice)
 
-	var retSlice reflect.Value
-	retSlice, err = p.populateSlice(vConfig, vRawConfig, configPath, reportUnused)
-	if err == nil {
-		vConfig.Set(retSlice)
+	retSlice, err := p.populateSlice(vConfig, vRawConfig, configPath, reportUnused)
+	if err != nil {
+		return nil, err
 	}
-	return
+
+	return retSlice.Interface(), nil
 }
 
 // validate calls all the structure validations
@@ -121,7 +122,8 @@ func (p *Parser) populateStruct(vConfig reflect.Value, vRawConfig reflect.Value,
 	log.Debugf("populateStruct: %s (%s)", vConfig.Type().String(), configPath)
 
 	// Initialise defaults and register any validation function
-	p.prepareValue(vConfig, configPath)
+	p.prepareDefaults(vConfig, configPath)
+	p.prepareValidation(vConfig, configPath)
 
 	if err = p.populateStructInner(vConfig, vRawConfig, configPath, reportUnused); err != nil {
 		return
@@ -148,6 +150,8 @@ func (p *Parser) populateStructInner(vConfig reflect.Value, vRawConfig reflect.V
 	if vConfig.Kind() == reflect.Ptr {
 		return p.populateStructInner(vConfig.Elem(), vRawConfig, configPath, reportUnused)
 	}
+
+	log.Debugf("populateStructInner: %s (%s)", vConfig.Type().String(), configPath)
 
 	// When taking fields into struct we must be a struct
 	if vConfig.Kind() != reflect.Struct {
@@ -336,7 +340,8 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		if innerValue, err = p.populateEntry(vField.Elem(), vRawConfig, configPath, tag, reportUnused); err != nil {
 			return
 		}
-		retValue = innerValue.Addr()
+		retValue = reflect.New(vField.Elem().Type())
+		retValue.Elem().Set(innerValue)
 		return
 	}
 
@@ -461,6 +466,17 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		return
 	}
 
+	if vField.Kind() == reflect.String {
+		if vMapIndex.Kind() != reflect.String {
+			err = fmt.Errorf("Option %s%s must be a string", configPath, tag)
+			return
+		}
+
+		log.Debugf("populateEntry value: %v (%s%s)", vMapIndex.String(), configPath, tag)
+		retValue = vMapIndex
+		return
+	}
+
 	if vField.Kind() == reflect.Int64 || vField.Kind() == reflect.Int {
 		var number int
 
@@ -489,6 +505,17 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		return
 	}
 
+	if vField.Kind() == reflect.Bool {
+		if vMapIndex.Kind() != reflect.Bool {
+			err = fmt.Errorf("Option %s%s must be a boolean", configPath, tag)
+			return
+		}
+
+		log.Debugf("populateEntry value: %v (%s%s)", vMapIndex.Bool(), configPath, tag)
+		retValue = vMapIndex
+		return
+	}
+
 	panic(fmt.Sprintf("Unrecognised configuration structure encountered: %s (Kind: %s)", vField.Type().Name(), vField.Kind().String()))
 }
 
@@ -497,22 +524,24 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, configPath string, reportUnused bool) (retSlice reflect.Value, err error) {
 	log.Debugf("populateSlice: %s (%s)", vSlice.Type().String(), configPath)
 
+	if vSlice.Kind() == reflect.Ptr {
+		var innerSlice reflect.Value
+		innerSlice, err = p.populateSlice(vSlice.Elem(), vRawConfig, configPath, reportUnused)
+		retSlice = reflect.New(vSlice.Elem().Type())
+		retSlice.Elem().Set(innerSlice)
+		return
+	}
+
 	if vRawConfig.IsValid() && vRawConfig.Kind() != reflect.Slice {
 		err = fmt.Errorf("Option %s must be an array", configPath)
 		return
 	}
-
-	// Setup default value and register any validation
-	p.prepareValue(vSlice, configPath)
 
 	if vSlice.IsZero() {
 		vSlice = reflect.MakeSlice(vSlice.Type(), 0, 0)
 	}
 
 	if vRawConfig.IsValid() {
-		if vSlice.Len() != 0 {
-			vSlice = reflect.MakeSlice(vSlice.Type(), 0, 0)
-		}
 		for i := 0; i < vRawConfig.Len(); i++ {
 			vItem := reflect.New(vSlice.Type().Elem()).Elem()
 			// Dereference interface{} map value in incoming config to get the real item
@@ -528,6 +557,9 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 		}
 	}
 
+	// Register any validation
+	p.prepareValidation(vSlice, configPath)
+
 	// Call the Init if any, this should take away the unused values by populating
 	// further structures depending on other values
 	if err = p.callInit(vSlice, configPath); err != nil {
@@ -538,32 +570,46 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 	return
 }
 
-// prepareValue calls the defaults function, if any, and also registers any
-// validation functions
-func (p *Parser) prepareValue(value reflect.Value, configPath string) {
+// prepareDefaults calls the defaults function
+func (p *Parser) prepareDefaults(value reflect.Value, configPath string) {
+	_, hasDefaults := value.Interface().(Preconfigured)
+	if !hasDefaults {
+		return
+	}
+
+	defaultsFunc := value.MethodByName("Defaults")
+
 	// Does the configuration structure have InitDefaults method? Call it to
 	// pre-populate the default values before we overwrite the ones given by
 	// rawConfig
-	if defaultsFunc := value.MethodByName("Defaults"); defaultsFunc.IsValid() {
-		log.Debugf("Initialising defaults: %s (%s)", value.Type().String(), configPath)
-		defaultsFunc.Call([]reflect.Value{})
+	log.Debugf("Initialising defaults: %s (%s)", value.Type().String(), configPath)
+	defaultsFunc.Call([]reflect.Value{})
+}
+
+// prepareValidation registers any validation functions
+func (p *Parser) prepareValidation(value reflect.Value, configPath string) {
+	_, hasValidate := value.Interface().(Validated)
+	if !hasValidate {
+		return
 	}
 
+	validateFunc := value.MethodByName("Validate")
+
 	// Queue the structure for a Validate call at the end if it has one
-	if validateFunc := value.MethodByName("Validate"); validateFunc.IsValid() {
-		log.Debugf("Registering validation: %s (%s)", value.Type().String(), configPath)
-		p.validationFuncs = append(p.validationFuncs, validateFunc)
-		p.validationPaths = append(p.validationPaths, configPath)
-	}
+	log.Debugf("Registering validation: %s (%s)", value.Type().String(), configPath)
+	p.validationFuncs = append(p.validationFuncs, validateFunc)
+	p.validationPaths = append(p.validationPaths, configPath)
 }
 
 // callInit calls the custom initialisation function, if any, for the given
 // value
 func (p *Parser) callInit(value reflect.Value, configPath string) error {
-	initFunc := value.MethodByName("Init")
-	if !initFunc.IsValid() {
+	_, hasInit := value.Interface().(Initialising)
+	if !hasInit {
 		return nil
 	}
+
+	initFunc := value.MethodByName("Init")
 
 	log.Debugf("Calling initialisation: %s (%s)", value.Type().String(), configPath)
 	result := initFunc.Call([]reflect.Value{

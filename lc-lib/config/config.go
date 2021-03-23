@@ -20,9 +20,13 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
+	"reflect"
 	"sort"
+
+	"gopkg.in/op/go-logging.v1"
 )
 
 var (
@@ -91,6 +95,41 @@ func (c *Config) Section(name string) interface{} {
 	}
 
 	return ret
+}
+
+// Section sets the specified dynamic configuration entry - it must already exist and be the same type
+func (c *Config) SetSection(name string, value interface{}) {
+	existingValue, ok := c.Sections[name]
+	if !ok {
+		panic("Cannot set value of unregistered section")
+	}
+
+	existing := reflect.TypeOf(existingValue)
+	provided := reflect.TypeOf(value)
+	if existing != provided {
+		panic("Cannot set value of registered section to a different type than the registered section")
+	}
+
+	c.Sections[name] = value
+}
+
+// parseConfiguration is a bootstrap around Parser
+func parseConfiguration(cfg *Config, rawConfig interface{}, reportUnused bool) error {
+	p := NewParser(cfg)
+	if err := p.Populate(cfg, rawConfig, "/", reportUnused); err != nil {
+		return err
+	}
+
+	err := p.validate()
+	if log.IsEnabledFor(logging.DEBUG) {
+		json, err := json.MarshalIndent(cfg, "", "\t")
+		if err == nil {
+			log.Debugf("Final configuration: %s", json)
+		} else {
+			log.Debugf("Final configuration could not be rendered as JSON: %s", err)
+		}
+	}
+	return err
 }
 
 // LoadFile detects the extension of the given file and loads it using the

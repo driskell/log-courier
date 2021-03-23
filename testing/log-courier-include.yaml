@@ -1,0 +1,18 @@
+general:
+  log syslog: false
+  log stdout: true
+  persist directory: .
+  log level: debug
+admin:
+  enabled: true
+  listen address: tcp:127.0.0.1:12340
+network:
+  servers:
+  - 127.0.0.1:12345
+  - 127.0.0.1:12346
+  transport: tcp
+files:
+- paths:
+  - singleline-generated.log
+includes:
+- ./log-courier-include-*.yaml

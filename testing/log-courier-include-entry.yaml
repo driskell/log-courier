@@ -1,0 +1,10 @@
+- paths:
+  - multiline-generated.log
+  codecs:
+  - name: multiline
+    patterns:
+    - "!$"
+    previous timeout: 30s
+    max multiline bytes: 524288
+  fields:
+    type: nginx
