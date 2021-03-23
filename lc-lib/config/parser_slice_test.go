@@ -1,143 +1,11 @@
 package config
 
 import (
+	"io"
+	"reflect"
 	"strconv"
 	"testing"
 )
-
-type TestParserPopulateStructFixture struct {
-	Value        string
-	ValueWithKey int `config:"keyed"`
-}
-
-func TestParserPopulateStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
-
-	input := map[string]interface{}{
-		"keyed": 678,
-	}
-
-	item := &TestParserPopulateStructFixture{}
-	err := parser.Populate(item, input, "/", false)
-	if err != nil {
-		t.Errorf("Parsing failed unexpectedly: %s", err)
-		t.FailNow()
-	}
-
-	if item.Value != "" {
-		t.Errorf("Unexpected parse of unkeyed Value property: %s", item.Value)
-	}
-	if item.ValueWithKey != 678 {
-		t.Errorf("Unexpected value of ValueWithKey property: %d", item.ValueWithKey)
-	}
-
-	// Double pointer
-	input = map[string]interface{}{
-		"keyed": 678,
-	}
-
-	item = &TestParserPopulateStructFixture{}
-	item2 := &item
-	err = parser.Populate(item2, input, "/", false)
-	if err != nil {
-		t.Errorf("Parsing failed unexpectedly: %s", err)
-		t.FailNow()
-	}
-
-	if item.ValueWithKey != 678 {
-		t.Errorf("Unexpected value of ValueWithKey property: %d", item.ValueWithKey)
-	}
-}
-
-func TestParserPopulateReportUnused(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
-
-	input := map[string]interface{}{
-		"value":        "testing",
-		"unused":       123,
-		"keyed":        678,
-		"ValueWithKey": 987,
-	}
-
-	item := &TestParserPopulateStructFixture{}
-	err := parser.Populate(item, input, "/", true)
-	if err == nil {
-		t.Errorf("Parsing with unused succeeded unexpectedly")
-		t.FailNow()
-	}
-
-	if item.ValueWithKey != 678 {
-		t.Errorf("Unexpected value of ValueWithKey property: %d", item.ValueWithKey)
-	}
-
-	// Verify that we exhausted from the map - this isn't a bug it's how we process values
-	if _, ok := input["keyed"]; ok {
-		t.Errorf("Parsing did not remove used value from map")
-	}
-	if _, ok := input["ValueWithKey"]; !ok {
-		t.Errorf("Parsing removed unexpected value from map")
-	}
-	if _, ok := input["unused"]; !ok {
-		t.Errorf("Parsing removed unexpected value from map")
-	}
-	if _, ok := input["value"]; !ok {
-		t.Errorf("Parsing removed unexpected value from map")
-	}
-}
-
-func TestParserPopulateStructNoPointer(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
-
-	input := map[string]interface{}{
-		"keyed": 678,
-	}
-
-	defer func() {
-		err := recover()
-		if err == nil {
-			t.Errorf("Parsing with struct that cannot be set (no pointer) succeeded unexpectedly")
-		}
-	}()
-
-	item := TestParserPopulateStructFixture{}
-	parser.Populate(item, input, "/", false)
-}
-
-type TestParserPopulateEmbeddedStructFixture struct {
-	Inner          *TestParserPopulateStructFixture `config:"inner"`
-	InnerNoPointer TestParserPopulateStructFixture  `config:"innernp"`
-}
-
-func TestParserPopulateEmbeddedStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
-
-	input := map[string]interface{}{
-		"inner": map[string]interface{}{
-			"keyed": 678,
-		},
-		"innernp": map[string]interface{}{
-			"keyed": 123,
-		},
-	}
-
-	item := &TestParserPopulateEmbeddedStructFixture{}
-	err := parser.Populate(item, input, "/", false)
-	if err != nil {
-		t.Errorf("Parsing failed unexpectedly: %s", err)
-		t.FailNow()
-	}
-
-	if item.Inner.ValueWithKey != 678 {
-		t.Errorf("Unexpected value of Inner.ValueWithKey property: %d", item.Inner.ValueWithKey)
-	}
-	if item.InnerNoPointer.ValueWithKey != 123 {
-		t.Errorf("Unexpected value of InnerNoPointer.ValueWithKey property: %d", item.InnerNoPointer.ValueWithKey)
-	}
-}
 
 type TestParserPopulateStructSliceInStructFixture struct {
 	Slice                 []TestParserPopulateStructFixture   `config:"slice"`
@@ -870,5 +738,98 @@ func TestParserPopulatePointerSliceOfPointer(t *testing.T) {
 		if *item[index] != value {
 			t.Errorf("Unexpected value in slice at location %d: %s", index, *item[index])
 		}
+	}
+}
+
+var TestParserPopulateSliceCallbacksCalled []string
+
+type TestParserPopulateSliceCallbacksFixture []string
+
+func (f TestParserPopulateSliceCallbacksFixture) Defaults() {
+	TestParserPopulateSliceCallbacksCalled = append(TestParserPopulateSliceCallbacksCalled, "defaults")
+}
+
+func (f TestParserPopulateSliceCallbacksFixture) Init(p *Parser, path string) error {
+	TestParserPopulateSliceCallbacksCalled = append(TestParserPopulateSliceCallbacksCalled, "init")
+	return nil
+}
+
+func (f TestParserPopulateSliceCallbacksFixture) Validate(p *Parser, path string) error {
+	TestParserPopulateSliceCallbacksCalled = append(TestParserPopulateSliceCallbacksCalled, "validate")
+	return nil
+}
+
+func TestParserPopulateSliceCallbacks(t *testing.T) {
+	config := NewConfig()
+	parser := NewParser(config)
+
+	TestParserPopulateSliceCallbacksCalled = make([]string, 0, 0)
+
+	input := []interface{}{"100", "200"}
+
+	item := TestParserPopulateSliceCallbacksFixture{}
+	retItem, err := parser.PopulateSlice(item, input, "/", false)
+	if err != nil {
+		t.Errorf("Parsing failed unexpectedly: %s", err)
+		t.FailNow()
+	}
+	item = retItem.(TestParserPopulateSliceCallbacksFixture)
+	if err != nil {
+		t.Errorf("Parsing failed unexpectedly: %s", err)
+		t.FailNow()
+	}
+
+	err = parser.validate()
+	if err != nil {
+		t.Errorf("Unexpected validation error: %s", err)
+	}
+
+	if !reflect.DeepEqual(TestParserPopulateSliceCallbacksCalled, []string{"init", "validate"}) {
+		t.Errorf("Unexpected or missing callback; Expected: %v Received: %v", []string{"init", "validate"}, TestParserPopulateSliceCallbacksCalled)
+	}
+}
+
+type TestParserPopulateSliceCallbacksInitErrorFixture []string
+
+func (f TestParserPopulateSliceCallbacksInitErrorFixture) Init(p *Parser, path string) error {
+	return io.EOF
+}
+
+func TestParserPopulateSliceCallbacksInitError(t *testing.T) {
+	config := NewConfig()
+	parser := NewParser(config)
+
+	input := []interface{}{"100", "200"}
+
+	item := TestParserPopulateSliceCallbacksInitErrorFixture{}
+	_, err := parser.PopulateSlice(item, input, "/", false)
+	if err == nil {
+		t.Error("Parsing succeeded unexpectedly")
+		t.FailNow()
+	}
+}
+
+type TestParserPopulateSliceCallbacksValidateErrorFixture []string
+
+func (f TestParserPopulateSliceCallbacksValidateErrorFixture) Validate(p *Parser, path string) error {
+	return io.EOF
+}
+
+func TestParserPopulateSliceCallbacksValidateError(t *testing.T) {
+	config := NewConfig()
+	parser := NewParser(config)
+
+	input := []interface{}{"100", "200"}
+
+	item := TestParserPopulateSliceCallbacksValidateErrorFixture{}
+	_, err := parser.PopulateSlice(item, input, "/", false)
+	if err != nil {
+		t.Errorf("Parsing failed unexpectedly: %s", err)
+		t.FailNow()
+	}
+
+	err = parser.validate()
+	if err == nil {
+		t.Errorf("Unexpected validation success")
 	}
 }

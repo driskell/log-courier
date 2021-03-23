@@ -33,6 +33,22 @@ type Parser struct {
 	validationPaths []string
 }
 
+// Preconfigured is implemented by configuration structures that are setup with a preconfigured value, and the Defaults method is called before parsing of configuration
+type Preconfigured interface {
+	Defaults()
+}
+
+// Initialising is implemented by configuration structures that need to perform additional tasks after configuration is parsed
+// This may include further parsing runs for structures with dynamic fields
+type Initialising interface {
+	Init(*Parser, string) error
+}
+
+// Validated is implemented by configuration structures that need validation, and the Validate method is called after parsing of all configuration
+type Validated interface {
+	Validate(*Parser, string) error
+}
+
 // NewParser returns a new parser for the given configuration structure
 func NewParser(cfg *Config) *Parser {
 	return &Parser{cfg: cfg}
@@ -450,6 +466,17 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		return
 	}
 
+	if vField.Kind() == reflect.String {
+		if vMapIndex.Kind() != reflect.String {
+			err = fmt.Errorf("Option %s%s must be a string", configPath, tag)
+			return
+		}
+
+		log.Debugf("populateEntry value: %v (%s%s)", vMapIndex.String(), configPath, tag)
+		retValue = vMapIndex
+		return
+	}
+
 	if vField.Kind() == reflect.Int64 || vField.Kind() == reflect.Int {
 		var number int
 
@@ -475,6 +502,17 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 			retValue = reflect.ValueOf(number)
 		}
 
+		return
+	}
+
+	if vField.Kind() == reflect.Bool {
+		if vMapIndex.Kind() != reflect.Bool {
+			err = fmt.Errorf("Option %s%s must be a boolean", configPath, tag)
+			return
+		}
+
+		log.Debugf("populateEntry value: %v (%s%s)", vMapIndex.Bool(), configPath, tag)
+		retValue = vMapIndex
 		return
 	}
 
@@ -534,32 +572,44 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 
 // prepareDefaults calls the defaults function
 func (p *Parser) prepareDefaults(value reflect.Value, configPath string) {
+	_, hasDefaults := value.Interface().(Preconfigured)
+	if !hasDefaults {
+		return
+	}
+
+	defaultsFunc := value.MethodByName("Defaults")
+
 	// Does the configuration structure have InitDefaults method? Call it to
 	// pre-populate the default values before we overwrite the ones given by
 	// rawConfig
-	if defaultsFunc := value.MethodByName("Defaults"); defaultsFunc.IsValid() {
-		log.Debugf("Initialising defaults: %s (%s)", value.Type().String(), configPath)
-		defaultsFunc.Call([]reflect.Value{})
-	}
+	log.Debugf("Initialising defaults: %s (%s)", value.Type().String(), configPath)
+	defaultsFunc.Call([]reflect.Value{})
 }
 
 // prepareValidation registers any validation functions
 func (p *Parser) prepareValidation(value reflect.Value, configPath string) {
-	// Queue the structure for a Validate call at the end if it has one
-	if validateFunc := value.MethodByName("Validate"); validateFunc.IsValid() {
-		log.Debugf("Registering validation: %s (%s)", value.Type().String(), configPath)
-		p.validationFuncs = append(p.validationFuncs, validateFunc)
-		p.validationPaths = append(p.validationPaths, configPath)
+	_, hasValidate := value.Interface().(Validated)
+	if !hasValidate {
+		return
 	}
+
+	validateFunc := value.MethodByName("Validate")
+
+	// Queue the structure for a Validate call at the end if it has one
+	log.Debugf("Registering validation: %s (%s)", value.Type().String(), configPath)
+	p.validationFuncs = append(p.validationFuncs, validateFunc)
+	p.validationPaths = append(p.validationPaths, configPath)
 }
 
 // callInit calls the custom initialisation function, if any, for the given
 // value
 func (p *Parser) callInit(value reflect.Value, configPath string) error {
-	initFunc := value.MethodByName("Init")
-	if !initFunc.IsValid() {
+	_, hasInit := value.Interface().(Initialising)
+	if !hasInit {
 		return nil
 	}
+
+	initFunc := value.MethodByName("Init")
 
 	log.Debugf("Calling initialisation: %s (%s)", value.Type().String(), configPath)
 	result := initFunc.Call([]reflect.Value{
