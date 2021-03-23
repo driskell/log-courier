@@ -318,7 +318,8 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		if innerValue, err = p.populateEntry(vField.Elem(), vRawConfig, configPath, tag, reportUnused); err != nil {
 			return
 		}
-		retValue = innerValue.Addr()
+		retValue = reflect.New(vField.Elem().Type())
+		retValue.Elem().Set(innerValue)
 		return
 	}
 
@@ -480,10 +481,11 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 	log.Debugf("populateSlice: %s (%s) %v", vSlice.Type().String(), configPath, vRawConfig)
 
 	if vSlice.Kind() == reflect.Ptr {
-		retSlice, err = p.populateSlice(vSlice.Elem(), vRawConfig, configPath, reportUnused)
-		newPtr := reflect.New(vSlice.Elem().Type())
-		newPtr.Elem().Set(retSlice)
-		return newPtr, err
+		var innerSlice reflect.Value
+		innerSlice, err = p.populateSlice(vSlice.Elem(), vRawConfig, configPath, reportUnused)
+		retSlice = reflect.New(vSlice.Elem().Type())
+		retSlice.Elem().Set(innerSlice)
+		return
 	}
 
 	if vRawConfig.IsValid() && vRawConfig.Kind() != reflect.Slice {

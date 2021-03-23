@@ -654,9 +654,6 @@ func TestParserPopulateSlice(t *testing.T) {
 type TestParserPopulateSliceOfPointerFixture []*string
 
 func TestParserPopulateSliceOfPointer(t *testing.T) {
-	// TODO: This entire thing panics
-	t.SkipNow()
-
 	config := NewConfig()
 	parser := NewParser(config)
 
@@ -711,9 +708,6 @@ func TestParserPopulateSliceOfPointer(t *testing.T) {
 type TestParserPopulateSliceOfPointerPointerFixture []**string
 
 func TestParserPopulateSliceOfPointerPointer(t *testing.T) {
-	// TODO: This entire thing panics
-	t.SkipNow()
-
 	config := NewConfig()
 	parser := NewParser(config)
 
@@ -819,9 +813,6 @@ func TestParserPopulatePointerSlice(t *testing.T) {
 }
 
 func TestParserPopulatePointerSliceOfPointer(t *testing.T) {
-	// TODO: This entire thing panics
-	t.SkipNow()
-
 	config := NewConfig()
 	parser := NewParser(config)
 
