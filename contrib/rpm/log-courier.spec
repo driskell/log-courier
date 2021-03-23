@@ -69,7 +69,8 @@ install -m 0644 docs/log-courier/*.md %{buildroot}%{_docdir}/%{name}-%{version}/
 mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/codecs
 install -m 0644 docs/log-courier/codecs/*.md %{buildroot}%{_docdir}/%{name}-%{version}/codecs/
 mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}/examples
-install -m 0644 docs/log-courier/examples/*.md %{buildroot}%{_docdir}/%{name}-%{version}/examples/
+install -m 0644 docs/log-courier/examples/*.conf %{buildroot}%{_docdir}/%{name}-%{version}/examples/
+install -m 0644 docs/log-courier/examples/*.yaml %{buildroot}%{_docdir}/%{name}-%{version}/examples/
 
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
