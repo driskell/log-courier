@@ -27,10 +27,6 @@ override_dh_auto_install:
 	mkdir -p debian/log-carver/usr/sbin
 	install -m 0755 bin/log-carver debian/log-carver/usr/sbin/log-carver
 
-	# Install example configuration
-	mkdir -p debian/log-carver/etc/log-carver/examples
-	cp -av docs/log-carver/examples/* debian/log-carver/etc/log-carver/examples/
-
 	# Install upstart and systemd scripts
 	mkdir -p debian/log-carver/etc/init.d debian/log-carver/lib/systemd/system
 	install -m 0755 contrib/initscripts/debian-upstart.init debian/log-carver/etc/init.d/log-carver
@@ -44,4 +40,4 @@ override_dh_auto_install:
 	# Install copyright and docs
 	mkdir -p debian/log-carver/usr/share/doc/log-carver
 	install -m 0644 debian/copyright debian/log-carver/usr/share/doc/log-carver/copyright
-	cp -av docs/* debian/log-carver/usr/share/doc/log-carver/
+	cp -av docs/log-carver/* debian/log-carver/usr/share/doc/log-carver/

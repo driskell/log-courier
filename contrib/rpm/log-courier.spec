@@ -56,16 +56,16 @@ mkdir -p %{buildroot}%{_bindir}
 install -m 0755 "%{_builddir}/bin/lc-admin" %{buildroot}%{_bindir}/lc-admin
 install -m 0755 "%{_builddir}/bin/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
 
-# Install example configuration
-mkdir -p %{buildroot}%{_sysconfdir}/log-courier %{buildroot}%{_sysconfdir}/log-courier/examples/
-install -m 0644 docs/log-courier/examples/* %{buildroot}%{_sysconfdir}/log-courier/examples/
-
 # Make the state dir
 mkdir -p %{buildroot}%{_var}/lib/log-courier
 touch %{buildroot}%{_var}/lib/log-courier/.log-courier
 
 # Install init script and related paraphernalia
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
+
+# Install docs
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
+install -m 0644 docs/log-courier/* %{buildroot}%{_docdir}/%{name}-%{version}/
 
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
@@ -138,7 +138,7 @@ fi
 %{_unitdir}/log-courier.service
 %endif
 %dir %{_sysconfdir}/log-courier
-%{_sysconfdir}/log-courier/examples
+%{_docdir}/%{name}-%{version}
 %config(noreplace) %{_sysconfdir}/sysconfig/log-courier
 
 %defattr(0644,log-courier,log-courier,0755)

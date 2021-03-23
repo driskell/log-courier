@@ -30,10 +30,6 @@ override_dh_auto_install:
 	install -m 0755 bin/lc-admin debian/log-courier/usr/bin/lc-admin
 	install -m 0755 bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
 
-	# Install example configuration
-	mkdir -p debian/log-courier/etc/log-courier/examples
-	cp -av docs/log-courier/examples/* debian/log-courier/etc/log-courier/examples/
-
 	# Install upstart script
 	mkdir -p debian/log-courier/etc/init.d
 	install -m 0755 contrib/initscripts/debian-upstart.init debian/log-courier/etc/init.d/log-courier
@@ -46,4 +42,4 @@ override_dh_auto_install:
 	# Install copyright and docs
 	mkdir -p debian/log-courier/usr/share/doc/log-courier
 	install -m 0644 debian/copyright debian/log-courier/usr/share/doc/log-courier/copyright
-	cp -av docs/* debian/log-courier/usr/share/doc/log-courier/
+	cp -av docs/log-courier/* debian/log-courier/usr/share/doc/log-courier/

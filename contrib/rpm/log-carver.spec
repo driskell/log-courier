@@ -54,15 +54,15 @@ fi
 mkdir -p %{buildroot}%{_sbindir}
 install -m 0755 %{_builddir}/bin/log-carver %{buildroot}%{_sbindir}/log-carver
 
-# Install example configuration
-mkdir -p %{buildroot}%{_sysconfdir}/log-carver %{buildroot}%{_sysconfdir}/log-carver/examples/
-install -m 0644 docs/log-carver/examples/* %{buildroot}%{_sysconfdir}/log-carver/examples/
-
 # Install config directory
 mkdir -p %{buildroot}%{_sysconfdir}/log-carver
 
 # Install init script and related paraphernalia
 mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
+
+# Install docs
+mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
+install -m 0644 docs/log-courier/* %{buildroot}%{_docdir}/%{name}-%{version}/
 
 %if 0%{?rhel} >= 7
 mkdir -p %{buildroot}%{_unitdir}
@@ -122,14 +122,16 @@ fi
 %files
 %defattr(0755,root,root,0755)
 %{_sbindir}/log-carver
-%if 0%{?rhel} >= 7
-%{_unitdir}/log-carver.service
-%else
+%if 0%{?rhel} < 7
 %{_sysconfdir}/init.d/log-carver
 %endif
 
 %defattr(0644,root,root,0755)
+%if 0%{?rhel} >= 7
+%{_unitdir}/log-carver.service
+%endif
 %dir %{_sysconfdir}/log-carver
+%{_docdir}/%{name}-%{version}
 %config(noreplace) %{_sysconfdir}/sysconfig/log-carver
 
 %defattr(0644,log-courier,log-courier,0755)
