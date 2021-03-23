@@ -54,6 +54,10 @@ fi
 mkdir -p %{buildroot}%{_sbindir}
 install -m 0755 %{_builddir}/bin/log-carver %{buildroot}%{_sbindir}/log-carver
 
+# Install example configuration
+mkdir -p %{buildroot}%{_sysconfdir}/log-carver %{buildroot}%{_sysconfdir}/log-carver/examples/
+install -m 0644 docs/log-carver/examples/* %{buildroot}%{_sysconfdir}/log-carver/examples/
+
 # Install config directory
 mkdir -p %{buildroot}%{_sysconfdir}/log-carver
 

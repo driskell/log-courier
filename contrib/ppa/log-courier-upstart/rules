@@ -32,7 +32,7 @@ override_dh_auto_install:
 
 	# Install example configuration
 	mkdir -p debian/log-courier/etc/log-courier/examples
-	cp -av docs/examples/* debian/log-courier/etc/log-courier/examples/
+	cp -av docs/log-courier/examples/* debian/log-courier/etc/log-courier/examples/
 
 	# Install upstart script
 	mkdir -p debian/log-courier/etc/init.d

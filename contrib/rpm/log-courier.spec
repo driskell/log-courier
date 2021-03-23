@@ -58,7 +58,7 @@ install -m 0755 "%{_builddir}/bin/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
 
 # Install example configuration
 mkdir -p %{buildroot}%{_sysconfdir}/log-courier %{buildroot}%{_sysconfdir}/log-courier/examples/
-install -m 0644 docs/examples/* %{buildroot}%{_sysconfdir}/log-courier/examples/
+install -m 0644 docs/log-courier/examples/* %{buildroot}%{_sysconfdir}/log-courier/examples/
 
 # Make the state dir
 mkdir -p %{buildroot}%{_var}/lib/log-courier

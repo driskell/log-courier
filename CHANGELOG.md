@@ -100,7 +100,7 @@ Log Carver
 - New ES transport to allow events to be sent directly to Elasticsearch
 - Templates embedded for ES6+ that will automatically be inserted as "logstash"
 - It is recommended to use new indices and remove the "logstash" template from ES as fields are different and now follow ECS (Elastic Common Schema)
-- Configuration documentation is minimal but a minimal example can be found in the docs/examples folder, more will be added in time
+- Configuration documentation is minimal but a minimal example can be found in the docs/log-carver/examples folder, more will be added in time
 
 ## 2.0.6
 
