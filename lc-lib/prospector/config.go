@@ -73,7 +73,8 @@ func (fc *FileConfig) Validate(p *config.Parser, path string) (err error) {
 
 // Validate the configuration and process the includes
 func (ic IncludeConfig) Validate(p *config.Parser, path string) (err error) {
-	target := p.Config().Section("files").(*Config)
+	target := p.Config().Section("files")
+	includedFiles := false
 
 	// Iterate includes
 	for _, glob := range ic {
@@ -91,13 +92,16 @@ func (ic IncludeConfig) Validate(p *config.Parser, path string) (err error) {
 			}
 
 			// Append to files configuration
-			var retTarget interface{}
-			if retTarget, err = p.PopulateSlice(*target, rawInclude, fmt.Sprintf("%s/%s", path, include), true); err != nil {
+			if target, err = p.PopulateSlice(target, rawInclude, fmt.Sprintf("%s/%s", path, include), true); err != nil {
 				return
 			}
 
-			*target = retTarget.(Config)
+			includedFiles = true
 		}
+	}
+
+	if includedFiles {
+		p.Config().SetSection("files", target)
 	}
 
 	// Wait for Config to be processed

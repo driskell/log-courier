@@ -106,7 +106,8 @@ func (p *Parser) populateStruct(vConfig reflect.Value, vRawConfig reflect.Value,
 	log.Debugf("populateStruct: %s (%s)", vConfig.Type().String(), configPath)
 
 	// Initialise defaults and register any validation function
-	p.prepareValue(vConfig, configPath)
+	p.prepareDefaults(vConfig, configPath)
+	p.prepareValidation(vConfig, configPath)
 
 	if err = p.populateStructInner(vConfig, vRawConfig, configPath, reportUnused); err != nil {
 		return
@@ -498,9 +499,6 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 		return
 	}
 
-	// Setup default value and register any validation
-	p.prepareValue(vSlice, configPath)
-
 	if vSlice.IsZero() {
 		vSlice = reflect.MakeSlice(vSlice.Type(), 0, 0)
 	}
@@ -521,6 +519,9 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 		}
 	}
 
+	// Register any validation
+	p.prepareValidation(vSlice, configPath)
+
 	// Call the Init if any, this should take away the unused values by populating
 	// further structures depending on other values
 	if err = p.callInit(vSlice, configPath); err != nil {
@@ -531,9 +532,8 @@ func (p *Parser) populateSlice(vSlice reflect.Value, vRawConfig reflect.Value, c
 	return
 }
 
-// prepareValue calls the defaults function, if any, and also registers any
-// validation functions
-func (p *Parser) prepareValue(value reflect.Value, configPath string) {
+// prepareDefaults calls the defaults function
+func (p *Parser) prepareDefaults(value reflect.Value, configPath string) {
 	// Does the configuration structure have InitDefaults method? Call it to
 	// pre-populate the default values before we overwrite the ones given by
 	// rawConfig
@@ -541,7 +541,10 @@ func (p *Parser) prepareValue(value reflect.Value, configPath string) {
 		log.Debugf("Initialising defaults: %s (%s)", value.Type().String(), configPath)
 		defaultsFunc.Call([]reflect.Value{})
 	}
+}
 
+// prepareValidation registers any validation functions
+func (p *Parser) prepareValidation(value reflect.Value, configPath string) {
 	// Queue the structure for a Validate call at the end if it has one
 	if validateFunc := value.MethodByName("Validate"); validateFunc.IsValid() {
 		log.Debugf("Registering validation: %s (%s)", value.Type().String(), configPath)

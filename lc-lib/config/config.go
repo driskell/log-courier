@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"reflect"
 	"sort"
 
 	"gopkg.in/op/go-logging.v1"
@@ -94,6 +95,22 @@ func (c *Config) Section(name string) interface{} {
 	}
 
 	return ret
+}
+
+// Section sets the specified dynamic configuration entry - it must already exist and be the same type
+func (c *Config) SetSection(name string, value interface{}) {
+	existingValue, ok := c.Sections[name]
+	if !ok {
+		panic("Cannot set value of unregistered section")
+	}
+
+	existing := reflect.TypeOf(existingValue)
+	provided := reflect.TypeOf(value)
+	if existing != provided {
+		panic("Cannot set value of registered section to a different type than the registered section")
+	}
+
+	c.Sections[name] = value
 }
 
 // parseConfiguration is a bootstrap around Parser
