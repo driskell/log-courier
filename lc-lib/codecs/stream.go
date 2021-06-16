@@ -55,7 +55,7 @@ type Stream struct {
 
 // EventFunc is called by a Stream when an Event is produced by the
 // codec chain
-type EventFunc func(int64, int64, map[string]interface{})
+type EventFunc func(int64, int64, map[string]interface{}) error
 
 // Defaults sets the default codec stream configuration
 // Ensure we override the one from event.StreamConfig
@@ -73,7 +73,7 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 // codec factories that will be required
 func (sc *StreamConfig) Init(p *config.Parser, path string) (err error) {
 	if len(sc.Codecs) == 0 {
-		sc.Codecs = []Stub{Stub{Name: defaultStreamCodec}}
+		sc.Codecs = []Stub{{Name: defaultStreamCodec}}
 	}
 
 	for i := 0; i < len(sc.Codecs); i++ {
@@ -115,12 +115,12 @@ func (sc *StreamConfig) NewStream(eventFunc EventFunc, startOffset int64) *Strea
 }
 
 // ProcessEvent receives events that should be processed by the codec stream
-func (cs *Stream) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) {
-	cs.firstCodec.ProcessEvent(startOffset, endOffset, data)
+func (cs *Stream) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) error {
+	return cs.firstCodec.ProcessEvent(startOffset, endOffset, data)
 }
 
 // eventCallback receives events from the final codec and ships them to the output
-func (cs *Stream) eventCallback(startOffset int64, endOffset int64, data map[string]interface{}) {
+func (cs *Stream) eventCallback(startOffset int64, endOffset int64, data map[string]interface{}) error {
 	// TODO: Deprecate
 	if cs.streamConfig.AddOffsetField {
 		if cs.streamConfig.EnableECS {
@@ -130,7 +130,7 @@ func (cs *Stream) eventCallback(startOffset int64, endOffset int64, data map[str
 		}
 	}
 
-	cs.eventFunc(startOffset, endOffset, data)
+	return cs.eventFunc(startOffset, endOffset, data)
 }
 
 // Reset resets the stream and all codecs
