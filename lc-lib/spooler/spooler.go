@@ -43,6 +43,7 @@ type Spooler struct {
 	output       chan<- []*event.Event
 	timerStart   time.Time
 	timer        *time.Timer
+	timerFlushed bool
 }
 
 // NewSpooler creates a new event spooler
@@ -116,7 +117,7 @@ SpoolerLoop:
 						break SpoolerLoop
 					}
 
-					s.resetTimer(false)
+					s.resetTimer()
 					s.spoolSize += len(newEvent.Bytes()) + eventHeaderSize
 					s.spool = append(s.spool, newEvent)
 
@@ -134,10 +135,11 @@ SpoolerLoop:
 						break SpoolerLoop
 					}
 
-					s.resetTimer(false)
+					s.resetTimer()
 				}
 			}
 		case <-s.timer.C:
+			s.timerFlushed = true
 			// Flush what we have, if anything
 			if len(s.spool) > 0 {
 				log.Debug("Spooler flushing %d events due to spool timeout exceeded", len(s.spool))
@@ -147,7 +149,7 @@ SpoolerLoop:
 				}
 			}
 
-			s.resetTimer(true)
+			s.resetTimer()
 		case <-s.shutdownChan:
 			break SpoolerLoop
 		case config := <-s.configChan:
@@ -182,11 +184,13 @@ func (s *Spooler) sendSpool() bool {
 }
 
 // resetTimer resets the time needed to wait before automatically flushing
-func (s *Spooler) resetTimer(didReceive bool) {
+func (s *Spooler) resetTimer() {
 	s.timerStart = time.Now()
 
 	// Stop the timer, and ensure the channel is empty before restarting it
-	if !didReceive && !s.timer.Stop() {
+	if s.timerFlushed {
+		s.timerFlushed = false
+	} else if !s.timer.Stop() {
 		<-s.timer.C
 	}
 	s.timer.Reset(s.genConfig.SpoolTimeout)
@@ -202,9 +206,11 @@ func (s *Spooler) reloadConfig(cfg *config.Config) bool {
 		if !s.sendSpool() {
 			return false
 		}
-		s.resetTimer(false)
+		s.resetTimer()
 	} else {
-		if !s.timer.Stop() {
+		if s.timerFlushed {
+			s.timerFlushed = false
+		} else if !s.timer.Stop() {
 			<-s.timer.C
 		}
 		s.timer.Reset(passed - s.genConfig.SpoolTimeout)
