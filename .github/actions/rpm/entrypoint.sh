@@ -47,5 +47,5 @@ rpmbuild --rebuild ~/"rpmbuild/SRPMS/${NAME}"-*.src.rpm
 echo '::endgroup::'
 
 echo '::group::Submitting to COPR'
-copr-cli build log-courier2 ~/"rpmbuild/SRPMS/${NAME}"-*.src.rpm
+copr-cli build "${TARGET_REPO}" ~/"rpmbuild/SRPMS/${NAME}"-*.src.rpm
 echo '::endgroup::'
