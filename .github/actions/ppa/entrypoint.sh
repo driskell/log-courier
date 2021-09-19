@@ -6,7 +6,7 @@ VERSION=${VERSION#refs/tags/}
 RELEASE=1
 DRELEASE=${DRELEASE}
 
-echo "::group::Checking exists in $REF"
+echo "::group::Checking $NAME exists in $REF"
 if [ "${NAME}" != "log-courier" ] && [ ! -d "${NAME}" ]; then
 	exit 0
 fi

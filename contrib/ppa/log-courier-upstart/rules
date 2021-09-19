@@ -18,7 +18,7 @@ override_dh_auto_test:
 	VERSION=$$(bin/log-courier --version); \
 	VERSION=$${VERSION#Log Courier version }; \
 	echo "$$VERSION"; \
-	if [ "${SKIP_VERSION_CHECK}" != "1" ] && [ "$$VERSION" != "${DEB_VERSION_UPSTREAM}" ]; then \
+	if [ ! -f .skip-version-check ] && [ "$$VERSION" != "${DEB_VERSION_UPSTREAM}" ]; then \
 		exit 1; \
 	fi
 
