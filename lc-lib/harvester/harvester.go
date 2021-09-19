@@ -207,12 +207,12 @@ func (h *Harvester) performRead() error {
 		h.offset += int64(bytesread)
 
 		// Codec is last - it forwards harvester state for us such as offset for resume
-		h.eventStream.ProcessEvent(lineOffset, h.offset, item)
+		err = h.eventStream.ProcessEvent(lineOffset, h.offset, item)
 
 		h.lastReadTime = time.Now()
 		h.lineCount++
 		h.byteCount += uint64(bytesread)
-		return nil
+		return err
 	}
 
 	if err != io.EOF {
@@ -282,7 +282,7 @@ func (h *Harvester) takeMeasurements(isPipelineBlocked bool) error {
 		doChecks = true
 	}
 
-	// Check for stale data in the buffer
+	// Check for stale data in the buffer - only do this when waiting for new data, not when waiting for pipeline to unblock
 	if doChecks {
 		if !isPipelineBlocked && h.reader.BufferedLen() != 0 {
 			if h.staleOffset == h.offset && h.lastStaleOffset != h.offset+int64(h.reader.BufferedLen()) {
@@ -300,9 +300,18 @@ func (h *Harvester) takeMeasurements(isPipelineBlocked bool) error {
 	}
 
 	if doChecks && !h.isStream {
-		if err := h.statCheck(isPipelineBlocked); err != nil {
+		info, err := h.file.Stat()
+		if err != nil {
+			log.Errorf("Unexpected error checking status of %s: %s", h.path, err)
 			return err
 		}
+
+		if err := h.statCheck(info, isPipelineBlocked); err != nil {
+			return err
+		}
+
+		// Store latest stat()
+		h.fileinfo = info
 	}
 
 	h.mutex.Lock()
@@ -335,34 +344,28 @@ func (h *Harvester) takeMeasurements(isPipelineBlocked bool) error {
 	return nil
 }
 
-// statCheck checks for truncation and updates the file status used for completion amount
+// statCheck checks for truncation
 // It also monitors for dead_time and closes orphaned files that have been open too long
-func (h *Harvester) statCheck(isPipelineBlocked bool) error {
-	info, err := h.file.Stat()
-	if err != nil {
-		log.Errorf("Unexpected error checking status of %s: %s", h.path, err)
-		return err
-	}
+func (h *Harvester) statCheck(info os.FileInfo, isPipelineBlocked bool) (err error) {
+	if !isPipelineBlocked {
+		// We are reading new data and nothing appeared yet - is it because truncated?
+		if info.Size() < h.offset {
+			return errFileTruncated
+		}
 
-	if info.Size() < h.offset {
-		return errFileTruncated
-	}
-
-	// If lastReadTime was more than dead time, this file is probably dead.
-	// Stop only if the mtime did not change since last check - this stops a
-	// race where we hit EOF but as we Stat() the mtime is updated - this mtime
-	// is the one we monitor in order to resume checking, so we need to check it
-	// didn't already update
-	if !isPipelineBlocked && h.fileinfo.ModTime() == info.ModTime() {
-		if age := time.Since(h.lastReadTime); age > h.streamConfig.DeadTime {
-			log.Infof("Stopping harvest of %s; last successful read was %v ago (\"dead time\")", h.path, age-(age%time.Second))
-			// TODO: dead_action implementation here
-			return errStopRequested
+		// If lastReadTime was more than dead time, this file is probably dead.
+		// Stop only if the mtime did not change since last check - this stops a
+		// race where we hit EOF but as we Stat() the mtime is updated - this mtime
+		// is the one we monitor in order to resume checking, so we need to check it
+		// didn't already update
+		if h.fileinfo.ModTime() == info.ModTime() {
+			if age := time.Since(h.lastReadTime); age > h.streamConfig.DeadTime {
+				log.Infof("Stopping harvest of %s; last successful read was %v ago (\"dead time\")", h.path, age-(age%time.Second))
+				// TODO: dead_action implementation here
+				return errStopRequested
+			}
 		}
 	}
-
-	// Store latest stat()
-	h.fileinfo = info
 
 	// If we're holding a deleted file open (orphaned) and dead_time passes, abort and lose the file
 	// This scenario is only reached if a file is held open by a blocked/slow pipeline
@@ -379,11 +382,11 @@ func (h *Harvester) statCheck(isPipelineBlocked bool) error {
 		}
 	}
 
-	return err
+	return
 }
 
-// eventCallback receives events from the final codec and ships them to the output
-func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[string]interface{}) {
+// eventCallback receives events from the final codec (which could be on another routine) and ships them to the output
+func (h *Harvester) eventCallback(startOffset int64, endOffset int64, data map[string]interface{}) (err error) {
 	if h.streamConfig.AddPathField {
 		if h.streamConfig.EnableECS {
 			if !h.streamConfig.AddOffsetField {
@@ -421,19 +424,13 @@ EventLoop:
 		case <-h.blockedTimer.C:
 			h.blockedTimer.Reset(1 * time.Second)
 
-			if measureErr := h.takeMeasurements(true); measureErr != nil {
-				switch measureErr {
-				case errFileTruncated:
-					// Handle on next line read
-					continue
-				case errStopRequested:
-				default:
-					// Stop
-					break EventLoop
-				}
+			if err = h.takeMeasurements(true); err != nil {
+				break EventLoop
 			}
 		}
 	}
+
+	return
 }
 
 // prepareHarvester opens the file and makes sure we opened the same one and did not race with a roll over

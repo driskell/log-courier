@@ -69,10 +69,10 @@ func (c *CodecPlain) Reset() {
 
 // ProcessEvent is called for every log event, the resulting log event(s) to be
 // transmitted should be passed through the codec callback when ready
-func (c *CodecPlain) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) {
+func (c *CodecPlain) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) error {
 	c.lastOffset = endOffset
 
-	c.callbackFunc(startOffset, endOffset, data)
+	return c.callbackFunc(startOffset, endOffset, data)
 }
 
 // Meter is called by the harvester periodically to allow the codec to calculate

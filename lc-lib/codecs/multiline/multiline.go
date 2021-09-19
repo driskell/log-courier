@@ -64,6 +64,7 @@ type CodecMultiline struct {
 
 	meterLines int64
 	meterBytes int64
+	lastErr    error
 }
 
 // NewMultilineCodecFactory creates a new MultilineCodecFactory for a codec
@@ -148,13 +149,27 @@ func (c *CodecMultiline) Reset() {
 // ProcessEvent is called by a Harvester when a new line event occurs on a file.
 // Multiline processing takes place and when a complete multiline event is found
 // as described by the configuration it is shipped to the callback
-func (c *CodecMultiline) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) {
+func (c *CodecMultiline) ProcessEvent(startOffset int64, endOffset int64, data map[string]interface{}) error {
+	if c.config.what == codecMultilineWhatPrevious {
+		if c.config.PreviousTimeout != 0 {
+			// Prevent a flush happening while we're modifying the stored data
+			c.timerLock.Lock()
+			defer func() {
+				c.timerLock.Unlock()
+			}()
+		}
+	}
+
+	if c.lastErr != nil {
+		return c.lastErr
+	}
+
 	// TODO: Option to set the field
 	text, ok := data["message"].(string)
 	if !ok {
 		// Empty, ignore
 		c.endOffset = endOffset
-		return
+		return nil
 	}
 
 	// TODO:(driskell) If we are using previous and we match on the very first line read,
@@ -167,13 +182,10 @@ func (c *CodecMultiline) ProcessEvent(startOffset int64, endOffset int64, data m
 	// partially, always with the FIRST line correct (which could be the important one)."
 	matched := c.config.patterns.Match(text)
 
-	if c.config.what == codecMultilineWhatPrevious {
-		if c.config.PreviousTimeout != 0 {
-			// Prevent a flush happening while we're modifying the stored data
-			c.timerLock.Lock()
-		}
-		if !matched {
-			c.flush()
+	if c.config.what == codecMultilineWhatPrevious && !matched {
+		c.lastErr = c.flush()
+		if c.lastErr != nil {
+			return c.lastErr
 		}
 	}
 
@@ -196,7 +208,10 @@ func (c *CodecMultiline) ProcessEvent(startOffset int64, endOffset int64, data m
 		c.bufferLines++
 		c.bufferLen += cut
 
-		c.flush()
+		c.lastErr = c.flush()
+		if c.lastErr != nil {
+			return c.lastErr
+		}
 
 		// Append the remaining data to the buffer
 		c.startOffset = c.endOffset
@@ -217,21 +232,28 @@ func (c *CodecMultiline) ProcessEvent(startOffset int64, endOffset int64, data m
 		if c.config.PreviousTimeout != 0 {
 			// Reset the timer and unlock
 			c.timerDeadline = time.Now().Add(c.config.PreviousTimeout)
-			c.timerLock.Unlock()
 		}
 	} else if c.config.what == codecMultilineWhatNext && !matched {
-		c.flush()
+		c.lastErr = c.flush()
 	}
+
+	return c.lastErr
 }
 
 // flush is called internally when a multiline event is ready.
 // It combines the lines collected and passes the new event to the callback
-func (c *CodecMultiline) flush() {
+func (c *CodecMultiline) flush() error {
 	if len(c.buffer) == 0 {
-		return
+		return nil
 	}
 
 	data := map[string]interface{}{"message": strings.Join(c.buffer, "\n")}
+
+	err := c.callbackFunc(c.startOffset, c.endOffset, data)
+	if err != nil {
+		c.buffer = nil
+		return err
+	}
 
 	// Set last offset - this is returned in Teardown so if we're mid multiline and crash, we start this multiline again
 	c.lastOffset = c.endOffset
@@ -239,7 +261,7 @@ func (c *CodecMultiline) flush() {
 	c.bufferLen = 0
 	c.bufferLines = 0
 
-	c.callbackFunc(c.startOffset, c.endOffset, data)
+	return nil
 }
 
 // Meter is called by the Harvester to request accounting
@@ -272,15 +294,22 @@ DeadlineLoop:
 		case now := <-timer.C:
 			c.timerLock.Lock()
 
-			// Have we reached the target time?
-			if !now.After(c.timerDeadline) {
-				// Deadline moved, update the timer
-				timer.Reset(c.timerDeadline.Sub(now))
-				c.timerLock.Unlock()
-				continue
+			if c.lastErr == nil {
+				// Have we reached the target time?
+				if !now.After(c.timerDeadline) {
+					// Deadline moved, update the timer
+					timer.Reset(c.timerDeadline.Sub(now))
+					c.timerLock.Unlock()
+					continue
+				}
+
+				c.lastErr = c.flush()
 			}
 
-			c.flush()
+			if c.lastErr != nil {
+				c.timerLock.Unlock()
+				break DeadlineLoop
+			}
 			timer.Reset(c.config.PreviousTimeout)
 			c.timerLock.Unlock()
 		}

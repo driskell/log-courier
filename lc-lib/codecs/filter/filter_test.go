@@ -1,10 +1,15 @@
 package codecs
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/driskell/log-courier/lc-lib/codecs"
 	"github.com/driskell/log-courier/lc-lib/config"
+)
+
+var (
+	errFilterTest = errors.New("ERROR")
 )
 
 var filterLines []string
@@ -20,14 +25,22 @@ func createFilterCodec(unused map[string]interface{}, callback codecs.CallbackFu
 	return codecs.NewCodec(factory, callback, 0)
 }
 
-func checkFilter(startOffset int64, endOffset int64, data map[string]interface{}) {
+func checkFilter(startOffset int64, endOffset int64, data map[string]interface{}) error {
 	if message, ok := data["message"].(string); ok {
 		filterLines = append(filterLines, message)
 	}
+	return nil
 }
 
-func codecEvent(codec codecs.Codec, startOffset int64, endOffset int64, data string) {
-	codec.ProcessEvent(startOffset, endOffset, map[string]interface{}{"message": data})
+func errorFilter(startOffset int64, endOffset int64, data map[string]interface{}) error {
+	if startOffset == 0 {
+		return checkFilter(startOffset, endOffset, data)
+	}
+	return errFilterTest
+}
+
+func codecEvent(codec codecs.Codec, startOffset int64, endOffset int64, data string) error {
+	return codec.ProcessEvent(startOffset, endOffset, map[string]interface{}{"message": data})
 }
 
 func TestFilter(t *testing.T) {
@@ -51,6 +64,30 @@ func TestFilter(t *testing.T) {
 
 	offset := codec.Teardown()
 	if offset != 7 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
+func TestFilterError(t *testing.T) {
+	filterLines = make([]string, 0, 1)
+
+	codec := createFilterCodec(map[string]interface{}{
+		"patterns": []string{"^NEXT line$"},
+	}, errorFilter, t)
+
+	// Send some data
+	if err := codecEvent(codec, 0, 1, "NEXT line"); err != nil {
+		t.Error("Expected codec to succeed")
+	}
+	if err := codecEvent(codec, 1, 2, "SKIP line"); err != nil {
+		t.Error("Expected codec to succeed")
+	}
+	if err := codecEvent(codec, 2, 3, "NEXT line"); err != errFilterTest {
+		t.Error("Expected codec to propogate error")
+	}
+
+	offset := codec.Teardown()
+	if offset != 2 {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }

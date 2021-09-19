@@ -1,6 +1,7 @@
 package codecs
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +11,10 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/harvester"
 	"github.com/driskell/log-courier/lc-lib/spooler"
+)
+
+var (
+	errMultilineTest = errors.New("ERROR")
 )
 
 func createMultilineCodec(unused map[string]interface{}, callback codecs.CallbackFunc, t *testing.T) codecs.Codec {
@@ -35,8 +40,9 @@ type checkMultiline struct {
 	expect []checkMultilineExpect
 	t      *testing.T
 
-	mutex sync.Mutex
-	lines int
+	mutex    sync.Mutex
+	lines    int
+	errAfter int
 }
 
 func (c *checkMultiline) formatPrintable(text string) string {
@@ -57,7 +63,7 @@ func (c *checkMultiline) incorrectLineCount(lines int, message string) {
 	c.t.Errorf("Expected: %d", len(c.expect))
 }
 
-func (c *checkMultiline) EventCallback(startOffset int64, endOffset int64, data map[string]interface{}) {
+func (c *checkMultiline) EventCallback(startOffset int64, endOffset int64, data map[string]interface{}) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -91,6 +97,15 @@ func (c *checkMultiline) EventCallback(startOffset int64, endOffset int64, data 
 	}
 
 	c.lines = line
+	return nil
+}
+
+func (c *checkMultiline) EventCallbackError(startOffset int64, endOffset int64, data map[string]interface{}) error {
+	if c.errAfter == 0 {
+		return errMultilineTest
+	}
+	c.errAfter -= 1
+	return c.EventCallback(startOffset, endOffset, data)
 }
 
 func (c *checkMultiline) CheckCurrentCount(count int, message string) {
@@ -106,8 +121,8 @@ func (c *checkMultiline) CheckFinalCount() {
 	c.CheckCurrentCount(len(c.expect), "Incorrect line count received")
 }
 
-func codecEvent(codec codecs.Codec, startOffset int64, endOffset int64, data string) {
-	codec.ProcessEvent(startOffset, endOffset, map[string]interface{}{"message": data})
+func codecEvent(codec codecs.Codec, startOffset int64, endOffset int64, data string) error {
+	return codec.ProcessEvent(startOffset, endOffset, map[string]interface{}{"message": data})
 }
 
 func TestMultilinePrevious(t *testing.T) {
@@ -432,6 +447,190 @@ func TestMultilineMultiplePatternAll(t *testing.T) {
 	check.CheckFinalCount()
 
 	if offset := codec.Teardown(); offset != 5 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
+func TestMultilineError(t *testing.T) {
+	check := &checkMultiline{
+		t:        t,
+		errAfter: 0,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"patterns": []string{"^(ANOTHER|NEXT) "},
+			"what":     "previous",
+		},
+		check.EventCallbackError,
+		t,
+	)
+
+	// Send some data
+	if err := codecEvent(codec, 0, 1, "DEBUG last line of previous"); err != nil {
+		t.Error("Expected codec to succeed")
+	}
+	if err := codecEvent(codec, 1, 2, "DEBUG First line"); err != errMultilineTest {
+		t.Error("Expected codec to propogate the error")
+	}
+	if err := codecEvent(codec, 3, 4, "NEXT line"); err != errMultilineTest {
+		t.Error("Expected codec to propogate the error")
+	}
+	if err := codecEvent(codec, 5, 6, "DEBUG Next line"); err != errMultilineTest {
+		t.Error("Expected codec to propogate the error")
+	}
+
+	if offset := codec.Teardown(); offset != 0 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
+func TestMultilineErrorOverflow(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 9, "DEBUG last"},
+		},
+		t:        t,
+		errAfter: 1,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"max multiline bytes": int64(10),
+			"patterns":            []string{"^(ANOTHER|NEXT) "},
+			"what":                "previous",
+		},
+		check.EventCallbackError,
+		t,
+	)
+
+	// Send some data
+	if err := codecEvent(codec, 0, 9, "DEBUG last"); err != nil {
+		t.Error("Expected codec to succeed")
+	}
+	if err := codecEvent(codec, 9, 37, "DEBUG First line overflowing"); err != errMultilineTest {
+		t.Error("Expected codec to propogate the error")
+	}
+	if err := codecEvent(codec, 37, 52, "DEBUG next line"); err != errMultilineTest {
+		t.Error("Expected code to propogate the error")
+	}
+
+	if offset := codec.Teardown(); offset != 9 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
+func TestMultilineErrorOverflowMultiple(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 9, "DEBUG las"},
+			{9, 19, "DEBUG Firs"},
+		},
+		t:        t,
+		errAfter: 2,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"max multiline bytes": int64(10),
+			"patterns":            []string{"^(ANOTHER|NEXT) "},
+			"what":                "previous",
+		},
+		check.EventCallbackError,
+		t,
+	)
+
+	// Send some data
+	if err := codecEvent(codec, 0, 9, "DEBUG las"); err != nil {
+		t.Error("Expected codec to succeed")
+	}
+	if err := codecEvent(codec, 9, 37, "DEBUG First line overflowing"); err != errMultilineTest {
+		t.Error("Expected codec to propogate the error")
+	}
+	if err := codecEvent(codec, 37, 53, "DEBUG next line"); err != errMultilineTest {
+		t.Error("Expected code to propogate the error")
+	}
+
+	if offset := codec.Teardown(); offset != 19 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
+func TestMultilineErrorNext(t *testing.T) {
+	check := &checkMultiline{
+		t:        t,
+		errAfter: 0,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"patterns": []string{"^(DEBUG|NEXT) "},
+			"what":     "next",
+		},
+		check.EventCallbackError,
+		t,
+	)
+
+	// Send some data
+	if err := codecEvent(codec, 0, 1, "DEBUG last line"); err != nil {
+		t.Error("Expected codec to succeed")
+	}
+	if err := codecEvent(codec, 1, 2, "SEPARATE line"); err != errMultilineTest {
+		t.Error("Expected codec to propogate the error")
+	}
+	if err := codecEvent(codec, 3, 4, "FINAL next line"); err != errMultilineTest {
+		t.Error("Expected code to propogate the error")
+	}
+
+	if offset := codec.Teardown(); offset != 0 {
+		t.Error("Teardown returned incorrect offset: ", offset)
+	}
+}
+
+func TestMultilineErrorTimeout(t *testing.T) {
+	check := &checkMultiline{
+		expect: []checkMultilineExpect{
+			{0, 1, "DEBUG First line"},
+		},
+		t:        t,
+		errAfter: 1,
+	}
+
+	codec := createMultilineCodec(
+		map[string]interface{}{
+			"patterns":         []string{"^(ANOTHER|NEXT) "},
+			"what":             "previous",
+			"previous timeout": "3s",
+		},
+		check.EventCallbackError,
+		t,
+	)
+
+	// Send some data
+	if err := codecEvent(codec, 0, 1, "DEBUG First line"); err != nil {
+		t.Error("Expected codec to succeed")
+	}
+	if err := codecEvent(codec, 1, 2, "DEBUG Next line"); err != nil {
+		t.Error("Expected codec to succeed")
+	}
+
+	// Allow a second
+	time.Sleep(time.Second)
+
+	check.CheckCurrentCount(1, "Timeout triggered too early")
+
+	// Allow 5 seconds
+	time.Sleep(5 * time.Second)
+
+	check.CheckFinalCount()
+
+	// Should now return error immediately
+	if err := codecEvent(codec, 2, 3, "DEBUG Final line"); err != errMultilineTest {
+		t.Error("Expected codec to propogate error")
+	}
+
+	offset := codec.Teardown()
+	if offset != 1 {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
