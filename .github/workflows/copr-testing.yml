@@ -35,7 +35,7 @@ jobs:
         ref: master
         path: .master
     - name: Build and Submit
-      uses: driskell/log-courier/.github/actions/rpm@master
+      uses: driskell/log-courier/.github/actions/rpm@d7e844c4687ff9666c52b87885bd8e89836821b6
       env:
         NAME: log-courier
         REF: ${{ (github.event.ref && github.event.inputs.ref) || github.ref }}
@@ -58,7 +58,7 @@ jobs:
         ref: master
         path: .master
     - name: Build and Submit
-      uses: driskell/log-courier/.github/actions/rpm@master
+      uses: driskell/log-courier/.github/actions/rpm@d7e844c4687ff9666c52b87885bd8e89836821b6
       env:
         NAME: log-carver
         REF: ${{ (github.event.ref && github.event.inputs.ref) || github.ref }}
