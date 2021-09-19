@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 	"unsafe"
 
@@ -57,7 +58,7 @@ func (a *App) configureLoggingPlatform(backends *[]logging.Backend) error {
 	}
 
 	if a.config.General().LogSyslog {
-		syslogBackend, err := logging.NewSyslogBackend(a.binName)
+		syslogBackend, err := logging.NewSyslogBackend(path.Base(os.Args[0]))
 		if err != nil {
 			return fmt.Errorf("Failed to open syslog: %s", err)
 		}

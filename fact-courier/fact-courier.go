@@ -37,7 +37,7 @@ var (
 )
 
 func main() {
-	app = core.NewApp("Fact Courier", "fact-courier", core.LogCourierVersion)
+	app = core.NewApp("Fact Courier", core.LogCourierVersion)
 	app.StartUp()
 
 	if app.Config().Section("admin").(*admin.Config).Enabled {

@@ -33,7 +33,6 @@ import (
 // App represents a courier application
 type App struct {
 	name       string
-	binName    string
 	version    string
 	configFile string
 	pipeline   *Pipeline
@@ -43,7 +42,7 @@ type App struct {
 }
 
 // NewApp creates a new courier application
-func NewApp(name, binName, version string) *App {
+func NewApp(name, version string) *App {
 	return &App{
 		name:       name,
 		version:    version,
