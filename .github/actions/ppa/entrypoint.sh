@@ -6,7 +6,7 @@ VERSION=${VERSION#refs/tags/}
 RELEASE=1
 DRELEASE=${DRELEASE}
 
-echo "::group::Checking exists in $VERSION"
+echo "::group::Checking exists in $REF"
 if [ "${NAME}" != "log-courier" ] && [ ! -d "${NAME}" ]; then
 	exit 0
 fi
@@ -17,8 +17,8 @@ if [ "${DRELEASE}" != 1 ]; then
 	wget -q "https://launchpad.net/~devel-k/+archive/ubuntu/log-courier2/+sourcefiles/log-courier/${VERSION#v}-${RELEASE}~trusty$(( DRELEASE - 1 ))/${NAME}_${VERSION#v}.orig.tar.gz" -O ~/"${NAME}_${VERSION#v}.orig.tar.gz"
 	echo '::endgroup::'
 else
-	echo "::group::Generating sources for $VERSION"
-	git archive --format=tar.gz --output ~/"${NAME}_${VERSION#v}.orig.tar.gz" --prefix "${NAME}/" "$VERSION"
+	echo "::group::Generating sources for $REF"
+	git archive --format=tar.gz --output ~/"${NAME}_${VERSION#v}.orig.tar.gz" --prefix "${NAME}/" "$REF"
 	tar -C ~ -xzf ~/"${NAME}_${VERSION#v}.orig.tar.gz"
 	echo '::endgroup::'
 	echo '::group::Adding vendored modules'
