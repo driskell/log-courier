@@ -11,7 +11,10 @@ jobs:
   build:
     strategy:
       matrix:
-        go: ['1.13', '1.14', '1.15']
+        # Red Hat we compile inside COPR using the version of Golang for the target OS. That is 1.15 for both 7 and 8-Stream via epel-stable.
+        # Ubuntu we pre-compile in GitHub Action using Focal before providing to PPA, because the older OS do not have >=1.5 we need for Go modules. Focal uses 1.13.
+        # Also test on latest 1.17.
+        go: ['1.13', '1.15', '1.17']
     name: Build Go ${{ matrix.go }}
     # Use latest Ubuntu to try work around https://github.com/golang/go/issues/37362
     runs-on: ubuntu-20.04
