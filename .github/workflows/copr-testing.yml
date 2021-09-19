@@ -39,7 +39,7 @@ jobs:
       env:
         NAME: log-courier
         REF: ${{ (github.event.ref && github.event.inputs.ref) || github.ref }}
-        VERSION: ${{ (github.event.inputs && github.event.inputs.run_number) || github.run_number }}${{ (github.event.inputs && github.event.inputs.serial) || '00' }}
+        VERSION: v${{ (github.event.inputs && github.event.inputs.run_number) || github.run_number }}${{ (github.event.inputs && github.event.inputs.serial) || '00' }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2-testing
@@ -62,7 +62,7 @@ jobs:
       env:
         NAME: log-carver
         REF: ${{ (github.event.ref && github.event.inputs.ref) || github.ref }}
-        VERSION: ${{ (github.event.inputs && github.event.inputs.run_number) || github.run_number }}${{ (github.event.inputs && github.event.inputs.serial) || '00' }}
+        VERSION: v${{ (github.event.inputs && github.event.inputs.run_number) || github.run_number }}${{ (github.event.inputs && github.event.inputs.serial) || '00' }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2-testing
