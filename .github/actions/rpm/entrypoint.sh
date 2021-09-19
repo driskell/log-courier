@@ -10,9 +10,9 @@ if [ "${NAME}" != "log-courier" ] && [ ! -d "${NAME}" ]; then
 fi
 echo '::endgroup::'
 
-echo "::group::Generating sources for $VERSION"
+echo "::group::Generating sources for $REF"
 mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-git archive --format=zip --output ~/"rpmbuild/SOURCES/$VERSION.zip" --prefix "log-courier-${VERSION#v}/" "$VERSION"
+git archive --format=zip --output ~/"rpmbuild/SOURCES/$VERSION.zip" --prefix "log-courier-${VERSION#v}/" "$REF"
 echo '::endgroup::'
 
 echo "::group::Adding vendored modules to source"

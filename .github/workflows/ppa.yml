@@ -36,6 +36,7 @@ jobs:
       uses: driskell/log-courier/.github/actions/ppa@master
       env:
         NAME: log-courier
+        REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
@@ -58,6 +59,7 @@ jobs:
       uses: driskell/log-courier/.github/actions/ppa@master
       env:
         NAME: log-carver
+        REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
