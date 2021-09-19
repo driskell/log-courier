@@ -11,9 +11,9 @@ on:
 
 # NOTE: To test this locally using `act`:
 #       1. Remove the `with` from the first checkout so it can copy your local repository (otherwise you need a GITHUB_TOKEN as it will trigger action/checkout natively)
-#       2. For the same reason as 1, remove the second checkout of master completely (you'll be copying in master anyway, right?)
+#       2. For the same reason as 1, remove the second checkout of main completely (you'll be copying in main anyway, right?)
 #       3. Change the log-courier action `uses` path to a local one so it uses your latest changes instead of pulling the upstream version (e.g. `./.github/actions/xxx`)
-#       4. Modify the entrypoint for the corresponding log-courier action so that it creates .master as a link to itself so it can function mostly unchanged (`ln -nsf . .master`)
+#       4. Modify the entrypoint for the corresponding log-courier action so that it creates .main as a link to itself so it can function mostly unchanged (`ln -nsf . .main`)
 jobs:
   release-log-courier:
     name: Release Log Courier
@@ -26,10 +26,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
       with:
-        ref: master
-        path: .master
+        ref: main
+        path: .main
     - name: Build and Submit
-      uses: driskell/log-courier/.github/actions/rpm@master
+      uses: driskell/log-courier/.github/actions/rpm@main
       env:
         NAME: log-courier
         REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
@@ -49,10 +49,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
       with:
-        ref: master
-        path: .master
+        ref: main
+        path: .main
     - name: Build and Submit
-      uses: driskell/log-courier/.github/actions/rpm@master
+      uses: driskell/log-courier/.github/actions/rpm@main
       env:
         NAME: log-carver
         REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
