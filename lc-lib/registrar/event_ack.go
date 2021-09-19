@@ -47,7 +47,6 @@ func (e *AckEvent) process(state map[Entry]*FileState) {
 	for _, event := range e.events {
 		ctx := event.Context()
 		entry := ctx.Value(ContextEntry).(Entry)
-		log.Debug("%v", entry)
 		if lastEntry == nil || lastEntry != entry {
 			lastEntry = entry
 			lastState, isFound = state[entry]
