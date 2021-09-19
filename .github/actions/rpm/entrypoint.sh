@@ -32,7 +32,7 @@ zip -qr ~/"rpmbuild/SOURCES/$VERSION.zip" "log-courier-${VERSION#v}/vendor"
 echo '::endgroup::'
 
 echo "::group::Generating spec for $VERSION"
-sed "s/Version: %%VERSION%%/Version: ${VERSION#v}/" <".master/contrib/rpm/${NAME}.spec" >~/"rpmbuild/SPECS/${NAME}.spec"
+sed "s/Version: %%VERSION%%/Version: ${VERSION#v}/" <".main/contrib/rpm/${NAME}.spec" >~/"rpmbuild/SPECS/${NAME}.spec"
 echo '::endgroup::'
 
 echo '::group::Installing secrets'

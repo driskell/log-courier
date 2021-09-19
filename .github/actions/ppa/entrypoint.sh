@@ -61,9 +61,9 @@ for DIST in trusty xenial bionic focal; do
 	cd ~/"${NAME}"
 	rm -rf debian
 	if [ "$DIST" == "trusty" ]; then
-		cp -rf "/github/workspace/.master/contrib/ppa/${NAME}-upstart" debian
+		cp -rf "/github/workspace/.main/contrib/ppa/${NAME}-upstart" debian
 	else
-		cp -rf "/github/workspace/.master/contrib/ppa/${NAME}-systemd" debian
+		cp -rf "/github/workspace/.main/contrib/ppa/${NAME}-systemd" debian
 	fi
 	debchange \
 		--create \
