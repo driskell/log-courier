@@ -3,8 +3,11 @@ name: COPR
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: Tag
+      run_number:
+        description: Run Number
+        required: true
+      serial:
+        description: Serial Number
         required: true
   push:
     branches: [master]
@@ -32,7 +35,7 @@ jobs:
       uses: driskell/log-courier/.github/actions/rpm@master
       env:
         NAME: log-courier
-        VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+        VERSION: ${{ (github.event.inputs && github.event.inputs.run_number) || github.run_number }}${{ (github.event.inputs && github.event.inputs.serial) || '00' }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2-testing
@@ -54,7 +57,7 @@ jobs:
       uses: driskell/log-courier/.github/actions/rpm@master
       env:
         NAME: log-carver
-        VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+        VERSION: ${{ (github.event.inputs && github.event.inputs.run_number) || github.run_number }}${{ (github.event.inputs && github.event.inputs.serial) || '00' }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2-testing
