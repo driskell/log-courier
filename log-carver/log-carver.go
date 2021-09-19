@@ -43,7 +43,7 @@ var (
 )
 
 func main() {
-	app = core.NewApp("Log Carver", "log-carver", core.LogCourierVersion)
+	app = core.NewApp("Log Carver", core.LogCourierVersion)
 	app.StartUp()
 
 	if app.Config().Section("admin").(*admin.Config).Enabled {

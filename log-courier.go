@@ -44,7 +44,7 @@ var (
 )
 
 func main() {
-	app = core.NewApp("Log Courier", "log-courier", core.LogCourierVersion)
+	app = core.NewApp("Log Courier", core.LogCourierVersion)
 	flag.BoolVar(&stdin, "stdin", false, "Read from stdin instead of files listed in the config file")
 	flag.BoolVar(&fromBeginning, "from-beginning", false, "On first run, read new files from the beginning instead of the end")
 	app.StartUp()
