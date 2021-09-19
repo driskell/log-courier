@@ -43,6 +43,7 @@ jobs:
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2-testing
+        SKIP_VERSION_CHECK: 1
 
   release-log-carver:
     name: Release Log Carver
@@ -66,3 +67,4 @@ jobs:
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2-testing
+        SKIP_VERSION_CHECK: 1

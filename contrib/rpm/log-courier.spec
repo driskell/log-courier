@@ -44,7 +44,7 @@ go install -mod=vendor . ./lc-admin ./lc-tlscert
 %check
 VERSION=$(%{_builddir}/bin/log-courier --version)
 VERSION=${VERSION#Log Courier version }
-if [ "$VERSION" != "%{version}" ]; then
+if [ "%{getenv:SKIP_VERSION_CHECK}" != "1" ] && [ "$VERSION" != "%{version}" ]; then
 	exit 1
 fi
 

@@ -48,7 +48,7 @@ go -mod=vendor install ./fact-courier
 %check
 VERSION=$(%{_builddir}/bin/fact-courier --version)
 VERSION=${VERSION#Fact Courier version }
-if [ "$VERSION" != "%{version}" ]; then
+if [ "%{getenv:SKIP_VERSION_CHECK}" != "1" ] && [ "$VERSION" != "%{version}" ]; then
 	exit 1
 fi
 

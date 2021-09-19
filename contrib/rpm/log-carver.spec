@@ -45,7 +45,7 @@ go install -mod=vendor ./log-carver ./lc-admin
 %check
 VERSION=$(%{_builddir}/bin/log-carver --version)
 VERSION=${VERSION#Log Carver version }
-if [ "$VERSION" != "%{version}" ]; then
+if [ "%{getenv:SKIP_VERSION_CHECK}" != "1" ] && [ "$VERSION" != "%{version}" ]; then
 	exit 1
 fi
 
