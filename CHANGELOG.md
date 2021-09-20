@@ -1,5 +1,30 @@
 # Change Log
 
+## Future
+
+?
+
+Logstash Input Plugin
+
+- Updated dependencies to newer versions
+
+## 2.6.3
+
+20th September 2021
+
+Log Courier
+
+- Fix debug level logging outputting spurious messages (#385)
+- Fix syslog entries progname to only have the binary name and not the full path (#384)
+- Fix hold time settings not closing files properly and causing a notice every 10 seconds (#382)
+- Fix a deadlock in spooler if the pipeline completely stopped
+
+Log Carver
+
+- Fix syslog entries progname to only have the binary name and not the full path (#384)
+- Fixed missing home directory on RPM installations (it was unused but caused unnecessary warnings in some cases)
+- Fix a deadlock in spooler if the pipeline completely stopped
+
 ## 2.6.2
 
 23rd March 2021
