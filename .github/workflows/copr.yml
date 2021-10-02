@@ -41,6 +41,8 @@ jobs:
   release-log-carver:
     name: Release Log Carver
     runs-on: ubuntu-latest
+    # Run one at a time
+    needs: release-log-courier
     steps:
     - name: Checkout
       uses: actions/checkout@v2
