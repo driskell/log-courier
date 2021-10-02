@@ -1,4 +1,4 @@
-name: COPR
+name: COPR (Testing)
 
 on:
   workflow_dispatch:
