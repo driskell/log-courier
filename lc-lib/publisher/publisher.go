@@ -31,8 +31,8 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/internallist"
-	"github.com/driskell/log-courier/lc-lib/payload"
 	"github.com/driskell/log-courier/lc-lib/publisher/endpoint"
+	"github.com/driskell/log-courier/lc-lib/publisher/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -43,7 +43,7 @@ var (
 
 const (
 	// TODO(driskell): Make the idle timeout configurable like the network timeout is?
-	keepaliveTimeout time.Duration = 900 * time.Second
+	keepaliveTimeout time.Duration = 10 * time.Second
 )
 
 // Publisher handles payloads and is responsible for passing ordered
@@ -475,6 +475,10 @@ func (p *Publisher) sendPayload(pendingPayload *payload.Payload) (*endpoint.Endp
 	// Attempt to queue the payload with the best endpoint
 	endpoint, err := p.endpointSink.QueuePayload(pendingPayload)
 	if err != nil {
+		if err == transports.ErrCongestion {
+			// No need to force failure - just wait for another endpoint
+			return nil, false
+		}
 		p.forceEndpointFailure(endpoint, err)
 		return nil, false
 	}

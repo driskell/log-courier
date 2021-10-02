@@ -19,7 +19,8 @@ package endpoint
 import (
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/publisher/payload"
+	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 // CanQueue returns true if there are active endpoints ready to receive events
@@ -71,7 +72,33 @@ func (s *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
 		}
 	}
 
-	return bestEndpoint, bestEndpoint.queuePayload(payload)
+	err := bestEndpoint.queuePayload(payload)
+	if err == transports.ErrCongestion {
+		// The best endpoint is congested - so try to find ANY other non-congested endpoint
+		// If any fails - just return so we can force its failure and try again
+		// This is a last resort as generally the best endpoint should be quick and not congested
+		// If the best endpoint is congested then potentially all are congested or all competing so fire at will
+		for entry := s.readyList.Back(); entry != nil; entry = entry.Prev() {
+			endpoint := entry.Value.(*Endpoint)
+
+			// Skip the best endpoint that is congested
+			if endpoint == bestEndpoint {
+				continue;
+			}
+
+			// Skip warming endpoints
+			if endpoint.IsWarming() {
+				continue
+			}
+
+			err := endpoint.queuePayload(payload)
+			if err != transports.ErrCongestion {
+				return endpoint, err
+			}
+		}
+	}
+
+	return bestEndpoint, err
 }
 
 // ForceFailure forces the endpoint referenced by the context to fail

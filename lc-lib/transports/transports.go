@@ -22,7 +22,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 // ErrForcedFailure is an error a Transport can use to represent a forced
@@ -35,7 +35,7 @@ type Transport interface {
 	Ping() error
 	ReloadConfig(*Config, bool) bool
 	Shutdown()
-	Write(*payload.Payload) error
+	SendEvents(string, []*event.Event) error
 }
 
 // TransportFactory is the interface that all transport factories implement. The

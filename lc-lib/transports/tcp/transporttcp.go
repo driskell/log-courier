@@ -23,7 +23,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -31,7 +30,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -201,12 +200,6 @@ func (t *transportTCP) connect() (*connection, error) {
 		return nil, fmt.Errorf("Failed to connect to %s: %s", desc, err)
 	}
 
-	// Maxmium number of payloads we will queue - must be correct as otherwise
-	// the endpoint implementation will block unexpectedly and be unable to
-	// distribute events across multiple transports
-	// Pings don't count towards limit, we only ping if this queue is empty
-	sendChan := make(chan protocolMessage, t.netConfig.MaxPendingPayloads)
-
 	// Now wrap in TLS if this is the TLS transport
 	var connectionSocket connectionSocket
 	if t.config.transport == TransportTCPTLS {
@@ -215,26 +208,28 @@ func (t *transportTCP) connect() (*connection, error) {
 		connectionSocket = newConnectionSocketTCP(socket.(*net.TCPConn))
 	}
 
-	connContext := context.WithValue(t.ctx, contextIsClient, true)
-
-	conn := newConnection(connContext, connectionSocket, t.pool.Server(), t.eventChan, sendChan)
+	conn := newConnection(t.ctx, connectionSocket, t.pool.Server(), true, t.eventChan)
 
 	log.Notice("[%s] Connected to %s", t.pool.Server(), desc)
 	return conn, nil
 }
 
-// Write a message to the transport - only valid after Started transport event received
-func (t *transportTCP) Write(payload *payload.Payload) error {
+// SendEvents sends an event message with given nonce to the transport - only valid after Started transport event received
+func (t *transportTCP) SendEvents(nonce string, events []*event.Event) error {
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
 	if t.conn == nil {
-		return errors.New("Invalid connection state")
+		return ErrInvalidState
+	}
+	var eventsAsBytes = make([][]byte, len(events))
+	for idx, item := range events {
+		eventsAsBytes[idx] = item.Bytes()
 	}
 	var msg protocolMessage
 	if t.supportsEVNT {
-		msg = &protocolEVNT{nonce: payload.Nonce, events: payload.Events()}
+		msg = &protocolEVNT{nonce: &nonce, events: eventsAsBytes}
 	} else {
-		msg = &protocolJDAT{nonce: payload.Nonce, events: payload.Events()}
+		msg = &protocolJDAT{nonce: &nonce, events: eventsAsBytes}
 	}
 	return t.conn.SendMessage(msg)
 }
@@ -244,7 +239,7 @@ func (t *transportTCP) Ping() error {
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
 	if t.conn == nil {
-		return errors.New("Invalid connection state")
+		return ErrInvalidState
 	}
 	return t.conn.SendMessage(&protocolPING{})
 }

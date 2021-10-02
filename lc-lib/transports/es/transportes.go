@@ -34,13 +34,20 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 var (
-	globalTemplateLock sync.Mutex
+	// ErrInvalidState occurs when a send cannot happen because the connection has closed
+	ErrInvalidState = errors.New("Invalid connection state")
 )
+
+// payload contains nonce and events information
+type payload struct {
+	nonce  *string
+	events []*event.Event
+}
 
 // transportES implements a transport that sends over the ES HTTP protocol
 type transportES struct {
@@ -55,7 +62,7 @@ type transportES struct {
 
 	// Internal
 	// payloadMutex is so we can easily discard existing sendChan and its contents each time we reset
-	payloadChan     chan *payload.Payload
+	payloadChan     chan *payload
 	payloadMutex    sync.Mutex
 	poolMutex       sync.Mutex
 	wait            sync.WaitGroup
@@ -94,7 +101,7 @@ func (t *transportES) controllerRoutine() {
 
 	// Setup payload chan with max write count of pending payloads
 	t.payloadMutex.Lock()
-	t.payloadChan = make(chan *payload.Payload, t.netConfig.MaxPendingPayloads)
+	t.payloadChan = make(chan *payload, t.netConfig.MaxPendingPayloads)
 	t.payloadMutex.Unlock()
 
 	if t.setupAssociation() {
@@ -303,7 +310,7 @@ func (t *transportES) httpRoutine(id int) {
 			}
 
 			lastAckSequence := uint32(0)
-			request := newBulkRequest(t.config.IndexPattern, payload.Events())
+			request := newBulkRequest(t.config.IndexPattern, payload.events)
 
 			for {
 				if err := t.performBulkRequest(id, request); err != nil {
@@ -317,7 +324,7 @@ func (t *transportES) httpRoutine(id int) {
 					case <-t.ctx.Done():
 						// Forced failure
 						return
-					case t.eventChan <- transports.NewAckEvent(t.ctx, payload.Nonce, lastAckSequence):
+					case t.eventChan <- transports.NewAckEvent(t.ctx, payload.nonce, lastAckSequence):
 					}
 				}
 
@@ -424,15 +431,15 @@ func (t *transportES) retryWait(backoff *core.ExpBackoff) bool {
 	return false
 }
 
-// Write a message to the transport - only valid after Started transport event received
-func (t *transportES) Write(payload *payload.Payload) error {
+// SendEvents sends events to the transport - only valid after Started transport event received
+func (t *transportES) SendEvents(nonce string, events []*event.Event) error {
 	// Are we ready?
 	t.payloadMutex.Lock()
 	defer t.payloadMutex.Unlock()
 	if t.payloadChan == nil {
-		return errors.New("Invalid connection state")
+		return ErrInvalidState
 	}
-	t.payloadChan <- payload
+	t.payloadChan <- &payload{&nonce, events}
 	return nil
 }
 

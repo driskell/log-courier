@@ -22,7 +22,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/internallist"
-	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/publisher/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 

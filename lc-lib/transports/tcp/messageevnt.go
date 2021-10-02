@@ -18,24 +18,21 @@ package tcp
 
 import (
 	"compress/zlib"
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"math"
-
-	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 type protocolEVNT struct {
-	nonce  string
-	events []*event.Event
+	nonce  *string
+	events [][]byte
 }
 
 // Reads the events from existing data
 func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, error) {
-	if conn.isClient() {
+	if conn.isClient {
 		return nil, errors.New("Protocol error: Unexpected JDAT message received on client connection")
 	}
 
@@ -55,12 +52,9 @@ func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, erro
 		return nil, err
 	}
 
-	events := make([]*event.Event, 0, 100)
+	events := make([][]byte, 0, 100)
 
-	sequence := uint32(0)
 	for {
-		sequence++
-
 		var size uint32
 		if err := binary.Read(decompressor, binary.BigEndian, &size); err != nil {
 			if err == io.EOF {
@@ -89,11 +83,10 @@ func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, erro
 			}
 		}
 
-		ctx := context.WithValue(conn.ctx, contextEventPos, &eventPosition{nonce: nonce, sequence: sequence})
-		events = append(events, event.NewEventFromBytes(ctx, conn, data))
+		events = append(events, data)
 	}
 
-	return &protocolEVNT{nonce: nonce, events: events}, nil
+	return &protocolEVNT{nonce: &nonce, events: events}, nil
 }
 
 // Type returns a human-readable name for the message type
@@ -112,7 +105,7 @@ func (p *protocolEVNT) Write(conn *connection) error {
 		return err
 	}
 
-	if _, err := conn.Write([]byte(p.nonce)); err != nil {
+	if _, err := conn.Write([]byte(*p.nonce)); err != nil {
 		return err
 	}
 
@@ -122,11 +115,11 @@ func (p *protocolEVNT) Write(conn *connection) error {
 	}
 
 	for _, singleEvent := range p.events {
-		if err := binary.Write(compressor, binary.BigEndian, uint32(len(singleEvent.Bytes()))); err != nil {
+		if err := binary.Write(compressor, binary.BigEndian, uint32(len(singleEvent))); err != nil {
 			return err
 		}
 
-		if _, err := compressor.Write(singleEvent.Bytes()); err != nil {
+		if _, err := compressor.Write(singleEvent); err != nil {
 			return err
 		}
 	}
@@ -135,11 +128,11 @@ func (p *protocolEVNT) Write(conn *connection) error {
 }
 
 // Nonce returns the nonce - this implements eventsMessage
-func (p *protocolEVNT) Nonce() string {
+func (p *protocolEVNT) Nonce() *string {
 	return p.nonce
 }
 
 // Events returns the events - this implements eventsMessage
-func (p *protocolEVNT) Events() []*event.Event {
+func (p *protocolEVNT) Events() [][]byte {
 	return p.events
 }

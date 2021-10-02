@@ -141,6 +141,18 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 	}
 }
 
+// Acknowledge sends the correct connection an acknowledgement
+func (t *receiverTCP) Acknowledge(ctx context.Context, nonce *string, sequence uint32) error {
+	connection := ctx.Value(transports.ContextConnection).(*connection)
+	return connection.SendMessage(&protocolACKN{nonce: nonce, sequence: sequence})
+}
+
+// Pong sends the correct connection a pong response
+func (t *receiverTCP) Pong(ctx context.Context) error {
+	connection := ctx.Value(transports.ContextConnection).(*connection)
+	return connection.SendMessage(&protocolPONG{})
+}
+
 // stop ends the accept loop
 func (t *receiverTCP) Shutdown() {
 	t.shutdownFunc()
@@ -175,10 +187,6 @@ func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 	log.Notice("[%s < %s] New connection", t.pool.Server(), socket.RemoteAddr().String())
 
-	// Only acknowledgements will be sent
-	// TODO: Consider actual needed value, as we shouldn't expect ACK to block as they are tiny sends
-	sendChan := make(chan protocolMessage, 10)
-
 	var connectionSocket connectionSocket
 	if t.config.transport == TransportTCPTLS {
 		connectionSocket = newConnectionSocketTLS(socket, t.getTLSConfig(), true, t.pool.Server())
@@ -186,8 +194,7 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 		connectionSocket = newConnectionSocketTCP(socket)
 	}
 
-	connContext := context.WithValue(t.ctx, contextIsClient, false)
-	conn := newConnection(connContext, connectionSocket, t.pool.Server(), t.eventChan, sendChan)
+	conn := newConnection(t.ctx, connectionSocket, t.pool.Server(), false, t.eventChan)
 
 	t.connMutex.Lock()
 	t.connCount++

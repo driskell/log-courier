@@ -27,7 +27,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
-	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/publisher/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -175,7 +175,7 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 		log.Debug("[%s] Sending payload %x (%d events)", e.Server(), payload.Nonce, payload.Size())
 	}
 
-	if err := e.transport.Write(payload); err != nil {
+	if err := e.transport.SendEvents(payload.Nonce, payload.Events()); err != nil {
 		return err
 	}
 
@@ -246,10 +246,10 @@ func (e *Endpoint) LineCount() int64 {
 // It should return whether or not the payload was completed so full status
 // can be updated
 func (e *Endpoint) processAck(ack *transports.AckEvent, onAck func(*Endpoint, *payload.Payload, bool, int)) bool {
-	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), ack.Nonce(), ack.Sequence())
+	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), *ack.Nonce(), ack.Sequence())
 
 	// Grab the payload the ACK corresponds to by using nonce
-	payload, found := e.pendingPayloads[ack.Nonce()]
+	payload, found := e.pendingPayloads[*ack.Nonce()]
 	if !found {
 		// Don't fail here in case we had temporary issues and resend a payload, only for us to receive duplicate ACKN
 		log.Debug("[%s] Duplicate/corrupt ACK received for message %x", e.Server(), ack.Nonce())
@@ -263,7 +263,7 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, onAck func(*Endpoint, *p
 
 	if complete {
 		// No more events left for this payload, remove from pending list
-		delete(e.pendingPayloads, ack.Nonce())
+		delete(e.pendingPayloads, *ack.Nonce())
 
 		e.mutex.Lock()
 		e.lineCount += int64(lineCount)

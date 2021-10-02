@@ -23,8 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-
-	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 const (
@@ -67,13 +65,8 @@ type protocolMessage interface {
 
 type eventsMessage interface {
 	protocolMessage
-	Nonce() string
-	Events() []*event.Event
-}
-
-type eventPosition struct {
-	nonce    string
-	sequence uint32
+	Nonce() *string
+	Events() [][]byte
 }
 
 type socketMessage struct {

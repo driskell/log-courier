@@ -26,6 +26,8 @@ import (
 // Receiver is the generic interface that all receivers implement
 type Receiver interface {
 	ReloadConfig(*config.Config, ReceiverFactory) bool
+	Acknowledge(context.Context, *string, uint32) error
+	Pong(context.Context) error
 	Shutdown()
 }
 
