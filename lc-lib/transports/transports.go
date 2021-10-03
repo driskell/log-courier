@@ -27,7 +27,7 @@ import (
 
 // ErrForcedFailure is an error a Transport can use to represent a forced
 // failure by the publisher
-var ErrForcedFailure = errors.New("Failed by endpoint manager")
+var ErrForcedFailure = errors.New("failed by endpoint manager")
 
 // Transport is the generic interface that all transports implement
 type Transport interface {

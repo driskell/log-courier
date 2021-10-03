@@ -79,11 +79,9 @@ func (t *transportTest) Ping() error {
 // Fail the transport / Shutdown hard
 func (t *transportTest) Fail() {
 	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
-	return
 }
 
 // Shutdown the transport gracefully - only valid after Started transport event received
 func (t *transportTest) Shutdown() {
 	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
-	return
 }

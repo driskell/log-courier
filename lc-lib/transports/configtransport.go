@@ -57,7 +57,7 @@ type Config struct {
 func (nc *Config) Init(p *config.Parser, path string) (err error) {
 	registrarFunc, ok := registeredTransports[nc.Transport]
 	if !ok {
-		err = fmt.Errorf("Unrecognised transport '%s'", nc.Transport)
+		err = fmt.Errorf("unrecognised transport %s", nc.Transport)
 		return
 	}
 
@@ -71,12 +71,12 @@ func (nc *Config) Validate(p *config.Parser, path string) (err error) {
 		nc.Method = defaultNetworkMethod
 	}
 	if nc.Method != "random" && nc.Method != "failover" && nc.Method != "loadbalance" {
-		err = fmt.Errorf("The network method (%smethod) is not recognised: %s", path, nc.Method)
+		err = fmt.Errorf("%smethod is not a recognised value: %s", path, nc.Method)
 		return
 	}
 
 	if len(nc.Servers) == 0 {
-		err = fmt.Errorf("No network servers were specified (%sservers)", path)
+		err = fmt.Errorf("%sservers is required", path)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (nc *Config) Validate(p *config.Parser, path string) (err error) {
 	nc.AddressPools = make([]*addresspool.Pool, len(nc.Servers))
 	for n, server := range nc.Servers {
 		if _, exists := servers[server]; exists {
-			err = fmt.Errorf("The list of network servers (%sservers) must be unique: %s appears multiple times", path, server)
+			err = fmt.Errorf("%sservers must be unique: %s appears multiple times", path, server)
 			return
 		}
 		servers[server] = true

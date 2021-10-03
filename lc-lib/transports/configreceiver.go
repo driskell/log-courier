@@ -50,7 +50,7 @@ func (c *ReceiverConfigEntry) Defaults() {
 func (c *ReceiverConfigEntry) Init(p *config.Parser, path string) (err error) {
 	registrarFunc, ok := registeredReceivers[c.Transport]
 	if !ok {
-		err = fmt.Errorf("Unrecognised receiver transport '%s'", c.Transport)
+		err = fmt.Errorf("unrecognised receiver transport %s", c.Transport)
 		return
 	}
 
@@ -61,7 +61,7 @@ func (c *ReceiverConfigEntry) Init(p *config.Parser, path string) (err error) {
 // Validate the receiver configuration
 func (c *ReceiverConfigEntry) Validate(p *config.Parser, path string) (err error) {
 	if len(c.Listen) == 0 {
-		err = fmt.Errorf("No receiver listen addresses were specified (%slisten)", path)
+		err = fmt.Errorf("%slisten is required", path)
 		return
 	}
 
