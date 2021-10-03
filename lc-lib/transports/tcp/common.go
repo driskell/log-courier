@@ -39,7 +39,7 @@ var (
 	ErrEventTooLarge = errors.New("JDAT compressed entry message too large to decode")
 
 	// ErrUnexpectedEnd occurs when a message ends unexpectedly
-	ErrUnexpectedEnd = errors.New("Unexpected end of JDAT compressed entry")
+	ErrUnexpectedEnd = errors.New("unexpected end of JDAT compressed entry")
 
 	// TransportTCPTCP is the transport name for plain TCP
 	TransportTCPTCP = "tcp"
@@ -53,11 +53,6 @@ type connectionSocket interface {
 	CloseWrite() error
 }
 
-type listener interface {
-	Start(string, *net.TCPAddr) (bool, error)
-	Stop()
-}
-
 type protocolMessage interface {
 	Type() string
 	Write(*connection) error
@@ -67,11 +62,6 @@ type eventsMessage interface {
 	protocolMessage
 	Nonce() *string
 	Events() [][]byte
-}
-
-type socketMessage struct {
-	conn *connection
-	err  error
 }
 
 // parseTLSVersion parses a TLS version string into the tls library value for min/max config
@@ -89,5 +79,5 @@ func parseTLSVersion(version string, fallback uint16) (uint16, error) {
 	case "1.3":
 		return tls.VersionTLS13, nil
 	}
-	return tls.VersionTLS10, fmt.Errorf("Invalid or unknown TLS version: '%s'", version)
+	return tls.VersionTLS10, fmt.Errorf("invalid or unknown TLS version: '%s'", version)
 }

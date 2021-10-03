@@ -45,7 +45,6 @@ type transportTCP struct {
 	pool           *addresspool.Pool
 	eventChan      chan<- transports.Event
 	controllerChan chan error
-	connectionChan chan *socketMessage
 	backoff        *core.ExpBackoff
 
 	// Internal
@@ -188,7 +187,7 @@ func (t *transportTCP) connect() (*connection, error) {
 
 	addr, err := t.pool.Next()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to select next address: %s", err)
+		return nil, fmt.Errorf("failed to select next address: %s", err)
 	}
 
 	desc := t.pool.Desc()
@@ -197,7 +196,7 @@ func (t *transportTCP) connect() (*connection, error) {
 
 	socket, err := net.DialTimeout("tcp", addr.String(), t.netConfig.Timeout)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to %s: %s", desc, err)
+		return nil, fmt.Errorf("failed to connect to %s: %s", desc, err)
 	}
 
 	// Now wrap in TLS if this is the TLS transport

@@ -38,7 +38,7 @@ func createProtocolVERS() protocolMessage {
 // newProtocolVERS reads a new protocolVERS
 func newProtocolVERS(t *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength > 32 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message (VERS size %d > 32)", bodyLength)
+		return nil, fmt.Errorf("protocol error: Corrupt message (VERS size %d > 32)", bodyLength)
 	}
 
 	protocolFlags := make([]byte, bodyLength)

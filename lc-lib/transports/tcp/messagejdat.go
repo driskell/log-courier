@@ -33,15 +33,15 @@ type protocolJDAT struct {
 // newProtocolJDAT creates a new structure from wire-bytes
 func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, error) {
 	if conn.isClient {
-		return nil, errors.New("Protocol error: Unexpected JDAT message received on client connection")
+		return nil, errors.New("protocol error: Unexpected JDAT message received on client connection")
 	}
 
 	if bodyLength < 17 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message (JDAT size %d < 17)", bodyLength)
+		return nil, fmt.Errorf("protocol error: Corrupt message (JDAT size %d < 17)", bodyLength)
 	}
 
 	if bodyLength > 10485760 {
-		return nil, fmt.Errorf("Protocol error: Message body too large (%d > 10485760)", bodyLength)
+		return nil, fmt.Errorf("protocol error: Message body too large (%d > 10485760)", bodyLength)
 	}
 
 	data := make([]byte, bodyLength)

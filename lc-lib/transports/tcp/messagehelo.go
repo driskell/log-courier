@@ -24,7 +24,7 @@ type protocolHELO struct {
 // newProtocolHELO reads a new protocolHELO
 func newProtocolHELO(t *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength > 32 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message (HELO size %d > 32)", bodyLength)
+		return nil, fmt.Errorf("protocol error: Corrupt message (HELO size %d > 32)", bodyLength)
 	}
 
 	protocolFlags := make([]byte, bodyLength)

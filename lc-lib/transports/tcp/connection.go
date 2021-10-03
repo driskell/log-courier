@@ -37,10 +37,10 @@ import (
 // errHardCloseRequested is used to signal hard close requested
 var (
 	// ErrInvalidState occurs when a send cannot happen because the connection has closed
-	ErrInvalidState = errors.New("Invalid connection state")
+	ErrInvalidState = errors.New("invalid connection state")
 
 	// errHardCloseRequested occurs when the connection was closed forcefully and a hard close is requested
-	errHardCloseRequested = errors.New("Connection shutdown was requested")
+	errHardCloseRequested = errors.New("connection shutdown was requested")
 )
 
 type connection struct {
@@ -68,8 +68,6 @@ type connection struct {
 	senderShutdownChan chan struct{}
 	// wait can be used to wait for all routines to complete
 	wait sync.WaitGroup
-	// finalErr contains the final error for this connection after TearDown completed
-	finalErr error
 }
 
 func newConnection(ctx context.Context, socket connectionSocket, poolServer string, isClient bool, eventChan chan<- transports.Event) *connection {
@@ -145,7 +143,7 @@ func (t *connection) serverNegotiation() error {
 		} else if err == errHardCloseRequested {
 			return err
 		}
-		return fmt.Errorf("Unexpected end of negotiation: %s", err)
+		return fmt.Errorf("unexpected end of negotiation: %s", err)
 	}
 
 	_, ok := message.(*protocolHELO)
@@ -159,7 +157,7 @@ func (t *connection) serverNegotiation() error {
 			// Now go async
 			return nil
 		}
-		return fmt.Errorf("Unexpected %T during negotiation, expected protocolHELO", message)
+		return fmt.Errorf("unexpected %T during negotiation, expected protocolHELO", message)
 	}
 
 	if err := t.writeMsg(createProtocolVERS()); err != nil {
@@ -182,7 +180,7 @@ func (t *connection) clientNegotiation() error {
 		} else if err == errHardCloseRequested {
 			return err
 		}
-		return fmt.Errorf("Unexpected end of negotiation: %s", err)
+		return fmt.Errorf("unexpected end of negotiation: %s", err)
 	}
 
 	versMessage, ok := message.(*protocolVERS)
@@ -195,7 +193,7 @@ func (t *connection) clientNegotiation() error {
 	}
 
 	if versMessage == nil {
-		return fmt.Errorf("Unexpected %T reply to negotiation, expected protocolVERS", message)
+		return fmt.Errorf("unexpected %T reply to negotiation, expected protocolVERS", message)
 	}
 
 	t.supportsEvnt = versMessage.SupportsEVNT()
@@ -299,7 +297,7 @@ func (t *connection) receiver() error {
 		}
 
 		if transportEvent == nil {
-			return fmt.Errorf("Unknown protocol message %T", message)
+			return fmt.Errorf("unknown protocol message %T", message)
 		}
 
 		if shutdown := t.sendEvent(transportEvent); shutdown {
@@ -327,24 +325,24 @@ func (t *connection) readMsg() (protocolMessage, error) {
 
 	var newFunc func(*connection, uint32) (protocolMessage, error)
 	switch {
-	case bytes.Compare(header[0:4], []byte("????")) == 0: // UNKN
+	case bytes.Equal(header[0:4], []byte("????")): // UNKN
 		newFunc = newProtocolUNKN
-	case bytes.Compare(header[0:4], []byte("HELO")) == 0:
+	case bytes.Equal(header[0:4], []byte("HELO")):
 		newFunc = newProtocolHELO
-	case bytes.Compare(header[0:4], []byte("VERS")) == 0:
+	case bytes.Equal(header[0:4], []byte("VERS")):
 		newFunc = newProtocolVERS
-	case bytes.Compare(header[0:4], []byte("PING")) == 0:
+	case bytes.Equal(header[0:4], []byte("PING")):
 		newFunc = newProtocolPING
-	case bytes.Compare(header[0:4], []byte("PONG")) == 0:
+	case bytes.Equal(header[0:4], []byte("PONG")):
 		newFunc = newProtocolPONG
-	case bytes.Compare(header[0:4], []byte("ACKN")) == 0:
+	case bytes.Equal(header[0:4], []byte("ACKN")):
 		newFunc = newProtocolACKN
-	case bytes.Compare(header[0:4], []byte("JDAT")) == 0:
+	case bytes.Equal(header[0:4], []byte("JDAT")):
 		newFunc = newProtocolJDAT
-	case bytes.Compare(header[0:4], []byte("EVNT")) == 0:
+	case bytes.Equal(header[0:4], []byte("EVNT")):
 		newFunc = newProtocolEVNT
 	default:
-		return nil, fmt.Errorf("Unexpected message code: %s", header[0:4])
+		return nil, fmt.Errorf("unexpected message code: %s", header[0:4])
 	}
 
 	return newFunc(t, bodyLength)

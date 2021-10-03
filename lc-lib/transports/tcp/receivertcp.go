@@ -26,7 +26,6 @@ type receiverTCP struct {
 	backoff      *core.ExpBackoff
 
 	// Internal
-	tlsConfig *tls.Config
 	connCount int
 	connMutex sync.Mutex
 	connWait  sync.WaitGroup
@@ -103,7 +102,7 @@ func (t *receiverTCP) retryWait() bool {
 func (t *receiverTCP) listen() error {
 	addr, err := t.pool.Next()
 	if err != nil {
-		return fmt.Errorf("Failed to select next address: %s", err)
+		return fmt.Errorf("failed to select next address: %s", err)
 	}
 
 	desc := t.pool.Desc()
@@ -112,7 +111,7 @@ func (t *receiverTCP) listen() error {
 
 	tcplistener, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("Failed to listen on %s: %s", desc, err)
+		return fmt.Errorf("failed to listen on %s: %s", desc, err)
 	}
 
 	log.Notice("[%s] Listening on %s", t.pool.Server(), desc)
@@ -129,7 +128,7 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 		if err == nil {
 			t.startConnection(socket.(*net.TCPConn))
 		} else if neterr := err.(net.Error); !neterr.Timeout() {
-			return fmt.Errorf("Failed to accept on %s: %s", desc, err)
+			return fmt.Errorf("failed to accept on %s: %s", desc, err)
 		}
 
 		// Check for shutdown request

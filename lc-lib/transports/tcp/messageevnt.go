@@ -33,11 +33,11 @@ type protocolEVNT struct {
 // Reads the events from existing data
 func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, error) {
 	if conn.isClient {
-		return nil, errors.New("Protocol error: Unexpected JDAT message received on client connection")
+		return nil, errors.New("protocol error: Unexpected JDAT message received on client connection")
 	}
 
 	if bodyLength != math.MaxUint32 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message (EVNT size %d != %d)", bodyLength, uint32(math.MaxUint32))
+		return nil, fmt.Errorf("protocol error: Corrupt message (EVNT size %d != %d)", bodyLength, uint32(math.MaxUint32))
 	}
 
 	data := make([]byte, 16)

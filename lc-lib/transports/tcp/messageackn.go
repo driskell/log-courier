@@ -29,7 +29,7 @@ type protocolACKN struct {
 // newProtocolACKN reads a new protocolACKN
 func newProtocolACKN(conn *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength != 20 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message (ACKN size %d != 20)", bodyLength)
+		return nil, fmt.Errorf("protocol error: Corrupt message (ACKN size %d != 20)", bodyLength)
 	}
 
 	message := make([]byte, 20)
