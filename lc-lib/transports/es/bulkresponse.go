@@ -23,15 +23,6 @@ import (
 	"fmt"
 )
 
-const (
-	parseStateOutside int = iota
-	parseStateInside
-	parseStateTook
-	parseStateItems
-	parseStateItem
-	parseStateResult
-)
-
 type bulkResponseError struct {
 	Type      string                 `json:"type"`
 	Reason    string                 `json:"reason"`
@@ -93,22 +84,19 @@ func (b *bulkResponse) parse() error {
 			if err := b.decoder.Decode(&b.Took); err != nil {
 				return err
 			}
-			break
 		case "items":
 			if err := b.parseItems(); err != nil {
 				return err
 			}
-			break
 		default:
 			if err := b.consumeValue(); err != nil {
 				return err
 			}
-			break
 		}
 	}
 
 	if b.decoder.More() {
-		return errors.New("Unexpected tokens at end of stream")
+		return errors.New("unexpected tokens at end of stream")
 	}
 
 	return nil
@@ -136,12 +124,12 @@ func (b *bulkResponse) parseItems() error {
 			break
 		}
 		if delim, ok := next.(json.Delim); !ok || delim != json.Delim('{') {
-			return errors.New("Expected 'items' entry to be an object")
+			return errors.New("expected 'items' entry to be an object")
 		}
 
 		// Should have met the end?
 		if ended {
-			return errors.New("Too many results received")
+			return errors.New("too many results received")
 		}
 
 		// All bulk operations are index, so expect index object
@@ -150,10 +138,10 @@ func (b *bulkResponse) parseItems() error {
 			return err
 		}
 		if key == nil {
-			return errors.New("Unexpected end of an 'items' entry")
+			return errors.New("unexpected end of an 'items' entry")
 		}
 		if *key != "index" {
-			return errors.New("Expected only 'index' key within an 'items' entry")
+			return errors.New("expected only 'index' key within an 'items' entry")
 		}
 
 		// Expect another object for value
@@ -222,12 +210,12 @@ func (b *bulkResponse) parseItems() error {
 			return err
 		}
 		if key != nil {
-			return errors.New("Unexpected additional key in an 'items' entry")
+			return errors.New("unexpected additional key in an 'items' entry")
 		}
 	}
 
 	if !ended {
-		return errors.New("Too few results received")
+		return errors.New("too few results received")
 	}
 
 	return nil
@@ -240,7 +228,7 @@ func (b *bulkResponse) consumeDelim(expect rune) error {
 		return err
 	}
 	if delim, ok := token.(json.Delim); !ok || delim != json.Delim(expect) {
-		return fmt.Errorf("Expected delimiter: '%c'", expect)
+		return fmt.Errorf("expected delimiter: '%c'", expect)
 	}
 	return nil
 }
@@ -254,7 +242,7 @@ func (b *bulkResponse) parseKeyOrEnd() (*string, error) {
 	key, ok := token.(string)
 	if !ok {
 		if delim, ok := token.(json.Delim); !ok || delim != json.Delim('}') {
-			return nil, errors.New("Expected object key")
+			return nil, errors.New("expected object key")
 		}
 		return nil, nil
 	}
@@ -320,7 +308,7 @@ func (b *bulkResponse) consumeValueFrom(token json.Token) error {
 			}
 		}
 	} else {
-		return fmt.Errorf("Unrecognised delimiter: '%c'", delim)
+		return fmt.Errorf("unrecognised delimiter: '%c'", delim)
 	}
 	return nil
 }

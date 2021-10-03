@@ -31,7 +31,7 @@ type nodeInfo struct {
 // MaxMajorVersion returns the maximum major version from the node list
 func (n *nodeInfo) MaxMajorVersion() (int, error) {
 	if len(n.Nodes) == 0 {
-		return 0, errors.New("No nodes were found")
+		return 0, errors.New("no nodes were found")
 	}
 
 	maxMajorVersion := 0
@@ -42,7 +42,7 @@ func (n *nodeInfo) MaxMajorVersion() (int, error) {
 		}
 		majorVersion, err := strconv.Atoi(node.Version[0:dotPos])
 		if err != nil {
-			return 0, fmt.Errorf("Failed to parse version number %s for node %s", node.Version, err)
+			return 0, fmt.Errorf("failed to parse version number %s for node %s", node.Version, err)
 		}
 		if majorVersion > maxMajorVersion {
 			maxMajorVersion = majorVersion

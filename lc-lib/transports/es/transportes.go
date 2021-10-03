@@ -40,7 +40,7 @@ import (
 
 var (
 	// ErrInvalidState occurs when a send cannot happen because the connection has closed
-	ErrInvalidState = errors.New("Invalid connection state")
+	ErrInvalidState = errors.New("invalid connection state")
 )
 
 // payload contains nonce and events information
@@ -169,7 +169,7 @@ func (t *transportES) populateNodeInfo() error {
 	}()
 	if httpResponse.StatusCode != 200 {
 		body, _ := ioutil.ReadAll(httpResponse.Body)
-		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
+		return fmt.Errorf("unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	decoder := json.NewDecoder(httpResponse.Body)
@@ -179,7 +179,7 @@ func (t *transportES) populateNodeInfo() error {
 
 	t.maxMajorVersion, err = t.nodeInfo.MaxMajorVersion()
 	if err != nil {
-		return fmt.Errorf("Failed to calculate maximum version number for cluster: %s", err)
+		return fmt.Errorf("failed to calculate maximum version number for cluster: %s", err)
 	}
 
 	log.Info("[%s] Successfully retrieved Elasticsearch node information (major version: %d)", t.pool.Server(), t.maxMajorVersion)
@@ -207,22 +207,18 @@ func (t *transportES) installTemplate() error {
 		switch t.maxMajorVersion {
 		case 8:
 			template = esTemplate8
-			break
 		case 7:
 			template = esTemplate7
-			break
 		case 6:
 			template = esTemplate6
-			break
 		case 5:
 			template = esTemplate5
 			if len(t.config.TemplatePatterns) > 1 {
-				return fmt.Errorf("Elasticsearch major version %d does not support multiple 'template patterns'", t.maxMajorVersion)
+				return fmt.Errorf("the Elasticsearch major version %d does not support multiple template patterns", t.maxMajorVersion)
 			}
 			template = strings.ReplaceAll(template, "$INDEXPATTERNSINGLE$", t.config.templatePatternSingleJSON)
-			break
 		default:
-			return fmt.Errorf("Elasticsearch major version %d is unsupported", t.maxMajorVersion)
+			return fmt.Errorf("the Elasticsearch major version %d is unsupported", t.maxMajorVersion)
 		}
 		template = strings.ReplaceAll(template, "$INDEXPATTERNS$", t.config.templatePatternsJSON)
 		templateReader = strings.NewReader(template)
@@ -254,7 +250,7 @@ func (t *transportES) installTemplate() error {
 	}()
 	if httpResponse.StatusCode != 200 {
 		body, _ := ioutil.ReadAll(httpResponse.Body)
-		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
+		return fmt.Errorf("unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	log.Info("[%s] Successfully installed Elasticsearch index template: %s", t.pool.Server(), name)
@@ -282,7 +278,7 @@ func (t *transportES) checkTemplate(server *net.TCPAddr, name string) (bool, err
 	}
 	if httpResponse.StatusCode != 404 {
 		body, _ := ioutil.ReadAll(httpResponse.Body)
-		return false, fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
+		return false, fmt.Errorf("unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	return false, nil
@@ -393,12 +389,12 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	body, _ := ioutil.ReadAll(httpResponse.Body)
 	httpResponse.Body.Close()
 	if httpResponse.StatusCode != 200 {
-		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
+		return fmt.Errorf("unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	response, err := newBulkResponse(body, request)
 	if err != nil {
-		return fmt.Errorf("Response failed to parse: %s [Body: %s]", err, body)
+		return fmt.Errorf("response failed to parse: %s [Body: %s]", err, body)
 	}
 
 	if len(response.Errors) != 0 {

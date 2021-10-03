@@ -115,11 +115,10 @@ func TestRequestReadMultiple(t *testing.T) {
 
 func TestRequestReadReset(t *testing.T) {
 	request := createTestBulkRequest(3, "2020-03-07", "2020-03-14")
-	result, err := ioutil.ReadAll(request)
-	if err != nil {
+	if _, err := ioutil.ReadAll(request); err != nil {
 		t.Errorf("Failed to encode: %s", err)
 	}
-	result, err = ioutil.ReadAll(request)
+	result, err := ioutil.ReadAll(request)
 	if err != nil {
 		t.Errorf("Failed to encode: %s", err)
 	}

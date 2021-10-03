@@ -79,14 +79,14 @@ func NewTransportESFactory(p *config.Parser, configPath string, unUsed map[strin
 	}
 
 	if ret.Routines < 1 {
-		return nil, fmt.Errorf("'routines' cannot be less than 1")
+		return nil, fmt.Errorf("%sroutines cannot be less than 1", configPath)
 	}
 	if ret.Routines > 32 {
-		return nil, fmt.Errorf("'routines' cannot be more than 32")
+		return nil, fmt.Errorf("%sroutines cannot be more than 32", configPath)
 	}
 
 	if ret.IndexPattern == "" {
-		return nil, fmt.Errorf("'index pattern' cannot be empty when using 'es' transport")
+		return nil, fmt.Errorf("%sindex pattern is required", configPath)
 	}
 
 	if ret.TemplateFile != "" {
@@ -103,19 +103,19 @@ func NewTransportESFactory(p *config.Parser, configPath string, unUsed map[strin
 		}
 	} else {
 		if len(ret.TemplatePatterns) == 0 {
-			return nil, fmt.Errorf("'template patterns' is required when 'template file' is not set when using 'es' transport")
+			return nil, fmt.Errorf("%[1]stemplate patterns is required when %[1]stemplate file is not set", configPath)
 		}
 
 		var result []byte
 		result, err = json.Marshal(ret.TemplatePatterns)
 		if err != nil {
-			panic(fmt.Sprintf("'template patterns' failed to encode: %s", err))
+			panic(fmt.Sprintf("%stemplate patterns failed to encode: %s", configPath, err))
 		}
 		ret.templatePatternsJSON = string(result)
 
 		result, err = json.Marshal(ret.TemplatePatterns[0])
 		if err != nil {
-			panic(fmt.Sprintf("'template patterns' failed to encode: %s", err))
+			panic(fmt.Sprintf("%stemplate patterns failed to encode: %s", configPath, err))
 		}
 		ret.templatePatternSingleJSON = string(result)
 	}
