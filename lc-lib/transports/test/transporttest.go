@@ -36,6 +36,7 @@ type transportTest struct {
 	config    *TransportTestFactory
 	eventChan chan<- transports.Event
 	server    string
+	finished  bool
 }
 
 // ReloadConfig returns true if the transport needs to be restarted in order
@@ -47,6 +48,9 @@ func (t *transportTest) ReloadConfig(netConfig *transports.Config, finishOnFail 
 // SendEvents sends an event message with given nonce to the transport - only valid after Started transport event received
 func (t *transportTest) SendEvents(nonce string, events []*event.Event) error {
 	t.delayAction(func() {
+		if t.finished {
+			return
+		}
 		t.eventChan <- transports.NewAckEvent(t.ctx, &nonce, uint32(len(events)))
 	}, fmt.Sprintf("[%s] Sending acknowledgement for payload %x after %%d second delay", t.server, nonce))
 	return nil
@@ -71,6 +75,9 @@ func (t *transportTest) delayAction(action func(), message string) {
 // Ping the remote server - only valid after Started transport event received
 func (t *transportTest) Ping() error {
 	t.delayAction(func() {
+		if t.finished {
+			return
+		}
 		t.eventChan <- transports.NewPongEvent(t.ctx)
 	}, fmt.Sprintf("[%s] Sending pong response after %%d second delay", t.server))
 	return nil
@@ -78,10 +85,12 @@ func (t *transportTest) Ping() error {
 
 // Fail the transport / Shutdown hard
 func (t *transportTest) Fail() {
+	t.finished = true
 	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
 }
 
 // Shutdown the transport gracefully - only valid after Started transport event received
 func (t *transportTest) Shutdown() {
+	t.finished = true
 	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
 }

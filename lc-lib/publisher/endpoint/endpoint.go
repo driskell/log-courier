@@ -165,9 +165,9 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 	}
 
 	if payload.Resending {
-		log.Debug("[%s] Resending payload %x (%d events)", e.Server(), payload.Nonce, payload.Size())
+		log.Debug("[%s] Resending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
 	} else {
-		log.Debug("[%s] Sending payload %x (%d events)", e.Server(), payload.Nonce, payload.Size())
+		log.Debug("[%s] Sending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
 	}
 
 	if err := e.transport.SendEvents(payload.Nonce, payload.Events()); err != nil {
@@ -303,7 +303,7 @@ func (e *Endpoint) processPong(onPong func(*Endpoint)) {
 		return
 	}
 
-	log.Debug("[%s] Received PONG message", e.Server())
+	log.Debug("[%s] Received pong", e.Server())
 	e.pongPending = false
 
 	onPong(e)

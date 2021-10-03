@@ -123,8 +123,7 @@ func (m *methodRandom) connectRandom() {
 }
 
 func (m *methodRandom) onFail(endpoint *endpoint.Endpoint) {
-	// Should never happen - we initiate transports with finishOnFail
-	panic("Unexpected Method Random onFail")
+	// We start transports with finish on fail so do nothing and wait for finish
 }
 
 func (m *methodRandom) onFinish(endpoint *endpoint.Endpoint) bool {

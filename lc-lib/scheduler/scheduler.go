@@ -10,10 +10,11 @@ type Callback func()
 
 // Scheduler holds a list of scheduled objects and fires a timer when the next item is due
 type Scheduler struct {
-	tq    *timerQueue
-	index map[interface{}]*timerItem
-	timer *time.Timer
-	next  *time.Time
+	tq       *timerQueue
+	index    map[interface{}]*timerItem
+	timer    *time.Timer
+	timerSet bool
+	timerAt  time.Time
 }
 
 // NewScheduler returns a new timer queue
@@ -42,6 +43,7 @@ func (s *Scheduler) SetCallback(v interface{}, d time.Duration, callback Callbac
 func (s *Scheduler) set(v interface{}, d time.Duration, callback Callback) {
 	if item, ok := s.index[v]; ok {
 		item.when = time.Now().Add(d)
+		item.callback = callback
 		heap.Fix(s.tq, item.index)
 	} else {
 		item := &timerItem{
@@ -51,10 +53,6 @@ func (s *Scheduler) set(v interface{}, d time.Duration, callback Callback) {
 		}
 		s.index[v] = item
 		heap.Push(s.tq, item)
-	}
-
-	if s.next != nil && ((*s.tq)[0].when.After(*s.next) || *s.next == (*s.tq)[0].when) {
-		return
 	}
 
 	// Update timer since the new one is earlier - we optimise for the case
@@ -74,6 +72,7 @@ func (s *Scheduler) Remove(v interface{}) {
 
 // Next returns the next item that is due, or nil if none are due
 // For callback items it will handle them silently, so may return nil even though callbacks were called
+// Always call Reschedule to resetup the timer
 func (s *Scheduler) Next() interface{} {
 	// Handle all available items
 	for {
@@ -82,6 +81,7 @@ func (s *Scheduler) Next() interface{} {
 		}
 		item := heap.Pop(s.tq).(*timerItem)
 		delete(s.index, item.value)
+		s.timerSet = false // Since no timer is running now
 		// If not a callback - return it
 		if item.callback == nil {
 			return item.value
@@ -100,15 +100,25 @@ func (s *Scheduler) OnNext() <-chan time.Time {
 	return s.timer.C
 }
 
-// Reschedule arranges the timer again
+// Reschedule arranges the timer again if necessary
 func (s *Scheduler) Reschedule() {
+	if len(*s.tq) != 0 {
+		next := (*s.tq)[0].when
+		if !s.timerSet || s.timerAt.After(next) {
+			s.timerAt = next
+			s.timerSet = true
+			s.stopTimer()
+			s.timer.Reset(time.Until(next))
+		}
+	} else if s.timerSet {
+		s.timerSet = false
+		s.stopTimer()
+	}
+}
+
+// stopTimer ensures the timer is stopped and its channel empty
+func (s *Scheduler) stopTimer() {
 	if !s.timer.Stop() && len(s.timer.C) != 0 {
 		<-s.timer.C
-	}
-	if len(*s.tq) != 0 {
-		s.next = &(*s.tq)[0].when
-		s.timer.Reset(time.Until(*s.next))
-	} else {
-		s.next = nil
 	}
 }

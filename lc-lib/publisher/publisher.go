@@ -181,6 +181,7 @@ func (p *Publisher) runOnce() bool {
 		for p.endpointSink.Scheduler.Next() != nil {
 			panic("Unexpected non-callback item returned from Endpoint Scheduler")
 		}
+		p.endpointSink.Scheduler.Reschedule()
 	case spool := <-p.ifSpoolChan:
 		// When inputs close, sources are all closed
 		if spool == nil {
