@@ -231,7 +231,7 @@ func (t *transportTCP) SendEvents(nonce string, events []*event.Event) error {
 	} else {
 		msg = &protocolJDAT{nonce: &nonce, events: eventsAsBytes}
 	}
-	log.Debugf("[%s < %s] Sending %s payload with nonce %x and %d events", t.pool.Server(), t.conn.socket.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
+	log.Debugf("[%s > %s] Sending %s payload with nonce %x and %d events", t.pool.Server(), t.conn.socket.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
 	return t.conn.SendMessage(msg)
 }
 

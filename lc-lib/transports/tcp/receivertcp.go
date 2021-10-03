@@ -158,7 +158,7 @@ func (t *receiverTCP) Pong(ctx context.Context) error {
 // FailConnection shuts down a connection that has failed
 func (t *receiverTCP) FailConnection(ctx context.Context, err error) {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Warningf("[%s > %s] Connection failed: %s", connection.poolServer, connection.socket.RemoteAddr().String(), err)
+	log.Warningf("[%s - %s] Connection failed: %s", connection.poolServer, connection.socket.RemoteAddr().String(), err)
 	connection.Teardown()
 }
 
