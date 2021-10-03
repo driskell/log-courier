@@ -25,6 +25,7 @@ pipelines:
   - name: add_tag
     tag: unknown_event
 network:
-  transport: "null"
+  transport: test
   servers:
   - 127.0.0.1
+  max delay: 30

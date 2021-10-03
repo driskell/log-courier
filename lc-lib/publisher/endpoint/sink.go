@@ -23,6 +23,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 	"github.com/driskell/log-courier/lc-lib/publisher/payload"
+	"github.com/driskell/log-courier/lc-lib/scheduler"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -38,11 +39,13 @@ type Sink struct {
 
 	api *api.Array
 
-	timeoutList internallist.List
 	readyList   internallist.List
 	failedList  internallist.List
 	orderedList internallist.List
 
+	// Scheduler manages scheduled callbacks and values - OnNext should be used to get a channel and Next called repeatedly until it returns nil
+	// Endpoint sink will only schedule callbacks that are handled silently by Next - but Scheduler can have custom callbacks or just returns scheduled
+	Scheduler *scheduler.Scheduler
 	// OnAck is called when an acknowledgement response is received
 	// The payload is given and the second argument is true if this ack is the
 	// first ack for this payload
@@ -68,6 +71,7 @@ func NewSink(config *transports.Config) *Sink {
 		eventChan:    make(chan transports.Event, 10),
 		timeoutTimer: time.NewTimer(0),
 
+		Scheduler: scheduler.NewScheduler(),
 		OnAck:     func(*Endpoint, *payload.Payload, bool, int) {},
 		OnFail:    func(*Endpoint) {},
 		OnFinish:  func(*Endpoint) bool { return false },
@@ -75,7 +79,6 @@ func NewSink(config *transports.Config) *Sink {
 		OnStarted: func(*Endpoint) {},
 	}
 
-	ret.timeoutList.Init()
 	ret.readyList.Init()
 	ret.failedList.Init()
 	ret.orderedList.Init()

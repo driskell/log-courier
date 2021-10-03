@@ -39,7 +39,6 @@ func newMethodLoadbalance(sink *endpoint.Sink, netConfig *transports.Config) *me
 
 func (m *methodLoadbalance) onFail(endpoint *endpoint.Endpoint) {
 	// All endpoints are maintained
-	return
 }
 
 func (m *methodLoadbalance) onFinish(endpoint *endpoint.Endpoint) bool {
@@ -49,7 +48,6 @@ func (m *methodLoadbalance) onFinish(endpoint *endpoint.Endpoint) bool {
 
 func (m *methodLoadbalance) onStarted(endpoint *endpoint.Endpoint) {
 	// All endpoints are maintained
-	return
 }
 
 func (m *methodLoadbalance) reloadConfig(netConfig *transports.Config) {
@@ -75,4 +73,7 @@ func (m *methodLoadbalance) reloadConfig(netConfig *transports.Config) {
 		foundEndpoint.ReloadConfig(netConfig, false)
 		last = foundEndpoint
 	}
+}
+
+func (m *methodLoadbalance) destroy() {
 }

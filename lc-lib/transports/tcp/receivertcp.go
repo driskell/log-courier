@@ -144,16 +144,25 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 // Acknowledge sends the correct connection an acknowledgement
 func (t *receiverTCP) Acknowledge(ctx context.Context, nonce *string, sequence uint32) error {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
+	log.Debugf("[%s > %s] Sending acknowledgement for nonce %x with sequence %d", connection.poolServer, connection.socket.RemoteAddr().String(), *nonce, sequence)
 	return connection.SendMessage(&protocolACKN{nonce: nonce, sequence: sequence})
 }
 
 // Pong sends the correct connection a pong response
 func (t *receiverTCP) Pong(ctx context.Context) error {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
+	log.Debugf("[%s > %s] Sending pong", connection.poolServer, connection.socket.RemoteAddr().String())
 	return connection.SendMessage(&protocolPONG{})
 }
 
-// stop ends the accept loop
+// FailConnection shuts down a connection that has failed
+func (t *receiverTCP) FailConnection(ctx context.Context, err error) {
+	connection := ctx.Value(transports.ContextConnection).(*connection)
+	log.Warningf("[%s > %s] Connection failed: %s", connection.poolServer, connection.socket.RemoteAddr().String(), err)
+	connection.Teardown()
+}
+
+// Shutdown shuts down the listener and all connections gracefully
 func (t *receiverTCP) Shutdown() {
 	t.shutdownFunc()
 }

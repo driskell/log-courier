@@ -135,11 +135,7 @@ func (s *Sink) removeEndpoint(server string) {
 		s.failedList.Remove(&endpoint.failedElement)
 	}
 
-	// Remove any timer entry
-	if endpoint.Timeout.timeoutFunc != nil {
-		s.timeoutList.Remove(&endpoint.Timeout.timeoutElement)
-		s.resetTimeoutTimer(false)
-	}
+	s.Scheduler.Remove(endpoint)
 
 	s.mutex.Lock()
 	s.orderedList.Remove(&endpoint.orderedElement)
@@ -174,10 +170,7 @@ func (s *Sink) ShutdownEndpoint(server string) bool {
 		return true
 	}
 
-	if endpoint.timeoutFunc != nil {
-		s.timeoutList.Remove(&endpoint.timeoutElement)
-	}
-
+	s.Scheduler.Remove(endpoint)
 	endpoint.shutdownTransport()
 
 	return true

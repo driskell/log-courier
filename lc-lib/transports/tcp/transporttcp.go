@@ -225,12 +225,13 @@ func (t *transportTCP) SendEvents(nonce string, events []*event.Event) error {
 	for idx, item := range events {
 		eventsAsBytes[idx] = item.Bytes()
 	}
-	var msg protocolMessage
+	var msg eventsMessage
 	if t.supportsEVNT {
 		msg = &protocolEVNT{nonce: &nonce, events: eventsAsBytes}
 	} else {
 		msg = &protocolJDAT{nonce: &nonce, events: eventsAsBytes}
 	}
+	log.Debugf("[%s < %s] Sending %s payload with nonce %x and %d events", t.pool.Server(), t.conn.socket.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
 	return t.conn.SendMessage(msg)
 }
 
@@ -241,6 +242,7 @@ func (t *transportTCP) Ping() error {
 	if t.conn == nil {
 		return ErrInvalidState
 	}
+	log.Debugf("[%s > %s] Sending ping", t.pool.Server(), t.conn.socket.RemoteAddr().String())
 	return t.conn.SendMessage(&protocolPING{})
 }
 

@@ -37,8 +37,8 @@ import (
 )
 
 var (
-	errNetworkTimeout = errors.New("Server did not respond within network timeout")
-	errNetworkPing    = errors.New("Server did not respond to keepalive")
+	errNetworkTimeout = errors.New("server did not respond within network timeout")
+	errNetworkPing    = errors.New("server did not respond to keepalive")
 )
 
 const (
@@ -111,6 +111,11 @@ func (p *Publisher) Init(cfg *config.Config) error {
 // initMethod initialises the method the Publisher uses to manage multiple
 // endpoints
 func (p *Publisher) initMethod() {
+	// Destroy any previous method
+	if p.method != nil {
+		p.method.destroy()
+	}
+
 	// TODO: Factory registration for methods
 	switch p.netConfig.Method {
 	case "random":
@@ -151,6 +156,7 @@ func (p *Publisher) Run() {
 	}
 
 	log.Info("Publisher exiting")
+	p.method.destroy()
 }
 
 // runOnce runs a single iteration of the Publisher loop
@@ -162,7 +168,7 @@ func (p *Publisher) runOnce() bool {
 		// Endpoint Sink processes the events, and feeds back relevant changes
 		if !p.endpointSink.ProcessEvent(event) {
 			endpoint := event.Context().Value(endpoint.ContextSelf).(*endpoint.Endpoint)
-			p.forceEndpointFailure(endpoint, fmt.Errorf("Unexpected %T message received", event))
+			p.forceEndpointFailure(endpoint, fmt.Errorf("unexpected %T message received", event))
 		}
 
 		// If all finished, we're done
@@ -170,9 +176,11 @@ func (p *Publisher) runOnce() bool {
 			// TODO: What about out of sync ACK?
 			return true
 		}
-	case <-p.endpointSink.TimeoutChan():
+	case <-p.endpointSink.Scheduler.OnNext():
 		// Process triggered timeouts
-		p.endpointSink.ProcessTimeouts()
+		for p.endpointSink.Scheduler.Next() != nil {
+			panic("Unexpected non-callback item returned from Endpoint Scheduler")
+		}
 	case spool := <-p.ifSpoolChan:
 		// When inputs close, sources are all closed
 		if spool == nil {
@@ -251,13 +259,9 @@ func (p *Publisher) OnStarted(endpoint *endpoint.Endpoint) {
 	}
 
 	log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
-	p.endpointSink.RegisterTimeout(
-		&endpoint.Timeout,
-		keepaliveTimeout,
-		func() {
-			p.timeoutKeepalive(endpoint)
-		},
-	)
+	p.endpointSink.Scheduler.SetCallback(endpoint, keepaliveTimeout, func() {
+		p.timeoutKeepalive(endpoint)
+	})
 }
 
 // OnFinish handles when endpoints are finished
@@ -311,21 +315,13 @@ func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool, lineCount int) {
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.NumPending() > 0 {
-		p.endpointSink.RegisterTimeout(
-			&endpoint.Timeout,
-			p.netConfig.Timeout,
-			func() {
-				p.timeoutPending(endpoint)
-			},
-		)
+		p.endpointSink.Scheduler.SetCallback(endpoint, p.netConfig.Timeout, func() {
+			p.timeoutPending(endpoint)
+		})
 	} else {
-		p.endpointSink.RegisterTimeout(
-			&endpoint.Timeout,
-			keepaliveTimeout,
-			func() {
-				p.timeoutKeepalive(endpoint)
-			},
-		)
+		p.endpointSink.Scheduler.SetCallback(endpoint, keepaliveTimeout, func() {
+			p.timeoutKeepalive(endpoint)
+		})
 	}
 
 	complete := pendingPayload.Complete()
@@ -400,19 +396,16 @@ func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 	// If we haven't started sending anything, return to keepalive timeout
 	if endpoint.NumPending() == 0 {
 		log.Debug("[%s] Resetting keepalive timeout", endpoint.Server())
-		p.endpointSink.RegisterTimeout(
-			&endpoint.Timeout,
-			keepaliveTimeout,
-			func() {
-				p.timeoutKeepalive(endpoint)
-			},
-		)
+		p.endpointSink.Scheduler.SetCallback(endpoint, keepaliveTimeout, func() {
+			p.timeoutKeepalive(endpoint)
+		})
 	}
 }
 
 // forceEndpointFailure is called to force an endpoint to enter
 // the failed status. It reports the error and then processes the failure.
 func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
+	log.Warning("[%s] Forcing endpoint failure: %s", endpoint.Server(), err)
 	p.endpointSink.ForceFailure(endpoint)
 }
 
@@ -485,13 +478,9 @@ func (p *Publisher) sendPayload(pendingPayload *payload.Payload) (*endpoint.Endp
 
 	// If this is the first payload, start the network timeout
 	if endpoint.NumPending() == 1 {
-		p.endpointSink.RegisterTimeout(
-			&endpoint.Timeout,
-			p.netConfig.Timeout,
-			func() {
-				p.timeoutPending(endpoint)
-			},
-		)
+		p.endpointSink.Scheduler.SetCallback(endpoint, p.netConfig.Timeout, func() {
+			p.timeoutPending(endpoint)
+		})
 	}
 
 	return endpoint, true
@@ -509,13 +498,9 @@ func (p *Publisher) timeoutPending(endpoint *endpoint.Endpoint) {
 func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 	// Timeout for PING
 	log.Debug("[%s] Sending PING and starting pending timeout", endpoint.Server())
-	p.endpointSink.RegisterTimeout(
-		&endpoint.Timeout,
-		p.netConfig.Timeout,
-		func() {
-			p.timeoutPending(endpoint)
-		},
-	)
+	p.endpointSink.Scheduler.SetCallback(endpoint, p.netConfig.Timeout, func() {
+		p.timeoutPending(endpoint)
+	})
 
 	if err := endpoint.SendPing(); err != nil {
 		p.forceEndpointFailure(endpoint, err)

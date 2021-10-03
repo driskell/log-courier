@@ -287,16 +287,13 @@ func (t *connection) receiver() error {
 			case *protocolACKN:
 				transportEvent = transports.NewAckEvent(t.ctx, messageImpl.nonce, messageImpl.sequence)
 			case *protocolPONG:
-				log.Debugf("[%s < %s] Received PONG", t.poolServer, t.socket.RemoteAddr().String())
 				transportEvent = transports.NewPongEvent(t.ctx)
 			}
 		} else {
 			switch messageImpl := message.(type) {
 			case *protocolPING:
-				log.Debugf("[%s < %s] Received PING", t.poolServer, t.socket.RemoteAddr().String())
 				transportEvent = transports.NewPingEvent(t.ctx)
 			case eventsMessage:
-				log.Debugf("[%s < %s] Received %s payload %x with %d events", t.poolServer, t.socket.RemoteAddr().String(), messageImpl.Type(), *messageImpl.Nonce(), len(messageImpl.Events()))
 				transportEvent = transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
 			}
 		}

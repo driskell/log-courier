@@ -14,12 +14,12 @@
 * limitations under the License.
  */
 
-package null
+package test
 
 import "gopkg.in/op/go-logging.v1"
 
 var log *logging.Logger
 
 func init() {
-	log = logging.MustGetLogger("transports/null")
+	log = logging.MustGetLogger("transports/test")
 }

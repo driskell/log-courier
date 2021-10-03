@@ -30,8 +30,8 @@ import (
 	_ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/plain"
 
-	_ "github.com/driskell/log-courier/lc-lib/transports/null"
 	_ "github.com/driskell/log-courier/lc-lib/transports/tcp"
+	_ "github.com/driskell/log-courier/lc-lib/transports/test"
 )
 
 // Generate platform-specific default configuration values

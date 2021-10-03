@@ -56,9 +56,6 @@ type Endpoint struct {
 	failedElement  internallist.Element
 	orderedElement internallist.Element
 
-	// Support scheduled task for this endpoint
-	Timeout
-
 	sink            *Sink
 	server          string
 	addressPool     *addresspool.Pool
@@ -87,8 +84,6 @@ func (e *Endpoint) Init() {
 	e.readyElement.Value = e
 	e.failedElement.Value = e
 	e.orderedElement.Value = e
-
-	e.InitTimeout()
 
 	e.resetPayloads()
 

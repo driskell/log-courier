@@ -19,7 +19,6 @@ package receiver
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -59,7 +58,6 @@ type Pool struct {
 	ackChan              chan []*event.Event
 	eventChan            chan transports.Event
 	receivers            map[string]transports.Receiver
-	partialAckMutex      sync.Mutex
 	partialAckSchedule   *scheduler.Scheduler
 	partialAckConnection map[interface{}][]*poolEventProgress
 }
@@ -104,8 +102,6 @@ func (r *Pool) Run() {
 
 ReceiverLoop:
 	for {
-		partialAckNext := r.partialAckSchedule.OnNext()
-
 		select {
 		case <-shutdownChan:
 			if len(r.receivers) == 0 {
@@ -117,7 +113,7 @@ ReceiverLoop:
 			shutdownChan = nil
 		case newConfig := <-r.configChan:
 			r.updateReceivers(newConfig)
-		case <-partialAckNext:
+		case <-r.partialAckSchedule.OnNext():
 			if connection := r.partialAckSchedule.Next(); connection != nil {
 				expectedAck := r.partialAckConnection[connection][0]
 				expectedEvent := expectedAck.event
@@ -131,7 +127,7 @@ ReceiverLoop:
 					delete(r.partialAckConnection, connection)
 				}
 			}
-			r.partialAckSchedule.Reschedule(true)
+			r.partialAckSchedule.Reschedule()
 		case events := <-r.ackChan:
 			connection := events[0].Context().Value(transports.ContextConnection)
 			position := events[0].Context().Value(poolContextEventPosition).(*poolEventPosition)
@@ -144,13 +140,14 @@ ReceiverLoop:
 				position = nextPosition
 			}
 			r.ackEventsEvent(events[0].Context(), connection, position.nonce, position.sequence)
+			r.partialAckSchedule.Reschedule()
 		case receiverEvent := <-eventChan:
 			switch eventImpl := receiverEvent.(type) {
 			case *transports.EventsEvent:
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				r.partialAckConnection[connection] = append(r.partialAckConnection[connection], &poolEventProgress{event: eventImpl, sequence: 0})
 				r.partialAckSchedule.Set(connection, 5*time.Second)
-				r.partialAckSchedule.Reschedule(false)
+				r.partialAckSchedule.Reschedule()
 				// Build the events with our acknowledger and submit the bundle
 				var events = make([]*event.Event, len(eventImpl.Events()))
 				for idx, item := range eventImpl.Events() {
@@ -176,7 +173,9 @@ ReceiverLoop:
 				// TODO: Receiving a ping when we have outstanding events is invalid as per protocol, kill connection
 				key := eventImpl.Context().Value(poolContextReceiver).(string)
 				if receiver, has := r.receivers[key]; has && receiver != nil {
-					receiver.Pong(eventImpl.Context())
+					if err := receiver.Pong(eventImpl.Context()); err != nil {
+						receiver.FailConnection(eventImpl.Context(), err)
+					}
 				}
 			}
 		case spoolChan <- spool:
@@ -223,7 +222,9 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 
 	key := ctx.Value(poolContextReceiver).(string)
 	if receiver, has := r.receivers[key]; has && receiver != nil {
-		receiver.Acknowledge(ctx, nonce, sequence)
+		if err := receiver.Acknowledge(ctx, nonce, sequence); err != nil {
+			receiver.FailConnection(ctx, err)
+		}
 	}
 }
 

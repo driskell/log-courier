@@ -4,9 +4,10 @@ import "time"
 
 // timerItem holds an entry in the queue
 type timerItem struct {
-	value interface{}
-	when  time.Time
-	index int
+	value    interface{}
+	callback Callback
+	when     time.Time
+	index    int
 }
 
 // A timerQueue implements heap.Interface and holds timerItems.

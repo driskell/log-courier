@@ -154,3 +154,6 @@ func (m *methodFailover) reloadConfig(netConfig *transports.Config) {
 		last = foundEndpoint
 	}
 }
+
+func (m *methodFailover) destroy() {
+}

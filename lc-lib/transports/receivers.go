@@ -28,6 +28,7 @@ type Receiver interface {
 	ReloadConfig(*config.Config, ReceiverFactory) bool
 	Acknowledge(context.Context, *string, uint32) error
 	Pong(context.Context) error
+	FailConnection(context.Context, error)
 	Shutdown()
 }
 

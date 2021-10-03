@@ -17,50 +17,73 @@
  * limitations under the License.
  */
 
-package null
+package test
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
-// transportNull implements a transport that discards what it receives
+// transportTest implements a transport that discards what it receives
 // It is useful for testing
-type transportNull struct {
+type transportTest struct {
 	ctx       context.Context
+	config    *TransportTestFactory
 	eventChan chan<- transports.Event
+	server    string
 }
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-func (t *transportNull) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
+func (t *transportTest) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
 	return false
 }
 
 // SendEvents sends an event message with given nonce to the transport - only valid after Started transport event received
-func (t *transportNull) SendEvents(nonce string, events []*event.Event) error {
-	log.Debugf("[Null] Sending immediate acknowledgement for payload %x", nonce)
-	t.eventChan <- transports.NewAckEvent(t.ctx, &nonce, uint32(len(events)))
+func (t *transportTest) SendEvents(nonce string, events []*event.Event) error {
+	t.delayAction(func() {
+		t.eventChan <- transports.NewAckEvent(t.ctx, &nonce, uint32(len(events)))
+	}, fmt.Sprintf("[%s] Sending acknowledgement for payload %x after %%d second delay", t.server, nonce))
 	return nil
 }
 
+func (t *transportTest) delayAction(action func(), message string) {
+	delay := t.config.MinDelay
+	if t.config.MinDelay != t.config.MaxDelay {
+		delay = delay + rand.Int63n(t.config.MaxDelay-t.config.MinDelay)
+	}
+	log.Debugf(message, delay)
+	if delay == 0 {
+		action()
+	} else {
+		go func() {
+			<-time.After(time.Second * time.Duration(delay))
+			action()
+		}()
+	}
+}
+
 // Ping the remote server - only valid after Started transport event received
-func (t *transportNull) Ping() error {
-	log.Debug("[Null] Sending immediate PONG response")
-	t.eventChan <- transports.NewPongEvent(t.ctx)
+func (t *transportTest) Ping() error {
+	t.delayAction(func() {
+		t.eventChan <- transports.NewPongEvent(t.ctx)
+	}, fmt.Sprintf("[%s] Sending pong response after %%d second delay", t.server))
 	return nil
 }
 
 // Fail the transport / Shutdown hard
-func (t *transportNull) Fail() {
+func (t *transportTest) Fail() {
 	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
 	return
 }
 
 // Shutdown the transport gracefully - only valid after Started transport event received
-func (t *transportNull) Shutdown() {
+func (t *transportTest) Shutdown() {
 	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
 	return
 }

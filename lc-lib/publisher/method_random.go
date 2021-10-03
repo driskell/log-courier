@@ -32,8 +32,6 @@ type methodRandom struct {
 	activeServer int
 	generator    *rand.Rand
 	backoff      *core.ExpBackoff
-
-	endpoint.Timeout
 }
 
 func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodRandom {
@@ -45,8 +43,6 @@ func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodR
 	}
 
 	ret.backoff = core.NewExpBackoff("Random", ret.netConfig.Backoff, ret.netConfig.BackoffMax)
-
-	ret.InitTimeout()
 
 	if sink.Count() == 0 {
 		// Empty sink, connect to a random endpoint
@@ -128,24 +124,19 @@ func (m *methodRandom) connectRandom() {
 
 func (m *methodRandom) onFail(endpoint *endpoint.Endpoint) {
 	// Should never happen - we initiate transports with finishOnFail
-	return
+	panic("Unexpected Method Random onFail")
 }
 
 func (m *methodRandom) onFinish(endpoint *endpoint.Endpoint) bool {
 	// Due to finishOnFail we have no backoff after failure, so start one now to
 	// call connectRandom after the backoff
-	m.sink.RegisterTimeout(
-		&m.Timeout,
-		m.backoff.Trigger(),
-		func() {
-			m.connectRandom()
-		},
-	)
+	m.sink.Scheduler.SetCallback(m, m.backoff.Trigger(), func() {
+		m.connectRandom()
+	})
 	return false
 }
 
 func (m *methodRandom) onStarted(endpoint *endpoint.Endpoint) {
-	return
 }
 
 func (m *methodRandom) reloadConfig(netConfig *transports.Config) {
@@ -170,4 +161,8 @@ func (m *methodRandom) reloadConfig(netConfig *transports.Config) {
 
 	// Not present in server list, shut down
 	m.sink.ShutdownEndpoint(currentServer)
+}
+
+func (m *methodRandom) destroy() {
+	m.sink.Scheduler.Remove(m)
 }
