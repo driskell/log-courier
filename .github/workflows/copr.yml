@@ -68,6 +68,7 @@ jobs:
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
+        TARGET_REPO: log-courier2
     - name: Upload SRPM
       uses: actions/upload-artifact@v2
       if: ${{ always() }}
