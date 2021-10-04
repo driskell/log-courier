@@ -76,6 +76,7 @@ for DIST in trusty xenial bionic focal; do
 
 	echo "::group::Building source"
 	debuild -d -S -sa
+	cp -rf "../${NAME}_${VERSION#v}-${RELEASE}~${DIST}${DRELEASE}"* ~/
 	echo '::endgroup::'
 
 	echo "::group::Testing DEB"
