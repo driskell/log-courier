@@ -47,7 +47,7 @@ echo '::endgroup::'
 echo '::group::Building SRPM'
 yum-builddep -y ~/"rpmbuild/SPECS/${NAME}.spec"
 rpmbuild -bs ~/"rpmbuild/SPECS/${NAME}.spec"
-cp -rf ~/rpmbuild/SRPMS/*.src.rpm ~/
+cp -rf ~/rpmbuild/SRPMS/*.src.rpm "$GITHUB_WORKSPACE"/
 echo '::endgroup::'
 
 echo '::group::Testing RPM build'
