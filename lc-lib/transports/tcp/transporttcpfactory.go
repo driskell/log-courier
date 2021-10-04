@@ -95,15 +95,17 @@ func (f *TransportTCPFactory) Defaults() {
 // NewTransport returns a new Transport interface using the settings from the
 // TransportTCPFactory.
 func (f *TransportTCPFactory) NewTransport(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event, finishOnFail bool) transports.Transport {
+	cancelCtx, shutdownFunc := context.WithCancel(ctx)
+
 	ret := &transportTCP{
-		ctx:            ctx,
-		config:         f,
-		netConfig:      transports.FetchConfig(f.config),
-		finishOnFail:   finishOnFail,
-		pool:           pool,
-		eventChan:      eventChan,
-		controllerChan: make(chan error, 1),
-		backoff:        core.NewExpBackoff(pool.Server()+" Reconnect", f.Reconnect, f.ReconnectMax),
+		ctx:          cancelCtx,
+		shutdownFunc: shutdownFunc,
+		config:       f,
+		netConfig:    transports.FetchConfig(f.config),
+		finishOnFail: finishOnFail,
+		pool:         pool,
+		eventChan:    eventChan,
+		backoff:      core.NewExpBackoff(pool.Server()+" Reconnect", f.Reconnect, f.ReconnectMax),
 	}
 
 	ret.startController()

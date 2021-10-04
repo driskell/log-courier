@@ -138,6 +138,10 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 		panic(fmt.Sprintf("Endpoint is not ready (%d)", e.status))
 	}
 
+	if e.pongPending {
+		e.pongPending = false
+	}
+
 	// Calculate a nonce if we don't already have one
 	if payload.Nonce == "" {
 		nonce := e.generateNonce()
@@ -303,7 +307,6 @@ func (e *Endpoint) processPong(onPong func(*Endpoint)) {
 		return
 	}
 
-	log.Debug("[%s] Received pong", e.Server())
 	e.pongPending = false
 
 	onPong(e)

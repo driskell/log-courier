@@ -52,7 +52,7 @@ func (t *transportTest) SendEvents(nonce string, events []*event.Event) error {
 			return
 		}
 		t.eventChan <- transports.NewAckEvent(t.ctx, &nonce, uint32(len(events)))
-	}, fmt.Sprintf("[%s] Sending acknowledgement for payload %x after %%d second delay", t.server, nonce))
+	}, fmt.Sprintf("[%s] Returning acknowledgement for payload %x after %%d second delay", t.server, nonce))
 	return nil
 }
 

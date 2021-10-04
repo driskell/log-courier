@@ -38,14 +38,14 @@ import (
 // It also can optionally introduce a TLS layer for security
 type transportTCP struct {
 	// Constructor
-	ctx            context.Context
-	config         *TransportTCPFactory
-	netConfig      *transports.Config
-	finishOnFail   bool
-	pool           *addresspool.Pool
-	eventChan      chan<- transports.Event
-	controllerChan chan error
-	backoff        *core.ExpBackoff
+	ctx          context.Context
+	shutdownFunc context.CancelFunc
+	config       *TransportTCPFactory
+	netConfig    *transports.Config
+	finishOnFail bool
+	pool         *addresspool.Pool
+	eventChan    chan<- transports.Event
+	backoff      *core.ExpBackoff
 
 	// Internal
 	connMutex    sync.RWMutex
@@ -90,6 +90,7 @@ func (t *transportTCP) controllerRoutine() {
 	}()
 
 	// Main connect loop
+MainLoop:
 	for {
 		conn, err := t.connect()
 		if err == nil {
@@ -131,7 +132,8 @@ func (t *transportTCP) controllerRoutine() {
 		}
 
 		select {
-		case <-t.controllerChan:
+		case <-t.ctx.Done():
+			break MainLoop
 		case t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Failed):
 		}
 
@@ -139,6 +141,9 @@ func (t *transportTCP) controllerRoutine() {
 			break
 		}
 	}
+
+	// Ensure all resources cleared up for the context
+	t.shutdownFunc()
 }
 
 // reconnectWait waits the backoff timeout before attempting to reconnect
@@ -148,8 +153,8 @@ func (t *transportTCP) reconnectWait() bool {
 	reconnectDue := now.Add(t.backoff.Trigger())
 
 	select {
-	case <-t.controllerChan:
-		// Shutdown request
+	case <-t.ctx.Done():
+		// Failed transport
 		return true
 	case <-time.After(reconnectDue.Sub(now)):
 	}
@@ -247,15 +252,7 @@ func (t *transportTCP) Ping() error {
 
 // Fail the transport / Shutdown hard
 func (t *transportTCP) Fail() {
-	t.connMutex.Lock()
-	defer t.connMutex.Unlock()
-	if !t.shutdown {
-		if t.conn != nil {
-			t.conn.Teardown()
-		}
-		t.shutdown = true
-		close(t.controllerChan)
-	}
+	t.shutdownFunc()
 }
 
 // Shutdown the transport gracefully - only valid after Started transport event received
@@ -268,7 +265,6 @@ func (t *transportTCP) Shutdown() {
 			t.conn.SendMessage(nil)
 		}
 		t.shutdown = true
-		close(t.controllerChan)
 	}
 }
 

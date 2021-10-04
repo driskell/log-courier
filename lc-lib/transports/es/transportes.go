@@ -120,6 +120,9 @@ func (t *transportES) controllerRoutine() {
 	// Become the main http routine
 	t.wait.Add(1)
 	t.httpRoutine(0)
+
+	// Ensure all resources for the cancel are cleaned up
+	t.shutdownFunc()
 }
 
 // setupAssociation gathers cluster information and installs templates

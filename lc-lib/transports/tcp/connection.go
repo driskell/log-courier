@@ -46,6 +46,7 @@ var (
 type connection struct {
 	// ctx uniquely identifies the connection - a new one is allocated by newConnection
 	ctx          context.Context
+	shutdownFunc context.CancelFunc
 	socket       connectionSocket
 	poolServer   string
 	isClient     bool
@@ -56,12 +57,6 @@ type connection struct {
 	supportsEvnt bool
 	rwBuffer     bufio.ReadWriter
 
-	// receiverShutdownMutex ensures receiver shutdown happens once as it can be triggered externally and by sender
-	receiverShutdownMutex sync.RWMutex
-	// shutdown is flagged when receiver is shutting down
-	receiverShutdown bool
-	// receiverShutdownChan requests receiver to stop receiving data
-	receiverShutdownChan chan struct{}
 	// senderErr stores exit error from sender
 	senderErr error
 	// senderShutdownChan requests sender to begin to gracefully shutdown - called from receiver when EOF
@@ -72,17 +67,16 @@ type connection struct {
 
 func newConnection(ctx context.Context, socket connectionSocket, poolServer string, isClient bool, eventChan chan<- transports.Event) *connection {
 	ret := &connection{
-		socket:               socket,
-		poolServer:           poolServer,
-		isClient:             isClient,
-		eventChan:            eventChan,
-		sendChan:             make(chan protocolMessage, 1),
-		shutdownChan:         make(chan struct{}),
-		receiverShutdownChan: make(chan struct{}),
-		senderShutdownChan:   make(chan struct{}),
+		socket:             socket,
+		poolServer:         poolServer,
+		isClient:           isClient,
+		eventChan:          eventChan,
+		sendChan:           make(chan protocolMessage, 1),
+		shutdownChan:       make(chan struct{}),
+		senderShutdownChan: make(chan struct{}),
 	}
 
-	ret.ctx = context.WithValue(ctx, transports.ContextConnection, ret)
+	ret.ctx, ret.shutdownFunc = context.WithCancel(context.WithValue(ctx, transports.ContextConnection, ret))
 
 	return ret
 }
@@ -130,6 +124,9 @@ func (t *connection) Run(startedCallback func()) error {
 
 	// Unblock any external routines communicating via SendMessage
 	close(t.shutdownChan)
+
+	// Ensure all resources are cleaned up
+	t.shutdownFunc()
 
 	return err
 }
@@ -261,7 +258,7 @@ func (t *connection) writeMsg(msg protocolMessage) error {
 // any shutdown signal. Returns true if shutdown was signalled
 func (t *connection) sendEvent(transportEvent transports.Event) bool {
 	select {
-	case <-t.receiverShutdownChan:
+	case <-t.ctx.Done():
 		return true
 	case t.eventChan <- transportEvent:
 	}
@@ -357,7 +354,7 @@ func (t *connection) receiverRead(data []byte) (bool, error) {
 ReceiverReadLoop:
 	for {
 		select {
-		case <-t.receiverShutdownChan:
+		case <-t.ctx.Done():
 			err = errHardCloseRequested
 			break ReceiverReadLoop
 		default:
@@ -395,13 +392,7 @@ ReceiverReadLoop:
 // Receivers do not gracefully shutdown from our side, only remote side, so this is called to stop receiving more data
 // For Transports this is used to teardown due to a problem
 func (t *connection) Teardown() {
-	t.receiverShutdownMutex.Lock()
-	defer t.receiverShutdownMutex.Unlock()
-	if t.receiverShutdown {
-		return
-	}
-	t.receiverShutdown = true
-	close(t.receiverShutdownChan)
+	t.shutdownFunc()
 }
 
 // SendMessage queues a message to be sent on the connection

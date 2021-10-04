@@ -77,7 +77,9 @@ func (t *receiverTCP) controllerRoutine() {
 		}
 	}
 
-	t.closeConnections()
+	// Ensure resources are cleaned up for the context and all connections close (all connections inherit our cancel context so will implicitly exit)
+	t.shutdownFunc()
+	t.connWait.Wait()
 
 	log.Info("[%s] Receiver exiting", t.pool.Server())
 }
@@ -211,15 +213,6 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 
 	t.connWait.Add(1)
 	go t.connectionRoutine(socket, conn)
-}
-
-func (t *receiverTCP) closeConnections() {
-	t.connMutex.Lock()
-	for conn := range t.connections {
-		conn.Teardown()
-	}
-	t.connMutex.Unlock()
-	t.connWait.Wait()
 }
 
 // connectionRoutine is a routine for an individual connection that runs it and captures shutdown
