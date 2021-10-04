@@ -45,8 +45,9 @@ jobs:
   release-log-carver:
     name: Release Log Carver
     runs-on: ubuntu-latest
-    # Run one at a time
+    # Run one at a time but ignore failure of previous
     needs: release-log-courier
+    if: ${{ always() }}
     steps:
     - name: Checkout
       uses: actions/checkout@v2
