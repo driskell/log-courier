@@ -37,6 +37,11 @@ jobs:
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2
+    - uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: log-courier.srpm
+        path: rpmbuild/SRPMS/*.src.rpm
 
   release-log-carver:
     name: Release Log Carver
@@ -61,3 +66,8 @@ jobs:
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
+    - uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: log-carver.srpm
+        path: rpmbuild/SRPMS/*.src.rpm
