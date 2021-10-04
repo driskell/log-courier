@@ -41,15 +41,12 @@ jobs:
       uses: actions/upload-artifact@v2
       if: ${{ always() }}
       with:
-        name: log-courier.srpm
-        path: '*.src.rpm'
+        name: log-courier
+        path: artifacts/*
 
   release-log-carver:
     name: Release Log Carver
     runs-on: ubuntu-latest
-    # Run one at a time but ignore failure of previous
-    needs: release-log-courier
-    if: ${{ always() }}
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -73,5 +70,5 @@ jobs:
       uses: actions/upload-artifact@v2
       if: ${{ always() }}
       with:
-        name: log-carver.srpm
-        path: '*.src.rpm'
+        name: log-carver
+        path: artifacts/*
