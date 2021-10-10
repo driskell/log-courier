@@ -24,17 +24,20 @@ import (
 	"syscall"
 )
 
+// FileStateOS holds operating system specific identifiers for a file
 type FileStateOS struct {
 	Inode  uint64 `json:"inode,omitempty"`
 	Device uint64 `json:"device,omitempty"`
 }
 
+// PopulateFileIds grabs the OS specific identifiers for the given file on disk
 func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
 	fstat := info.Sys().(*syscall.Stat_t)
 	fs.Inode = fstat.Ino
 	fs.Device = fstat.Dev
 }
 
+// SameAs compares the given file using the stored identifiers
 func (fs *FileStateOS) SameAs(info os.FileInfo) bool {
 	state := &FileStateOS{}
 	state.PopulateFileIds(info)

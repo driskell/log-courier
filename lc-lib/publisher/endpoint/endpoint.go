@@ -27,7 +27,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/internallist"
-	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/publisher/payload"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -55,9 +55,6 @@ type Endpoint struct {
 	readyElement   internallist.Element
 	failedElement  internallist.Element
 	orderedElement internallist.Element
-
-	// Support scheduled task for this endpoint
-	Timeout
 
 	sink            *Sink
 	server          string
@@ -87,8 +84,6 @@ func (e *Endpoint) Init() {
 	e.readyElement.Value = e
 	e.failedElement.Value = e
 	e.orderedElement.Value = e
-
-	e.InitTimeout()
 
 	e.resetPayloads()
 
@@ -143,6 +138,10 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 		panic(fmt.Sprintf("Endpoint is not ready (%d)", e.status))
 	}
 
+	if e.pongPending {
+		e.pongPending = false
+	}
+
 	// Calculate a nonce if we don't already have one
 	if payload.Nonce == "" {
 		nonce := e.generateNonce()
@@ -170,12 +169,12 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 	}
 
 	if payload.Resending {
-		log.Debug("[%s] Resending payload %x (%d events)", e.Server(), payload.Nonce, payload.Size())
+		log.Debug("[%s] Resending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
 	} else {
-		log.Debug("[%s] Sending payload %x (%d events)", e.Server(), payload.Nonce, payload.Size())
+		log.Debug("[%s] Sending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
 	}
 
-	if err := e.transport.Write(payload); err != nil {
+	if err := e.transport.SendEvents(payload.Nonce, payload.Events()); err != nil {
 		return err
 	}
 
@@ -246,10 +245,10 @@ func (e *Endpoint) LineCount() int64 {
 // It should return whether or not the payload was completed so full status
 // can be updated
 func (e *Endpoint) processAck(ack *transports.AckEvent, onAck func(*Endpoint, *payload.Payload, bool, int)) bool {
-	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), ack.Nonce(), ack.Sequence())
+	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), *ack.Nonce(), ack.Sequence())
 
 	// Grab the payload the ACK corresponds to by using nonce
-	payload, found := e.pendingPayloads[ack.Nonce()]
+	payload, found := e.pendingPayloads[*ack.Nonce()]
 	if !found {
 		// Don't fail here in case we had temporary issues and resend a payload, only for us to receive duplicate ACKN
 		log.Debug("[%s] Duplicate/corrupt ACK received for message %x", e.Server(), ack.Nonce())
@@ -263,7 +262,7 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, onAck func(*Endpoint, *p
 
 	if complete {
 		// No more events left for this payload, remove from pending list
-		delete(e.pendingPayloads, ack.Nonce())
+		delete(e.pendingPayloads, *ack.Nonce())
 
 		e.mutex.Lock()
 		e.lineCount += int64(lineCount)
@@ -308,7 +307,6 @@ func (e *Endpoint) processPong(onPong func(*Endpoint)) {
 		return
 	}
 
-	log.Debug("[%s] Received PONG message", e.Server())
 	e.pongPending = false
 
 	onPong(e)

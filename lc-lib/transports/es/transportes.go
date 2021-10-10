@@ -34,13 +34,20 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 var (
-	globalTemplateLock sync.Mutex
+	// ErrInvalidState occurs when a send cannot happen because the connection has closed
+	ErrInvalidState = errors.New("invalid connection state")
 )
+
+// payload contains nonce and events information
+type payload struct {
+	nonce  *string
+	events []*event.Event
+}
 
 // transportES implements a transport that sends over the ES HTTP protocol
 type transportES struct {
@@ -55,7 +62,7 @@ type transportES struct {
 
 	// Internal
 	// payloadMutex is so we can easily discard existing sendChan and its contents each time we reset
-	payloadChan     chan *payload.Payload
+	payloadChan     chan *payload
 	payloadMutex    sync.Mutex
 	poolMutex       sync.Mutex
 	wait            sync.WaitGroup
@@ -94,7 +101,7 @@ func (t *transportES) controllerRoutine() {
 
 	// Setup payload chan with max write count of pending payloads
 	t.payloadMutex.Lock()
-	t.payloadChan = make(chan *payload.Payload, t.netConfig.MaxPendingPayloads)
+	t.payloadChan = make(chan *payload, t.netConfig.MaxPendingPayloads)
 	t.payloadMutex.Unlock()
 
 	if t.setupAssociation() {
@@ -113,6 +120,9 @@ func (t *transportES) controllerRoutine() {
 	// Become the main http routine
 	t.wait.Add(1)
 	t.httpRoutine(0)
+
+	// Ensure all resources for the cancel are cleaned up
+	t.shutdownFunc()
 }
 
 // setupAssociation gathers cluster information and installs templates
@@ -162,7 +172,7 @@ func (t *transportES) populateNodeInfo() error {
 	}()
 	if httpResponse.StatusCode != 200 {
 		body, _ := ioutil.ReadAll(httpResponse.Body)
-		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
+		return fmt.Errorf("unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	decoder := json.NewDecoder(httpResponse.Body)
@@ -172,7 +182,7 @@ func (t *transportES) populateNodeInfo() error {
 
 	t.maxMajorVersion, err = t.nodeInfo.MaxMajorVersion()
 	if err != nil {
-		return fmt.Errorf("Failed to calculate maximum version number for cluster: %s", err)
+		return fmt.Errorf("failed to calculate maximum version number for cluster: %s", err)
 	}
 
 	log.Info("[%s] Successfully retrieved Elasticsearch node information (major version: %d)", t.pool.Server(), t.maxMajorVersion)
@@ -200,22 +210,18 @@ func (t *transportES) installTemplate() error {
 		switch t.maxMajorVersion {
 		case 8:
 			template = esTemplate8
-			break
 		case 7:
 			template = esTemplate7
-			break
 		case 6:
 			template = esTemplate6
-			break
 		case 5:
 			template = esTemplate5
 			if len(t.config.TemplatePatterns) > 1 {
-				return fmt.Errorf("Elasticsearch major version %d does not support multiple 'template patterns'", t.maxMajorVersion)
+				return fmt.Errorf("the Elasticsearch major version %d does not support multiple template patterns", t.maxMajorVersion)
 			}
 			template = strings.ReplaceAll(template, "$INDEXPATTERNSINGLE$", t.config.templatePatternSingleJSON)
-			break
 		default:
-			return fmt.Errorf("Elasticsearch major version %d is unsupported", t.maxMajorVersion)
+			return fmt.Errorf("the Elasticsearch major version %d is unsupported", t.maxMajorVersion)
 		}
 		template = strings.ReplaceAll(template, "$INDEXPATTERNS$", t.config.templatePatternsJSON)
 		templateReader = strings.NewReader(template)
@@ -247,7 +253,7 @@ func (t *transportES) installTemplate() error {
 	}()
 	if httpResponse.StatusCode != 200 {
 		body, _ := ioutil.ReadAll(httpResponse.Body)
-		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
+		return fmt.Errorf("unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	log.Info("[%s] Successfully installed Elasticsearch index template: %s", t.pool.Server(), name)
@@ -275,7 +281,7 @@ func (t *transportES) checkTemplate(server *net.TCPAddr, name string) (bool, err
 	}
 	if httpResponse.StatusCode != 404 {
 		body, _ := ioutil.ReadAll(httpResponse.Body)
-		return false, fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
+		return false, fmt.Errorf("unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	return false, nil
@@ -303,7 +309,7 @@ func (t *transportES) httpRoutine(id int) {
 			}
 
 			lastAckSequence := uint32(0)
-			request := newBulkRequest(t.config.IndexPattern, payload.Events())
+			request := newBulkRequest(t.config.IndexPattern, payload.events)
 
 			for {
 				if err := t.performBulkRequest(id, request); err != nil {
@@ -317,7 +323,7 @@ func (t *transportES) httpRoutine(id int) {
 					case <-t.ctx.Done():
 						// Forced failure
 						return
-					case t.eventChan <- transports.NewAckEvent(t.ctx, payload.Nonce, lastAckSequence):
+					case t.eventChan <- transports.NewAckEvent(t.ctx, payload.nonce, lastAckSequence):
 					}
 				}
 
@@ -386,12 +392,12 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	body, _ := ioutil.ReadAll(httpResponse.Body)
 	httpResponse.Body.Close()
 	if httpResponse.StatusCode != 200 {
-		return fmt.Errorf("Unexpected status: %s [Body: %s]", httpResponse.Status, body)
+		return fmt.Errorf("unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
 	response, err := newBulkResponse(body, request)
 	if err != nil {
-		return fmt.Errorf("Response failed to parse: %s [Body: %s]", err, body)
+		return fmt.Errorf("response failed to parse: %s [Body: %s]", err, body)
 	}
 
 	if len(response.Errors) != 0 {
@@ -424,15 +430,15 @@ func (t *transportES) retryWait(backoff *core.ExpBackoff) bool {
 	return false
 }
 
-// Write a message to the transport - only valid after Started transport event received
-func (t *transportES) Write(payload *payload.Payload) error {
+// SendEvents sends events to the transport - only valid after Started transport event received
+func (t *transportES) SendEvents(nonce string, events []*event.Event) error {
 	// Are we ready?
 	t.payloadMutex.Lock()
 	defer t.payloadMutex.Unlock()
 	if t.payloadChan == nil {
-		return errors.New("Invalid connection state")
+		return ErrInvalidState
 	}
-	t.payloadChan <- payload
+	t.payloadChan <- &payload{&nonce, events}
 	return nil
 }
 

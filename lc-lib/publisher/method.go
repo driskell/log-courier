@@ -26,4 +26,5 @@ type method interface {
 	onFinish(*endpoint.Endpoint) bool
 	onStarted(*endpoint.Endpoint)
 	reloadConfig(*transports.Config)
+	destroy()
 }

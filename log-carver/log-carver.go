@@ -30,6 +30,7 @@ import (
 
 	_ "github.com/driskell/log-courier/lc-lib/transports/es"
 	_ "github.com/driskell/log-courier/lc-lib/transports/tcp"
+	_ "github.com/driskell/log-courier/lc-lib/transports/test"
 )
 
 // Generate platform-specific default configuration values

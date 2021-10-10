@@ -23,7 +23,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -31,7 +30,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/core"
-	"github.com/driskell/log-courier/lc-lib/payload"
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -39,15 +38,14 @@ import (
 // It also can optionally introduce a TLS layer for security
 type transportTCP struct {
 	// Constructor
-	ctx            context.Context
-	config         *TransportTCPFactory
-	netConfig      *transports.Config
-	finishOnFail   bool
-	pool           *addresspool.Pool
-	eventChan      chan<- transports.Event
-	controllerChan chan error
-	connectionChan chan *socketMessage
-	backoff        *core.ExpBackoff
+	ctx          context.Context
+	shutdownFunc context.CancelFunc
+	config       *TransportTCPFactory
+	netConfig    *transports.Config
+	finishOnFail bool
+	pool         *addresspool.Pool
+	eventChan    chan<- transports.Event
+	backoff      *core.ExpBackoff
 
 	// Internal
 	connMutex    sync.RWMutex
@@ -92,6 +90,7 @@ func (t *transportTCP) controllerRoutine() {
 	}()
 
 	// Main connect loop
+MainLoop:
 	for {
 		conn, err := t.connect()
 		if err == nil {
@@ -133,7 +132,8 @@ func (t *transportTCP) controllerRoutine() {
 		}
 
 		select {
-		case <-t.controllerChan:
+		case <-t.ctx.Done():
+			break MainLoop
 		case t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Failed):
 		}
 
@@ -141,6 +141,9 @@ func (t *transportTCP) controllerRoutine() {
 			break
 		}
 	}
+
+	// Ensure all resources cleared up for the context
+	t.shutdownFunc()
 }
 
 // reconnectWait waits the backoff timeout before attempting to reconnect
@@ -150,8 +153,8 @@ func (t *transportTCP) reconnectWait() bool {
 	reconnectDue := now.Add(t.backoff.Trigger())
 
 	select {
-	case <-t.controllerChan:
-		// Shutdown request
+	case <-t.ctx.Done():
+		// Failed transport
 		return true
 	case <-time.After(reconnectDue.Sub(now)):
 	}
@@ -189,7 +192,7 @@ func (t *transportTCP) connect() (*connection, error) {
 
 	addr, err := t.pool.Next()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to select next address: %s", err)
+		return nil, fmt.Errorf("failed to select next address: %s", err)
 	}
 
 	desc := t.pool.Desc()
@@ -198,14 +201,8 @@ func (t *transportTCP) connect() (*connection, error) {
 
 	socket, err := net.DialTimeout("tcp", addr.String(), t.netConfig.Timeout)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to %s: %s", desc, err)
+		return nil, fmt.Errorf("failed to connect to %s: %s", desc, err)
 	}
-
-	// Maxmium number of payloads we will queue - must be correct as otherwise
-	// the endpoint implementation will block unexpectedly and be unable to
-	// distribute events across multiple transports
-	// Pings don't count towards limit, we only ping if this queue is empty
-	sendChan := make(chan protocolMessage, t.netConfig.MaxPendingPayloads)
 
 	// Now wrap in TLS if this is the TLS transport
 	var connectionSocket connectionSocket
@@ -215,27 +212,30 @@ func (t *transportTCP) connect() (*connection, error) {
 		connectionSocket = newConnectionSocketTCP(socket.(*net.TCPConn))
 	}
 
-	connContext := context.WithValue(t.ctx, contextIsClient, true)
-
-	conn := newConnection(connContext, connectionSocket, t.pool.Server(), t.eventChan, sendChan)
+	conn := newConnection(t.ctx, connectionSocket, t.pool.Server(), true, t.eventChan)
 
 	log.Notice("[%s] Connected to %s", t.pool.Server(), desc)
 	return conn, nil
 }
 
-// Write a message to the transport - only valid after Started transport event received
-func (t *transportTCP) Write(payload *payload.Payload) error {
+// SendEvents sends an event message with given nonce to the transport - only valid after Started transport event received
+func (t *transportTCP) SendEvents(nonce string, events []*event.Event) error {
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
 	if t.conn == nil {
-		return errors.New("Invalid connection state")
+		return ErrInvalidState
 	}
-	var msg protocolMessage
+	var eventsAsBytes = make([][]byte, len(events))
+	for idx, item := range events {
+		eventsAsBytes[idx] = item.Bytes()
+	}
+	var msg eventsMessage
 	if t.supportsEVNT {
-		msg = &protocolEVNT{nonce: payload.Nonce, events: payload.Events()}
+		msg = &protocolEVNT{nonce: &nonce, events: eventsAsBytes}
 	} else {
-		msg = &protocolJDAT{nonce: payload.Nonce, events: payload.Events()}
+		msg = &protocolJDAT{nonce: &nonce, events: eventsAsBytes}
 	}
+	log.Debugf("[%s > %s] Sending %s payload with nonce %x and %d events", t.pool.Server(), t.conn.socket.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
 	return t.conn.SendMessage(msg)
 }
 
@@ -244,22 +244,15 @@ func (t *transportTCP) Ping() error {
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
 	if t.conn == nil {
-		return errors.New("Invalid connection state")
+		return ErrInvalidState
 	}
+	log.Debugf("[%s > %s] Sending ping", t.pool.Server(), t.conn.socket.RemoteAddr().String())
 	return t.conn.SendMessage(&protocolPING{})
 }
 
 // Fail the transport / Shutdown hard
 func (t *transportTCP) Fail() {
-	t.connMutex.Lock()
-	defer t.connMutex.Unlock()
-	if !t.shutdown {
-		if t.conn != nil {
-			t.conn.Teardown()
-		}
-		t.shutdown = true
-		close(t.controllerChan)
-	}
+	t.shutdownFunc()
 }
 
 // Shutdown the transport gracefully - only valid after Started transport event received
@@ -272,7 +265,6 @@ func (t *transportTCP) Shutdown() {
 			t.conn.SendMessage(nil)
 		}
 		t.shutdown = true
-		close(t.controllerChan)
 	}
 }
 

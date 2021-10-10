@@ -24,12 +24,14 @@ import (
 	"reflect"
 )
 
+// FileStateOS holds operating system specific identifiers for a file
 type FileStateOS struct {
 	Vol   uint32 `json:"vol,omitempty"`
 	IdxHi uint32 `json:"idxhi,omitempty"`
 	IdxLo uint32 `json:"idxlo,omitempty"`
 }
 
+// PopulateFileIds grabs the OS specific identifiers for the given file on disk
 func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
 	// For information on the following, see Go source: src/pkg/os/types_windows.go
 	// This is the only way we can get at the idxhi and idxlo
@@ -67,6 +69,7 @@ func (fs *FileStateOS) PopulateFileIds(info os.FileInfo) {
 	fs.IdxLo = uint32(fstat.FieldByName("idxlo").Uint())
 }
 
+// SameAs compares the given file using the stored identifiers
 func (fs *FileStateOS) SameAs(info os.FileInfo) bool {
 	state := &FileStateOS{}
 	state.PopulateFileIds(info)

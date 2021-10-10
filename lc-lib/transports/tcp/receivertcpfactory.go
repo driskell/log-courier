@@ -18,12 +18,7 @@ package tcp
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"regexp"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -45,19 +40,10 @@ type ReceiverTCPFactory struct {
 	hostportRegexp *regexp.Regexp
 
 	// Configuration
-	SSLCertificate string   `config:"ssl certificate"`
-	SSLKey         string   `config:"ssl key"`
 	SSLClientCA    []string `config:"ssl client ca"`
 	SSLVerifyPeers bool     `config:"verify_peers"`
-	MinTLSVersion  string   `config:"min tls version"`
-	MaxTLSVersion  string   `config:"max tls version"`
 
-	// Internal
-	certificate     *tls.Certificate
-	certificateList []*x509.Certificate
-	caList          []*x509.Certificate
-	minTLSVersion   uint16
-	maxTLSVersion   uint16
+	tlsConfiguration
 }
 
 // NewReceiverTCPFactory create a new ReceiverTCPFactory from the provided
@@ -77,72 +63,20 @@ func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[strin
 
 // Validate the configuration
 func (f *ReceiverTCPFactory) Validate(p *config.Parser, configPath string) (err error) {
-	// Check tls versions
-	f.minTLSVersion, err = parseTLSVersion(f.MinTLSVersion, defaultMinTLSVersion)
-	if err != nil {
-		return err
-	}
-	f.maxTLSVersion, err = parseTLSVersion(f.MaxTLSVersion, defaultMaxTLSVersion)
-	if err != nil {
-		return err
-	}
-
-	// Only allow SSL configurations if using TLS
 	if f.transport != TransportTCPTLS {
-		if len(f.SSLCertificate) > 0 || len(f.SSLKey) > 0 || len(f.SSLClientCA) > 0 {
-			return fmt.Errorf("Transport 'tcp' does not support 'ssl certificate', 'ssl key' or 'ssl client ca' configurations")
+		if len(f.SSLClientCA) > 0 {
+			return fmt.Errorf("%[1]sssl client ca is not supported when the transport is tcp", configPath)
 		}
 		return nil
 	}
 
-	if len(f.SSLCertificate) > 0 || len(f.SSLKey) > 0 {
-		if len(f.SSLCertificate) == 0 {
-			return errors.New("The 'ssl key' option is only valid with a matching 'ssl certificate'")
-		}
-
-		if len(f.SSLKey) == 0 {
-			return errors.New("The 'ssl key' option must be specified when an 'ssl certificate' is provided")
-		}
-
-		certificate, err := tls.LoadX509KeyPair(f.SSLCertificate, f.SSLKey)
-		if err != nil {
-			return fmt.Errorf("Failed loading 'ssl certificate': %s", err)
-		}
-
-		f.certificate = &certificate
-
-		for _, certBytes := range f.certificate.Certificate {
-			thisCert, err := x509.ParseCertificate(certBytes)
-			if err != nil {
-				return fmt.Errorf("Failed loading 'ssl certificate': %s", err)
-			}
-			f.certificateList = append(f.certificateList, thisCert)
-		}
+	if err = f.tlsValidate(f.transport, p, configPath); err != nil {
+		return err
 	}
 
-	for _, clientCA := range f.SSLClientCA {
-		pemdata, err := ioutil.ReadFile(clientCA)
-		if err != nil {
-			return fmt.Errorf("Failure reading CA certificate '%s': %s", clientCA, err)
-		}
-		rest := pemdata
-		var block *pem.Block
-		var pemBlockNum = 1
-		for {
-			block, rest = pem.Decode(rest)
-			if block != nil {
-				if block.Type != "CERTIFICATE" {
-					return fmt.Errorf("Failure loading 'tls' receiver 'ssl ca': block %d of '%s' does not contain a certificate", pemBlockNum, clientCA)
-				}
-				cert, err := x509.ParseCertificate(block.Bytes)
-				if err != nil {
-					return fmt.Errorf("Failure loading 'tls' receiver 'ssl ca': failed to parse CA certificate in block %d of '%s'", pemBlockNum, clientCA)
-				}
-				f.caList = append(f.caList, cert)
-				pemBlockNum++
-			} else {
-				break
-			}
+	for idx, clientCA := range f.SSLClientCA {
+		if err = f.addCa(clientCA, fmt.Sprintf("%sssl client ca[%d]", configPath, idx)); err != nil {
+			return err
 		}
 	}
 

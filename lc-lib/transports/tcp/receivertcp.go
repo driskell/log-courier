@@ -26,7 +26,6 @@ type receiverTCP struct {
 	backoff      *core.ExpBackoff
 
 	// Internal
-	tlsConfig *tls.Config
 	connCount int
 	connMutex sync.Mutex
 	connWait  sync.WaitGroup
@@ -78,7 +77,9 @@ func (t *receiverTCP) controllerRoutine() {
 		}
 	}
 
-	t.closeConnections()
+	// Ensure resources are cleaned up for the context and all connections close (all connections inherit our cancel context so will implicitly exit)
+	t.shutdownFunc()
+	t.connWait.Wait()
 
 	log.Info("[%s] Receiver exiting", t.pool.Server())
 }
@@ -103,7 +104,7 @@ func (t *receiverTCP) retryWait() bool {
 func (t *receiverTCP) listen() error {
 	addr, err := t.pool.Next()
 	if err != nil {
-		return fmt.Errorf("Failed to select next address: %s", err)
+		return fmt.Errorf("failed to select next address: %s", err)
 	}
 
 	desc := t.pool.Desc()
@@ -112,7 +113,7 @@ func (t *receiverTCP) listen() error {
 
 	tcplistener, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("Failed to listen on %s: %s", desc, err)
+		return fmt.Errorf("failed to listen on %s: %s", desc, err)
 	}
 
 	log.Notice("[%s] Listening on %s", t.pool.Server(), desc)
@@ -129,7 +130,7 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 		if err == nil {
 			t.startConnection(socket.(*net.TCPConn))
 		} else if neterr := err.(net.Error); !neterr.Timeout() {
-			return fmt.Errorf("Failed to accept on %s: %s", desc, err)
+			return fmt.Errorf("failed to accept on %s: %s", desc, err)
 		}
 
 		// Check for shutdown request
@@ -141,7 +142,28 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 	}
 }
 
-// stop ends the accept loop
+// Acknowledge sends the correct connection an acknowledgement
+func (t *receiverTCP) Acknowledge(ctx context.Context, nonce *string, sequence uint32) error {
+	connection := ctx.Value(transports.ContextConnection).(*connection)
+	log.Debugf("[%s > %s] Sending acknowledgement for nonce %x with sequence %d", connection.poolServer, connection.socket.RemoteAddr().String(), *nonce, sequence)
+	return connection.SendMessage(&protocolACKN{nonce: nonce, sequence: sequence})
+}
+
+// Pong sends the correct connection a pong response
+func (t *receiverTCP) Pong(ctx context.Context) error {
+	connection := ctx.Value(transports.ContextConnection).(*connection)
+	log.Debugf("[%s > %s] Sending pong", connection.poolServer, connection.socket.RemoteAddr().String())
+	return connection.SendMessage(&protocolPONG{})
+}
+
+// FailConnection shuts down a connection that has failed
+func (t *receiverTCP) FailConnection(ctx context.Context, err error) {
+	connection := ctx.Value(transports.ContextConnection).(*connection)
+	log.Warningf("[%s - %s] Connection failed: %s", connection.poolServer, connection.socket.RemoteAddr().String(), err)
+	connection.Teardown()
+}
+
+// Shutdown shuts down the listener and all connections gracefully
 func (t *receiverTCP) Shutdown() {
 	t.shutdownFunc()
 }
@@ -175,10 +197,6 @@ func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 	log.Notice("[%s < %s] New connection", t.pool.Server(), socket.RemoteAddr().String())
 
-	// Only acknowledgements will be sent
-	// TODO: Consider actual needed value, as we shouldn't expect ACK to block as they are tiny sends
-	sendChan := make(chan protocolMessage, 10)
-
 	var connectionSocket connectionSocket
 	if t.config.transport == TransportTCPTLS {
 		connectionSocket = newConnectionSocketTLS(socket, t.getTLSConfig(), true, t.pool.Server())
@@ -186,8 +204,7 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 		connectionSocket = newConnectionSocketTCP(socket)
 	}
 
-	connContext := context.WithValue(t.ctx, contextIsClient, false)
-	conn := newConnection(connContext, connectionSocket, t.pool.Server(), t.eventChan, sendChan)
+	conn := newConnection(t.ctx, connectionSocket, t.pool.Server(), false, t.eventChan)
 
 	t.connMutex.Lock()
 	t.connCount++
@@ -196,15 +213,6 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 
 	t.connWait.Add(1)
 	go t.connectionRoutine(socket, conn)
-}
-
-func (t *receiverTCP) closeConnections() {
-	t.connMutex.Lock()
-	for conn := range t.connections {
-		conn.Teardown()
-	}
-	t.connMutex.Unlock()
-	t.connWait.Wait()
 }
 
 // connectionRoutine is a routine for an individual connection that runs it and captures shutdown

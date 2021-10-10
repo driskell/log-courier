@@ -22,14 +22,14 @@ import (
 )
 
 type protocolACKN struct {
-	nonce    string
+	nonce    *string
 	sequence uint32
 }
 
 // newProtocolACKN reads a new protocolACKN
 func newProtocolACKN(conn *connection, bodyLength uint32) (protocolMessage, error) {
 	if bodyLength != 20 {
-		return nil, fmt.Errorf("Protocol error: Corrupt message (ACKN size %d != 20)", bodyLength)
+		return nil, fmt.Errorf("protocol error: Corrupt message (ACKN size %d != 20)", bodyLength)
 	}
 
 	message := make([]byte, 20)
@@ -39,7 +39,7 @@ func newProtocolACKN(conn *connection, bodyLength uint32) (protocolMessage, erro
 
 	nonce := string(message[:16])
 	sequence := binary.BigEndian.Uint32(message[16:])
-	return &protocolACKN{nonce: nonce, sequence: sequence}, nil
+	return &protocolACKN{nonce: &nonce, sequence: sequence}, nil
 }
 
 // Type returns a human-readable name for the message type
@@ -58,7 +58,7 @@ func (p *protocolACKN) Write(conn *connection) error {
 		return err
 	}
 
-	if _, err := conn.Write([]byte(p.nonce)); err != nil {
+	if _, err := conn.Write([]byte(*p.nonce)); err != nil {
 		return err
 	}
 

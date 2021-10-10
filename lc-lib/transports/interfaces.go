@@ -18,9 +18,23 @@ package transports
 
 import (
 	"context"
+	"errors"
 
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/event"
+)
+
+// ErrCongestion represents temporary congestion, rather than failure
+var (
+	ErrCongestion error = errors.New("Congestion")
+)
+
+// TransportContext
+type TransportContext string
+
+const (
+	// ContextConnection provides a value representing an individual connection
+	// The returned interface should be treated opaque outside of the relevant transport package
+	ContextConnection TransportContext = "connection"
 )
 
 // Event is the interface implemented by all event structures
@@ -65,12 +79,12 @@ func (e *StatusEvent) StatusChange() StatusChange {
 // AckEvent contains information on which events have been acknowledged
 type AckEvent struct {
 	context  context.Context
-	nonce    string
+	nonce    *string
 	sequence uint32
 }
 
 // NewAckEvent generates a new AckEvent for the given Endpoint
-func NewAckEvent(context context.Context, nonce string, sequence uint32) *AckEvent {
+func NewAckEvent(context context.Context, nonce *string, sequence uint32) *AckEvent {
 	return &AckEvent{
 		context:  context,
 		nonce:    nonce,
@@ -84,7 +98,7 @@ func (e *AckEvent) Context() context.Context {
 }
 
 // Nonce returns the nonce value
-func (e *AckEvent) Nonce() string {
+func (e *AckEvent) Nonce() *string {
 	return e.nonce
 }
 
@@ -93,15 +107,15 @@ func (e *AckEvent) Sequence() uint32 {
 	return e.sequence
 }
 
-// EventsEvent contains events that need to be ingested
+// EventsEvent contains events received from a transport
 type EventsEvent struct {
 	context context.Context
-	nonce   string
-	events  []*event.Event
+	nonce   *string
+	events  [][]byte
 }
 
 // NewEventsEvent generates a new EventsEvent for the given Endpoint
-func NewEventsEvent(context context.Context, nonce string, events []*event.Event) *EventsEvent {
+func NewEventsEvent(context context.Context, nonce *string, events [][]byte) *EventsEvent {
 	return &EventsEvent{
 		context: context,
 		nonce:   nonce,
@@ -115,12 +129,12 @@ func (e *EventsEvent) Context() context.Context {
 }
 
 // Nonce returns the nonce
-func (e *EventsEvent) Nonce() string {
+func (e *EventsEvent) Nonce() *string {
 	return e.nonce
 }
 
 // Events returns the events
-func (e *EventsEvent) Events() []*event.Event {
+func (e *EventsEvent) Events() [][]byte {
 	return e.events
 }
 

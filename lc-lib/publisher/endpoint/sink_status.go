@@ -44,7 +44,7 @@ func (s *Sink) moveFailed(endpoint *Endpoint) {
 
 	log.Info("[%s] Marking endpoint as failed", endpoint.Server())
 
-	s.ClearTimeout(&endpoint.Timeout)
+	s.Scheduler.Remove(endpoint)
 
 	if endpoint.IsActive() {
 		s.readyList.Remove(&endpoint.readyElement)
@@ -84,11 +84,7 @@ func (s *Sink) recoverFailed(endpoint *Endpoint) {
 	log.Info("[%s] Endpoint has recovered - will resume in %v", endpoint.Server(), backoff)
 
 	// Backoff before allowing recovery
-	s.RegisterTimeout(
-		&endpoint.Timeout,
-		backoff,
-		func() {
-			s.markActive(endpoint)
-		},
-	)
+	s.Scheduler.SetCallback(endpoint, backoff, func() {
+		s.markActive(endpoint)
+	})
 }
