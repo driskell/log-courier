@@ -17,7 +17,9 @@
 package core
 
 import (
+	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 )
@@ -89,6 +91,9 @@ func (p *Pipeline) registerSegment(segment pipelineSegment) {
 
 // Run the pipeline, starting up each segment and then waiting for sink to finish or shutdown
 func (p *Pipeline) Run(config *config.Config) {
+	// Reseed rand
+	rand.Seed(time.Now().UnixNano())
+
 	if err := p.initRoutines(config); err != nil {
 		log.Error("Pipeline failed: %s", err)
 		return
