@@ -2,7 +2,13 @@
 
 ## Future
 
-?
+Log Courier
+
+- Simplified networking logic and fixes to some endpoint deadlocks in publisher
+
+Log Carver
+
+- Simplified networking logic and fixes to some endpoint deadlocks in publisher
 
 Logstash Input Plugin
 
