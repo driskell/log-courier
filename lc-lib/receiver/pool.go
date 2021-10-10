@@ -141,7 +141,7 @@ ReceiverLoop:
 				}
 				position = nextPosition
 			}
-			r.ackEventsEvent(events[0].Context(), connection, position.nonce, position.sequence)
+			r.ackEventsEvent(currentContext, connection, position.nonce, position.sequence)
 			r.partialAckSchedule.Reschedule()
 		case receiverEvent := <-eventChan:
 			switch eventImpl := receiverEvent.(type) {
