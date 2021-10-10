@@ -101,19 +101,11 @@ MainLoop:
 				t.connMutex.Lock()
 				t.conn = conn
 				t.supportsEVNT = t.conn.SupportsEVNT()
-				shutdown := t.shutdown
 				t.connMutex.Unlock()
-
-				// Request immediate shutdown if we just noticed it - shutdown
-				// will not have registered this if t.conn was not previously set as needed
-				if shutdown {
-					t.conn.SendMessage(nil)
-				}
 			})
 		}
 
 		t.connMutex.Lock()
-		shutdown := t.shutdown
 		t.conn = nil
 		t.connMutex.Unlock()
 
@@ -123,12 +115,12 @@ MainLoop:
 			} else {
 				log.Errorf("[%s] Transport error, disconnected: %s", t.pool.Server(), err)
 			}
-			if t.finishOnFail || shutdown {
-				return
+			if t.finishOnFail {
+				break MainLoop
 			}
 		} else {
 			log.Info("[%s] Transport disconnected gracefully", t.pool.Server())
-			return
+			break MainLoop
 		}
 
 		select {
@@ -255,13 +247,16 @@ func (t *transportTCP) Fail() {
 	t.shutdownFunc()
 }
 
-// Shutdown the transport gracefully - only valid after Started transport event received
+// Shutdown the transport gracefully
 func (t *transportTCP) Shutdown() {
-	// Sending nil triggers graceful shutdown
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
 	if !t.shutdown {
-		if t.conn != nil {
+		if t.conn == nil {
+			// No connection to gracefully shutdown, use context to fail and cancel any retries
+			t.shutdownFunc()
+		} else {
+			// Sending nil triggers graceful shutdown
 			t.conn.SendMessage(nil)
 		}
 		t.shutdown = true

@@ -99,15 +99,15 @@ func (t *transportES) controllerRoutine() {
 		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
 	}()
 
-	// Setup payload chan with max write count of pending payloads
-	t.payloadMutex.Lock()
-	t.payloadChan = make(chan *payload, t.netConfig.MaxPendingPayloads)
-	t.payloadMutex.Unlock()
-
 	if t.setupAssociation() {
 		// Shutdown was requested
 		return
 	}
+
+	// Setup payload chan with max write count of pending payloads
+	t.payloadMutex.Lock()
+	t.payloadChan = make(chan *payload, t.netConfig.MaxPendingPayloads)
+	t.payloadMutex.Unlock()
 
 	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Started)
 
@@ -456,8 +456,11 @@ func (t *transportES) Fail() {
 func (t *transportES) Shutdown() {
 	t.payloadMutex.Lock()
 	defer t.payloadMutex.Unlock()
-	// Trigger graceful shutdown
-	if t.payloadChan != nil {
+	if t.payloadChan == nil {
+		// No connection active so just fail
+		t.shutdownFunc()
+	} else {
+		// Trigger graceful shutdown
 		close(t.payloadChan)
 	}
 }
