@@ -181,6 +181,8 @@ ReceiverLoop:
 					// Nothing left to ack - close
 					receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 					receiver.ShutdownConnection(eventImpl.Context())
+					// Receive side is closed, and we're just sending, so it'll close automatically once flushed, so clear all scheduled timeouts
+					r.partialAckSchedule.Remove(connection)
 				} else {
 					// Add to the partialAckSchedule a nil progress to signal that when we finish ack everything - this connection can close
 					r.partialAckConnection[connection] = append(r.partialAckConnection[connection], nil)
@@ -203,10 +205,16 @@ ReceiverLoop:
 				}
 			case *transports.PingEvent:
 				// Immediately send a pong back - ignore failure - remote will time itself out
-				// TODO: Receiving a ping when we have outstanding events is invalid as per protocol, kill connection
+				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-				if err := receiver.Pong(eventImpl.Context()); err != nil {
+				if _, ok := r.partialAckConnection[connection]; ok {
+					// We should not be receiving PING if we haven't finished acknowleding - this violates protocol
+					receiver.FailConnection(eventImpl.Context(), fmt.Errorf("received ping message on non-idle connection"))
+				} else if err := receiver.Pong(eventImpl.Context()); err != nil {
 					receiver.FailConnection(eventImpl.Context(), err)
+				} else {
+					// Reset idle timeout
+					r.startIdleTimeout(eventImpl.Context(), receiver, connection)
 				}
 			}
 		case spoolChan <- nextSpool:
