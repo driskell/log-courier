@@ -47,13 +47,27 @@ func (t *transportTest) ReloadConfig(netConfig *transports.Config, finishOnFail 
 
 // SendEvents sends an event message with given nonce to the transport - only valid after Started transport event received
 func (t *transportTest) SendEvents(nonce string, events []*event.Event) error {
+	endSequence := uint32(len(events))
+	sequence := endSequence
+	if rand.Intn(1) == 0 {
+		// Generate a split acknowledgement
+		sequence = uint32(rand.Intn(int(sequence)-1) + 1)
+	}
+
 	t.delayAction(func() {
-		if t.finished {
-			return
+		t.sendAck(nonce, sequence)
+		if sequence != endSequence {
+			t.delayAction(func() { t.sendAck(nonce, endSequence) }, fmt.Sprintf("[T %s] Returning acknowledgement of %d events for payload %x after %%d second delay", t.server, sequence, nonce))
 		}
-		t.eventChan <- transports.NewAckEvent(t.ctx, &nonce, uint32(len(events)))
-	}, fmt.Sprintf("[%s] Returning acknowledgement for payload %x after %%d second delay", t.server, nonce))
+	}, fmt.Sprintf("[T %s] Returning acknowledgement of %d events for payload %x after %%d second delay", t.server, sequence, nonce))
 	return nil
+}
+
+func (t *transportTest) sendAck(nonce string, sequence uint32) {
+	if t.finished {
+		return
+	}
+	t.eventChan <- transports.NewAckEvent(t.ctx, &nonce, sequence)
 }
 
 func (t *transportTest) delayAction(action func(), message string) {
