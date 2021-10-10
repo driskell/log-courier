@@ -100,13 +100,18 @@ func (r *Pool) Init(cfg *config.Config) error {
 
 // Run starts listening
 func (r *Pool) Run() {
-	var spool []*event.Event
+	var spool [][]*event.Event
 	var spoolChan chan<- []*event.Event
 	eventChan := r.eventChan
 	shutdownChan := r.shutdownChan
 
 ReceiverLoop:
 	for {
+		var nextSpool []*event.Event = nil
+		if len(spool) != 0 {
+			nextSpool = spool[0]
+		}
+
 		select {
 		case <-shutdownChan:
 			if len(r.receivers) == 0 {
@@ -167,7 +172,7 @@ ReceiverLoop:
 					ctx := context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{nonce: eventImpl.Nonce(), sequence: uint32(idx + 1)})
 					events[idx] = event.NewEventFromBytes(ctx, r, item)
 				}
-				spool = events
+				spool = append(spool, events)
 				spoolChan = r.output
 			case *transports.EndEvent:
 				// Connection EOF
@@ -204,9 +209,12 @@ ReceiverLoop:
 					receiver.FailConnection(eventImpl.Context(), err)
 				}
 			}
-		case spoolChan <- spool:
-			spool = nil
-			spoolChan = nil
+		case spoolChan <- nextSpool:
+			copy(spool, spool[1:])
+			spool = spool[:len(spool)-1]
+			if len(spool) == 0 {
+				spoolChan = nil
+			}
 		}
 	}
 
@@ -244,7 +252,8 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 			delete(r.partialAckConnection, connection)
 			r.partialAckSchedule.Remove(connection)
 		} else {
-			r.partialAckConnection[connection] = r.partialAckConnection[connection][1:]
+			copy(r.partialAckConnection[connection], r.partialAckConnection[connection][1:])
+			r.partialAckConnection[connection] = r.partialAckConnection[connection][:len(r.partialAckConnection[connection])-1]
 			r.partialAckSchedule.Set(connection, time.Second*5)
 		}
 	} else {
