@@ -206,7 +206,7 @@ func (t *transportTCP) connect() (*connection, error) {
 
 	conn := newConnection(t.ctx, connectionSocket, t.pool.Server(), true, t.eventChan)
 
-	log.Noticef("[T %s - %s] Connected to %s", connectionSocket.LocalAddr().String(), connectionSocket.RemoteAddr().String(), desc)
+	log.Noticef("[T %s - %s] Connected to %s", socket.LocalAddr().String(), socket.RemoteAddr().String(), desc)
 	return conn, nil
 }
 
