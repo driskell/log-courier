@@ -67,7 +67,7 @@ func (t *connectionSocketTLS) Setup() error {
 		subject = " [No client certificate]"
 	}
 
-	log.Notice("[%s] Handshake completed with %s%s", t.poolDesc, t.RemoteAddr().String(), subject)
+	log.Notice("[C %s - %s] TLS handshake completed: %s", t.poolDesc, t.RemoteAddr().String(), subject)
 	return nil
 }
 

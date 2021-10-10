@@ -193,7 +193,7 @@ func (t *connection) clientNegotiation() error {
 
 	t.supportsEvnt = versMessage.SupportsEVNT()
 	if t.supportsEvnt {
-		log.Debugf("[%s < %s] Remote supports enhanced EVNT messages", t.poolServer, t.socket.RemoteAddr().String())
+		log.Debugf("[C %s < %s] Remote supports enhanced EVNT messages", t.poolServer, t.socket.RemoteAddr().String())
 	}
 
 	return nil
@@ -276,15 +276,19 @@ func (t *connection) receiver() (err error) {
 			switch messageImpl := message.(type) {
 			case *protocolACKN:
 				transportEvent = transports.NewAckEvent(t.ctx, messageImpl.nonce, messageImpl.sequence)
+				log.Debugf("[T %s < %s] Received acknowledgement for nonce %x with sequence %d", t.poolServer, t.socket.RemoteAddr().String(), *messageImpl.nonce, messageImpl.sequence)
 			case *protocolPONG:
 				transportEvent = transports.NewPongEvent(t.ctx)
+				log.Debugf("[T %s < %s] Received pong", t.poolServer, t.socket.RemoteAddr().String())
 			}
 		} else {
 			switch messageImpl := message.(type) {
 			case *protocolPING:
 				transportEvent = transports.NewPingEvent(t.ctx)
+				log.Debugf("[R %s < %s] Received ping", t.poolServer, t.socket.RemoteAddr().String())
 			case eventsMessage:
 				transportEvent = transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
+				log.Debugf("[R %s < %s] Received payload with nonce %x and %d events", t.poolServer, t.socket.RemoteAddr().String(), *messageImpl.Nonce(), len(messageImpl.Events()))
 			}
 		}
 
