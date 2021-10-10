@@ -443,7 +443,16 @@ func (t *transportES) SendEvents(nonce string, events []*event.Event) error {
 }
 
 // Ping the remote server - not implemented for HTTP since we close connections after each send
+// Immediately respond with a pong
 func (t *transportES) Ping() error {
+	go func() {
+		select {
+		case <-t.ctx.Done():
+			// Forced failure
+			return
+		case t.eventChan <- transports.NewPongEvent(t.ctx):
+		}
+	}()
 	return nil
 }
 
