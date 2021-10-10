@@ -250,8 +250,6 @@ func (e *Endpoint) LineCount() int64 {
 // It should return whether or not the payload was completed so full status
 // can be updated
 func (e *Endpoint) processAck(ack *transports.AckEvent, onAck func(*Endpoint, *payload.Payload, bool, int)) bool {
-	log.Debugf("[E %s] Acknowledgement received for payload %x sequence %d", e.Server(), *ack.Nonce(), ack.Sequence())
-
 	// Grab the payload the ACK corresponds to by using nonce
 	payload, found := e.pendingPayloads[*ack.Nonce()]
 	if !found {

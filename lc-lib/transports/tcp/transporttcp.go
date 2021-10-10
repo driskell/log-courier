@@ -189,7 +189,7 @@ func (t *transportTCP) connect() (*connection, error) {
 
 	desc := t.pool.Desc()
 
-	log.Infof("[T %s - %s] Attempting to connect", t.pool.Server(), desc)
+	log.Infof("[T %s] Attempting to connect to %s", t.pool.Server(), desc)
 
 	socket, err := net.DialTimeout("tcp", addr.String(), t.netConfig.Timeout)
 	if err != nil {
@@ -206,7 +206,7 @@ func (t *transportTCP) connect() (*connection, error) {
 
 	conn := newConnection(t.ctx, connectionSocket, t.pool.Server(), true, t.eventChan)
 
-	log.Noticef("[T %s - %s] Connected", t.pool.Server(), desc)
+	log.Noticef("[T %s - %s] Connected to %s", connectionSocket.LocalAddr().String(), connectionSocket.RemoteAddr().String(), desc)
 	return conn, nil
 }
 
@@ -227,7 +227,7 @@ func (t *transportTCP) SendEvents(nonce string, events []*event.Event) error {
 	} else {
 		msg = &protocolJDAT{nonce: &nonce, events: eventsAsBytes}
 	}
-	log.Debugf("[T %s > %s] Sending %s payload with nonce %x and %d events", t.pool.Server(), t.conn.socket.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
+	log.Debugf("[T %s > %s] Sending %s payload with nonce %x and %d events", t.conn.socket.LocalAddr().String(), t.conn.socket.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
 	return t.conn.SendMessage(msg)
 }
 
@@ -238,7 +238,7 @@ func (t *transportTCP) Ping() error {
 	if t.conn == nil {
 		return ErrInvalidState
 	}
-	log.Debugf("[T %s > %s] Sending ping", t.pool.Server(), t.conn.socket.RemoteAddr().String())
+	log.Debugf("[T %s > %s] Sending ping", t.conn.socket.LocalAddr().String(), t.conn.socket.RemoteAddr().String())
 	return t.conn.SendMessage(&protocolPING{})
 }
 

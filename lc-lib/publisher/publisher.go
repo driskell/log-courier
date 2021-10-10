@@ -313,6 +313,7 @@ func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 // shutdown can be postponed if we've received Acks for newer events before
 // older events. It also serialises the Ack offsets for correct handling
 // so events are always acknowledged sequentially
+// TODO: Use event.Sequencer to simplify this?
 func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool, lineCount int) {
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.NumPending() > 0 {

@@ -125,7 +125,7 @@ func (t *receiverTCP) listen() error {
 		return fmt.Errorf("failed to listen on %s: %s", desc, err)
 	}
 
-	log.Noticef("[R %s] Listening on %s", t.pool.Server(), desc)
+	log.Noticef("[R %s] Listening on %s", tcplistener.Addr().String(), desc)
 
 	return t.acceptLoop(desc, tcplistener)
 }
@@ -154,28 +154,28 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 // Acknowledge sends the correct connection an acknowledgement
 func (t *receiverTCP) Acknowledge(ctx context.Context, nonce *string, sequence uint32) error {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Debugf("[R %s > %s] Sending acknowledgement for nonce %x with sequence %d", connection.poolServer, connection.socket.RemoteAddr().String(), *nonce, sequence)
+	log.Debugf("[R %s > %s] Sending acknowledgement for nonce %x with sequence %d", connection.socket.LocalAddr().String(), connection.socket.RemoteAddr().String(), *nonce, sequence)
 	return connection.SendMessage(&protocolACKN{nonce: nonce, sequence: sequence})
 }
 
 // Pong sends the correct connection a pong response
 func (t *receiverTCP) Pong(ctx context.Context) error {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Debugf("[R %s > %s] Sending pong", connection.poolServer, connection.socket.RemoteAddr().String())
+	log.Debugf("[R %s > %s] Sending pong", connection.socket.LocalAddr().String(), connection.socket.RemoteAddr().String())
 	return connection.SendMessage(&protocolPONG{})
 }
 
 // FailConnection shuts down a connection that has failed
 func (t *receiverTCP) FailConnection(ctx context.Context, err error) {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Errorf("[R %s - %s] Client failed: %s", connection.poolServer, connection.socket.RemoteAddr().String(), err)
+	log.Errorf("[R %s - %s] Client failed: %s", connection.socket.LocalAddr().String(), connection.socket.RemoteAddr().String(), err)
 	connection.Teardown()
 }
 
 // ShutdownConnection shuts down a connection gracefully by closing the send side
 func (t *receiverTCP) ShutdownConnection(ctx context.Context) {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Debugf("[R %s - %s] Closing connection", connection.poolServer, connection.socket.RemoteAddr().String())
+	log.Debugf("[R %s - %s] Closing connection", connection.socket.LocalAddr().String(), connection.socket.RemoteAddr().String())
 	if err := connection.SendMessage(nil); err != nil {
 		t.FailConnection(ctx, err)
 	}
