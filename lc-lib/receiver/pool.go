@@ -129,13 +129,15 @@ ReceiverLoop:
 			}
 			r.partialAckSchedule.Reschedule()
 		case events := <-r.ackChan:
-			connection := events[0].Context().Value(transports.ContextConnection)
-			position := events[0].Context().Value(poolContextEventPosition).(*poolEventPosition)
+			currentContext := events[0].Context()
+			connection := currentContext.Value(transports.ContextConnection)
+			position := currentContext.Value(poolContextEventPosition).(*poolEventPosition)
 			for _, item := range events[1:] {
 				nextPosition := item.Context().Value(poolContextEventPosition).(*poolEventPosition)
 				if *nextPosition.nonce != *position.nonce {
-					r.ackEventsEvent(item.Context(), connection, position.nonce, position.sequence)
-					connection = item.Context().Value(transports.ContextConnection)
+					r.ackEventsEvent(currentContext, connection, position.nonce, position.sequence)
+					currentContext = item.Context()
+					connection = currentContext.Value(transports.ContextConnection)
 				}
 				position = nextPosition
 			}

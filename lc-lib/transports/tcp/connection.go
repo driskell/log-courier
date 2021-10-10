@@ -67,11 +67,13 @@ type connection struct {
 
 func newConnection(ctx context.Context, socket connectionSocket, poolServer string, isClient bool, eventChan chan<- transports.Event) *connection {
 	ret := &connection{
-		socket:             socket,
-		poolServer:         poolServer,
-		isClient:           isClient,
-		eventChan:          eventChan,
-		sendChan:           make(chan protocolMessage, 1),
+		socket:     socket,
+		poolServer: poolServer,
+		isClient:   isClient,
+		eventChan:  eventChan,
+		// TODO: Make configurable. Allow up to 100 pending messages.
+		// This will cope with a max pending payload size of 100 for each connection by allowing 100 acks to be queued
+		sendChan:           make(chan protocolMessage, 100),
 		shutdownChan:       make(chan struct{}),
 		senderShutdownChan: make(chan struct{}),
 	}
