@@ -17,6 +17,8 @@
 package endpoint
 
 import (
+	"fmt"
+
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -28,8 +30,8 @@ func (s *Sink) EventChan() <-chan transports.Event {
 }
 
 // ProcessEvent performs the necessary processing of events
-func (s *Sink) ProcessEvent(event transports.Event) bool {
-	endpoint := event.Context().Value(ContextSelf).(*Endpoint)
+func (s *Sink) ProcessEvent(event transports.Event) (endpoint *Endpoint, err error) {
+	endpoint = event.Context().Value(ContextSelf).(*Endpoint)
 
 	switch msg := event.(type) {
 	case *transports.StatusEvent:
@@ -38,11 +40,15 @@ func (s *Sink) ProcessEvent(event transports.Event) bool {
 		s.processAck(msg, endpoint)
 	case *transports.PongEvent:
 		endpoint.processPong(s.OnPong)
+	case *transports.EndEvent:
+		if endpoint.status != endpointStatusClosed {
+			err = fmt.Errorf("unexpected end of connection")
+		}
 	default:
-		return false
+		err = fmt.Errorf("unexpected %T message received", event)
 	}
 
-	return true
+	return
 }
 
 // processStatusChange handles status change events

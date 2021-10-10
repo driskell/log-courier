@@ -84,18 +84,17 @@ func (f *ReceiverTCPFactory) Validate(p *config.Parser, configPath string) (err 
 
 // NewReceiver returns a new Receiver interface using the settings from the ReceiverTCPFactory
 func (f *ReceiverTCPFactory) NewReceiver(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Receiver {
-	ctx, shutdownFunc := context.WithCancel(ctx)
-
 	ret := &receiverTCP{
-		ctx:          ctx,
-		shutdownFunc: shutdownFunc,
 		config:       f,
 		pool:         pool,
 		eventChan:    eventChan,
 		connections:  make(map[*connection]*connection),
+		shutdownChan: make(chan struct{}),
 		// TODO: Own values
 		backoff: core.NewExpBackoff(pool.Server()+" Receiver Reset", defaultReconnect, defaultReconnectMax),
 	}
+
+	ret.ctx, ret.shutdownFunc = context.WithCancel(context.WithValue(ctx, transports.ContextReceiver, ret))
 
 	ret.startController()
 	return ret

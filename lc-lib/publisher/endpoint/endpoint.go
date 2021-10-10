@@ -117,8 +117,13 @@ func (e *Endpoint) shutdownTransport() {
 		return
 	}
 
-	log.Debug("[%s] Endpoint is now shutting down", e.Server())
+	log.Debugf("[E %s] Endpoint is now shutting down", e.Server())
 	e.transport.Shutdown()
+
+	e.sink.Scheduler.SetCallback(e, e.sink.config.Timeout, func() {
+		log.Warningf("[E %s] Endpoint failed to shutdown", e.Server())
+		e.transport.Fail()
+	})
 
 	// Set status to closed, so we know shutdown has now been triggered
 	e.status = endpointStatusClosed
@@ -169,9 +174,9 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 	}
 
 	if payload.Resending {
-		log.Debug("[%s] Resending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
+		log.Debugf("[E %s] Resending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
 	} else {
-		log.Debug("[%s] Sending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
+		log.Debugf("[E %s] Sending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
 	}
 
 	if err := e.transport.SendEvents(payload.Nonce, payload.Events()); err != nil {
@@ -245,13 +250,13 @@ func (e *Endpoint) LineCount() int64 {
 // It should return whether or not the payload was completed so full status
 // can be updated
 func (e *Endpoint) processAck(ack *transports.AckEvent, onAck func(*Endpoint, *payload.Payload, bool, int)) bool {
-	log.Debug("[%s] Acknowledgement received for payload %x sequence %d", e.Server(), *ack.Nonce(), ack.Sequence())
+	log.Debugf("[E %s] Acknowledgement received for payload %x sequence %d", e.Server(), *ack.Nonce(), ack.Sequence())
 
 	// Grab the payload the ACK corresponds to by using nonce
 	payload, found := e.pendingPayloads[*ack.Nonce()]
 	if !found {
 		// Don't fail here in case we had temporary issues and resend a payload, only for us to receive duplicate ACKN
-		log.Debug("[%s] Duplicate/corrupt ACK received for message %x", e.Server(), ack.Nonce())
+		log.Debugf("[E %s] Duplicate/corrupt ACK received for payload %x", e.Server(), *ack.Nonce())
 		return false
 	}
 
@@ -281,7 +286,7 @@ func (e *Endpoint) processAck(ack *transports.AckEvent, onAck func(*Endpoint, *p
 
 		e.mutex.Unlock()
 
-		log.Debug("[%s] Average latency per event: %.2f ms", e.Server(), e.averageLatency/float64(time.Millisecond))
+		log.Debugf("[E %s] Average latency per event: %.2f ms", e.Server(), e.averageLatency/float64(time.Millisecond))
 
 		if e.numPayloads > 0 {
 			e.transmissionStart = time.Now()

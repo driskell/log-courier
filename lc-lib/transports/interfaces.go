@@ -35,6 +35,9 @@ const (
 	// ContextConnection provides a value representing an individual connection
 	// The returned interface should be treated opaque outside of the relevant transport package
 	ContextConnection TransportContext = "connection"
+
+	// ContextReceiver provides the Receiver that a connection relates to
+	ContextReceiver TransportContext = "receiver"
 )
 
 // Event is the interface implemented by all event structures
@@ -107,6 +110,23 @@ func (e *AckEvent) Sequence() uint32 {
 	return e.sequence
 }
 
+// ConnectEvent marks the start of a new connection on a reciver
+type ConnectEvent struct {
+	context context.Context
+}
+
+// NewConnectEvent generates a new ConnectEvent for the given Endpoint
+func NewConnectEvent(context context.Context) *ConnectEvent {
+	return &ConnectEvent{
+		context: context,
+	}
+}
+
+// Context returns the endpoint associated with this event
+func (e *ConnectEvent) Context() context.Context {
+	return e.context
+}
+
 // EventsEvent contains events received from a transport
 type EventsEvent struct {
 	context context.Context
@@ -141,6 +161,23 @@ func (e *EventsEvent) Events() [][]byte {
 // Count returns the number of events in the payload
 func (e *EventsEvent) Count() uint32 {
 	return uint32(len(e.events))
+}
+
+// EndEvent marks the end of a stream of events from an endpoint
+type EndEvent struct {
+	context context.Context
+}
+
+// NewEndEvent generates a new EndEvent for the given Endpoint
+func NewEndEvent(context context.Context) *EndEvent {
+	return &EndEvent{
+		context: context,
+	}
+}
+
+// Context returns the endpoint associated with this event
+func (e *EndEvent) Context() context.Context {
+	return e.context
 }
 
 // PongEvent is received when a transport has responded to a Ping() request

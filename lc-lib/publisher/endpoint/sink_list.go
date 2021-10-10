@@ -126,7 +126,7 @@ func (s *Sink) removeEndpoint(server string) {
 		return
 	}
 
-	log.Debug("[%s] Endpoint has finished", server)
+	log.Debugf("[E %s] Endpoint has finished", server)
 
 	// Ensure we are correctly removed from all lists
 	if endpoint.IsActive() {
@@ -170,7 +170,6 @@ func (s *Sink) ShutdownEndpoint(server string) bool {
 		return true
 	}
 
-	s.Scheduler.Remove(endpoint)
 	endpoint.shutdownTransport()
 
 	return true

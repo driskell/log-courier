@@ -26,9 +26,10 @@ type receiverTCP struct {
 	backoff      *core.ExpBackoff
 
 	// Internal
-	connCount int
-	connMutex sync.Mutex
-	connWait  sync.WaitGroup
+	connCount    int
+	connMutex    sync.Mutex
+	connWait     sync.WaitGroup
+	shutdownChan chan struct{}
 }
 
 // ReloadConfig returns true if the transport needs to be restarted in order
@@ -70,18 +71,26 @@ func (t *receiverTCP) controllerRoutine() {
 			break
 		}
 
-		log.Error("[%s] Receiver error, resetting: %s", t.pool.Server(), err)
+		log.Errorf("[R %s] Receiver error, resetting: %s", t.pool.Server(), err)
 
 		if t.retryWait() {
 			break
 		}
 	}
 
-	// Ensure resources are cleaned up for the context and all connections close (all connections inherit our cancel context so will implicitly exit)
-	t.shutdownFunc()
+	// Request all connections to stop receiving and wait for them to finally close once the final ack is sent and nil message sent
+	log.Infof("[R %s] Receiver shutting down and waiting for final acknowledgements to be sent", t.pool.Server())
+	t.connMutex.Lock()
+	for _, connection := range t.connections {
+		connection.CloseRead()
+	}
+	t.connMutex.Unlock()
 	t.connWait.Wait()
 
-	log.Info("[%s] Receiver exiting", t.pool.Server())
+	// Ensure resources are cleaned up for the context
+	t.shutdownFunc()
+
+	log.Infof("[R %s] Receiver exiting", t.pool.Server())
 }
 
 // retryWait waits the backoff timeout before attempting to listen again
@@ -91,7 +100,7 @@ func (t *receiverTCP) retryWait() bool {
 	setupDue := now.Add(t.backoff.Trigger())
 
 	select {
-	case <-t.ctx.Done():
+	case <-t.shutdownChan:
 		// Shutdown request
 		return true
 	case <-time.After(setupDue.Sub(now)):
@@ -109,14 +118,14 @@ func (t *receiverTCP) listen() error {
 
 	desc := t.pool.Desc()
 
-	log.Info("[%s] Attempting to listen on %s", t.pool.Server(), desc)
+	log.Infof("[R %s] Attempting to listen on %s", t.pool.Server(), desc)
 
 	tcplistener, err := net.ListenTCP("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %s", desc, err)
 	}
 
-	log.Notice("[%s] Listening on %s", t.pool.Server(), desc)
+	log.Noticef("[R %s] Listening on %s", t.pool.Server(), desc)
 
 	return t.acceptLoop(desc, tcplistener)
 }
@@ -135,7 +144,7 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 
 		// Check for shutdown request
 		select {
-		case <-t.ctx.Done():
+		case <-t.shutdownChan:
 			return nil
 		default:
 		}
@@ -145,27 +154,37 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 // Acknowledge sends the correct connection an acknowledgement
 func (t *receiverTCP) Acknowledge(ctx context.Context, nonce *string, sequence uint32) error {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Debugf("[%s > %s] Sending acknowledgement for nonce %x with sequence %d", connection.poolServer, connection.socket.RemoteAddr().String(), *nonce, sequence)
+	log.Debugf("[R %s > %s] Sending acknowledgement for nonce %x with sequence %d", connection.poolServer, connection.socket.RemoteAddr().String(), *nonce, sequence)
 	return connection.SendMessage(&protocolACKN{nonce: nonce, sequence: sequence})
 }
 
 // Pong sends the correct connection a pong response
 func (t *receiverTCP) Pong(ctx context.Context) error {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Debugf("[%s > %s] Sending pong", connection.poolServer, connection.socket.RemoteAddr().String())
+	log.Debugf("[R %s > %s] Sending pong", connection.poolServer, connection.socket.RemoteAddr().String())
 	return connection.SendMessage(&protocolPONG{})
 }
 
 // FailConnection shuts down a connection that has failed
 func (t *receiverTCP) FailConnection(ctx context.Context, err error) {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Warningf("[%s - %s] Connection failed: %s", connection.poolServer, connection.socket.RemoteAddr().String(), err)
+	log.Errorf("[R %s - %s] Client failed: %s", connection.poolServer, connection.socket.RemoteAddr().String(), err)
 	connection.Teardown()
 }
 
+// ShutdownConnection shuts down a connection gracefully by closing the send side
+func (t *receiverTCP) ShutdownConnection(ctx context.Context) {
+	connection := ctx.Value(transports.ContextConnection).(*connection)
+	log.Debugf("[R %s - %s] Closing connection", connection.poolServer, connection.socket.RemoteAddr().String())
+	if err := connection.SendMessage(nil); err != nil {
+		t.FailConnection(ctx, err)
+	}
+}
+
 // Shutdown shuts down the listener and all connections gracefully
+// Calling more than once will panic
 func (t *receiverTCP) Shutdown() {
-	t.shutdownFunc()
+	close(t.shutdownChan)
 }
 
 // getTLSConfig returns TLS configuration for the connection
@@ -195,7 +214,7 @@ func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 
 // startConnection sets up a new connection
 func (t *receiverTCP) startConnection(socket *net.TCPConn) {
-	log.Notice("[%s < %s] New connection", t.pool.Server(), socket.RemoteAddr().String())
+	log.Noticef("[R %s - %s] New connection", t.pool.Server(), socket.RemoteAddr().String())
 
 	var connectionSocket connectionSocket
 	if t.config.transport == TransportTCPTLS {
@@ -219,14 +238,16 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	defer t.connWait.Done()
 
-	if err := conn.Run(nil); err != nil {
+	if err := conn.Run(func() {
+		conn.sendEvent(transports.NewConnectEvent(conn.ctx))
+	}); err != nil {
 		if err == errHardCloseRequested {
-			log.Info("[%s < %s] Connection shutdown requested", t.pool.Server(), socket.RemoteAddr().String())
+			log.Noticef("[R %s - %s] Client forcefully disconnected", t.pool.Server(), socket.RemoteAddr().String())
 		} else {
-			log.Error("[%s < %s] Connection failed: %s", t.pool.Server(), socket.RemoteAddr().String(), err)
+			log.Errorf("[R %s - %s] Client failed: %s", t.pool.Server(), socket.RemoteAddr().String(), err)
 		}
 	} else {
-		log.Info("[%s < %s] Connection closed gracefully", t.pool.Server(), socket.RemoteAddr().String())
+		log.Noticef("[R %s - %s] Client closed", t.pool.Server(), socket.RemoteAddr().String())
 	}
 
 	t.connMutex.Lock()

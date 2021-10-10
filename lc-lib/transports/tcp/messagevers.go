@@ -75,6 +75,5 @@ func (p *protocolVERS) Write(conn *connection) error {
 
 // SupportsEVNT returns true if the remote side supports the enhanced message
 func (p *protocolVERS) SupportsEVNT() bool {
-	log.Debug("VERS: %v", p.protocolFlags)
 	return len(p.protocolFlags) > 0 && p.protocolFlags[0]&0x01 == 0x01
 }

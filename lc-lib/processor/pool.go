@@ -89,7 +89,7 @@ func (p *Pool) Run() {
 		p.fanout = make(chan *event.Bundle, routineCount)
 		p.collector = make(chan *event.Bundle, routineCount)
 
-		log.Info("Processor starting %d routines", routineCount)
+		log.Infof("Processor starting %d routines", routineCount)
 		for i := 0; i < routineCount; i++ {
 			go p.processorRoutine(i)
 		}
@@ -100,7 +100,7 @@ func (p *Pool) Run() {
 			case <-shutdownChan:
 				shutdown = true
 				shutdownChan = nil
-				log.Info("Processor shutting down %d routines", routineCount)
+				log.Infof("Processor shutting down %d routines", routineCount)
 			case newConfig = <-p.configChan:
 				// Request shutdown so we can restart with new configuration
 				close(p.fanout)
@@ -180,7 +180,7 @@ func (p *Pool) Run() {
 // processorRoutine runs a single routine for processing
 func (p *Pool) processorRoutine(id int) {
 	defer func() {
-		log.Info("[%d] Processor routine exiting", id)
+		log.Infof("[Processor %d] Processor routine exiting", id)
 		p.collector <- nil
 	}()
 	for {
@@ -198,7 +198,7 @@ func (p *Pool) processorRoutine(id int) {
 				events[idx] = p.processEvent(event)
 			}
 
-			log.Debugf("[%d] Processed %d events in %v", id, bundle.Len(), time.Since(start))
+			log.Debugf("[Processor %d] Processed %d events in %v", id, bundle.Len(), time.Since(start))
 
 			select {
 			case <-p.shutdownChan:

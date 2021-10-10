@@ -23,7 +23,7 @@ func (s *Sink) markActive(endpoint *Endpoint) {
 		return
 	}
 
-	log.Debug("[%s] Endpoint is ready", endpoint.Server())
+	log.Debugf("[E %s] Endpoint is ready", endpoint.Server())
 
 	endpoint.mutex.Lock()
 	endpoint.status = endpointStatusActive
@@ -42,7 +42,7 @@ func (s *Sink) moveFailed(endpoint *Endpoint) {
 		return
 	}
 
-	log.Info("[%s] Marking endpoint as failed", endpoint.Server())
+	log.Infof("[E %s] Marking endpoint as failed", endpoint.Server())
 
 	s.Scheduler.Remove(endpoint)
 
@@ -50,19 +50,12 @@ func (s *Sink) moveFailed(endpoint *Endpoint) {
 		s.readyList.Remove(&endpoint.readyElement)
 	}
 
-	shutdown := endpoint.IsClosing()
-
 	endpoint.mutex.Lock()
 	endpoint.status = endpointStatusFailed
 	endpoint.averageLatency = 0
 	endpoint.mutex.Unlock()
 
 	s.failedList.PushFront(&endpoint.failedElement)
-
-	// If we're shutting down, give up and complete transport shutdown
-	if shutdown {
-		endpoint.shutdownTransport()
-	}
 
 	s.OnFail(endpoint)
 }
@@ -81,7 +74,7 @@ func (s *Sink) recoverFailed(endpoint *Endpoint) {
 	s.failedList.Remove(&endpoint.failedElement)
 
 	backoff := endpoint.backoff.Trigger()
-	log.Info("[%s] Endpoint has recovered - will resume in %v", endpoint.Server(), backoff)
+	log.Infof("[E %s] Endpoint has recovered - will resume in %v", endpoint.Server(), backoff)
 
 	// Backoff before allowing recovery
 	s.Scheduler.SetCallback(endpoint, backoff, func() {

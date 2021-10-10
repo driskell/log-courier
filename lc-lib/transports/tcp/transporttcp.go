@@ -111,15 +111,15 @@ MainLoop:
 
 		if err != nil {
 			if err == errHardCloseRequested {
-				log.Info("[%s] Transport shutdown requested", t.pool.Server())
+				log.Noticef("[T %s] Transport forcefully disconnected", t.pool.Server())
 			} else {
-				log.Errorf("[%s] Transport error, disconnected: %s", t.pool.Server(), err)
+				log.Errorf("[T %s] Transport error, disconnected: %s", t.pool.Server(), err)
 			}
 			if t.finishOnFail {
 				break MainLoop
 			}
 		} else {
-			log.Info("[%s] Transport disconnected gracefully", t.pool.Server())
+			log.Noticef("[T %s] Transport disconnected gracefully", t.pool.Server())
 			break MainLoop
 		}
 
@@ -189,7 +189,7 @@ func (t *transportTCP) connect() (*connection, error) {
 
 	desc := t.pool.Desc()
 
-	log.Info("[%s] Attempting to connect to %s", t.pool.Server(), desc)
+	log.Infof("[T %s - %s] Attempting to connect", t.pool.Server(), desc)
 
 	socket, err := net.DialTimeout("tcp", addr.String(), t.netConfig.Timeout)
 	if err != nil {
@@ -206,7 +206,7 @@ func (t *transportTCP) connect() (*connection, error) {
 
 	conn := newConnection(t.ctx, connectionSocket, t.pool.Server(), true, t.eventChan)
 
-	log.Notice("[%s] Connected to %s", t.pool.Server(), desc)
+	log.Noticef("[T %s - %s] Connected", t.pool.Server(), desc)
 	return conn, nil
 }
 
@@ -227,7 +227,7 @@ func (t *transportTCP) SendEvents(nonce string, events []*event.Event) error {
 	} else {
 		msg = &protocolJDAT{nonce: &nonce, events: eventsAsBytes}
 	}
-	log.Debugf("[%s > %s] Sending %s payload with nonce %x and %d events", t.pool.Server(), t.conn.socket.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
+	log.Debugf("[T %s > %s] Sending %s payload with nonce %x and %d events", t.pool.Server(), t.conn.socket.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
 	return t.conn.SendMessage(msg)
 }
 
@@ -238,7 +238,7 @@ func (t *transportTCP) Ping() error {
 	if t.conn == nil {
 		return ErrInvalidState
 	}
-	log.Debugf("[%s > %s] Sending ping", t.pool.Server(), t.conn.socket.RemoteAddr().String())
+	log.Debugf("[T %s > %s] Sending ping", t.pool.Server(), t.conn.socket.RemoteAddr().String())
 	return t.conn.SendMessage(&protocolPING{})
 }
 
@@ -257,7 +257,9 @@ func (t *transportTCP) Shutdown() {
 			t.shutdownFunc()
 		} else {
 			// Sending nil triggers graceful shutdown
-			t.conn.SendMessage(nil)
+			if err := t.conn.SendMessage(nil); err != nil {
+				t.shutdownFunc()
+			}
 		}
 		t.shutdown = true
 	}
@@ -276,17 +278,17 @@ func (t *transportTCP) checkClientCertificates() {
 
 	for _, cert := range t.config.certificateList {
 		if cert.NotBefore.After(now) {
-			log.Warning("The client certificate with common name '%s' is not valid until %s.", cert.Subject.CommonName, cert.NotBefore.Format("Jan 02 2006"))
+			log.Warningf("The client certificate with common name '%s' is not valid until %s.", cert.Subject.CommonName, cert.NotBefore.Format("Jan 02 2006"))
 			certIssues = true
 		}
 
 		if cert.NotAfter.Before(now) {
-			log.Warning("The client certificate with common name '%s' expired on %s.", cert.Subject.CommonName, cert.NotAfter.Format("Jan 02 2006"))
+			log.Warningf("The client certificate with common name '%s' expired on %s.", cert.Subject.CommonName, cert.NotAfter.Format("Jan 02 2006"))
 			certIssues = true
 		}
 	}
 
 	if certIssues {
-		log.Warning("Client certificate issues may prevent successful connection.")
+		log.Warningf("Client certificate issues may prevent successful connection.")
 	}
 }

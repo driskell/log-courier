@@ -74,6 +74,8 @@ func (s *Scheduler) Remove(v interface{}) {
 // For callback items it will handle them silently, so may return nil even though callbacks were called
 // Always call Reschedule to resetup the timer
 func (s *Scheduler) Next() interface{} {
+	// Since no timer is running now
+	s.timerSet = false
 	// Handle all available items
 	for {
 		if len(*s.tq) == 0 || (*s.tq)[0].when.After(time.Now()) {
@@ -81,7 +83,6 @@ func (s *Scheduler) Next() interface{} {
 		}
 		item := heap.Pop(s.tq).(*timerItem)
 		delete(s.index, item.value)
-		s.timerSet = false // Since no timer is running now
 		// If not a callback - return it
 		if item.callback == nil {
 			return item.value
@@ -91,6 +92,7 @@ func (s *Scheduler) Next() interface{} {
 }
 
 // OnNext returns a channel that will receive the current time when the next item is due
+// Next MUST then be called to process items and flag the timer as consumed
 // Next is not guaranteed to return if OnNext fires so its result could still be nil
 // Returns a nil channel if no items are scheduled, which can still be used in a switch but will never fire
 func (s *Scheduler) OnNext() <-chan time.Time {

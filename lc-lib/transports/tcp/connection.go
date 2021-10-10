@@ -52,15 +52,14 @@ type connection struct {
 	isClient     bool
 	eventChan    chan<- transports.Event
 	sendChan     chan protocolMessage
-	shutdownChan chan struct{}
 
 	supportsEvnt bool
 	rwBuffer     bufio.ReadWriter
 
 	// senderErr stores exit error from sender
 	senderErr error
-	// senderShutdownChan requests sender to begin to gracefully shutdown - called from receiver when EOF
-	senderShutdownChan chan struct{}
+	// receiverShutdownChan is closed by CloseRead to request receiver to stop receiving and exit gracefully
+	receiverShutdownChan chan struct{}
 	// wait can be used to wait for all routines to complete
 	wait sync.WaitGroup
 }
@@ -73,9 +72,8 @@ func newConnection(ctx context.Context, socket connectionSocket, poolServer stri
 		eventChan:  eventChan,
 		// TODO: Make configurable. Allow up to 100 pending messages.
 		// This will cope with a max pending payload size of 100 for each connection by allowing 100 acks to be queued
-		sendChan:           make(chan protocolMessage, 100),
-		shutdownChan:       make(chan struct{}),
-		senderShutdownChan: make(chan struct{}),
+		sendChan:             make(chan protocolMessage, 100),
+		receiverShutdownChan: make(chan struct{}),
 	}
 
 	ret.ctx, ret.shutdownFunc = context.WithCancel(context.WithValue(ctx, transports.ContextConnection, ret))
@@ -109,37 +107,37 @@ func (t *connection) Run(startedCallback func()) error {
 	t.wait.Add(1)
 	go t.senderRoutine()
 	err := t.receiver()
-	// Request sender shutdown
-	close(t.senderShutdownChan)
-	// Wait for sender to complete
+	if err != nil && err != io.EOF {
+		// Teardown if error occurs and it wasn't a graceful EOF (nil err means CloseRead called so also graceful)
+		t.shutdownFunc()
+	}
+
+	// EOF is not an error to be returned
+	if err == io.EOF {
+		err = nil
+	}
+
+	// Wait for sender to complete due to Teardown or nil sent
 	t.wait.Wait()
 
 	// Cleanup
 	t.socket.Close()
 
-	// If we had no error, did sender save one when it shutdown?
-	// This is already the receiver error if receiver collected it and shutdown
-	// If receiver EOF though and then we had a sender issue, take that error
-	if err == nil {
-		err = t.senderErr
-	}
-
-	// Unblock any external routines communicating via SendMessage
-	close(t.shutdownChan)
-
-	// Ensure all resources are cleaned up
+	// Ensure context resources are cleaned up
 	t.shutdownFunc()
 
+	// If we had no receiver error, did sender save one when it shutdown?
+	if err == nil {
+		return t.senderErr
+	}
 	return err
 }
 
 // serverNegotiation works out the protocol version supported by the remote
 func (t *connection) serverNegotiation() error {
 	message, err := t.readMsg()
-	if message == nil {
-		if err == nil {
-			err = io.EOF
-		} else if err == errHardCloseRequested {
+	if err != nil {
+		if err == errHardCloseRequested {
 			return err
 		}
 		return fmt.Errorf("unexpected end of negotiation: %s", err)
@@ -150,8 +148,8 @@ func (t *connection) serverNegotiation() error {
 		if messageImpl, ok := message.(eventsMessage); ok {
 			// Backwards compatible path with older log-courier which do not perform a negotiation
 			event := transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
-			if t.sendEvent(event) {
-				return errHardCloseRequested
+			if err := t.sendEvent(event); err != nil {
+				return err
 			}
 			// Now go async
 			return nil
@@ -173,10 +171,8 @@ func (t *connection) clientNegotiation() error {
 	}
 
 	message, err := t.readMsg()
-	if message == nil {
-		if err == nil {
-			err = io.EOF
-		} else if err == errHardCloseRequested {
+	if err != nil {
+		if err == errHardCloseRequested {
 			return err
 		}
 		return fmt.Errorf("unexpected end of negotiation: %s", err)
@@ -197,7 +193,7 @@ func (t *connection) clientNegotiation() error {
 
 	t.supportsEvnt = versMessage.SupportsEVNT()
 	if t.supportsEvnt {
-		log.Debug("[%s < %s] Remote supports enhanced EVNT messages", t.poolServer, t.socket.RemoteAddr().String())
+		log.Debugf("[%s < %s] Remote supports enhanced EVNT messages", t.poolServer, t.socket.RemoteAddr().String())
 	}
 
 	return nil
@@ -210,13 +206,6 @@ func (t *connection) senderRoutine() {
 	}()
 
 	t.senderErr = t.sender()
-
-	// Sender exits after graceful shutdown from receiver EOF
-	// Or it exits due to a problem
-	// Therefore, always force shutdown here of receiver if it wasn't already
-	// This will unblock everything, including attempts to send data that won't now complete
-	// as they all monitor the main shutdown channel
-	t.Teardown()
 }
 
 // sender handles socket writes
@@ -225,8 +214,8 @@ func (t *connection) sender() error {
 		var msg protocolMessage
 
 		select {
-		case <-t.senderShutdownChan:
-			return nil
+		case <-t.ctx.Done():
+			return errHardCloseRequested
 		case msg = <-t.sendChan:
 			// Is this the end message? nil? No more to send?
 			if msg == nil {
@@ -258,23 +247,27 @@ func (t *connection) writeMsg(msg protocolMessage) error {
 
 // sendEvent ships an event structure whilst also monitoring for
 // any shutdown signal. Returns true if shutdown was signalled
-func (t *connection) sendEvent(transportEvent transports.Event) bool {
+func (t *connection) sendEvent(transportEvent transports.Event) error {
 	select {
+	case <-t.receiverShutdownChan:
+		// Gracefully stop receiving data
+		return io.EOF
 	case <-t.ctx.Done():
-		return true
+		// Teardown - end now
+		return errHardCloseRequested
 	case t.eventChan <- transportEvent:
 	}
-	return false
+	return nil
 }
 
 // receiver handles socket reads
 // Returns nil error on shutdown, or an actual error
-func (t *connection) receiver() error {
+func (t *connection) receiver() (err error) {
 	for {
-		message, err := t.readMsg()
-		if message == nil {
-			// Message is nil and err nil on EOF, return err or nil back
-			return err
+		var message protocolMessage
+		message, err = t.readMsg()
+		if err != nil {
+			break
 		}
 
 		var transportEvent transports.Event = nil
@@ -299,10 +292,16 @@ func (t *connection) receiver() error {
 			return fmt.Errorf("unknown protocol message %T", message)
 		}
 
-		if shutdown := t.sendEvent(transportEvent); shutdown {
-			return nil
+		if err := t.sendEvent(transportEvent); err != nil {
+			break
 		}
 	}
+
+	if err == io.EOF {
+		// Send EOF signal so receiver or transport can handle it accordingly
+		err = t.sendEvent(transports.NewEndEvent(t.ctx))
+	}
+	return
 }
 
 // readMsg reads a message from the connection
@@ -310,12 +309,7 @@ func (t *connection) receiver() error {
 func (t *connection) readMsg() (protocolMessage, error) {
 	var header [8]byte
 
-	if shutdown, err := t.receiverRead(header[:]); shutdown || err != nil {
-		if err != nil {
-			if err == io.EOF {
-				return nil, nil
-			}
-		}
+	if err := t.receiverRead(header[:]); err != nil {
 		return nil, err
 	}
 
@@ -349,7 +343,7 @@ func (t *connection) readMsg() (protocolMessage, error) {
 
 // receiverRead will repeatedly read from the socket until the given byte array
 // is filled, or sender signals an error
-func (t *connection) receiverRead(data []byte) (bool, error) {
+func (t *connection) receiverRead(data []byte) error {
 	var err error
 	received := 0
 
@@ -358,6 +352,10 @@ ReceiverReadLoop:
 		select {
 		case <-t.ctx.Done():
 			err = errHardCloseRequested
+			break ReceiverReadLoop
+		case <-t.receiverShutdownChan:
+			// Stop receiving any more data so we can gracefully close
+			err = io.EOF
 			break ReceiverReadLoop
 		default:
 			// Timeout after socketIntervalSeconds, check for shutdown, and try again
@@ -368,7 +366,7 @@ ReceiverReadLoop:
 
 			if received >= len(data) {
 				// Success
-				return false, nil
+				return nil
 			}
 
 			if err == nil {
@@ -382,26 +380,33 @@ ReceiverReadLoop:
 			}
 
 			// Pass an error back
-			return false, err
+			return err
 		}
 	}
 
-	return true, err
+	return err
 }
 
-// Teardown ends the connection
-// It will end the receiver to stop receiving data
-// Receivers do not gracefully shutdown from our side, only remote side, so this is called to stop receiving more data
-// For Transports this is used to teardown due to a problem
+// Teardown ends the connection forcefully, usually due to a problem
+// No waiting happens and connections are not gracefully closed
 func (t *connection) Teardown() {
 	t.shutdownFunc()
 }
 
+// CloseRead stops the receiving of data from this connection
+// It is used by Receiver to request we stop receiving data, whilst allowing acks to be sent for what we did receive
+// Once a nil is sent via SendMessage CloseWrite then happens and we then shutdown fully
+// Calling this function twice will cause a panic due to invalid state
+func (t *connection) CloseRead() {
+	close(t.receiverShutdownChan)
+}
+
 // SendMessage queues a message to be sent on the connection
-// Send a nil to close the connection gracefully
-// If nil is sent twice - there will be a panic - so only request shutdown ONCE
-// If the connection is running too slow and the queue is full then ErrSendQueueFull is returned
+// Send a nil to begin closing the connection gracefully by performing a CloseWrite
+// Once an EOF occurs on the read side (or a CloseRead occurs) shutdown will be complete
+// If the connection is running too slow and the queue is full then ErrCongestion is returned
 // If the connection has closed it will return ErrInvalidState
+// If nil is sent twice - there will be a panic - so only request shutdown ONCE
 func (t *connection) SendMessage(message protocolMessage) error {
 	if message == nil {
 		close(t.sendChan)
@@ -409,7 +414,7 @@ func (t *connection) SendMessage(message protocolMessage) error {
 	}
 
 	select {
-	case <-t.shutdownChan:
+	case <-t.ctx.Done():
 		return ErrInvalidState
 	case t.sendChan <- message:
 	default:
@@ -429,7 +434,7 @@ func (t *connection) SupportsEVNT() bool {
 // the int return will always be the length of the message, unless an error occurs, in
 // which case it will be 0.
 func (t *connection) Read(message []byte) (int, error) {
-	if shutdown, err := t.receiverRead(message); shutdown || err != nil {
+	if err := t.receiverRead(message); err != nil {
 		return 0, err
 	}
 	return len(message), nil

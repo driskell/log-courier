@@ -166,9 +166,8 @@ func (p *Publisher) runOnce() bool {
 	select {
 	case event := <-p.endpointSink.EventChan():
 		// Endpoint Sink processes the events, and feeds back relevant changes
-		if !p.endpointSink.ProcessEvent(event) {
-			endpoint := event.Context().Value(endpoint.ContextSelf).(*endpoint.Endpoint)
-			p.forceEndpointFailure(endpoint, fmt.Errorf("unexpected %T message received", event))
+		if endpoint, err := p.endpointSink.ProcessEvent(event); err != nil {
+			p.forceEndpointFailure(endpoint, err)
 		}
 
 		// If all finished, we're done
@@ -259,7 +258,7 @@ func (p *Publisher) OnStarted(endpoint *endpoint.Endpoint) {
 		return
 	}
 
-	log.Debug("[%s] Starting keepalive timeout", endpoint.Server())
+	log.Debugf("[P %s] Starting keepalive timeout", endpoint.Server())
 	p.endpointSink.Scheduler.SetCallback(endpoint, keepaliveTimeout, func() {
 		p.timeoutKeepalive(endpoint)
 	})
@@ -296,7 +295,8 @@ func (p *Publisher) OnFail(endpoint *endpoint.Endpoint) {
 // publisher for redelivery
 func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 	// Pull back pending payloads so we can requeue them onto other endpoints
-	for _, pendingPayload := range endpoint.PullBackPending() {
+	payloads := endpoint.PullBackPending()
+	for _, pendingPayload := range payloads {
 		pendingPayload.Resending = true
 		pendingPayload.ResetSequence()
 		p.resendList.PushBack(&pendingPayload.ResendElement)
@@ -305,7 +305,7 @@ func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 	// If any ready now, requeue immediately
 	p.tryQueueHeld()
 
-	log.Debug("%d payloads held for resend", p.resendList.Len())
+	log.Debugf("[P %s] %d payloads pulled back for resend (%d total now held for resend)", endpoint.Server(), len(payloads), p.resendList.Len())
 }
 
 // OnAck handles acknowledgements from endpoints
@@ -396,7 +396,7 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 	// If we haven't started sending anything, return to keepalive timeout
 	if endpoint.NumPending() == 0 {
-		log.Debug("[%s] Resetting keepalive timeout", endpoint.Server())
+		log.Debugf("[P %s] Resetting keepalive timeout", endpoint.Server())
 		p.endpointSink.Scheduler.SetCallback(endpoint, keepaliveTimeout, func() {
 			p.timeoutKeepalive(endpoint)
 		})
@@ -406,7 +406,7 @@ func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 // forceEndpointFailure is called to force an endpoint to enter
 // the failed status. It reports the error and then processes the failure.
 func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
-	log.Warning("[%s] Forcing endpoint failure: %s", endpoint.Server(), err)
+	log.Warningf("[P %s] Forcing endpoint failure: %s", endpoint.Server(), err)
 	p.endpointSink.ForceFailure(endpoint)
 }
 
@@ -432,7 +432,7 @@ func (p *Publisher) tryQueueHeld() bool {
 				pendingPayload.Resending = false
 				pendingPayload.ResetSequence()
 				p.resendList.Remove(&pendingPayload.ResendElement)
-				log.Debug("%d payloads remain held for resend", p.resendList.Len())
+				log.Debugf("%d payloads remain held for resend", p.resendList.Len())
 				didSend = true
 			}
 		}
@@ -479,6 +479,7 @@ func (p *Publisher) sendPayload(pendingPayload *payload.Payload) (*endpoint.Endp
 
 	// If this is the first payload, start the network timeout
 	if endpoint.NumPending() == 1 {
+		log.Debugf("[P %s] Starting timout timer", endpoint.Server())
 		p.endpointSink.Scheduler.SetCallback(endpoint, p.netConfig.Timeout, func() {
 			p.timeoutPending(endpoint)
 		})
@@ -498,7 +499,7 @@ func (p *Publisher) timeoutPending(endpoint *endpoint.Endpoint) {
 
 func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 	// Timeout for PING
-	log.Debug("[%s] Sending PING and starting pending timeout", endpoint.Server())
+	log.Debugf("[P %s] Sending PING and starting pending timeout", endpoint.Server())
 	p.endpointSink.Scheduler.SetCallback(endpoint, p.netConfig.Timeout, func() {
 		p.timeoutPending(endpoint)
 	})
