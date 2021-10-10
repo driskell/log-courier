@@ -2,13 +2,14 @@
 
 ## Future
 
-Log Courier
+Log Courier / Log Carver
 
 - Simplified networking logic and fixes to some endpoint deadlocks in publisher
+- Faster TCP/TLS shutdown if the transport is an unusable state
 
 Log Carver
 
-- Simplified networking logic and fixes to some endpoint deadlocks in publisher
+- Fixed shutdown hanging forever if an ES transport is unable to retrieve node information
 
 Logstash Input Plugin
 
