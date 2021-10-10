@@ -57,9 +57,9 @@ func (t *transportTest) SendEvents(nonce string, events []*event.Event) error {
 	t.delayAction(func() {
 		t.sendAck(nonce, sequence)
 		if sequence != endSequence {
-			t.delayAction(func() { t.sendAck(nonce, endSequence) }, fmt.Sprintf("[T %s] Returning acknowledgement of %d events for payload %x after %%d second delay", t.server, sequence, nonce))
+			t.delayAction(func() { t.sendAck(nonce, endSequence) }, fmt.Sprintf("[T %s] Acknowledging %d events for payload %x", t.server, endSequence, nonce))
 		}
-	}, fmt.Sprintf("[T %s] Returning acknowledgement of %d events for payload %x after %%d second delay", t.server, sequence, nonce))
+	}, fmt.Sprintf("[T %s] Acknowledging %d events for payload %x", t.server, sequence, nonce))
 	return nil
 }
 
@@ -75,12 +75,14 @@ func (t *transportTest) delayAction(action func(), message string) {
 	if t.config.MinDelay != t.config.MaxDelay {
 		delay = delay + rand.Int63n(t.config.MaxDelay-t.config.MinDelay)
 	}
-	log.Debugf(message, delay)
 	if delay == 0 {
+		log.Debugf("%s", message)
 		action()
 	} else {
+		log.Debugf("%s (delaying %d seconds)", message, delay)
 		go func() {
 			<-time.After(time.Second * time.Duration(delay))
+			log.Debugf("%s", message)
 			action()
 		}()
 	}
