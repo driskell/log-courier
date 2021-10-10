@@ -242,12 +242,12 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 		conn.sendEvent(transports.NewConnectEvent(conn.ctx))
 	}); err != nil {
 		if err == errHardCloseRequested {
-			log.Noticef("[R %s - %s] Client forcefully disconnected", t.pool.Server(), socket.RemoteAddr().String())
+			log.Noticef("[R %s - %s] Client forcefully disconnected", socket.LocalAddr().String(), socket.RemoteAddr().String())
 		} else {
-			log.Errorf("[R %s - %s] Client failed: %s", t.pool.Server(), socket.RemoteAddr().String(), err)
+			log.Errorf("[R %s - %s] Client failed: %s", socket.LocalAddr().String(), socket.RemoteAddr().String(), err)
 		}
 	} else {
-		log.Noticef("[R %s - %s] Client closed", t.pool.Server(), socket.RemoteAddr().String())
+		log.Noticef("[R %s - %s] Client closed", socket.LocalAddr().String(), socket.RemoteAddr().String())
 	}
 
 	t.connMutex.Lock()
