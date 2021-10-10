@@ -4,11 +4,14 @@
 
 Log Courier / Log Carver
 
-- Simplified networking logic and fixes to some endpoint deadlocks in publisher
+- Simplified networking logic and fixed some deadlocks in publisher and scheduler
+- Improved logging of transports, receivers, endpoints and publisher
 - Faster TCP/TLS shutdown if the transport is an unusable state
 
 Log Carver
 
+- Implemented controlled shutdown of log-carver's log-courier connections to ensure all received events are acknowledged, so that log-courier does not resend any events already sent to the transport when it reconnects
+- Added additional timeouts to ensure that all dead connections to log-carver are detected and closed
 - Fixed shutdown hanging forever if an ES transport is unable to retrieve node information
 
 Logstash Input Plugin
