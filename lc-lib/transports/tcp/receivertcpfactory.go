@@ -43,7 +43,7 @@ type ReceiverTCPFactory struct {
 	SSLClientCA    []string `config:"ssl client ca"`
 	SSLVerifyPeers bool     `config:"verify_peers"`
 
-	tlsConfiguration
+	*TlsConfiguration `config:",embed"`
 }
 
 // NewReceiverTCPFactory create a new ReceiverTCPFactory from the provided
@@ -63,21 +63,20 @@ func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[strin
 
 // Validate the configuration
 func (f *ReceiverTCPFactory) Validate(p *config.Parser, configPath string) (err error) {
-	if f.transport != TransportTCPTLS {
+	if f.transport == TransportTCPTLS {
+		for idx, clientCA := range f.SSLClientCA {
+			if err = f.addCa(clientCA, fmt.Sprintf("%sssl client ca[%d]", configPath, idx)); err != nil {
+				return err
+			}
+		}
+	} else {
 		if len(f.SSLClientCA) > 0 {
 			return fmt.Errorf("%[1]sssl client ca is not supported when the transport is tcp", configPath)
 		}
-		return nil
 	}
 
 	if err = f.tlsValidate(f.transport, p, configPath); err != nil {
 		return err
-	}
-
-	for idx, clientCA := range f.SSLClientCA {
-		if err = f.addCa(clientCA, fmt.Sprintf("%sssl client ca[%d]", configPath, idx)); err != nil {
-			return err
-		}
 	}
 
 	return nil

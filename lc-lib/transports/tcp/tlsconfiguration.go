@@ -29,7 +29,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
-type tlsConfiguration struct {
+type TlsConfiguration struct {
 	SSLCertificate string `config:"ssl certificate"`
 	SSLKey         string `config:"ssl key"`
 	MinTLSVersion  string `config:"min tls version"`
@@ -42,7 +42,7 @@ type tlsConfiguration struct {
 	maxTLSVersion   uint16
 }
 
-func (f *tlsConfiguration) tlsValidate(transport string, p *config.Parser, configPath string) (err error) {
+func (f *TlsConfiguration) tlsValidate(transport string, p *config.Parser, configPath string) (err error) {
 	// Check tls versions
 	f.minTLSVersion, err = parseTLSVersion(f.MinTLSVersion, defaultMinTLSVersion)
 	if err != nil {
@@ -56,18 +56,18 @@ func (f *tlsConfiguration) tlsValidate(transport string, p *config.Parser, confi
 	// Only allow SSL configurations if using TLS
 	if transport != TransportTCPTLS {
 		if len(f.SSLCertificate) > 0 || len(f.SSLKey) > 0 {
-			return fmt.Errorf("%[1]sssl certificate and %[1]s/ssl key are not supported when the transport is tcp", configPath)
+			return fmt.Errorf("%[1]sssl certificate and %[1]sssl key are not supported when the transport is tcp", configPath)
 		}
 		return nil
 	}
 
 	if len(f.SSLCertificate) > 0 || len(f.SSLKey) > 0 {
 		if len(f.SSLCertificate) == 0 {
-			return fmt.Errorf("%[1]sssl key is only valid with a matching %[1]s/ssl certificate", configPath)
+			return fmt.Errorf("%[1]sssl key is only valid with a matching %[1]sssl certificate", configPath)
 		}
 
 		if len(f.SSLKey) == 0 {
-			return fmt.Errorf("%[1]sssl key must be specified when %[1]s/ssl certificate is specified", configPath)
+			return fmt.Errorf("%[1]sssl key must be specified when %[1]sssl certificate is specified", configPath)
 		}
 
 		certificate, err := tls.LoadX509KeyPair(f.SSLCertificate, f.SSLKey)
@@ -89,7 +89,7 @@ func (f *tlsConfiguration) tlsValidate(transport string, p *config.Parser, confi
 	return nil
 }
 
-func (f *tlsConfiguration) addCa(file string, configPath string) error {
+func (f *TlsConfiguration) addCa(file string, configPath string) error {
 	pemdata, err := ioutil.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("failed loading %s: %s", configPath, err)

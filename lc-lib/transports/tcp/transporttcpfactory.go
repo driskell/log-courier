@@ -49,7 +49,7 @@ type TransportTCPFactory struct {
 	ReconnectMax time.Duration `config:"reconnect backoff max"`
 	SSLCA        string        `config:"ssl ca"`
 
-	tlsConfiguration
+	*TlsConfiguration `config:",embed"`
 }
 
 // NewTransportTCPFactory create a new TransportTCPFactory from the provided
@@ -72,18 +72,16 @@ func (f *TransportTCPFactory) Validate(p *config.Parser, configPath string) (err
 		if len(f.SSLCA) == 0 {
 			return fmt.Errorf("%sssl ca is required when the transport is tls", configPath)
 		}
+		if err := f.addCa(f.SSLCA, configPath+"ssl ca"); err != nil {
+			return err
+		}
 	} else {
 		if len(f.SSLCA) > 0 {
 			return fmt.Errorf("%[1]sssl ca is not supported when the transport is tcp", configPath)
 		}
-		return nil
 	}
 
-	if err = f.tlsValidate(f.transport, p, configPath); err != nil {
-		return err
-	}
-
-	return f.addCa(f.SSLCA, configPath+"ssl ca")
+	return f.tlsValidate(f.transport, p, configPath)
 }
 
 // Defaults sets the default configuration values
