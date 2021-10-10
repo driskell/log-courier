@@ -119,7 +119,11 @@ ReceiverLoop:
 		case newConfig := <-r.configChan:
 			r.updateReceivers(newConfig)
 		case <-r.partialAckSchedule.OnNext():
-			if connection := r.partialAckSchedule.Next(); connection != nil {
+			for {
+				connection := r.partialAckSchedule.Next()
+				if connection == nil {
+					break
+				}
 				expectedAck := r.partialAckConnection[connection][0]
 				expectedEvent := expectedAck.event
 				receiver := expectedEvent.Context().Value(transports.ContextReceiver).(transports.Receiver)
@@ -152,9 +156,11 @@ ReceiverLoop:
 				r.startIdleTimeout(eventImpl.Context(), receiver, connection)
 			case *transports.EventsEvent:
 				connection := eventImpl.Context().Value(transports.ContextConnection)
+				// Schedule partial ack if this is first set of events
+				if _, has := r.partialAckConnection[connection]; !has {
+					r.partialAckSchedule.Set(connection, 5*time.Second)
+				}
 				r.partialAckConnection[connection] = append(r.partialAckConnection[connection], &poolEventProgress{event: eventImpl, sequence: 0})
-				r.partialAckSchedule.Set(connection, 5*time.Second)
-				r.partialAckSchedule.Reschedule()
 				// Build the events with our acknowledger and submit the bundle
 				var events = make([]*event.Event, len(eventImpl.Events()))
 				for idx, item := range eventImpl.Events() {
