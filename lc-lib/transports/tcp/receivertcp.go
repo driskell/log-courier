@@ -214,7 +214,7 @@ func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 
 // startConnection sets up a new connection
 func (t *receiverTCP) startConnection(socket *net.TCPConn) {
-	log.Noticef("[R %s - %s] New connection", t.pool.Server(), socket.RemoteAddr().String())
+	log.Noticef("[R %s - %s] New connection", socket.LocalAddr().String(), socket.RemoteAddr().String())
 
 	var connectionSocket connectionSocket
 	if t.config.transport == TransportTCPTLS {
