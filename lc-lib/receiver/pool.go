@@ -209,9 +209,9 @@ ReceiverLoop:
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				if _, ok := r.partialAckConnection[connection]; ok {
 					// We should not be receiving PING if we haven't finished acknowleding - this violates protocol
-					receiver.FailConnection(eventImpl.Context(), fmt.Errorf("received ping message on non-idle connection"))
+					r.failConnection(eventImpl.Context(), receiver, connection, fmt.Errorf("received ping message on non-idle connection"))
 				} else if err := receiver.Pong(eventImpl.Context()); err != nil {
-					receiver.FailConnection(eventImpl.Context(), err)
+					r.failConnection(eventImpl.Context(), receiver, connection, err)
 				} else {
 					// Reset idle timeout
 					r.startIdleTimeout(eventImpl.Context(), receiver, connection)
@@ -254,6 +254,7 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 		if len(partialAcks) == 1 {
 			lastAck = true
 		} else if partialAcks[1] == nil {
+			lastAck = true
 			closeConnection = true
 		}
 		if lastAck || closeConnection {
@@ -272,7 +273,7 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 
 	receiver := ctx.Value(transports.ContextReceiver).(transports.Receiver)
 	if err := receiver.Acknowledge(ctx, nonce, sequence); err != nil {
-		receiver.FailConnection(ctx, err)
+		r.failConnection(ctx, receiver, connection, err)
 	} else if lastAck && (!r.receivers[receiver].active || closeConnection) {
 		// Either it's the last ack for a connection on a shutting down receiver, or the connection read closed, so shutdown the connection
 		receiver.ShutdownConnection(ctx)
@@ -286,8 +287,15 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 func (r *Pool) startIdleTimeout(ctx context.Context, receiver transports.Receiver, connection interface{}) {
 	// Set a network timeout - we should be receiving pings - close connections that do nothing
 	r.partialAckSchedule.SetCallback(connection, 15*time.Second, func() {
-		receiver.FailConnection(ctx, fmt.Errorf("no data received within timeout"))
+		r.failConnection(ctx, receiver, connection, fmt.Errorf("no data received within timeout"))
 	})
+}
+
+// failConnection cleans up resources and fails the connection
+func (r *Pool) failConnection(ctx context.Context, receiver transports.Receiver, connection interface{}, err error) {
+	r.partialAckSchedule.Remove(connection)
+	delete(r.partialAckConnection, connection)
+	receiver.FailConnection(ctx, err)
 }
 
 // updateReceivers updates the list of running receivers
