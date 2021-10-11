@@ -446,6 +446,7 @@ func (t *transportES) SendEvents(nonce string, events []*event.Event) error {
 // Immediately respond with a pong
 func (t *transportES) Ping() error {
 	go func() {
+		log.Debugf("[T %s] Responding with pong", t.pool.Server())
 		select {
 		case <-t.ctx.Done():
 			// Forced failure

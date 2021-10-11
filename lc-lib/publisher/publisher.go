@@ -500,7 +500,7 @@ func (p *Publisher) timeoutPending(endpoint *endpoint.Endpoint) {
 
 func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 	// Timeout for PING
-	log.Debugf("[P %s] Sending PING and starting pending timeout", endpoint.Server())
+	log.Debugf("[P %s] Sending ping and starting pending timeout", endpoint.Server())
 	p.endpointSink.Scheduler.SetCallback(endpoint, p.netConfig.Timeout, func() {
 		p.timeoutPending(endpoint)
 	})
