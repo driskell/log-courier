@@ -7,6 +7,7 @@ Log Courier / Log Carver
 - Simplified networking logic and fixed some deadlocks in publisher and scheduler
 - Improved logging of transports, receivers, endpoints and publisher
 - Faster TCP/TLS shutdown if the transport is an unusable state
+- The name and version of the remote is now logged for new connections as part of the HELO/VERS handshake
 
 Log Carver
 
