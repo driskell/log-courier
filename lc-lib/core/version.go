@@ -17,4 +17,7 @@
 package core
 
 // LogCourierVersion is the library version number
+const LogCourierMajorVersion uint32 = 2
+const LogCourierMinorVersion uint32 = 6
+const LogCourierPatchVersion uint32 = 4
 const LogCourierVersion string = "2.6.4"

@@ -32,6 +32,11 @@ const (
 	// Default to TLS 1.2 minimum, supported since Go 1.2
 	defaultMinTLSVersion = tls.VersionTLS12
 	defaultMaxTLSVersion = 0
+
+	// TransportTCPTCP is the transport name for plain TCP
+	TransportTCPTCP = "tcp"
+	// TransportTCPTLS is the transport name for encrypted TLS
+	TransportTCPTLS = "tls"
 )
 
 var (
@@ -41,10 +46,14 @@ var (
 	// ErrUnexpectedEnd occurs when a message ends unexpectedly
 	ErrUnexpectedEnd = errors.New("unexpected end of JDAT compressed entry")
 
-	// TransportTCPTCP is the transport name for plain TCP
-	TransportTCPTCP = "tcp"
-	// TransportTCPTLS is the transport name for encrypted TLS
-	TransportTCPTLS = "tls"
+	// clientName holds the client identifier to send in VERS and HELO
+	clientName string = "\x00\x00\x00\x00"
+
+	// clientNameMapping holds mapping from short name to full name for HELO and VERS
+	clientNameMapping map[string]string = map[string]string{
+		"LCOR": "Log Courier",
+		"LCVR": "Log Carver",
+	}
 )
 
 type connectionSocket interface {
@@ -80,4 +89,8 @@ func parseTLSVersion(version string, fallback uint16) (uint16, error) {
 		return tls.VersionTLS13, nil
 	}
 	return tls.VersionTLS10, fmt.Errorf("invalid or unknown TLS version: '%s'", version)
+}
+
+func SetClientName(client string) {
+	clientName = client
 }

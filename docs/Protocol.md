@@ -13,7 +13,8 @@
     - [JDAT - JSON data](#jdat---json-data)
     - [EVNT - Event data](#evnt---event-data)
     - [ACKN - Acknowledgement](#ackn---acknowledgement)
-    - [???? - Unknown](#unknown)
+    - [???? - Unknown](#---unknown)
+  - [Known Clients](#known-clients)
 
 ## Overview
 
@@ -57,34 +58,25 @@ accepted a connection from a client.
 
 Request
 
-Length MUST be 0. Implementations MUST accept a length of up to 32 bytes, and
-discard any unknown the data. Unknown data is reserved for future protocol
-expansions.
+Implementations MUST accept a length of up to 32 bytes, and discard any unknown
+data. Unknown data is reserved for future protocol expansions and MUST be all zero.
 
-This message MUST be the first request sent on the connection. The server will
-response with a VERS message if it supports protocol negotaton. If the server
-responds with ???? the client MUST assume a VERS response with no flags set.
+This message MUST be the first request sent on the connection. The server MAY
+respond with a VERS message if it supports protocol negotaton. If the server
+responds with ???? or an event message the client MUST assume a VERS response
+that is all zeros.
 
 If a server receives this message not at the start of a connection it MUST
 return a ???? message, stating the message is unknown.
 
-### VERS - Version
-
-Response
-
-Length MUST be between 0 and 1. Implementations MUST accept a length of up to
-32 bytes, and discard any unknown data. Unknown data is reserved for future
-protocol expansions.
-
-This message MUST be sent in response to receiving a HELO message at the start
-of a connection.
-
 Data for this message is currently defined as follows:
 
 ```text
-+---+-----------+
-| F | Reserved  |
-+---+-----------+
++---+---+---+---+
+| F | M | m | p |
++---+---+---+---+
+| Client        |
++---+---+---+---+
 | 28-bytes Reserved...
 +
 ```
@@ -93,6 +85,26 @@ F = 1-byte of Bit Flags defined as follows:
 
 - Bit 1: EVNT message stream is supported
 - Bits 2-8: Reserved
+
+M = Major version of client
+
+m = minor version of client
+
+p = patch version of client
+
+Client = 4-character ASCII identifier of the client. All "LC" prefix are reserved. See [Known Clients](#known-clients).
+
+### VERS - Version
+
+Response
+
+Implementations MUST accept a length of up to 32 bytes, and discard any unknown
+data. Unknown data is reserved for future protocol expansions and MUST be all zero.
+
+This message MUST be sent in response to receiving a HELO message at the start
+of a connection.
+
+The structure of this message is the same as the HELO message.
 
 ## Standard Messages
 
@@ -212,3 +224,9 @@ Mandatory length of 0 and no data.
 This message should be sent in response to a message that does not exist in the
 protocol version the server or client connected implements. This is used to
 allow for backwards compatibility in future versions of the protocol.
+
+## Known Clients
+
+- \x00\x00\x00\x00 = (All zeros) Unspecified client
+- LCOR = Log Courier
+- LCVR = Log Carver

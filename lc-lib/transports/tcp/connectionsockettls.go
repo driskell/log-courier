@@ -45,9 +45,12 @@ func newConnectionSocketTLS(tcpSocket *net.TCPConn, tlsConfig *tls.Config, serve
 
 // Setup wraps the socket and resolves the handshake
 func (t *connectionSocketTLS) Setup() error {
+	var side string
 	if t.server {
+		side = "R"
 		t.Conn = tls.Server(&connectionSocketTLSWrap{shutdownChan: t.shutdownChan, tcpSocket: t.tcpSocket}, t.tlsConfig)
 	} else {
+		side = "T"
 		t.Conn = tls.Client(&connectionSocketTLSWrap{shutdownChan: t.shutdownChan, tcpSocket: t.tcpSocket}, t.tlsConfig)
 	}
 
@@ -66,7 +69,7 @@ func (t *connectionSocketTLS) Setup() error {
 		subject = "No client certificate"
 	}
 
-	log.Notice("[C %s - %s] TLS handshake completed [%s]", t.LocalAddr().String(), t.RemoteAddr().String(), subject)
+	log.Notice("[%s %s - %s] TLS handshake completed [%s]", side, t.LocalAddr().String(), t.RemoteAddr().String(), subject)
 	return nil
 }
 

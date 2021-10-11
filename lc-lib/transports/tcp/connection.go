@@ -143,7 +143,7 @@ func (t *connection) serverNegotiation() error {
 		return fmt.Errorf("unexpected end of negotiation: %s", err)
 	}
 
-	_, ok := message.(*protocolHELO)
+	heloMessage, ok := message.(*protocolHELO)
 	if !ok {
 		if messageImpl, ok := message.(eventsMessage); ok {
 			// Backwards compatible path with older log-courier which do not perform a negotiation
@@ -157,6 +157,9 @@ func (t *connection) serverNegotiation() error {
 		return fmt.Errorf("unexpected %T during negotiation, expected protocolHELO", message)
 	}
 
+	log.Infof("[R %s < %s] Remote is %s", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String(), heloMessage.Client())
+
+	log.Debugf("[R %s > %s] Sending protocol version", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
 	if err := t.writeMsg(createProtocolVERS()); err != nil {
 		return err
 	}
@@ -166,7 +169,8 @@ func (t *connection) serverNegotiation() error {
 
 // clientNegotiation works out the protocol version supported by the remote
 func (t *connection) clientNegotiation() error {
-	if err := t.writeMsg(&protocolHELO{}); err != nil {
+	log.Debugf("[T %s > %s] Sending hello", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
+	if err := t.writeMsg(createProtocolHELO()); err != nil {
 		return err
 	}
 
@@ -191,9 +195,11 @@ func (t *connection) clientNegotiation() error {
 		return fmt.Errorf("unexpected %T reply to negotiation, expected protocolVERS", message)
 	}
 
+	log.Infof("[T %s < %s] Remote is %s", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String(), versMessage.Client())
+
 	t.supportsEvnt = versMessage.SupportsEVNT()
 	if t.supportsEvnt {
-		log.Debugf("[C %s < %s] Remote supports enhanced EVNT messages", t.poolServer, t.socket.RemoteAddr().String())
+		log.Debugf("[T %s < %s] Remote supports enhanced EVNT messages", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
 	}
 
 	return nil

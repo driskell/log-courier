@@ -30,7 +30,7 @@ import (
 	_ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/plain"
 
-	_ "github.com/driskell/log-courier/lc-lib/transports/tcp"
+	tcp "github.com/driskell/log-courier/lc-lib/transports/tcp"
 	_ "github.com/driskell/log-courier/lc-lib/transports/test"
 )
 
@@ -45,6 +45,8 @@ var (
 )
 
 func main() {
+	tcp.SetClientName("LCOR")
+
 	app = core.NewApp("Log Courier", core.LogCourierVersion)
 	flag.BoolVar(&stdin, "stdin", false, "Read from stdin instead of files listed in the config file")
 	flag.BoolVar(&fromBeginning, "from-beginning", false, "On first run, read new files from the beginning instead of the end")

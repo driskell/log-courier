@@ -29,7 +29,7 @@ import (
 	_ "github.com/driskell/log-courier/lc-lib/codecs/plain"
 
 	_ "github.com/driskell/log-courier/lc-lib/transports/es"
-	_ "github.com/driskell/log-courier/lc-lib/transports/tcp"
+	tcp "github.com/driskell/log-courier/lc-lib/transports/tcp"
 	_ "github.com/driskell/log-courier/lc-lib/transports/test"
 )
 
@@ -44,6 +44,8 @@ var (
 )
 
 func main() {
+	tcp.SetClientName("LCVR")
+
 	app = core.NewApp("Log Carver", core.LogCourierVersion)
 	app.StartUp()
 
