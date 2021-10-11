@@ -18,7 +18,6 @@ package tcp
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
 	"time"
 )
@@ -62,12 +61,12 @@ func (t *connectionSocketTLS) Setup() error {
 
 	subject := ""
 	if len(t.ConnectionState().VerifiedChains) > 0 {
-		subject = fmt.Sprintf(" [%s]", t.ConnectionState().VerifiedChains[0][0].Subject)
+		subject = t.ConnectionState().VerifiedChains[0][0].Subject.String()
 	} else {
-		subject = " [No client certificate]"
+		subject = "No client certificate"
 	}
 
-	log.Notice("[C %s - %s] TLS handshake completed: %s", t.poolDesc, t.RemoteAddr().String(), subject)
+	log.Notice("[C %s - %s] TLS handshake completed [%s]", t.LocalAddr().String(), t.RemoteAddr().String(), subject)
 	return nil
 }
 
