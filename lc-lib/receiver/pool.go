@@ -286,7 +286,8 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 // All connections should send pings or some other data within a timeout period
 func (r *Pool) startIdleTimeout(ctx context.Context, receiver transports.Receiver, connection interface{}) {
 	// Set a network timeout - we should be receiving pings - close connections that do nothing
-	r.partialAckSchedule.SetCallback(connection, 15*time.Second, func() {
+	// TODO: Make configurable - it's not configurable on courier side yet and it's 900 there
+	r.partialAckSchedule.SetCallback(connection, 1000*time.Second, func() {
 		r.failConnection(ctx, receiver, connection, fmt.Errorf("no data received within timeout"))
 	})
 }
