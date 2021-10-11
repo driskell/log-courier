@@ -162,9 +162,9 @@ Log Carver
 
 ## 2.0.6
 
-*9th May 2020*
+9th May 2020
 
-* Fix several issues when shutting down with outstanding payloads, to prevent
+- Fix several issues when shutting down with outstanding payloads, to prevent
 hanging forever
 
 ## 2.0.5
@@ -729,10 +729,10 @@ prevents the logging program from renaming the file
 multiline codec to combine multiple lines into single events is now available.
 - Fix test suite and add new tests
 - Add support for FreeBSD
-(<https://github.com/elasticsearch/logstash-forwarder/pull/132> by https://github.com/atwardowski)
+(<https://github.com/elasticsearch/logstash-forwarder/pull/132> by <https://github.com/atwardowski>)
 - Fix duplicated log file import caused by incomplete lines in the log file
-(<https://github.com/elasticsearch/logstash-forwarder/pull/164> by https://github.com/tzahari)
+(<https://github.com/elasticsearch/logstash-forwarder/pull/164> by <https://github.com/tzahari>)
 - Add support for newer SSL certificate types
-(<https://github.com/elasticsearch/logstash-forwarder/pull/188> by https://github.com/pilif)
+(<https://github.com/elasticsearch/logstash-forwarder/pull/188> by <https://github.com/pilif>)
 - Add support for IPv6 servers
-(<https://github.com/elasticsearch/logstash-forwarder/pull/143> by https://github.com/yath)
+(<https://github.com/elasticsearch/logstash-forwarder/pull/143> by <https://github.com/yath>)
