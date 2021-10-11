@@ -407,9 +407,9 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	}
 
 	if request.Remaining() == 0 {
-		log.Debugf("[T %s - %d] Elasticsearch request complete (took %d; created %d; errors %d)", t.pool.Server(), id, response.Took, request.Created()-created, len(response.Errors))
+		log.Debugf("[T %s - %d] Elasticsearch request complete (took %dms; created %d; errors %d)", t.pool.Server(), id, response.Took, request.Created()-created, len(response.Errors))
 	} else {
-		log.Warningf("[T %s - %d] Elasticsearch request partially complete (took %d; created %d; errors %d; retrying %d)", t.pool.Server(), id, response.Took, request.Created()-created, len(response.Errors), request.Remaining())
+		log.Warningf("[T %s - %d] Elasticsearch request partially complete (took %dms; created %d; errors %d; retrying %d)", t.pool.Server(), id, response.Took, request.Created()-created, len(response.Errors), request.Remaining())
 	}
 	return nil
 }
