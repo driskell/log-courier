@@ -142,11 +142,12 @@ ReceiverLoop:
 			connection := currentContext.Value(transports.ContextConnection)
 			position := currentContext.Value(poolContextEventPosition).(*poolEventPosition)
 			for _, item := range events[1:] {
+				nextConnection := item.Context().Value(transports.ContextConnection)
 				nextPosition := item.Context().Value(poolContextEventPosition).(*poolEventPosition)
-				if *nextPosition.nonce != *position.nonce {
+				if nextConnection != connection || *nextPosition.nonce != *position.nonce {
 					r.ackEventsEvent(currentContext, connection, position.nonce, position.sequence)
 					currentContext = item.Context()
-					connection = currentContext.Value(transports.ContextConnection)
+					connection = nextConnection
 				}
 				position = nextPosition
 			}
