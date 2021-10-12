@@ -255,9 +255,6 @@ func (t *connection) writeMsg(msg protocolMessage) error {
 // any shutdown signal. Returns true if shutdown was signalled
 func (t *connection) sendEvent(transportEvent transports.Event) error {
 	select {
-	case <-t.receiverShutdownChan:
-		// Gracefully stop receiving data
-		return io.EOF
 	case <-t.ctx.Done():
 		// Teardown - end now
 		return errHardCloseRequested
