@@ -52,16 +52,21 @@ type connection struct {
 	isClient     bool
 	eventChan    chan<- transports.Event
 	sendChan     chan protocolMessage
-
 	supportsEvnt bool
 	rwBuffer     bufio.ReadWriter
 
-	// senderErr stores exit error from sender
+	// senderErr stores exit error from sender so if receiver succeeds but sender not we can return it
 	senderErr error
+	// senderShutdown stores whether sender is active or not, so SendMessage can return ErrInvalidState
+	senderShutdown bool
 	// receiverShutdownChan is closed by CloseRead to request receiver to stop receiving and exit gracefully
 	receiverShutdownChan chan struct{}
 	// wait can be used to wait for all routines to complete
 	wait sync.WaitGroup
+	// receiverShutdownOnce ensures CloseRead's receiverShutdownChan channel close happens only once
+	receiverShutdownOnce sync.Once
+	// sendShutdownLock provides access to sendShutdown and ensures only a single close of sendChan
+	sendShutdownLock sync.RWMutex
 }
 
 func newConnection(ctx context.Context, socket connectionSocket, poolServer string, isClient bool, eventChan chan<- transports.Event) *connection {
@@ -403,21 +408,33 @@ func (t *connection) Teardown() {
 // CloseRead stops the receiving of data from this connection
 // It is used by Receiver to request we stop receiving data, whilst allowing acks to be sent for what we did receive
 // Once a nil is sent via SendMessage CloseWrite then happens and we then shutdown fully
-// Calling this function twice will cause a panic due to invalid state
 func (t *connection) CloseRead() {
-	close(t.receiverShutdownChan)
+	t.receiverShutdownOnce.Do(func() {
+		close(t.receiverShutdownChan)
+	})
 }
 
 // SendMessage queues a message to be sent on the connection
 // Send a nil to begin closing the connection gracefully by performing a CloseWrite
 // Once an EOF occurs on the read side (or a CloseRead occurs) shutdown will be complete
 // If the connection is running too slow and the queue is full then ErrCongestion is returned
-// If the connection has closed it will return ErrInvalidState
-// If nil is sent twice - there will be a panic - so only request shutdown ONCE
+// If the connection closed or CloseWrite has already happened it will return ErrInvalidState
 func (t *connection) SendMessage(message protocolMessage) error {
 	if message == nil {
+		t.sendShutdownLock.Lock()
+		defer t.sendShutdownLock.Unlock()
+		if t.senderShutdown {
+			return nil
+		}
 		close(t.sendChan)
+		t.senderShutdown = true
 		return nil
+	}
+
+	t.sendShutdownLock.RLock()
+	defer t.sendShutdownLock.RUnlock()
+	if t.senderShutdown {
+		return ErrInvalidState
 	}
 
 	select {

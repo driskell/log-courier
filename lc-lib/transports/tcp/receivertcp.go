@@ -26,10 +26,10 @@ type receiverTCP struct {
 	backoff      *core.ExpBackoff
 
 	// Internal
-	connCount    int
 	connMutex    sync.Mutex
 	connWait     sync.WaitGroup
 	shutdownChan chan struct{}
+	shutdownOnce sync.Once
 }
 
 // ReloadConfig returns true if the transport needs to be restarted in order
@@ -182,9 +182,10 @@ func (t *receiverTCP) ShutdownConnection(ctx context.Context) {
 }
 
 // Shutdown shuts down the listener and all connections gracefully
-// Calling more than once will panic
 func (t *receiverTCP) Shutdown() {
-	close(t.shutdownChan)
+	t.shutdownOnce.Do(func() {
+		close(t.shutdownChan)
+	})
 }
 
 // getTLSConfig returns TLS configuration for the connection
@@ -226,7 +227,6 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 	conn := newConnection(t.ctx, connectionSocket, t.pool.Server(), false, t.eventChan)
 
 	t.connMutex.Lock()
-	t.connCount++
 	t.connections[conn] = conn
 	t.connMutex.Unlock()
 
@@ -251,7 +251,6 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	}
 
 	t.connMutex.Lock()
-	t.connCount--
 	delete(t.connections, conn)
 	t.connMutex.Unlock()
 }
