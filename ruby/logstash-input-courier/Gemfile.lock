@@ -97,7 +97,7 @@ GEM
       coderay (~> 1.1)
       method_source (~> 1.0)
       spoon (~> 0.0)
-    puma (4.3.8-java)
+    puma (4.3.9-java)
       nio4r (~> 2.0)
     rack (2.2.3)
     rack-protection (2.1.0)
