@@ -112,11 +112,11 @@ func (p *protocolVERS) Client() string {
 		if p.majorVersion == 0 && p.minorVersion == 0 && p.patchVersion == 0 {
 			return "Unknown"
 		}
-		return fmt.Sprintf("Unknown %d.%d.%d", p.majorVersion, p.minorVersion, p.patchVersion)
+		return fmt.Sprintf("Unknown v%d.%d.%d", p.majorVersion, p.minorVersion, p.patchVersion)
 	}
 	client := p.client
 	if name, has := clientNameMapping[client]; has {
 		client = name
 	}
-	return fmt.Sprintf("%s %d.%d.%d", client, p.majorVersion, p.minorVersion, p.patchVersion)
+	return fmt.Sprintf("%s v%d.%d.%d", client, p.majorVersion, p.minorVersion, p.patchVersion)
 }
