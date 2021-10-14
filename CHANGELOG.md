@@ -2,6 +2,14 @@
 
 ## Future
 
+Logstash Input Plugin
+
+- Updated dependencies to newer versions
+
+## 2.6.4
+
+14th October 2021
+
 Log Courier / Log Carver
 
 - Simplified networking logic and fixed some deadlocks in publisher and scheduler
@@ -14,10 +22,6 @@ Log Carver
 - Implemented controlled shutdown of log-carver's log-courier connections to ensure all received events are acknowledged, so that log-courier does not resend any events already sent to the transport when it reconnects
 - Added additional timeouts to ensure that all dead connections to log-carver are detected and closed
 - Fixed shutdown hanging forever if an ES transport is unable to retrieve node information
-
-Logstash Input Plugin
-
-- Updated dependencies to newer versions
 
 ## 2.6.3
 
