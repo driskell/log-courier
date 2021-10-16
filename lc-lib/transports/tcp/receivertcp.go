@@ -61,7 +61,7 @@ func (t *receiverTCP) startController() {
 // controllerRoutine managed restarting listening as things fail
 func (t *receiverTCP) controllerRoutine() {
 	defer func() {
-		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
+		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished, nil)
 	}()
 
 	for {

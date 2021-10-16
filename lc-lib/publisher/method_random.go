@@ -73,7 +73,7 @@ func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodR
 				log.Debug("[Random] Utilising existing endpoint connection: %s", server)
 
 				// Reload it
-				endpoint.ReloadConfig(netConfig, true)
+				endpoint.ReloadConfig(netConfig)
 				break
 			}
 		}
@@ -99,10 +99,12 @@ func (m *methodRandom) connectRandom() {
 		addressPool = m.netConfig.AddressPools[0]
 		m.activeServer = 0
 	} else if len(m.netConfig.Servers) == 2 && m.activeServer != -1 {
+		// Alternate between two endpoints
 		m.activeServer = (m.activeServer + 1) % 2
 		server = m.netConfig.Servers[m.activeServer]
 		addressPool = m.netConfig.AddressPools[m.activeServer]
 	} else {
+		// Random selection that avoids the same endpoint twice in a row
 		for {
 			selected := m.generator.Intn(len(m.netConfig.Servers))
 			if selected == m.activeServer {
@@ -117,25 +119,29 @@ func (m *methodRandom) connectRandom() {
 		}
 	}
 
-	log.Debug("[Random] Randomly selected new endpoint: %s", server)
+	log.Info("[Random] Randomly selected new endpoint: %s", server)
 
-	m.sink.AddEndpoint(server, addressPool, true)
+	m.sink.AddEndpoint(server, addressPool)
 }
 
 func (m *methodRandom) onFail(endpoint *endpoint.Endpoint) {
-	// We start transports with finish on fail so do nothing and wait for finish
+	// Failed endpoint - keep it alive until backoff triggers new connection
+	// This way we still have an endpoint with a last error in monitor
+	m.sink.Scheduler.SetCallback(m, m.backoff.Trigger(), func() {
+		log.Warning("[Random] Giving up on failed endpoint: %s", endpoint.Server())
+		m.sink.ShutdownEndpoint(endpoint.Server())
+	})
 }
 
 func (m *methodRandom) onFinish(endpoint *endpoint.Endpoint) bool {
-	// Due to finishOnFail we have no backoff after failure, so start one now to
-	// call connectRandom after the backoff
-	m.sink.Scheduler.SetCallback(m, m.backoff.Trigger(), func() {
-		m.connectRandom()
-	})
+	// If shutdown, leave it out, but start another
+	m.connectRandom()
 	return false
 }
 
 func (m *methodRandom) onStarted(endpoint *endpoint.Endpoint) {
+	// If we just recovered from failure before the shutdown occurred, prevent random timeout occuring
+	m.sink.Scheduler.Remove(m)
 }
 
 func (m *methodRandom) reloadConfig(netConfig *transports.Config) {
@@ -153,7 +159,7 @@ func (m *methodRandom) reloadConfig(netConfig *transports.Config) {
 	for _, server := range m.netConfig.Servers {
 		if server == currentServer {
 			// Still present, all good, pass through the reload
-			front.ReloadConfig(netConfig, true)
+			front.ReloadConfig(netConfig)
 			return
 		}
 	}

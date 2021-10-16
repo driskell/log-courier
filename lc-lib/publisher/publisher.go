@@ -408,7 +408,7 @@ func (p *Publisher) OnPong(endpoint *endpoint.Endpoint) {
 // the failed status. It reports the error and then processes the failure.
 func (p *Publisher) forceEndpointFailure(endpoint *endpoint.Endpoint, err error) {
 	log.Warningf("[P %s] Forcing endpoint failure: %s", endpoint.Server(), err)
-	p.endpointSink.ForceFailure(endpoint)
+	p.endpointSink.ForceFailure(endpoint, err)
 }
 
 // eventsHeld returns true if there are events held waiting to be queued

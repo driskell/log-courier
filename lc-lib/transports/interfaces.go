@@ -59,13 +59,15 @@ const (
 type StatusEvent struct {
 	context      context.Context
 	statusChange StatusChange
+	err          error
 }
 
 // NewStatusEvent generates a new StatusEvent for the given context
-func NewStatusEvent(context context.Context, statusChange StatusChange) *StatusEvent {
+func NewStatusEvent(context context.Context, statusChange StatusChange, err error) *StatusEvent {
 	return &StatusEvent{
 		context:      context,
 		statusChange: statusChange,
+		err:          err,
 	}
 }
 
@@ -77,6 +79,11 @@ func (e *StatusEvent) Context() context.Context {
 // StatusChange returns the status change value
 func (e *StatusEvent) StatusChange() StatusChange {
 	return e.statusChange
+}
+
+// StatusChange returns the error associated with a Failed status
+func (e *StatusEvent) Err() error {
+	return e.err
 }
 
 // AckEvent contains information on which events have been acknowledged

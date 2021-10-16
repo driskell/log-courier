@@ -56,7 +56,6 @@ type transportES struct {
 	shutdownFunc context.CancelFunc
 	config       *TransportESFactory
 	netConfig    *transports.Config
-	finishOnFail bool
 	pool         *addresspool.Pool
 	eventChan    chan<- transports.Event
 
@@ -72,12 +71,7 @@ type transportES struct {
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-func (t *transportES) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
-	// Check if automatic retry should be enabled or not
-	if t.finishOnFail != finishOnFail {
-		return true
-	}
-
+func (t *transportES) ReloadConfig(netConfig *transports.Config) bool {
 	// Check other changes
 	if t.netConfig.MaxPendingPayloads != netConfig.MaxPendingPayloads || t.netConfig.Timeout != netConfig.Timeout {
 		return true
@@ -96,7 +90,7 @@ func (t *transportES) controllerRoutine() {
 	defer func() {
 		// Wait for all routines to close
 		t.wait.Wait()
-		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
+		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished, nil)
 	}()
 
 	if t.setupAssociation() {
@@ -109,7 +103,7 @@ func (t *transportES) controllerRoutine() {
 	t.payloadChan = make(chan *payload, t.netConfig.MaxPendingPayloads)
 	t.payloadMutex.Unlock()
 
-	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Started)
+	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Started, nil)
 
 	// Start secondary http routines
 	for i := 1; i < t.config.Routines; i++ {

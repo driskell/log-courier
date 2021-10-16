@@ -41,7 +41,7 @@ type transportTest struct {
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-func (t *transportTest) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
+func (t *transportTest) ReloadConfig(netConfig *transports.Config) bool {
 	return false
 }
 
@@ -95,18 +95,18 @@ func (t *transportTest) Ping() error {
 			return
 		}
 		t.eventChan <- transports.NewPongEvent(t.ctx)
-	}, fmt.Sprintf("[%s] Sending pong response after %%d second delay", t.server))
+	}, fmt.Sprintf("[%s] Sending pong response", t.server))
 	return nil
 }
 
 // Fail the transport / Shutdown hard
 func (t *transportTest) Fail() {
 	t.finished = true
-	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
+	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished, nil)
 }
 
 // Shutdown the transport gracefully - only valid after Started transport event received
 func (t *transportTest) Shutdown() {
 	t.finished = true
-	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
+	t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished, nil)
 }

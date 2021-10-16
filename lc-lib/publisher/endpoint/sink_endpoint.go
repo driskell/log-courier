@@ -83,7 +83,7 @@ func (s *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
 
 			// Skip the best endpoint that is congested
 			if endpoint == bestEndpoint {
-				continue;
+				continue
 			}
 
 			// Skip warming endpoints
@@ -102,11 +102,11 @@ func (s *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
 }
 
 // ForceFailure forces the endpoint referenced by the context to fail
-func (s *Sink) ForceFailure(endpoint *Endpoint) {
+func (s *Sink) ForceFailure(endpoint *Endpoint, err error) {
 	if endpoint.IsFailed() {
 		return
 	}
 
-	s.moveFailed(endpoint)
+	s.moveFailed(endpoint, err)
 	endpoint.forceFailure()
 }

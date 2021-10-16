@@ -33,6 +33,13 @@ func (a *apiEndpoint) Update() error {
 	a.e.mutex.RLock()
 	a.SetEntry("server", api.String(a.e.server))
 	a.SetEntry("status", api.String(a.e.status.String()))
+	if a.e.lastErr != nil {
+		a.SetEntry("last_error", api.String(a.e.lastErr.Error()))
+		a.SetEntry("last_error_time", api.String(a.e.lastErrTime.Format(time.RFC3339)))
+	} else {
+		a.SetEntry("last_error", api.Null)
+		a.SetEntry("last_error_time", api.Null)
+	}
 	a.SetEntry("pendingPayloads", api.Number(a.e.NumPending()))
 	a.SetEntry("publishedLines", api.Number(a.e.LineCount()))
 	a.SetEntry("averageLatency", api.Float(a.e.AverageLatency()/time.Millisecond))

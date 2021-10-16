@@ -73,8 +73,3 @@ func (e *Endpoint) IsFailed() bool {
 func (e *Endpoint) IsClosing() bool {
 	return e.status == endpointStatusClosing || e.status == endpointStatusClosed
 }
-
-// IsAlive returns true if this endpoint is not failed or closing
-func (e *Endpoint) IsAlive() bool {
-	return !e.IsIdle() && e.status < endpointStatusFailed
-}

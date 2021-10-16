@@ -134,7 +134,7 @@ func (f *TransportESFactory) Defaults() {
 
 // NewTransport returns a new Transport interface using the settings from the
 // TransportTCPFactory.
-func (f *TransportESFactory) NewTransport(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event, finishOnFail bool) transports.Transport {
+func (f *TransportESFactory) NewTransport(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Transport {
 	ctx, shutdownFunc := context.WithCancel(ctx)
 
 	ret := &transportES{
@@ -142,7 +142,6 @@ func (f *TransportESFactory) NewTransport(ctx context.Context, pool *addresspool
 		shutdownFunc: shutdownFunc,
 		config:       f,
 		netConfig:    transports.FetchConfig(f.config),
-		finishOnFail: finishOnFail,
 		pool:         pool,
 		eventChan:    eventChan,
 	}

@@ -32,7 +32,7 @@ func (s *Sink) Front() *Endpoint {
 }
 
 // addEndpoint initialises a new endpoint
-func (s *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
+func (s *Sink) addEndpoint(server string, addressPool *addresspool.Pool) *Endpoint {
 	var initialLatency float64
 
 	if s.readyList.Len() == 0 {
@@ -50,7 +50,6 @@ func (s *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishO
 		sink:           s,
 		server:         server,
 		addressPool:    addressPool,
-		finishOnFail:   finishOnFail,
 		averageLatency: initialLatency,
 	}
 
@@ -62,8 +61,8 @@ func (s *Sink) addEndpoint(server string, addressPool *addresspool.Pool, finishO
 
 // AddEndpoint initialises a new endpoint for a given server entry and adds it
 // to the back of the list of endpoints
-func (s *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishOnFail bool) *Endpoint {
-	endpoint := s.addEndpoint(server, addressPool, finishOnFail)
+func (s *Sink) AddEndpoint(server string, addressPool *addresspool.Pool) *Endpoint {
+	endpoint := s.addEndpoint(server, addressPool)
 
 	s.mutex.Lock()
 	s.orderedList.PushBack(&endpoint.orderedElement)
@@ -77,8 +76,8 @@ func (s *Sink) AddEndpoint(server string, addressPool *addresspool.Pool, finishO
 // AddEndpointAfter initialises a new endpoint for a given server entry and adds
 // it in the list to the position after the given endpoint. If the given
 // endpoint is nil it is added at the front
-func (s *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, finishOnFail bool, after *Endpoint) *Endpoint {
-	endpoint := s.addEndpoint(server, addressPool, finishOnFail)
+func (s *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, after *Endpoint) *Endpoint {
+	endpoint := s.addEndpoint(server, addressPool)
 
 	s.mutex.Lock()
 	if after == nil {

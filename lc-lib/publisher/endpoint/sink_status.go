@@ -16,6 +16,8 @@
 
 package endpoint
 
+import "time"
+
 // markActive marks an idle endpoint as active and puts it on the ready list
 func (s *Sink) markActive(endpoint *Endpoint) {
 	// Ignore if not idle
@@ -36,9 +38,8 @@ func (s *Sink) markActive(endpoint *Endpoint) {
 
 // moveFailed stores the endpoint on the failed list, removing it from the
 // ready list so no more events are sent to it
-func (s *Sink) moveFailed(endpoint *Endpoint) {
-	// Should never get here if we're closed, caller should check
-	if !endpoint.IsAlive() && !endpoint.IsClosing() {
+func (s *Sink) moveFailed(endpoint *Endpoint, err error) {
+	if endpoint.IsFailed() {
 		return
 	}
 
@@ -53,6 +54,8 @@ func (s *Sink) moveFailed(endpoint *Endpoint) {
 	endpoint.mutex.Lock()
 	endpoint.status = endpointStatusFailed
 	endpoint.averageLatency = 0
+	endpoint.lastErr = err
+	endpoint.lastErrTime = time.Now()
 	endpoint.mutex.Unlock()
 
 	s.failedList.PushFront(&endpoint.failedElement)

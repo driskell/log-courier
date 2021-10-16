@@ -55,7 +55,7 @@ func (s *Sink) ProcessEvent(event transports.Event) (endpoint *Endpoint, err err
 func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *Endpoint) {
 	switch status.StatusChange() {
 	case transports.Failed:
-		s.moveFailed(endpoint)
+		s.moveFailed(endpoint, status.Err())
 	case transports.Started:
 		if endpoint.IsFailed() {
 			s.recoverFailed(endpoint)
@@ -76,7 +76,7 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 
 			// Still in the config, ask the OnFinish handler if we should re-add it
 			if s.OnFinish(endpoint) {
-				s.AddEndpoint(server, addresspool.NewPool(server), endpoint.finishOnFail)
+				s.AddEndpoint(server, addresspool.NewPool(server))
 			}
 			break
 		}

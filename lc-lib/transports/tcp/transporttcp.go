@@ -42,7 +42,6 @@ type transportTCP struct {
 	shutdownFunc context.CancelFunc
 	config       *TransportTCPFactory
 	netConfig    *transports.Config
-	finishOnFail bool
 	pool         *addresspool.Pool
 	eventChan    chan<- transports.Event
 	backoff      *core.ExpBackoff
@@ -56,13 +55,8 @@ type transportTCP struct {
 
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
-func (t *transportTCP) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
+func (t *transportTCP) ReloadConfig(netConfig *transports.Config) bool {
 	newConfig := netConfig.Factory.(*TransportTCPFactory)
-
-	// Check if automatic reconnection should be enabled or not
-	if t.finishOnFail != finishOnFail {
-		return true
-	}
 
 	// TODO: Check timestamps of underlying certificate files to detect changes
 	if newConfig.SSLCertificate != t.config.SSLCertificate || newConfig.SSLKey != t.config.SSLKey || newConfig.SSLCA != t.config.SSLCA {
@@ -86,7 +80,7 @@ func (t *transportTCP) startController() {
 // When reconnecting, the socket and all routines are torn down and restarted
 func (t *transportTCP) controllerRoutine() {
 	defer func() {
-		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished)
+		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished, nil)
 	}()
 
 	// Main connect loop
@@ -96,7 +90,7 @@ MainLoop:
 		if err == nil {
 			err = conn.Run(func() {
 				// Send a started signal to say we're ready
-				t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Started)
+				t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Started, nil)
 
 				t.connMutex.Lock()
 				t.conn = conn
@@ -115,9 +109,6 @@ MainLoop:
 			} else {
 				log.Errorf("[T %s] Transport error, disconnected: %s", t.pool.Server(), err)
 			}
-			if t.finishOnFail {
-				break MainLoop
-			}
 		} else {
 			log.Noticef("[T %s] Transport disconnected gracefully", t.pool.Server())
 			break MainLoop
@@ -126,7 +117,7 @@ MainLoop:
 		select {
 		case <-t.ctx.Done():
 			break MainLoop
-		case t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Failed):
+		case t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Failed, err):
 		}
 
 		if t.reconnectWait() {

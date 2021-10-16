@@ -59,12 +59,13 @@ type Endpoint struct {
 	sink            *Sink
 	server          string
 	addressPool     *addresspool.Pool
-	finishOnFail    bool
 	transport       transports.Transport
 	pendingPayloads map[string]*payload.Payload
 	numPayloads     int
 	pongPending     bool
 
+	lastErr           error
+	lastErrTime       time.Time
 	lineCount         int64
 	averageLatency    float64
 	transmissionStart time.Time
@@ -87,7 +88,7 @@ func (e *Endpoint) Init() {
 
 	e.resetPayloads()
 
-	e.transport = e.sink.config.Factory.NewTransport(e.ctx, e.Pool(), e.EventChan(), e.finishOnFail)
+	e.transport = e.sink.config.Factory.NewTransport(e.ctx, e.Pool(), e.EventChan())
 }
 
 // Context returns the endpoint's context
@@ -339,8 +340,8 @@ func (e *Endpoint) PullBackPending() []*payload.Payload {
 // ReloadConfig submits a new configuration to the transport, and returns true
 // if the transports requested that it be restarted in order for the
 // configuration to take effect
-func (e *Endpoint) ReloadConfig(netConfig *transports.Config, finishOnFail bool) bool {
-	return e.transport.ReloadConfig(netConfig, finishOnFail)
+func (e *Endpoint) ReloadConfig(netConfig *transports.Config) bool {
+	return e.transport.ReloadConfig(netConfig)
 }
 
 // resetPayloads resets the internal state for pending payloads
@@ -359,6 +360,12 @@ func (e *Endpoint) Pool() *addresspool.Pool {
 // EventChan returns the event channel transports should send events through
 func (e *Endpoint) EventChan() chan<- transports.Event {
 	return e.sink.eventChan
+}
+
+// LastErr returns the time the last error occurred and the error itself
+// Both returned values are nil if no error is recorded
+func (e *Endpoint) LastErr() (time.Time, error) {
+	return e.lastErrTime, e.lastErr
 }
 
 // ForceFailure requests that the transport force itself to fail and reset

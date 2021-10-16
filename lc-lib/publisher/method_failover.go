@@ -71,7 +71,6 @@ func (m *methodFailover) onFail(endpoint *endpoint.Endpoint) {
 		m.currentEndpoint = m.sink.AddEndpoint(
 			newServer,
 			m.netConfig.AddressPools[m.failoverPosition],
-			false,
 		)
 	}
 }
@@ -131,11 +130,11 @@ func (m *methodFailover) reloadConfig(netConfig *transports.Config) {
 				continue
 			}
 
-			last = m.sink.AddEndpointAfter(server, addresspool.NewPool(server), false, last)
+			last = m.sink.AddEndpointAfter(server, addresspool.NewPool(server), last)
 
 			// If there was no current, we're initialising, use this one
 			if m.currentEndpoint == nil {
-				log.Debug("[Failover] Initialised priority endpoint: %s", last.Server())
+				log.Info("[Failover] Initialised priority endpoint: %s", last.Server())
 				m.currentEndpoint = last
 				foundCurrent = true
 			}
@@ -150,7 +149,7 @@ func (m *methodFailover) reloadConfig(netConfig *transports.Config) {
 
 		// Ensure ordering and reload the configuration
 		m.sink.MoveEndpointAfter(foundEndpoint, last)
-		foundEndpoint.ReloadConfig(netConfig, false)
+		foundEndpoint.ReloadConfig(netConfig)
 		last = foundEndpoint
 	}
 }

@@ -61,16 +61,15 @@ func (m *methodLoadbalance) reloadConfig(netConfig *transports.Config) {
 			last = m.sink.AddEndpointAfter(
 				server,
 				m.netConfig.AddressPools[n],
-				false,
 				last,
 			)
-			log.Debug("[Loadbalance] Initialised new endpoint: %s", last.Server())
+			log.Info("[Loadbalance] Initialised new endpoint: %s", last.Server())
 			continue
 		}
 
 		// Ensure ordering
 		m.sink.MoveEndpointAfter(foundEndpoint, last)
-		foundEndpoint.ReloadConfig(netConfig, false)
+		foundEndpoint.ReloadConfig(netConfig)
 		last = foundEndpoint
 	}
 }
