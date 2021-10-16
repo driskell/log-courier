@@ -17,6 +17,7 @@
 package tcp
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"time"
@@ -24,12 +25,10 @@ import (
 
 // connectionSocketTLS wraps a TCP socket with TLS
 type connectionSocketTLS struct {
-	shutdownChan <-chan error
-	tcpSocket    *net.TCPConn
-	tlsConfig    *tls.Config
-	server       bool
-	poolDesc     string
-
+	tcpSocket *net.TCPConn
+	tlsConfig *tls.Config
+	server    bool
+	poolDesc  string
 	*tls.Conn
 }
 
@@ -44,14 +43,14 @@ func newConnectionSocketTLS(tcpSocket *net.TCPConn, tlsConfig *tls.Config, serve
 }
 
 // Setup wraps the socket and resolves the handshake
-func (t *connectionSocketTLS) Setup() error {
+func (t *connectionSocketTLS) Setup(ctx context.Context) error {
 	var side string
 	if t.server {
 		side = "R"
-		t.Conn = tls.Server(&connectionSocketTLSWrap{shutdownChan: t.shutdownChan, tcpSocket: t.tcpSocket}, t.tlsConfig)
+		t.Conn = tls.Server(&connectionSocketTLSWrap{receiverShutdownChan: ctx.Done(), tcpSocket: t.tcpSocket}, t.tlsConfig)
 	} else {
 		side = "T"
-		t.Conn = tls.Client(&connectionSocketTLSWrap{shutdownChan: t.shutdownChan, tcpSocket: t.tcpSocket}, t.tlsConfig)
+		t.Conn = tls.Client(&connectionSocketTLSWrap{receiverShutdownChan: ctx.Done(), tcpSocket: t.tcpSocket}, t.tlsConfig)
 	}
 
 	// TODO: Use netConfig.Timeout

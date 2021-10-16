@@ -17,6 +17,7 @@
 package tcp
 
 import (
+	"context"
 	"net"
 )
 
@@ -29,6 +30,6 @@ func newConnectionSocketTCP(tcpSocket *net.TCPConn) *connectionSocketTCP {
 	return &connectionSocketTCP{TCPConn: tcpSocket}
 }
 
-func (w *connectionSocketTCP) Setup() error {
+func (w *connectionSocketTCP) Setup(ctx context.Context) error {
 	return nil
 }

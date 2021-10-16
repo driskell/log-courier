@@ -17,6 +17,7 @@
 package tcp
 
 import (
+	"context"
 	_ "crypto/sha256" // Support for newer SSL signature algorithms
 	_ "crypto/sha512" // Support for newer SSL signature algorithms
 	"crypto/tls"
@@ -58,7 +59,7 @@ var (
 
 type connectionSocket interface {
 	net.Conn
-	Setup() error
+	Setup(context.Context) error
 	CloseWrite() error
 }
 

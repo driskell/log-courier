@@ -206,7 +206,7 @@ func (t *transportTCP) SendEvents(nonce string, events []*event.Event) error {
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
 	if t.conn == nil {
-		return ErrInvalidState
+		return transports.ErrInvalidState
 	}
 	var eventsAsBytes = make([][]byte, len(events))
 	for idx, item := range events {
@@ -227,7 +227,7 @@ func (t *transportTCP) Ping() error {
 	t.connMutex.Lock()
 	defer t.connMutex.Unlock()
 	if t.conn == nil {
-		return ErrInvalidState
+		return transports.ErrInvalidState
 	}
 	log.Debugf("[T %s > %s] Sending ping", t.conn.socket.LocalAddr().String(), t.conn.socket.RemoteAddr().String())
 	return t.conn.SendMessage(&protocolPING{})

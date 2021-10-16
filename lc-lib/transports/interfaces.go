@@ -23,9 +23,12 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
-// ErrCongestion represents temporary congestion, rather than failure
 var (
+	// ErrCongestion represents temporary congestion, rather than failure
 	ErrCongestion error = errors.New("Congestion")
+
+	// ErrInvalidState occurs when a send cannot happen because the connection has closed
+	ErrInvalidState = errors.New("invalid connection state")
 )
 
 // TransportContext

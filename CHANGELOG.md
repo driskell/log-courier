@@ -7,6 +7,11 @@ Log Courier / Log Carver
 - Added `last_error` and `last_error_time` to `lc-admin` for endpoints, so that the last error can be inspected
 - Improved to `random` transport method so that a failed endpoint remains active and retrying until the switch happens, allowing it's status and last error to be seen in `lc-admin` instead of `endpoints: none`
 
+Log Carver
+
+- Fix a connection failing during attempt to gracefully shut it down
+- Fix a possible deadlock in receiver shutdown due to late acknowledgements for a failed connection during shutdown
+
 Logstash Input Plugin
 
 - Updated dependencies to newer versions

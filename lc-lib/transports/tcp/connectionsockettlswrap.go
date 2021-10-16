@@ -27,8 +27,8 @@ import (
 // the SetWriteDeadline there and check shutdown signal and loop. Inside
 // tls.Conn the Write blocks until it finishes and everyone is happy
 type connectionSocketTLSWrap struct {
-	shutdownChan <-chan error
-	tcpSocket    net.Conn
+	receiverShutdownChan <-chan struct{}
+	tcpSocket            net.Conn
 
 	net.Conn
 }
@@ -60,7 +60,7 @@ RetrySend:
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			// Check for shutdown, then try again
 			select {
-			case <-w.shutdownChan:
+			case <-w.receiverShutdownChan:
 				// Shutdown
 				return length, errHardCloseRequested
 			default:

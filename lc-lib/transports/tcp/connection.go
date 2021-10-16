@@ -36,9 +36,6 @@ import (
 
 // errHardCloseRequested is used to signal hard close requested
 var (
-	// ErrInvalidState occurs when a send cannot happen because the connection has closed
-	ErrInvalidState = errors.New("invalid connection state")
-
 	// errHardCloseRequested occurs when the connection was closed forcefully and a hard close is requested
 	errHardCloseRequested = errors.New("connection shutdown was requested")
 )
@@ -91,7 +88,7 @@ func (t *connection) Run(startedCallback func()) error {
 	t.rwBuffer.Reader = bufio.NewReader(t.socket)
 	t.rwBuffer.Writer = bufio.NewWriter(t.socket)
 
-	if err := t.socket.Setup(); err != nil {
+	if err := t.socket.Setup(t.ctx); err != nil {
 		return err
 	}
 
@@ -309,6 +306,10 @@ func (t *connection) receiver() (err error) {
 		}
 	}
 
+	// Some of the protocol readers might return unexpected - treat it always as EOF
+	if err == io.ErrUnexpectedEOF {
+		err = io.EOF
+	}
 	if err == io.EOF {
 		// Send EOF signal so receiver or transport can handle it accordingly
 		err = t.sendEvent(transports.NewEndEvent(t.ctx))
@@ -434,12 +435,12 @@ func (t *connection) SendMessage(message protocolMessage) error {
 	t.sendShutdownLock.RLock()
 	defer t.sendShutdownLock.RUnlock()
 	if t.senderShutdown {
-		return ErrInvalidState
+		return transports.ErrInvalidState
 	}
 
 	select {
 	case <-t.ctx.Done():
-		return ErrInvalidState
+		return transports.ErrInvalidState
 	case t.sendChan <- message:
 	default:
 		return transports.ErrCongestion

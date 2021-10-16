@@ -153,6 +153,11 @@ ReceiverLoop:
 			}
 			r.ackEventsEvent(currentContext, connection, position.nonce, position.sequence)
 			r.partialAckSchedule.Reschedule()
+
+			// If shutting down, have all acknowledgemente been handled, and all receivers closed?
+			if shutdownChan == nil && len(r.receivers) == 0 && len(r.partialAckConnection) == 0 {
+				break ReceiverLoop
+			}
 		case receiverEvent := <-eventChan:
 			switch eventImpl := receiverEvent.(type) {
 			case *transports.ConnectEvent:
@@ -199,7 +204,8 @@ ReceiverLoop:
 						if status.active {
 							delete(r.receiversByListen, status.listen)
 						}
-						if len(r.receivers) == 0 && shutdownChan == nil {
+						// If shutting down, have all acknowledgemente been handled, and all receivers closed?
+						if shutdownChan == nil && len(r.receivers) == 0 && len(r.partialAckConnection) == 0 {
 							break ReceiverLoop
 						}
 					}
@@ -275,7 +281,7 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 	receiver := ctx.Value(transports.ContextReceiver).(transports.Receiver)
 	if err := receiver.Acknowledge(ctx, nonce, sequence); err != nil {
 		r.failConnection(ctx, receiver, connection, err)
-	} else if lastAck && (!r.receivers[receiver].active || closeConnection) {
+	} else if lastAck && closeConnection {
 		// Either it's the last ack for a connection on a shutting down receiver, or the connection read closed, so shutdown the connection
 		receiver.ShutdownConnection(ctx)
 	} else if lastAck {
@@ -294,10 +300,16 @@ func (r *Pool) startIdleTimeout(ctx context.Context, receiver transports.Receive
 }
 
 // failConnection cleans up resources and fails the connection
+// It will stop the partial acks but will continue to remember the connection to deal with incoming acknowledgements
+// for events already passed through the pipeline
 func (r *Pool) failConnection(ctx context.Context, receiver transports.Receiver, connection interface{}, err error) {
 	r.partialAckSchedule.Remove(connection)
-	delete(r.partialAckConnection, connection)
-	receiver.FailConnection(ctx, err)
+
+	// Fail connection - but only if the error wasn't InvalidState, which means it's dead anyway
+	// Saves us throwing errors due to lagging acknowledgements for a dead connection
+	if err != transports.ErrInvalidState {
+		receiver.FailConnection(ctx, err)
+	}
 }
 
 // updateReceivers updates the list of running receivers
@@ -349,8 +361,7 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 
 // shutdown stops all receivers
 func (r *Pool) shutdown() {
-	for receiver, status := range r.receivers {
+	for _, receiver := range r.receiversByListen {
 		receiver.Shutdown()
-		status.active = false
 	}
 }
