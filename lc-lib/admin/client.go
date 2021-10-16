@@ -84,12 +84,12 @@ func (c *Client) initClient() error {
 		Transport: c.transport,
 	}
 
-	remoteVersion, err := c.Request("version")
+	remoteVersion, err := c.RequestJSON("version")
 	if err != nil {
 		return err
 	}
 
-	c.remoteVersion = remoteVersion
+	c.remoteVersion = remoteVersion.(string)
 
 	return nil
 }
@@ -101,13 +101,35 @@ func (c *Client) RemoteVersion() string {
 
 // Request performs a request and returns a pretty response
 // It will defer to Call method if the path is a known Call path
-func (c *Client) Request(path string) (string, error) {
+func (c *Client) RequestJSON(path string) (interface{}, error) {
+	resp, err := c.rawRequest(path, false)
+	if err != nil {
+		return nil, err
+	}
+
+	var result interface{}
+	if err := json.Unmarshal([]byte(resp), &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (c *Client) RequestPretty(path string) (string, error) {
+	return c.rawRequest(path, true)
+}
+
+func (c *Client) rawRequest(path string, pretty bool) (string, error) {
 	// Is this a Call request?
 	if _, ok := callMap[path]; ok {
 		return c.Call(path, url.Values{})
 	}
 
-	resp, err := c.client.Get("http://" + c.fakeHost + "/" + path + "?w=pretty")
+	url := "http://" + c.fakeHost + "/" + path
+	if pretty {
+		url = url + "?w=pretty"
+	}
+	resp, err := c.client.Get(url)
 	if err != nil {
 		return "", err
 	}

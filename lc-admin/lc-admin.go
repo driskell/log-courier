@@ -19,12 +19,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
-	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"gopkg.in/op/go-logging.v1"
@@ -35,6 +35,7 @@ import (
 
 type commandProcessor interface {
 	ProcessCommand(string) bool
+	Monitor() error
 }
 
 type lcAdmin struct {
@@ -44,54 +45,42 @@ type lcAdmin struct {
 	adminConnect string
 	configFile   string
 	configDebug  bool
-
-	client *admin.Client
 }
 
 func main() {
 	(&lcAdmin{}).Run()
 }
 
-func (a *lcAdmin) printHelp() {
-	fmt.Printf("Available commands:\n")
-	fmt.Printf("  help\n")
-	fmt.Printf("    Show this information\n")
-	fmt.Printf("  status\n")
-	fmt.Printf("    Get a full status snapshot of all Log Courier internals\n")
-	fmt.Printf("  prospector [status | files [id]]\n")
-	fmt.Printf("    Get information on prospector state and running harvesters\n")
-	fmt.Printf("  publisher [status | endpoints [id]]\n")
-	fmt.Printf("    Get information on connectivity and endpoints\n")
-	fmt.Printf("  reload\n")
-	fmt.Printf("    Signals Log Courier to reload its configuration\n")
-	fmt.Printf("  version\n")
-	fmt.Printf("    Get the remote version\n")
-	fmt.Printf("  debug\n")
-	fmt.Printf("    Get a live goroutine trace for debugging purposes\n")
-	fmt.Printf("  exit\n")
-	fmt.Printf("    Exit\n")
-}
-
 func (a *lcAdmin) startUp() {
 	var version bool
 
-	flag.BoolVar(&version, "version", false, "display the Log Courier client version")
+	flag.BoolVar(&version, "version", false, "display the lc-admin version")
 	flag.BoolVar(&a.quiet, "quiet", false, "quietly execute the command line argument and output only the result")
 	flag.BoolVar(&a.watch, "watch", false, "repeat the command specified on the command line every second")
-	flag.BoolVar(&a.legacy, "legacy", false, "connect to version 1.x Log Courier instances")
-	flag.StringVar(&a.adminConnect, "connect", "", "the Log Courier instance to connect to")
-	flag.StringVar(&a.configFile, "config", config.DefaultConfigurationFile, "read the Log Courier connection address from the given configuration file (ignored if connect specified)")
+	flag.BoolVar(&a.legacy, "legacy", false, "connect to v1 Log Courier instances")
+	flag.StringVar(&a.adminConnect, "connect", "", "the remote instance to connect to")
+	flag.StringVar(&a.configFile, "config", config.DefaultConfigurationFile, "read the connection address from the given configuration file (ignored if connect specified)")
 	flag.BoolVar(&a.configDebug, "config-debug", false, "Enable configuration parsing debug logs on the console")
+
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
+		flag.PrintDefaults()
+		fmt.Fprintf(flag.CommandLine.Output(), "\n")
+		if a.legacy {
+			printV1Help()
+		} else {
+			printV2Help()
+			fmt.Fprintf(flag.CommandLine.Output(), "\nRun %s -legacy -help to show available commands for v1 remotes\n", os.Args[0])
+		}
+	}
 
 	flag.Parse()
 
-	if version {
-		fmt.Printf("Log Courier client version %s\n", core.LogCourierVersion)
-		os.Exit(0)
-	}
-
-	if !a.quiet {
-		fmt.Printf("Log Courier client version %s\n", core.LogCourierVersion)
+	if !a.quiet || version {
+		fmt.Printf("Admin version %s\n", core.LogCourierVersion)
+		if version {
+			os.Exit(0)
+		}
 	}
 
 	// Enable config logging if requested
@@ -136,18 +125,16 @@ func (a *lcAdmin) loadConfig() {
 func (a *lcAdmin) Run() {
 	a.startUp()
 
-	admin, err := a.newCommandProcessor()
+	processor, err := a.newCommandProcessor()
 	if err != nil {
 		fmt.Printf("Failed to initialise: %s\n", err)
 		os.Exit(1)
 		return
 	}
 
-	prompt := &prompt{commandProcessor: admin}
 	args := flag.Args()
-
 	if len(args) != 0 {
-		if prompt.argsCommand(args, a.watch) {
+		if a.argsCommand(processor, args, a.watch) {
 			os.Exit(0)
 		}
 		os.Exit(1)
@@ -163,72 +150,50 @@ func (a *lcAdmin) Run() {
 		os.Exit(1)
 	}
 
-	prompt.run()
+	if err := processor.Monitor(); err != nil {
+		fmt.Printf("Error: %s\n", err)
+		os.Exit(1)
+	}
 }
 
 func (a *lcAdmin) newCommandProcessor() (commandProcessor, error) {
 	if a.legacy {
 		// Create the old V1 legacy processor
-		return newV1LcAdmin(a.quiet, a.adminConnect)
+		return newV1Command(a.quiet, a.adminConnect)
 	}
 
-	if !a.quiet {
-		fmt.Printf("Attempting connection to %s...\n", a.adminConnect)
-	}
-
-	client, err := admin.NewClient(a.adminConnect)
-	if err != nil {
-		return nil, err
-	}
-
-	a.client = client
-
-	if !a.quiet {
-		fmt.Printf("Connected to Log Courier version %s\n\n", client.RemoteVersion())
-	}
-
-	return a, nil
+	return newV2Command(a.quiet, a.adminConnect)
 }
 
-func (a *lcAdmin) ProcessCommand(command string) bool {
-	if command == "help" {
-		a.printHelp()
-		return true
+func (a *lcAdmin) argsCommand(processor commandProcessor, args []string, watch bool) bool {
+	var signalChan chan os.Signal
+
+	if watch {
+		signalChan = make(chan os.Signal, 1)
+		signal.Notify(signalChan, os.Interrupt)
 	}
 
-	if command == "status" {
-		// Simulate empty command so we grab full status
-		command = ""
+WatchLoop:
+	for {
+		if !processor.ProcessCommand(strings.Join(args, " ")) {
+			if !watch {
+				return false
+			}
+		}
+
+		if !watch {
+			break
+		}
+
+		// Gap between repeats
+		fmt.Printf("\n")
+
+		select {
+		case <-signalChan:
+			break WatchLoop
+		case <-time.After(time.Second):
+		}
 	}
-
-	command = url.QueryEscape(command)
-
-	path := strings.Map(func(r rune) rune {
-		if r == '+' {
-			return '/'
-		}
-		return r
-	}, command)
-
-	resp, err := a.client.Request(path)
-	if err != nil {
-		switch err {
-		case api.ErrNotFound:
-			fmt.Printf("Unknown command\n")
-			return false
-		}
-
-		switch err.(type) {
-		case api.ErrUnknown:
-			fmt.Printf("Log Courier returned an error: %s\n", err.(api.ErrUnknown).Error())
-			return false
-		}
-
-		fmt.Printf("The API request failed: %s\n", err)
-		return false
-	}
-
-	fmt.Println(resp)
 
 	return true
 }
