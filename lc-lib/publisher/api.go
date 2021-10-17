@@ -33,6 +33,7 @@ func (a *apiStatus) Update() error {
 	a.SetEntry("speed", api.Float(a.p.lineSpeed))
 	a.SetEntry("publishedLines", api.Number(a.p.lastLineCount))
 	a.SetEntry("pendingPayloads", api.Number(a.p.numPayloads))
+	a.SetEntry("maxPendingPayloads", api.Number(a.p.netConfig.MaxPendingPayloads))
 	a.p.mutex.RUnlock()
 
 	return nil

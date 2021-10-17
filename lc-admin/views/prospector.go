@@ -1,75 +1,106 @@
+/*
+ * Copyright 2012-2020 Jason Woods and contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package views
 
 import (
 	"fmt"
-	"image"
 	"sort"
 	"strings"
 
+	"github.com/driskell/log-courier/lc-admin/lcwidgets"
 	"github.com/driskell/log-courier/lc-lib/admin"
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 )
 
+type prospectorResponse struct {
+	Files []struct {
+		Error     string `json:"error"`
+		Id        string `json:"id"`
+		Orphaned  string `json:"Orphaned"`
+		Path      string `json:"path"`
+		Status    string `json:"status"`
+		Type      string `json:"type"`
+		Harvester *struct {
+			Completion     float64 `json:"completion"`
+			ProcessedLines float64 `json:"processed_lines"`
+		} `json:"harvester"`
+	} `json:"files"`
+	Status struct {
+		ActiveStates int `json:"activeStates"`
+		WatchedFiles int `json:"watchedFiles"`
+	} `json:"status"`
+}
+
 type Prospector struct {
-	ui.Block
+	*view
 	client     *admin.Client
 	updateChan chan<- interface{}
-	data       []interface{}
+	err        error
+	data       *prospectorResponse
+	table      *lcwidgets.Table
 	gauges     []*widgets.Gauge
 }
 
-func NewProspector(client *admin.Client, updateChan chan<- interface{}) *Prospector {
+func NewProspector(client *admin.Client, updateChan chan<- interface{}) View {
 	p := &Prospector{
 		client:     client,
 		updateChan: updateChan,
 	}
 
-	p.Block = *ui.NewBlock()
+	p.view = newView()
+	p.table = lcwidgets.NewTable()
 
 	return p
 }
 
 // StartUpdate begins a background update, and returns result on the update channel
 func (p *Prospector) StartUpdate() {
-	resp, err := p.client.RequestJSON("prospector/files")
-	if err != nil {
+	var resp prospectorResponse
+	if err := p.client.RequestJSON("prospector", &resp); err != nil {
 		p.updateChan <- err
 		return
 	}
-
-	p.updateChan <- resp
+	p.updateChan <- &resp
 }
 
 // CompleteUpdate completes the update, after which a render will occur
 func (p *Prospector) CompleteUpdate(resp interface{}) {
-	if resp == nil {
+	if err, ok := resp.(error); ok {
 		p.data = nil
 		p.gauges = nil
+		p.err = err
 		return
 	}
 
-	if _, ok := resp.(error); ok {
-		p.data = nil
-		p.gauges = nil
-		return
-	}
-
-	p.data = resp.([]interface{})
+	p.data = resp.(*prospectorResponse)
 
 	// Generate gauges
-	if len(p.gauges) != len(p.data) {
+	if len(p.gauges) != len(p.data.Files) {
 		oldGauges := p.gauges
-		p.gauges = make([]*widgets.Gauge, len(p.data))
+		p.gauges = make([]*widgets.Gauge, len(p.data.Files))
 		copy(p.gauges, oldGauges)
 	}
-	for idx, data := range p.data {
-		dataMap := data.(map[string]interface{})
-		if harvesterData, ok := dataMap["harvester"].(map[string]interface{}); ok {
+	for idx, data := range p.data.Files {
+		if data.Harvester != nil {
 			if p.gauges[idx] == nil {
 				p.gauges[idx] = widgets.NewGauge()
 			}
-			p.gauges[idx].Percent = int(harvesterData["completion"].(float64))
+			p.gauges[idx].Percent = int(data.Harvester.Completion)
 			p.gauges[idx].Border = false
 		} else {
 			p.gauges[idx] = nil
@@ -78,7 +109,10 @@ func (p *Prospector) CompleteUpdate(resp interface{}) {
 }
 
 func (p *Prospector) Draw(buf *ui.Buffer) {
-	p.Block.Draw(buf)
+	p.view.Draw(buf)
+	if p.err != nil {
+		return
+	}
 
 	// 4*3+2 for dividers and padding
 	// 10 for orphaned
@@ -92,7 +126,7 @@ func (p *Prospector) Draw(buf *ui.Buffer) {
 	if p.data == nil {
 		rows = make([][]interface{}, 3)
 	} else {
-		rows = make([][]interface{}, 2+len(p.data))
+		rows = make([][]interface{}, 2+len(p.data.Files))
 	}
 
 	rows[0] = []interface{}{"[Path](mod:bold)", "[Orphaned](mod:bold)", "[Status](mod:bold)", "[Lines](mod:bold)", "[Completion](mod:bold)"}
@@ -102,15 +136,14 @@ func (p *Prospector) Draw(buf *ui.Buffer) {
 		rows[2] = []interface{}{"Loading...", "", "", "", ""}
 	} else {
 		idx := 2
-		for dataIdx, data := range p.data {
-			dataMap := data.(map[string]interface{})
+		for dataIdx, data := range p.data.Files {
 			rows[idx] = make([]interface{}, 5)
-			rows[idx][0] = dataMap["path"]
-			rows[idx][1] = dataMap["orphaned"]
-			rows[idx][2] = dataMap["status"]
+			rows[idx][0] = data.Path
+			rows[idx][1] = data.Orphaned
+			rows[idx][2] = data.Status
 
-			if harvesterData, ok := dataMap["harvester"].(map[string]interface{}); ok {
-				rows[idx][3] = fmt.Sprintf("%.0f", harvesterData["processed_lines"].(float64))
+			if data.Harvester != nil {
+				rows[idx][3] = fmt.Sprintf("%.0f", data.Harvester.ProcessedLines)
 				rows[idx][4] = p.gauges[dataIdx]
 			} else {
 				rows[idx][3] = "-"
@@ -125,50 +158,8 @@ func (p *Prospector) Draw(buf *ui.Buffer) {
 		})
 	}
 
-	x := p.Inner.Min.X
-	y := p.Inner.Min.Y
-	hLine := ui.NewCell(ui.HORIZONTAL_LINE, p.Block.BorderStyle)
-	vLine := ui.NewCell(ui.VERTICAL_LINE, p.Block.BorderStyle)
-	hDown := ui.NewCell(ui.HORIZONTAL_DOWN, p.Block.BorderStyle)
-	for _, columnWidth := range columnWidths[:len(columnWidths)-1] {
-		x += columnWidth + 2
-		buf.SetCell(hDown, image.Point{x, y - 1})
-		x += 1
-	}
-	x = p.Inner.Min.X
-	for _, row := range rows {
-		if row == nil {
-			hvCross := ui.NewCell('┼', p.Block.BorderStyle)
-			buf.Fill(hLine, image.Rect(x, y, x+p.Inner.Dx(), y+1))
-			buf.SetCell(ui.NewCell(ui.VERTICAL_RIGHT, p.Block.BorderStyle), image.Point{p.Min.X, y})
-			buf.SetCell(ui.NewCell(ui.VERTICAL_LEFT, p.Block.BorderStyle), image.Point{p.Max.X - 1, y})
-			for _, columnWidth := range columnWidths[:len(columnWidths)-1] {
-				x += columnWidth + 2
-				buf.SetCell(hvCross, image.Point{x, y})
-				x += 1
-			}
-			y += 1
-			x = p.Inner.Min.X
-			continue
-		}
-		for idx, columnWidth := range columnWidths {
-			if gauge, ok := row[idx].(*widgets.Gauge); ok {
-				gauge.SetRect(x-1, y, x+columnWidth+2, y+1)
-				gauge.Draw(buf)
-				x += columnWidth + 3
-				continue
-			}
-			x += 1
-			cells := ui.TrimCells(ui.ParseStyles(row[idx].(string), ui.Theme.Paragraph.Text), columnWidth)
-			for _, cell := range cells {
-				buf.SetCell(cell, image.Point{x, y})
-				x += 1
-			}
-			x += columnWidth - len(cells) + 1
-			buf.SetCell(vLine, image.Point{x, y})
-			x += 1
-		}
-		y += 1
-		x = p.Inner.Min.X
-	}
+	p.table.ColumnWidths = columnWidths
+	p.table.Rows = rows
+	p.table.SetRect(p.Min.X, p.Min.Y, p.Max.X, p.Max.Y)
+	p.table.Draw(buf)
 }

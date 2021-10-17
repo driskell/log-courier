@@ -41,17 +41,17 @@ const (
 func (s status) String() string {
 	switch s {
 	case endpointStatusIdle:
-		return "Idle"
+		return "idle"
 	case endpointStatusActive:
-		return "Active"
+		return "active"
 	case endpointStatusFailed:
-		return "Failed"
+		return "failed"
 	case endpointStatusClosing:
-		return "Shutting down"
+		return "closing"
 	case endpointStatusClosed:
-		return "Shutdown"
+		return "closed"
 	}
-	return "Unknown"
+	return "unknown"
 }
 
 // IsIdle returns true if this Endpoint is idle (newly created and unused)

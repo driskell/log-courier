@@ -60,6 +60,7 @@ var (
 type connectionSocket interface {
 	net.Conn
 	Setup(context.Context) error
+	Desc() string
 	CloseWrite() error
 }
 

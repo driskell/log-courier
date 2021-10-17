@@ -87,7 +87,7 @@ func (d *KeyValue) HumanReadable(indent string) ([]byte, error) {
 		result.WriteString(indent)
 		result.WriteString(key)
 
-		if bytes.IndexRune(subResult, '\n') != -1 {
+		if bytes.ContainsRune(subResult, '\n') {
 			result.WriteString(":\n")
 			result.Write(subResult)
 			continue

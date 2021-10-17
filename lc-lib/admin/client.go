@@ -42,6 +42,8 @@ type Client struct {
 	adminConnect  string
 	transport     *http.Transport
 	client        *http.Client
+	remoteSummary map[string]interface{}
+	remoteName    string
 	remoteVersion string
 	fakeHost      string
 }
@@ -64,7 +66,7 @@ func (c *Client) initClient() error {
 
 	dialer, ok := registeredDialers[bind[0]]
 	if !ok {
-		return fmt.Errorf("Unknown transport specified for admin bind: '%s'", bind[0])
+		return fmt.Errorf("unknown transport specified for admin bind: '%s'", bind[0])
 	}
 
 	dialerStruct, err := dialer(bind[0], bind[1])
@@ -84,52 +86,79 @@ func (c *Client) initClient() error {
 		Transport: c.transport,
 	}
 
-	remoteVersion, err := c.RequestJSON("version")
+	c.remoteSummary = make(map[string]interface{})
+	err = c.RequestJSONSummary("", &c.remoteSummary)
 	if err != nil {
 		return err
 	}
 
-	c.remoteVersion = remoteVersion.(string)
+	if name, ok := c.remoteSummary["name"].(string); ok {
+		c.remoteName = name
+	}
+	if version, ok := c.remoteSummary["version"].(string); ok {
+		c.remoteVersion = version
+	}
 
 	return nil
 }
 
 // RemoteVersion returns the version of the remotely connected Log Courier
-func (c *Client) RemoteVersion() string {
-	return c.remoteVersion
+func (c *Client) RemoteClient() (string, string) {
+	return c.remoteName, c.remoteVersion
 }
 
-// Request performs a request and returns a pretty response
+// RemoteSummary returns the summary data of the root node on the remote
+// It allows detection of pipeline features
+func (c *Client) RemoteSummary() map[string]interface{} {
+	return c.remoteSummary
+}
+
+// RequestJSON performs a request and returns a JSON response
 // It will defer to Call method if the path is a known Call path
-func (c *Client) RequestJSON(path string) (interface{}, error) {
-	resp, err := c.rawRequest(path, false)
-	if err != nil {
-		return nil, err
-	}
-
-	var result interface{}
-	if err := json.Unmarshal([]byte(resp), &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+func (c *Client) RequestJSON(path string, target interface{}) error {
+	return c.rawRequestJSON(path, target, map[string]string{})
 }
 
+// RequestJSONSummary performs a request and returns a JSON response
+// It will only return top level items from the requested node
+// Any deeper nodes will be replaced with a structure containing their type
+// It will defer to Call method if the path is a known Call path
+func (c *Client) RequestJSONSummary(path string, target interface{}) error {
+	return c.rawRequestJSON(path, target, map[string]string{"w": "summary"})
+}
+
+// RequestPretty performs a request and returns a human readable response
+// It will defer to Call method if the path is a known Call path
 func (c *Client) RequestPretty(path string) (string, error) {
-	return c.rawRequest(path, true)
+	return c.rawRequest(path, map[string]string{"w": "pretty"})
 }
 
-func (c *Client) rawRequest(path string, pretty bool) (string, error) {
+func (c *Client) rawRequestJSON(path string, target interface{}, opts map[string]string) error {
+	resp, err := c.rawRequest(path, opts)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal([]byte(resp), target)
+}
+
+func (c *Client) rawRequest(path string, opts map[string]string) (string, error) {
 	// Is this a Call request?
 	if _, ok := callMap[path]; ok {
 		return c.Call(path, url.Values{})
 	}
 
-	url := "http://" + c.fakeHost + "/" + path
-	if pretty {
-		url = url + "?w=pretty"
+	requestUrl := url.URL{}
+	requestUrl.Scheme = "http"
+	requestUrl.Host = c.fakeHost
+	requestUrl.Path = path
+	query := url.Values{}
+	for key, value := range opts {
+		query.Add(key, value)
 	}
-	resp, err := c.client.Get(url)
+	requestUrl.RawQuery = query.Encode()
+
+	resp, err := c.client.Get(requestUrl.String())
 	if err != nil {
 		return "", err
 	}

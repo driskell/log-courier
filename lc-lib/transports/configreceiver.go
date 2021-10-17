@@ -33,9 +33,10 @@ type ReceiverConfig []*ReceiverConfigEntry
 type ReceiverConfigEntry struct {
 	Factory ReceiverFactory
 
-	Enabled   bool     `config:"enabled"`
-	Transport string   `config:"transport"`
-	Listen    []string `config:"listen"`
+	Enabled            bool     `config:"enabled"`
+	Transport          string   `config:"transport"`
+	Listen             []string `config:"listen"`
+	MaxPendingPayloads int64    `config:"max pending payloads"`
 
 	Unused map[string]interface{} `json:",omitempty"`
 }
@@ -44,6 +45,7 @@ type ReceiverConfigEntry struct {
 func (c *ReceiverConfigEntry) Defaults() {
 	c.Enabled = true
 	c.Transport = defaultReceiverTransport
+	c.MaxPendingPayloads = defaultNetworkMaxPendingPayloads
 }
 
 // Init the receiver configuration

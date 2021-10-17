@@ -44,7 +44,7 @@ func (d *tcpDialer) Host() string {
 func connectTCP(transport, addr string) (netDialer, error) {
 	taddr, err := net.ResolveTCPAddr(transport, addr)
 	if err != nil {
-		return nil, fmt.Errorf("The connection address specified is not valid: %s", err)
+		return nil, fmt.Errorf("connection address specified is not valid: %s", err)
 	}
 
 	dialer := &tcpDialer{
@@ -59,7 +59,7 @@ func connectTCP(transport, addr string) (netDialer, error) {
 func listenTCP(transport, addr string) (netListener, error) {
 	taddr, err := net.ResolveTCPAddr(transport, addr)
 	if err != nil {
-		return nil, fmt.Errorf("The admin bind address specified is not valid: %s", err)
+		return nil, fmt.Errorf("admin bind address specified is not valid: %s", err)
 	}
 
 	listener, err := net.ListenTCP(transport, taddr)

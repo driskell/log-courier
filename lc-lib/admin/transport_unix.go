@@ -43,7 +43,7 @@ func (d *unixDialer) Host() string {
 func connectUnix(transport, path string) (netDialer, error) {
 	uaddr, err := net.ResolveUnixAddr("unix", path)
 	if err != nil {
-		return nil, fmt.Errorf("The connection address specified is not valid: %s", err)
+		return nil, fmt.Errorf("connection address specified is not valid: %s", err)
 	}
 
 	// TODO: Change umask to 111 so all can write (need to move to _unix)
@@ -58,14 +58,14 @@ func connectUnix(transport, path string) (netDialer, error) {
 func listenUnix(transport, addr string) (netListener, error) {
 	uaddr, err := net.ResolveUnixAddr("unix", addr)
 	if err != nil {
-		return nil, fmt.Errorf("The admin bind address specified is not valid: %s", err)
+		return nil, fmt.Errorf("admin bind address specified is not valid: %s", err)
 	}
 
 	// Remove previous socket file if it's still there or we'll get address
 	// already in use error
 	if _, err = os.Stat(addr); err == nil || !os.IsNotExist(err) {
 		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
-			return nil, fmt.Errorf("Failed to remove the existing socket file: %s", err)
+			return nil, fmt.Errorf("failed to remove the existing socket file: %s", err)
 		}
 	}
 

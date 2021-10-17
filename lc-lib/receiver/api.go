@@ -14,38 +14,24 @@
  * limitations under the License.
  */
 
-package views
+package receiver
 
 import (
-	ui "github.com/gizak/termui/v3"
-	"github.com/gizak/termui/v3/widgets"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 )
 
-type View interface {
-	ui.Drawable
-	StartUpdate()
-	CompleteUpdate(interface{})
+type apiStatus struct {
+	api.KeyValue
+
+	r *Pool
 }
 
-type view struct {
-	*ui.Block
-	err error
-}
+// Update updates the prospector status information
+func (a *apiStatus) Update() error {
+	// Update the values and pass through to node
+	a.r.connectionLock.RLock()
+	a.SetEntry("activeConnections", api.Number(len(a.r.connectionStatus)))
+	a.r.connectionLock.RUnlock()
 
-func newView() *view {
-	return &view{
-		Block: ui.NewBlock(),
-	}
-}
-
-func (v *view) Draw(buf *ui.Buffer) {
-	v.Block.Draw(buf)
-
-	if v.err != nil {
-		text := widgets.NewParagraph()
-		text.Border = false
-		text.Text = v.err.Error()
-		text.SetRect(v.Inner.Min.X, v.Inner.Min.Y, v.Inner.Max.X, v.Inner.Max.Y)
-		text.Draw(buf)
-	}
+	return nil
 }
