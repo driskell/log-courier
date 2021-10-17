@@ -98,7 +98,7 @@ func (p *Pipeline) Run(config *config.Config, signalChan chan<- os.Signal) {
 
 	if err := p.initRoutines(config); err != nil {
 		log.Error("Pipeline failed: %s", err)
-		signalChan <- syscall.SIGTERM
+		signalChan <- syscall.SIGKILL
 		return
 	}
 

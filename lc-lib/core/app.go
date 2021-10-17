@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"sort"
+	"syscall"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
@@ -149,9 +150,14 @@ func (a *App) Run() {
 
 	a.registerSignals()
 
+	badExit := false
 SignalLoop:
 	for signal := range a.signalChan {
 		if signal == nil || isShutdownSignal(signal) {
+			if signal == syscall.SIGKILL {
+				// Pipeline start failed
+				badExit = true
+			}
 			break SignalLoop
 		}
 
@@ -165,6 +171,10 @@ SignalLoop:
 
 	if a.logFile != nil {
 		a.logFile.Close()
+	}
+
+	if badExit {
+		os.Exit(1)
 	}
 }
 
