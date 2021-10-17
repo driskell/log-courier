@@ -42,7 +42,8 @@ func newAPIRoot(app *core.App) *apiRoot {
 		debug: api.NewDataEntry(&apiDebug{}),
 	}
 
-	root.SetEntry("version", api.NewDataEntry(api.String(core.LogCourierVersion)))
+	root.SetEntry("name", api.NewDataEntry(api.String(app.Name())))
+	root.SetEntry("version", api.NewDataEntry(api.String(app.Version())))
 	root.SetEntry("reload", api.NewCallbackEntry(func(values url.Values) (string, error) {
 		if err := app.ReloadConfig(); err != nil {
 			return "", err

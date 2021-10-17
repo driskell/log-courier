@@ -123,18 +123,32 @@ func (e *AckEvent) Sequence() uint32 {
 // ConnectEvent marks the start of a new connection on a reciver
 type ConnectEvent struct {
 	context context.Context
+	remote  string
+	desc    string
 }
 
 // NewConnectEvent generates a new ConnectEvent for the given Endpoint
-func NewConnectEvent(context context.Context) *ConnectEvent {
+func NewConnectEvent(context context.Context, remote string, desc string) *ConnectEvent {
 	return &ConnectEvent{
-		context: context,
+		context,
+		remote,
+		desc,
 	}
 }
 
 // Context returns the endpoint associated with this event
 func (e *ConnectEvent) Context() context.Context {
 	return e.context
+}
+
+// Remote returns the identity of the remote side
+func (e *ConnectEvent) Remote() string {
+	return e.remote
+}
+
+// Desc returns a description for the remote
+func (e *ConnectEvent) Desc() string {
+	return e.desc
 }
 
 // EventsEvent contains events received from a transport

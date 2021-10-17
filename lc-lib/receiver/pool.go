@@ -19,9 +19,12 @@ package receiver
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
+	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
@@ -36,21 +39,6 @@ const (
 	poolContextEventPosition poolContext = "eventpos"
 )
 
-type poolEventPosition struct {
-	nonce    *string
-	sequence uint32
-}
-
-type poolEventProgress struct {
-	event    *transports.EventsEvent
-	sequence uint32
-}
-
-type poolReceiverStatus struct {
-	listen string
-	active bool
-}
-
 // Pool manages a list of receivers
 type Pool struct {
 	// Pipeline
@@ -59,21 +47,29 @@ type Pool struct {
 	configChan   <-chan *config.Config
 
 	// Internal
-	ackChan              chan []*event.Event
-	eventChan            chan transports.Event
-	receivers            map[transports.Receiver]*poolReceiverStatus
-	receiversByListen    map[string]transports.Receiver
-	partialAckSchedule   *scheduler.Scheduler
-	partialAckConnection map[interface{}][]*poolEventProgress
+	ackChan           chan []*event.Event
+	eventChan         chan transports.Event
+	receivers         map[transports.Receiver]*poolReceiverStatus
+	receiversByListen map[string]transports.Receiver
+	scheduler         *scheduler.Scheduler
+	connectionLock    sync.RWMutex
+	connectionStatus  map[interface{}]*poolConnectionStatus
+
+	apiConfig      *admin.Config
+	apiConnections api.Array
+	apiListeners   api.Array
+	apiStatus      *apiStatus
+	api.Node
 }
 
 // NewPool creates a new receiver pool
 func NewPool(app *core.App) *Pool {
 	return &Pool{
-		ackChan:              make(chan []*event.Event),
-		eventChan:            make(chan transports.Event),
-		partialAckSchedule:   scheduler.NewScheduler(),
-		partialAckConnection: make(map[interface{}][]*poolEventProgress),
+		apiConfig:        admin.FetchConfig(app.Config()),
+		ackChan:          make(chan []*event.Event),
+		eventChan:        make(chan transports.Event),
+		scheduler:        scheduler.NewScheduler(),
+		connectionStatus: make(map[interface{}]*poolConnectionStatus),
 	}
 }
 
@@ -95,6 +91,15 @@ func (r *Pool) SetConfigChan(configChan <-chan *config.Config) {
 // Init sets up the listener
 func (r *Pool) Init(cfg *config.Config) error {
 	r.updateReceivers(cfg)
+
+	if r.apiConfig.Enabled {
+		r.apiStatus = &apiStatus{r: r}
+		r.SetEntry("listeners", &r.apiListeners)
+		r.SetEntry("connections", &r.apiConnections)
+		r.SetEntry("status", r.apiStatus)
+		r.apiConfig.SetEntry("receiver", r)
+	}
+
 	return nil
 }
 
@@ -123,21 +128,23 @@ ReceiverLoop:
 			shutdownChan = nil
 		case newConfig := <-r.configChan:
 			r.updateReceivers(newConfig)
-		case <-r.partialAckSchedule.OnNext():
+		case <-r.scheduler.OnNext():
 			for {
-				connection := r.partialAckSchedule.Next()
+				connection := r.scheduler.Next()
 				if connection == nil {
 					break
 				}
-				expectedAck := r.partialAckConnection[connection][0]
+				r.connectionLock.Lock()
+				expectedAck := r.connectionStatus[connection].progress[0]
 				expectedEvent := expectedAck.event
 				receiver := expectedEvent.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				receiver.Acknowledge(expectedEvent.Context(), expectedEvent.Nonce(), expectedAck.sequence)
-				// Schedule again
-				r.partialAckSchedule.Set(connection, time.Second*5)
+				r.scheduler.Set(connection, time.Second*5)
+				r.connectionLock.Unlock()
 			}
-			r.partialAckSchedule.Reschedule()
+			r.scheduler.Reschedule()
 		case events := <-r.ackChan:
+			r.connectionLock.Lock()
 			currentContext := events[0].Context()
 			connection := currentContext.Value(transports.ContextConnection)
 			position := currentContext.Value(poolContextEventPosition).(*poolEventPosition)
@@ -152,10 +159,11 @@ ReceiverLoop:
 				position = nextPosition
 			}
 			r.ackEventsEvent(currentContext, connection, position.nonce, position.sequence)
-			r.partialAckSchedule.Reschedule()
+			r.scheduler.Reschedule()
+			r.connectionLock.Unlock()
 
 			// If shutting down, have all acknowledgemente been handled, and all receivers closed?
-			if shutdownChan == nil && len(r.receivers) == 0 && len(r.partialAckConnection) == 0 {
+			if shutdownChan == nil && len(r.receivers) == 0 && len(r.connectionStatus) == 0 {
 				break ReceiverLoop
 			}
 		case receiverEvent := <-eventChan:
@@ -165,13 +173,20 @@ ReceiverLoop:
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				r.startIdleTimeout(eventImpl.Context(), receiver, connection)
+				r.connectionLock.Lock()
+				r.connectionStatus[connection] = newPoolConnectionStatus(r, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc())
+				r.apiConnections.AddEntry(eventImpl.Remote(), r.connectionStatus[connection])
+				r.connectionLock.Unlock()
 			case *transports.EventsEvent:
+				r.connectionLock.Lock()
 				connection := eventImpl.Context().Value(transports.ContextConnection)
+				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				// Schedule partial ack if this is first set of events
-				if _, has := r.partialAckConnection[connection]; !has {
-					r.partialAckSchedule.Set(connection, 5*time.Second)
+				if len(r.connectionStatus[connection].progress) == 0 {
+					r.scheduler.Set(connection, 5*time.Second)
 				}
-				r.partialAckConnection[connection] = append(r.partialAckConnection[connection], &poolEventProgress{event: eventImpl, sequence: 0})
+				r.connectionStatus[connection].progress = append(r.connectionStatus[connection].progress, &poolEventProgress{event: eventImpl, sequence: 0})
+				r.connectionLock.Unlock()
 				// Build the events with our acknowledger and submit the bundle
 				var events = make([]*event.Event, len(eventImpl.Events()))
 				for idx, item := range eventImpl.Events() {
@@ -180,41 +195,48 @@ ReceiverLoop:
 				}
 				spool = append(spool, events)
 				spoolChan = r.output
+				// Stop reading events if this client breached our limit
+				if len(r.connectionStatus[connection].progress) > int(r.receivers[receiver].config.MaxPendingPayloads) {
+					receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max pending payloads exceeded"))
+				}
 			case *transports.EndEvent:
 				// Connection EOF
+				r.connectionLock.Lock()
 				connection := eventImpl.Context().Value(transports.ContextConnection)
-				if _, ok := r.partialAckConnection[connection]; !ok {
-					// Nothing left to ack - close
+				if partialAcks, ok := r.connectionStatus[connection]; !ok || len(partialAcks.progress) == 0 {
+					// Nothing left to ack - close send side
 					receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 					receiver.ShutdownConnection(eventImpl.Context())
 					// Receive side is closed, and we're just sending, so it'll close automatically once flushed, so clear all scheduled timeouts
-					r.partialAckSchedule.Remove(connection)
+					r.apiConnections.RemoveEntry(r.connectionStatus[connection].remote)
+					delete(r.connectionStatus, connection)
+					r.scheduler.Remove(connection)
 				} else {
-					// Add to the partialAckSchedule a nil progress to signal that when we finish ack everything - this connection can close
-					r.partialAckConnection[connection] = append(r.partialAckConnection[connection], nil)
+					// Add to the scheduler a nil progress to signal that when we finish ack everything - this connection can close
+					r.connectionStatus[connection].progress = append(r.connectionStatus[connection].progress, nil)
 				}
+				r.connectionLock.Unlock()
 			case *transports.StatusEvent:
 				if eventImpl.StatusChange() == transports.Finished {
 					// Remove the receiver from our list and exit if all receivers are finished
 					receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-					if status, has := r.receivers[receiver]; has {
-						delete(r.receivers, receiver)
-						// Only a receiver that is active will exist in the receiversByListen index
-						// Inactive receivers are ones removed during a config reload for listens we don't want anymore
-						if status.active {
-							delete(r.receiversByListen, status.listen)
-						}
-						// If shutting down, have all acknowledgemente been handled, and all receivers closed?
-						if shutdownChan == nil && len(r.receivers) == 0 && len(r.partialAckConnection) == 0 {
-							break ReceiverLoop
-						}
+					status := r.receivers[receiver]
+					delete(r.receivers, receiver)
+					// Only a receiver that is active will exist in the receiversByListen index
+					// Inactive receivers are ones removed during a config reload for listens we don't want anymore
+					if status.active {
+						delete(r.receiversByListen, status.listen)
+					}
+					// If shutting down, have all acknowledgemente been handled, and all receivers closed?
+					if shutdownChan == nil && len(r.receivers) == 0 && len(r.connectionStatus) == 0 {
+						break ReceiverLoop
 					}
 				}
 			case *transports.PingEvent:
 				// Immediately send a pong back - ignore failure - remote will time itself out
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-				if _, ok := r.partialAckConnection[connection]; ok {
+				if status, ok := r.connectionStatus[connection]; ok && len(status.progress) != 0 {
 					// We should not be receiving PING if we haven't finished acknowleding - this violates protocol
 					r.failConnection(eventImpl.Context(), receiver, connection, fmt.Errorf("received ping message on non-idle connection"))
 				} else if err := receiver.Pong(eventImpl.Context()); err != nil {
@@ -243,17 +265,20 @@ func (r *Pool) Acknowledge(events []*event.Event) {
 
 // ackEventsEvent processes the acknowledgement, updating any pending partial acknowledgement schedules
 func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce *string, sequence uint32) {
-	partialAcks, ok := r.partialAckConnection[connection]
-	if !ok {
+	status, ok := r.connectionStatus[connection]
+	if !ok || len(status.progress) == 0 {
 		panic(fmt.Sprintf("Out of order acknowledgement: Nonce=%x; Sequence=%d; ExpectedNonce=<none>; ExpectedSequenceMin=<none>; ExpectedSequenceMax=<none>", *nonce, sequence))
 	}
 
+	partialAcks := status.progress
 	expectedAck := partialAcks[0]
 	expectedEvent := expectedAck.event
 	endSequence := expectedEvent.Count()
 	if *expectedEvent.Nonce() != *nonce || sequence < expectedAck.sequence || sequence > endSequence {
 		panic(fmt.Sprintf("Out of order acknowledgement: Nonce=%x; Sequence=%d; ExpectedNonce=%x; ExpectedSequenceMin=%d; ExpectedSequenceMax=%d", *nonce, sequence, *expectedEvent.Nonce(), expectedAck.sequence, endSequence))
 	}
+
+	status.lines += int64(sequence - expectedAck.sequence)
 
 	lastAck := false
 	closeConnection := false
@@ -264,19 +289,17 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 			lastAck = true
 			closeConnection = true
 		}
+		copy(partialAcks, partialAcks[1:])
+		status.progress = partialAcks[:len(partialAcks)-1]
 		if lastAck || closeConnection {
-			delete(r.partialAckConnection, connection)
-			r.partialAckSchedule.Remove(connection)
+			r.scheduler.Remove(connection)
 		} else {
-			copy(r.partialAckConnection[connection], r.partialAckConnection[connection][1:])
-			r.partialAckConnection[connection] = r.partialAckConnection[connection][:len(r.partialAckConnection[connection])-1]
-			r.partialAckSchedule.Set(connection, time.Second*5)
+			r.scheduler.Set(connection, time.Second*5)
 		}
 	} else {
-		r.partialAckSchedule.Set(connection, time.Second*5)
+		r.scheduler.Set(connection, time.Second*5)
+		expectedAck.sequence = sequence
 	}
-
-	expectedAck.sequence = sequence
 
 	receiver := ctx.Value(transports.ContextReceiver).(transports.Receiver)
 	if err := receiver.Acknowledge(ctx, nonce, sequence); err != nil {
@@ -284,6 +307,8 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 	} else if lastAck && closeConnection {
 		// Either it's the last ack for a connection on a shutting down receiver, or the connection read closed, so shutdown the connection
 		receiver.ShutdownConnection(ctx)
+		r.apiConnections.RemoveEntry(status.remote)
+		delete(r.connectionStatus, connection)
 	} else if lastAck {
 		r.startIdleTimeout(ctx, receiver, connection)
 	}
@@ -294,7 +319,7 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 func (r *Pool) startIdleTimeout(ctx context.Context, receiver transports.Receiver, connection interface{}) {
 	// Set a network timeout - we should be receiving pings - close connections that do nothing
 	// TODO: Make configurable - it's not configurable on courier side yet and it's 900 there
-	r.partialAckSchedule.SetCallback(connection, 1000*time.Second, func() {
+	r.scheduler.SetCallback(connection, 1000*time.Second, func() {
 		r.failConnection(ctx, receiver, connection, fmt.Errorf("no data received within timeout"))
 	})
 }
@@ -303,7 +328,7 @@ func (r *Pool) startIdleTimeout(ctx context.Context, receiver transports.Receive
 // It will stop the partial acks but will continue to remember the connection to deal with incoming acknowledgements
 // for events already passed through the pipeline
 func (r *Pool) failConnection(ctx context.Context, receiver transports.Receiver, connection interface{}, err error) {
-	r.partialAckSchedule.Remove(connection)
+	r.scheduler.Remove(connection)
 
 	// Fail connection - but only if the error wasn't InvalidState, which means it's dead anyway
 	// Saves us throwing errors due to lagging acknowledgements for a dead connection
@@ -324,12 +349,16 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 					log.Warning("Ignoring duplicate receiver listen address: %s", listen)
 					continue
 				}
+				receiverApi := &api.KeyValue{}
+				receiverApi.SetEntry("listen", api.String(listen))
+				receiverApi.SetEntry("maxPendingPayloads", api.Number(cfgEntry.MaxPendingPayloads))
+				r.apiListeners.AddEntry(listen, receiverApi)
 				if r.receivers != nil {
 					// If already exists as active then reload config
 					if existing, has := r.receiversByListen[listen]; has {
 						// Receiver already exists, update its configuration
 						existing.ReloadConfig(newConfig, cfgEntry.Factory)
-						newReceivers[existing] = &poolReceiverStatus{listen: listen, active: true}
+						newReceivers[existing] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
 						newReceiversByListen[listen] = existing
 						continue
 					}
@@ -337,7 +366,7 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 				// Create new receiver
 				pool := addresspool.NewPool(listen)
 				newReceiversByListen[listen] = cfgEntry.Factory.NewReceiver(context.Background(), pool, r.eventChan)
-				newReceivers[newReceiversByListen[listen]] = &poolReceiverStatus{listen: listen, active: true}
+				newReceivers[newReceiversByListen[listen]] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
 			}
 		}
 	}
@@ -352,6 +381,7 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 			receiver.Shutdown()
 			status.active = false
 			newReceivers[receiver] = status
+			r.apiListeners.RemoveEntry(status.listen)
 		}
 	}
 

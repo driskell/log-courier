@@ -14,27 +14,38 @@
  * limitations under the License.
  */
 
-package publisher
+package views
 
 import (
-	"github.com/driskell/log-courier/lc-lib/admin/api"
+	ui "github.com/gizak/termui/v3"
+	"github.com/gizak/termui/v3/widgets"
 )
 
-type apiStatus struct {
-	api.KeyValue
-
-	p *Publisher
+type View interface {
+	ui.Drawable
+	StartUpdate()
+	CompleteUpdate(interface{})
 }
 
-// Update updates the publisher status information
-func (a *apiStatus) Update() error {
-	// Update the values and pass through to node
-	a.p.mutex.RLock()
-	a.SetEntry("speed", api.Float(a.p.lineSpeed))
-	a.SetEntry("publishedLines", api.Number(a.p.lastLineCount))
-	a.SetEntry("pendingPayloads", api.Number(a.p.numPayloads))
-	a.SetEntry("maxPendingPayloads", api.Number(a.p.netConfig.MaxPendingPayloads))
-	a.p.mutex.RUnlock()
+type view struct {
+	*ui.Block
+	err error
+}
 
-	return nil
+func newView() *view {
+	return &view{
+		Block: ui.NewBlock(),
+	}
+}
+
+func (v *view) Draw(buf *ui.Buffer) {
+	v.Block.Draw(buf)
+
+	if v.err != nil {
+		text := widgets.NewParagraph()
+		text.Border = false
+		text.Text = v.err.Error()
+		text.SetRect(v.Inner.Min.X, v.Inner.Min.Y, v.Inner.Max.X, v.Inner.Max.Y)
+		text.Draw(buf)
+	}
 }

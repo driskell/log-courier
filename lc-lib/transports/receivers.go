@@ -30,6 +30,7 @@ type Receiver interface {
 	Pong(context.Context) error
 	FailConnection(context.Context, error)
 	ShutdownConnection(context.Context)
+	ShutdownConnectionRead(context.Context, error)
 	Shutdown()
 }
 

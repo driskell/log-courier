@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"sync"
 )
 
 type apiArrayEntry struct {
@@ -31,13 +32,18 @@ type apiArrayEntry struct {
 
 // Array represents an array of entries in the API accessible through a
 // primary key
+// Thread safe
 type Array struct {
+	mutex    sync.RWMutex
 	entryMap map[string]*apiArrayEntry
 	entries  []Navigatable
 }
 
 // AddEntry a new array entry
 func (a *Array) AddEntry(key string, entry Navigatable) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
 	if a.entryMap == nil {
 		a.entryMap = make(map[string]*apiArrayEntry)
 	} else {
@@ -58,6 +64,9 @@ func (a *Array) AddEntry(key string, entry Navigatable) {
 
 // RemoveEntry removes an array entry
 func (a *Array) RemoveEntry(key string) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
 	if a.entryMap == nil {
 		panic("Array has no entries")
 	}
@@ -76,6 +85,9 @@ func (a *Array) RemoveEntry(key string) {
 
 // Get returns an entry using it's primary key name or row number
 func (a *Array) Get(path string) (Navigatable, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	if a.entryMap == nil {
 		return nil, nil
 	}
@@ -104,11 +116,17 @@ func (a *Array) Call(params url.Values) (string, error) {
 
 // MarshalJSON returns the Array in JSON form
 func (a *Array) MarshalJSON() ([]byte, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	return json.Marshal(a.entries)
 }
 
 // HumanReadable returns the Array as a string
 func (a *Array) HumanReadable(indent string) ([]byte, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	if a.entryMap == nil || len(a.entryMap) == 0 {
 		return []byte("none"), nil
 	}
@@ -133,7 +151,7 @@ func (a *Array) HumanReadable(indent string) ([]byte, error) {
 		result.WriteString(indent)
 		result.WriteString(key)
 
-		if bytes.IndexRune(subResult, '\n') != -1 {
+		if bytes.ContainsRune(subResult, '\n') {
 			result.WriteString(":\n")
 			result.Write(subResult)
 			continue
@@ -151,6 +169,9 @@ func (a *Array) HumanReadable(indent string) ([]byte, error) {
 // if required to keep the contents up to date on each request
 // Default behaviour is to update each of the array entries
 func (a *Array) Update() error {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	for _, entry := range a.entries {
 		if err := entry.Update(); err != nil {
 			return err

@@ -26,10 +26,17 @@ type connectionSocketTCP struct {
 	*net.TCPConn
 }
 
+// newConnectionSocketTLS return a TCP socket supporting our connection interface
 func newConnectionSocketTCP(tcpSocket *net.TCPConn) *connectionSocketTCP {
 	return &connectionSocketTCP{TCPConn: tcpSocket}
 }
 
+// Setup is not required for a TCP connection so is nil effect
 func (w *connectionSocketTCP) Setup(ctx context.Context) error {
 	return nil
+}
+
+// Desc returns dash - TCP connections have no description
+func (w *connectionSocketTCP) Desc() string {
+	return "-"
 }

@@ -82,7 +82,7 @@ func (t *receiverTCP) controllerRoutine() {
 	log.Infof("[R %s] Receiver shutting down and waiting for final acknowledgements to be sent", t.pool.Server())
 	t.connMutex.Lock()
 	for _, connection := range t.connections {
-		connection.CloseRead()
+		t.ShutdownConnectionRead(connection.ctx, fmt.Errorf("exiting"))
 	}
 	t.connMutex.Unlock()
 	t.connWait.Wait()
@@ -181,6 +181,13 @@ func (t *receiverTCP) ShutdownConnection(ctx context.Context) {
 	}
 }
 
+// ShutdownConnectionRead shuts down a connection gracefully by closing the read side
+func (t *receiverTCP) ShutdownConnectionRead(ctx context.Context, err error) {
+	connection := ctx.Value(transports.ContextConnection).(*connection)
+	log.Debugf("[R %s - %s] Aborting connection: %s", connection.socket.LocalAddr().String(), connection.socket.RemoteAddr().String(), err)
+	connection.CloseRead()
+}
+
 // Shutdown shuts down the listener and all connections gracefully
 func (t *receiverTCP) Shutdown() {
 	t.shutdownOnce.Do(func() {
@@ -239,7 +246,7 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	defer t.connWait.Done()
 
 	if err := conn.Run(func() {
-		conn.sendEvent(transports.NewConnectEvent(conn.ctx))
+		conn.sendEvent(transports.NewConnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc()))
 	}); err != nil {
 		if err == errHardCloseRequested {
 			log.Noticef("[R %s - %s] Client forcefully disconnected", socket.LocalAddr().String(), socket.RemoteAddr().String())

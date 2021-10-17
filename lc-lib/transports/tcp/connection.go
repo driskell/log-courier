@@ -310,10 +310,9 @@ func (t *connection) receiver() (err error) {
 	if err == io.ErrUnexpectedEOF {
 		err = io.EOF
 	}
-	if err == io.EOF {
-		// Send EOF signal so receiver or transport can handle it accordingly
-		err = t.sendEvent(transports.NewEndEvent(t.ctx))
-	}
+
+	// Send EOF signal so receiver or transport can handle it accordingly, but keep existing error
+	t.sendEvent(transports.NewEndEvent(t.ctx))
 	return
 }
 

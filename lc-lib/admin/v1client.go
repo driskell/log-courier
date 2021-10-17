@@ -27,9 +27,8 @@ import (
 
 // V1Client is a client compatible with Log Courier 1.x
 type V1Client struct {
-	adminConnect string
-	conn         net.Conn
-	decoder      *gob.Decoder
+	conn    net.Conn
+	decoder *gob.Decoder
 }
 
 // NewV1Client returns a new admin client compatible with Log Courier 1.x
@@ -59,7 +58,7 @@ func (c *V1Client) connect(adminConnect string) (net.Conn, error) {
 		return dialerStruct.Dial(connect[0], connect[1])
 	}
 
-	return nil, fmt.Errorf("Unknown transport specified in connection address: '%s'", connect[0])
+	return nil, fmt.Errorf("unknown transport specified in connection address: '%s'", connect[0])
 }
 
 func (c *V1Client) request(command string) (*Response, error) {

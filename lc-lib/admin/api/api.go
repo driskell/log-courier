@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"sort"
+	"sync"
 )
 
 // Indentation is a single indentation to be used in HumanReadable calls on
@@ -30,10 +32,10 @@ const Indentation = "  "
 
 var (
 	// ErrNotImplemented is an API error when the call is not implemented
-	ErrNotImplemented = errors.New("Not Implemented")
+	ErrNotImplemented = errors.New("not implemented")
 
 	// ErrNotFound is an API error when the requested information was not found
-	ErrNotFound = errors.New("Not Found")
+	ErrNotFound = errors.New("not found")
 )
 
 // ErrUnknown represents a successful request where Log Courier returned an
@@ -49,6 +51,12 @@ type Encodable interface {
 	// another HumanReadable call it should add Indentation to the indent
 	// string, and check the returned string for new lines and render accordingly
 	HumanReadable(indent string) ([]byte, error)
+}
+
+// Nested represents an entry in the API that nests other entries
+// It allows us to request instead a "summary" of just the keys
+type Nested interface {
+	Summary() map[string]interface{}
 }
 
 // Navigatable is a navigatable entry in the API
@@ -68,12 +76,16 @@ type Navigatable interface {
 
 // Node acts like a directory in the API, containing mappings from names to
 // status information of various types
+// Thread-safe
 type Node struct {
+	mutex    sync.RWMutex
 	children map[string]Navigatable
 }
 
 // SetEntry adds a new path entry with the given name
 func (n *Node) SetEntry(path string, entry Navigatable) {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
 	if n.children == nil {
 		n.children = make(map[string]Navigatable)
 	}
@@ -83,6 +95,9 @@ func (n *Node) SetEntry(path string, entry Navigatable) {
 
 // RemoveEntry removes a path entry
 func (n *Node) RemoveEntry(path string) {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+
 	if n.children == nil {
 		return
 	}
@@ -92,6 +107,9 @@ func (n *Node) RemoveEntry(path string) {
 
 // Get the child entry with the specified name
 func (n *Node) Get(path string) (Navigatable, error) {
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+
 	entry, ok := n.children[path]
 	if !ok {
 		return nil, nil
@@ -106,11 +124,17 @@ func (n *Node) Call(url.Values) (string, error) {
 
 // MarshalJSON returns the entire path structures in JSON form
 func (n *Node) MarshalJSON() ([]byte, error) {
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+
 	return json.Marshal(n.children)
 }
 
 // HumanReadable returns the entire path structures in human-readable form
 func (n *Node) HumanReadable(indent string) ([]byte, error) {
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+
 	if n.children == nil || len(n.children) == 0 {
 		return []byte("none"), nil
 	}
@@ -135,7 +159,7 @@ func (n *Node) HumanReadable(indent string) ([]byte, error) {
 		result.WriteString(indent)
 		result.WriteString(name)
 
-		if bytes.IndexRune(part, '\n') != -1 {
+		if bytes.ContainsRune(part, '\n') {
 			result.WriteString(":\n")
 			result.Write(part)
 			continue
@@ -153,6 +177,9 @@ func (n *Node) HumanReadable(indent string) ([]byte, error) {
 // if required to keep the contents up to date on each request
 // Default behaviour is to update each of the navigatable entries
 func (n *Node) Update() error {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+
 	for _, entry := range n.children {
 		if err := entry.Update(); err != nil {
 			return err
@@ -160,6 +187,21 @@ func (n *Node) Update() error {
 	}
 
 	return nil
+}
+
+// Summary returns just the children names and their types as a summary
+// That way we could request the root just to get the names and not
+// cause it to grab everything all the way down the tree
+func (n *Node) Summary() map[string]interface{} {
+	summary := make(map[string]interface{})
+	for key, entry := range n.children {
+		if _, ok := entry.(Nested); ok {
+			summary[key] = struct{ Type string }{Type: fmt.Sprintf("%T", entry)}
+		} else {
+			summary[key] = entry
+		}
+	}
+	return summary
 }
 
 // DataEntry wraps an Encodable so it can be used as an Navigatable
@@ -213,7 +255,7 @@ func NewCallbackEntry(f CallbackFunc) *CallbackEntry {
 
 // MarshalJSON returns the CallbackEntry in JSON form
 func (c *CallbackEntry) MarshalJSON() ([]byte, error) {
-	return []byte("null"), nil
+	return json.Marshal(struct{ Type string }{Type: fmt.Sprintf("%T", c)})
 }
 
 // HumanReadable returns the CallbackEntry as a string

@@ -126,7 +126,7 @@ func (l *Server) listen(config *Config) (netListener, error) {
 		return listener(bind[0], bind[1])
 	}
 
-	return nil, fmt.Errorf("Unknown transport specified for admin bind: '%s'", bind[0])
+	return nil, fmt.Errorf("unknown transport specified for admin bind: '%s'", bind[0])
 }
 
 func (l *Server) initServer() error {
@@ -235,8 +235,16 @@ func (l *Server) handleRequest(w http.ResponseWriter, r *http.Request, root api.
 		contentType = "text/plain"
 		response, err = root.HumanReadable("")
 	} else {
-		contentType = "application/json"
-		response, err = json.Marshal(root)
+		if r.URL.Query().Get("w") == "summary" {
+			if rootNested, ok := root.(api.Nested); ok {
+				contentType = "application/json"
+				response, err = json.Marshal(rootNested.Summary())
+			}
+		}
+		if contentType == "" {
+			contentType = "application/json"
+			response, err = json.Marshal(root)
+		}
 	}
 
 	if err != nil {
@@ -334,5 +342,5 @@ func (l *Server) errorResponse(w http.ResponseWriter, r *http.Request, err error
 }
 
 func (l *Server) accessLog(r *http.Request, c int) {
-	log.Debug("[admin] %s %s %d", r.Method, r.URL.Path, c)
+	log.Debug("[admin] %s %s %s %d", r.Method, r.URL.Path, r.URL.Query().Encode(), c)
 }

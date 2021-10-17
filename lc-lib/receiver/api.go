@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package publisher
+package receiver
 
 import (
 	"github.com/driskell/log-courier/lc-lib/admin/api"
@@ -23,18 +23,15 @@ import (
 type apiStatus struct {
 	api.KeyValue
 
-	p *Publisher
+	r *Pool
 }
 
-// Update updates the publisher status information
+// Update updates the prospector status information
 func (a *apiStatus) Update() error {
 	// Update the values and pass through to node
-	a.p.mutex.RLock()
-	a.SetEntry("speed", api.Float(a.p.lineSpeed))
-	a.SetEntry("publishedLines", api.Number(a.p.lastLineCount))
-	a.SetEntry("pendingPayloads", api.Number(a.p.numPayloads))
-	a.SetEntry("maxPendingPayloads", api.Number(a.p.netConfig.MaxPendingPayloads))
-	a.p.mutex.RUnlock()
+	a.r.connectionLock.RLock()
+	a.SetEntry("activeConnections", api.Number(len(a.r.connectionStatus)))
+	a.r.connectionLock.RUnlock()
 
 	return nil
 }

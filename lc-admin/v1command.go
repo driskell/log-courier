@@ -26,7 +26,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/core"
 )
 
-type v1LcAdmin struct {
+type v1Command struct {
 	client       *admin.V1Client
 	connected    bool
 	quiet        bool
@@ -35,8 +35,8 @@ type v1LcAdmin struct {
 	scannerErr   error
 }
 
-func newV1LcAdmin(quiet bool, adminConnect string) (*v1LcAdmin, error) {
-	ret := &v1LcAdmin{
+func newV1Command(quiet bool, adminConnect string) (*v1Command, error) {
+	ret := &v1Command{
 		quiet:        quiet,
 		adminConnect: adminConnect,
 	}
@@ -48,44 +48,42 @@ func newV1LcAdmin(quiet bool, adminConnect string) (*v1LcAdmin, error) {
 	return ret, nil
 }
 
-func (a *v1LcAdmin) printHelp() {
-	fmt.Printf("Available commands:\n")
+func printV1Help() {
+	fmt.Printf("Available commands for v1 remotes:\n")
 	fmt.Printf("  reload    Reload configuration\n")
 	fmt.Printf("  status    Display the current shipping status\n")
 	fmt.Printf("  exit      Exit\n")
 }
 
-func (a *v1LcAdmin) connect() error {
-	if !a.connected {
-		var err error
+func (a *v1Command) connect() error {
+	var err error
 
-		if !a.quiet {
-			fmt.Printf("Attempting connection to %s...\n", a.adminConnect)
-		}
+	if !a.quiet {
+		fmt.Printf("Attempting connection to %s...\n", a.adminConnect)
+	}
 
-		if a.client, err = admin.NewV1Client(a.adminConnect); err != nil {
-			return err
-		}
+	if a.client, err = admin.NewV1Client(a.adminConnect); err != nil {
+		return err
+	}
 
-		if !a.quiet {
-			fmt.Printf("Connected\n\n")
-		}
-
-		a.connected = true
+	if !a.quiet {
+		fmt.Printf("Connected\n")
 	}
 
 	return nil
 }
 
-func (a *v1LcAdmin) ProcessCommand(command string) bool {
+func (a *v1Command) ProcessCommand(command string) bool {
 	var reconnected bool
 
 	for {
 		if !a.connected {
 			if err := a.connect(); err != nil {
+				fmt.Printf("Failed to connect: %s", err.Error())
 				return false
 			}
 
+			a.connected = true
 			reconnected = true
 		}
 
@@ -128,13 +126,6 @@ func (a *v1LcAdmin) ProcessCommand(command string) bool {
 			}
 
 			a.renderSnap(format, snaps)
-		case "help":
-			if !a.scanEOF() {
-				err = commandTooManyArgs
-				break
-			}
-
-			a.printHelp()
 		default:
 			err = &commandError{fmt.Sprintf("Unknown command: %s", command)}
 		}
@@ -155,6 +146,7 @@ func (a *v1LcAdmin) ProcessCommand(command string) bool {
 			fmt.Printf("Connection error: %s\n", err)
 		}
 
+		// Don't reconnect more than once, to prevent a big loop
 		if reconnected {
 			break
 		}
@@ -163,7 +155,7 @@ func (a *v1LcAdmin) ProcessCommand(command string) bool {
 	return false
 }
 
-func (a *v1LcAdmin) initScanner(command string) {
+func (a *v1Command) initScanner(command string) {
 	a.scanner.Init(strings.NewReader(command))
 	a.scanner.Mode = scanner.ScanIdents | scanner.ScanInts | scanner.ScanStrings
 	a.scanner.Whitespace = 1 << ' '
@@ -173,7 +165,7 @@ func (a *v1LcAdmin) initScanner(command string) {
 	}
 }
 
-func (a *v1LcAdmin) scanIdent() (string, error) {
+func (a *v1Command) scanIdent() (string, error) {
 	r := a.scanner.Scan()
 	if a.scannerErr != nil {
 		return "", a.scannerErr
@@ -187,7 +179,7 @@ func (a *v1LcAdmin) scanIdent() (string, error) {
 	return "", &commandError{"Invalid token"}
 }
 
-func (a *v1LcAdmin) scanEOF() bool {
+func (a *v1Command) scanEOF() bool {
 	r := a.scanner.Scan()
 	if a.scannerErr == nil && r == scanner.EOF {
 		return true
@@ -195,7 +187,7 @@ func (a *v1LcAdmin) scanEOF() bool {
 	return false
 }
 
-func (a *v1LcAdmin) renderSnap(format string, snap *core.Snapshot) {
+func (a *v1Command) renderSnap(format string, snap *core.Snapshot) {
 	switch format {
 	case "json":
 		fmt.Printf("{\n")
@@ -206,7 +198,7 @@ func (a *v1LcAdmin) renderSnap(format string, snap *core.Snapshot) {
 	}
 }
 
-func (a *v1LcAdmin) renderSnapJSON(indent string, snap *core.Snapshot) {
+func (a *v1Command) renderSnapJSON(indent string, snap *core.Snapshot) {
 	if snap.NumEntries() != 0 {
 		for i, j := 0, snap.NumEntries(); i < j; i = i + 1 {
 			k, v := snap.Entry(i)
@@ -245,7 +237,7 @@ func (a *v1LcAdmin) renderSnapJSON(indent string, snap *core.Snapshot) {
 	}
 }
 
-func (a *v1LcAdmin) renderSnapYAML(indent string, snap *core.Snapshot) {
+func (a *v1Command) renderSnapYAML(indent string, snap *core.Snapshot) {
 	if snap.NumEntries() != 0 {
 		for i, j := 0, snap.NumEntries(); i < j; i = i + 1 {
 			k, v := snap.Entry(i)
@@ -272,4 +264,8 @@ func (a *v1LcAdmin) renderSnapYAML(indent string, snap *core.Snapshot) {
 			a.renderSnapYAML(indent+"  ", subSnap)
 		}
 	}
+}
+
+func (a *v1Command) Monitor() error {
+	return fmt.Errorf("command interface for v1 Log Courier has been removed, please upgrade the remote to v2+ or specify the commands as arguments")
 }
