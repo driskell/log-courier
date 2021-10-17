@@ -169,8 +169,8 @@ func (p *Publisher) Draw(buf *ui.Buffer) {
 				rows[idx][5] = ""
 				rows[idx][6] = ""
 			} else {
-				rows[idx][5] = data.LastErrorTime
-				rows[idx][6] = data.LastError
+				rows[idx][5] = *data.LastErrorTime
+				rows[idx][6] = *data.LastError
 			}
 
 			idx += 1
