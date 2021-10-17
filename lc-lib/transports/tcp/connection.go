@@ -92,18 +92,28 @@ func (t *connection) Run(startedCallback func()) error {
 		return err
 	}
 
+	var event transports.Event
 	if t.isClient {
 		if err := t.clientNegotiation(); err != nil {
 			return err
 		}
 	} else {
-		if err := t.serverNegotiation(); err != nil {
+		var err error
+		if event, err = t.serverNegotiation(); err != nil {
 			return err
 		}
 	}
 
 	if startedCallback != nil {
 		startedCallback()
+	}
+
+	// If handshake isn't implemented by a client in server mode, we may have an events message already
+	// Ensure it is sent AFTER the startedCallback and not before, which might mean something isn't ready
+	if event != nil {
+		if err := t.sendEvent(event); err != nil {
+			return err
+		}
 	}
 
 	t.wait.Add(1)
@@ -136,37 +146,32 @@ func (t *connection) Run(startedCallback func()) error {
 }
 
 // serverNegotiation works out the protocol version supported by the remote
-func (t *connection) serverNegotiation() error {
+func (t *connection) serverNegotiation() (transports.Event, error) {
 	message, err := t.readMsg()
 	if err != nil {
 		if err == errHardCloseRequested {
-			return err
+			return nil, err
 		}
-		return fmt.Errorf("unexpected end of negotiation: %s", err)
+		return nil, fmt.Errorf("unexpected end of negotiation: %s", err)
 	}
 
 	heloMessage, ok := message.(*protocolHELO)
 	if !ok {
 		if messageImpl, ok := message.(eventsMessage); ok {
 			// Backwards compatible path with older log-courier which do not perform a negotiation
-			event := transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
-			if err := t.sendEvent(event); err != nil {
-				return err
-			}
-			// Now go async
-			return nil
+			return transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events()), nil
 		}
-		return fmt.Errorf("unexpected %T during negotiation, expected protocolHELO", message)
+		return nil, fmt.Errorf("unexpected %T during negotiation, expected protocolHELO", message)
 	}
 
 	log.Infof("[R %s < %s] Remote is %s", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String(), heloMessage.Client())
 
 	log.Debugf("[R %s > %s] Sending protocol version", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
 	if err := t.writeMsg(createProtocolVERS()); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return nil, nil
 }
 
 // clientNegotiation works out the protocol version supported by the remote
