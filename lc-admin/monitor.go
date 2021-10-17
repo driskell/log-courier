@@ -100,7 +100,7 @@ func (m *monitor) Run() error {
 
 	termWidth, termHeight := ui.TerminalDimensions()
 
-	menuItems := make([]string, len(m.views))
+	menuItems := make([]string, 0, len(m.views))
 	for _, view := range m.views {
 		if view.enabled {
 			menuItems = append(menuItems, fmt.Sprintf("[[%s]](fg:black,bg:white) %s", view.key, view.name))
