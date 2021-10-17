@@ -118,7 +118,13 @@ func (a *lcAdmin) loadConfig() {
 			os.Exit(1)
 		}
 
-		a.adminConnect = config.Section("admin").(*admin.Config).Bind
+		adminConfig := config.Section("admin").(*admin.Config)
+		if !adminConfig.Enabled {
+			fmt.Printf("Unable to connect: the admin interface is disabled\n")
+			os.Exit(1)
+		}
+
+		a.adminConnect = adminConfig.Bind
 	}
 }
 
