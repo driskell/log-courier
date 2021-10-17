@@ -58,6 +58,7 @@
   - [`receivers`](#receivers)
     - [`enabled` (receiver)](#enabled-receiver)
     - [`listen`](#listen)
+    - [`max pending payloads` (receiver)](#max-pending-payloads-receiver)
     - [`max tls version` (receiver)](#max-tls-version-receiver)
     - [`min tls version` (receiver)](#min-tls-version-receiver)
     - [`ssl certificate` (receiver)](#ssl-certificate-receiver)
@@ -700,6 +701,23 @@ Sets the list of endpoints to listen on. Accepted formats for each endpoint entr
 - `hostname:port` (A DNS lookup is performed)
 - `@hostname` (A SRV DNS lookup is performed, with further DNS lookups if
 required)
+
+### `max pending payloads` (receiver)
+
+Number. Optional. Default: 10
+Since **alpha** (not yet released)
+
+The maximum number of spools that can be in process from a connection at any
+one time. Each spool will be kept in memory until it is fully processed and
+acknowledged by the transport.
+
+If a connection attempts to send more than this many spools to Log Carver,
+Log Carver will stop reading from the connection until it has acknowledged
+all pending payloads, and will then close the connection, forcing the client
+to retry.
+
+*You should only change this value if you changed the equivilant value on a
+Log Courier client.*
 
 ### `max tls version` (receiver)
 

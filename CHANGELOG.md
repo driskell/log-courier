@@ -6,11 +6,21 @@ Log Courier / Log Carver
 
 - Added `last_error` and `last_error_time` to `lc-admin` for endpoints, so that the last error can be inspected
 - Improved to `random` transport method so that a failed endpoint remains active and retrying until the switch happens, allowing it's status and last error to be seen in `lc-admin` instead of `endpoints: none`
+- Improved moving average speed calculations
+- Fixed panic in `test` transport when a payload containing a single event is encountered
+- Fixed startup hang if the pipeline fails to start, for example when a port is already in use
 
 Log Carver
 
+- Added `max pending payloads` configuration to `receiver` section, to ensure clients cannot DoS Log Carver
 - Fix a connection failing during attempt to gracefully shut it down
 - Fix a possible deadlock in receiver shutdown due to late acknowledgements for a failed connection during shutdown
+
+`lc-admin`
+
+- **Breaking Change:** Removed the prompt when `lc-admin` is run without arguments and replaced it with an interactive console
+- Added screens for monitoring the prospector, receiver and publisher, which refresh every second
+- Note that scrolling is not yet implemented and so a larger terminal screen may be required to see all data for busy instances
 
 Logstash Input Plugin
 
