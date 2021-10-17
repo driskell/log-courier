@@ -145,20 +145,17 @@ func (a *App) Run() {
 	// Check config
 	a.Config()
 
-	go a.pipeline.Run(a.config)
+	go a.pipeline.Run(a.config, a.signalChan)
 
 	a.registerSignals()
 
 SignalLoop:
-	for {
-		select {
-		case signal := <-a.signalChan:
-			if signal == nil || isShutdownSignal(signal) {
-				break SignalLoop
-			}
-
-			a.ReloadConfig()
+	for signal := range a.signalChan {
+		if signal == nil || isShutdownSignal(signal) {
+			break SignalLoop
 		}
+
+		a.ReloadConfig()
 	}
 
 	a.pipeline.Shutdown()
@@ -187,6 +184,16 @@ func (a *App) Config() *config.Config {
 		panic("StartUp has not been called")
 	}
 	return a.config
+}
+
+// Name returns the app name
+func (a *App) Name() string {
+	return a.name
+}
+
+// Version returns the app version
+func (a *App) Version() string {
+	return a.version
 }
 
 // configureLogging enables the available logging backends

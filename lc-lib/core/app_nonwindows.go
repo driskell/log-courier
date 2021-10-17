@@ -41,11 +41,7 @@ func (a *App) registerSignals() {
 
 // isShutdownSignal returns true if the signal provided is a shutdown signal
 func isShutdownSignal(signal os.Signal) bool {
-	if signal == syscall.SIGHUP {
-		return false
-	}
-
-	return true
+	return signal != syscall.SIGHUP
 }
 
 // configureLoggingPlatform enables platform specific logging backends in the
@@ -60,7 +56,7 @@ func (a *App) configureLoggingPlatform(backends *[]logging.Backend) error {
 	if a.config.General().LogSyslog {
 		syslogBackend, err := logging.NewSyslogBackend(path.Base(os.Args[0]))
 		if err != nil {
-			return fmt.Errorf("Failed to open syslog: %s", err)
+			return fmt.Errorf("failed to open syslog: %s", err)
 		}
 		newBackends := append(*backends, syslogBackend)
 		*backends = newBackends
