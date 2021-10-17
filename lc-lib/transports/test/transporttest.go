@@ -49,7 +49,7 @@ func (t *transportTest) ReloadConfig(netConfig *transports.Config) bool {
 func (t *transportTest) SendEvents(nonce string, events []*event.Event) error {
 	endSequence := uint32(len(events))
 	sequence := endSequence
-	if rand.Intn(1) == 0 {
+	if sequence > 1 && rand.Intn(1) == 0 {
 		// Generate a split acknowledgement
 		sequence = uint32(rand.Intn(int(sequence)-1) + 1)
 	}
@@ -95,7 +95,7 @@ func (t *transportTest) Ping() error {
 			return
 		}
 		t.eventChan <- transports.NewPongEvent(t.ctx)
-	}, fmt.Sprintf("[%s] Sending pong response", t.server))
+	}, fmt.Sprintf("[T %s] Sending pong response", t.server))
 	return nil
 }
 
