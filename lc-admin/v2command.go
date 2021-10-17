@@ -73,8 +73,8 @@ func (a *v2Command) setupClient() error {
 	a.client = client
 
 	if !a.quiet {
-		_, version := client.RemoteClient()
-		fmt.Printf("Detected remote version %s\n", version)
+		name, version := client.RemoteClient()
+		fmt.Printf("Detected remote %s v%s\n", name, version)
 	}
 
 	return nil
