@@ -43,10 +43,12 @@ func CalculateSpeed(duration time.Duration, average float64, measurement float64
 // CalculateRunningAverage returns a running average
 // On the first call, where the existing average is 0, it will return the
 // measurement unchanged
+// (Exponential moving average)
 func CalculateRunningAverage(period float64, totalPeriods float64, average float64, measurement float64) float64 {
 	if average == 0. {
 		return measurement
 	}
 
-	return measurement + math.Exp(period/-totalPeriods)*(average-measurement)
+	exp := math.Exp(period / -totalPeriods)
+	return (1-exp)*measurement + exp*(average)
 }
