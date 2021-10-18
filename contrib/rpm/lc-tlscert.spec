@@ -34,7 +34,7 @@ install -m 0755 "%{_builddir}/bin/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
 
 # Install docs
 mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
-install -m 0644 docs/log-courier/SSLCertificateUtility.md %{buildroot}%{_docdir}/%{name}-%{version}/
+install -m 0644 docs/SSLCertificateUtility.md %{buildroot}%{_docdir}/%{name}-%{version}/
 
 %clean
 rm -rf $RPM_BUILD_ROOT

@@ -45,7 +45,7 @@ install -m 0755 "%{_builddir}/bin/lc-admin" %{buildroot}%{_bindir}/lc-admin
 
 # Install docs
 mkdir -p %{buildroot}%{_docdir}/%{name}-%{version}
-install -m 0644 docs/log-courier/AdministrationUtility.md %{buildroot}%{_docdir}/%{name}-%{version}/
+install -m 0644 docs/AdministrationUtility.md %{buildroot}%{_docdir}/%{name}-%{version}/
 
 %clean
 rm -rf $RPM_BUILD_ROOT
