@@ -46,6 +46,7 @@ type prospectorResponse struct {
 	} `json:"status"`
 }
 
+// Prosector is a screen for monitoring open files
 type Prospector struct {
 	*view
 	client     *admin.Client
@@ -56,6 +57,7 @@ type Prospector struct {
 	gauges     []*widgets.Gauge
 }
 
+// NewProspector creates a new drawable Prospector view
 func NewProspector(client *admin.Client, updateChan chan<- interface{}) View {
 	p := &Prospector{
 		client:     client,
@@ -64,8 +66,29 @@ func NewProspector(client *admin.Client, updateChan chan<- interface{}) View {
 
 	p.view = newView()
 	p.table = lcwidgets.NewTable()
+	p.table.ColumnNames = []string{"Path", "Orphaned", "Status", "Lines", "Completion"}
 
 	return p
+}
+
+// ScrollUp moves the viewable area upwards one row
+func (p *Prospector) ScrollUp() {
+	p.table.ScrollUp()
+}
+
+// PageUp moves the viewable area upwards one page
+func (p *Prospector) PageUp() {
+	p.table.PageUp()
+}
+
+// ScrollDown moves the viewable area downwards one row
+func (p *Prospector) ScrollDown() {
+	p.table.ScrollDown()
+}
+
+// PageDown moves the viewable area downwards one page
+func (p *Prospector) PageDown() {
+	p.table.PageDown()
 }
 
 // StartUpdate begins a background update, and returns result on the update channel
@@ -106,13 +129,48 @@ func (p *Prospector) CompleteUpdate(resp interface{}) {
 			p.gauges[idx] = nil
 		}
 	}
+
+	var rows [][]interface{}
+	if p.data == nil {
+		rows = make([][]interface{}, 1)
+	} else {
+		rows = make([][]interface{}, len(p.data.Files)*50)
+	}
+
+	if p.data == nil {
+		rows[0] = []interface{}{"Loading...", "", "", "", ""}
+	} else {
+		idx := 0
+		for i := 0; i < 50; i++ {
+			for dataIdx, data := range p.data.Files {
+				rows[idx] = make([]interface{}, 5)
+				rows[idx][0] = data.Path + fmt.Sprintf(" %d", i)
+				rows[idx][1] = data.Orphaned
+				rows[idx][2] = data.Status
+
+				if data.Harvester != nil {
+					rows[idx][3] = fmt.Sprintf("%.0f", data.Harvester.ProcessedLines)
+					rows[idx][4] = p.gauges[dataIdx]
+				} else {
+					rows[idx][3] = "-"
+					rows[idx][4] = "-"
+				}
+
+				idx += 1
+			}
+		}
+
+		sort.Slice(rows, func(i, j int) bool {
+			return strings.Compare(rows[i][0].(string), rows[j][0].(string)) == -1
+		})
+	}
+
+	p.table.Rows = rows
 }
 
-func (p *Prospector) Draw(buf *ui.Buffer) {
-	p.view.Draw(buf)
-	if p.err != nil {
-		return
-	}
+// SetRect implements the Drawable interface
+func (p *Prospector) SetRect(x1, y1, x2, y2 int) {
+	p.view.SetRect(x1, y1, x2, y2)
 
 	// 4*3+2 for dividers and padding
 	// 10 for orphaned
@@ -122,44 +180,16 @@ func (p *Prospector) Draw(buf *ui.Buffer) {
 	calculatedWidth := int((p.Inner.Dx() - 14 - 10 - 10 - 20) / 2)
 	columnWidths := []int{calculatedWidth, 10, 10, 20, calculatedWidth}
 
-	var rows [][]interface{}
-	if p.data == nil {
-		rows = make([][]interface{}, 3)
-	} else {
-		rows = make([][]interface{}, 2+len(p.data.Files))
-	}
-
-	rows[0] = []interface{}{"[Path](mod:bold)", "[Orphaned](mod:bold)", "[Status](mod:bold)", "[Lines](mod:bold)", "[Completion](mod:bold)"}
-	rows[1] = nil
-
-	if p.data == nil {
-		rows[2] = []interface{}{"Loading...", "", "", "", ""}
-	} else {
-		idx := 2
-		for dataIdx, data := range p.data.Files {
-			rows[idx] = make([]interface{}, 5)
-			rows[idx][0] = data.Path
-			rows[idx][1] = data.Orphaned
-			rows[idx][2] = data.Status
-
-			if data.Harvester != nil {
-				rows[idx][3] = fmt.Sprintf("%.0f", data.Harvester.ProcessedLines)
-				rows[idx][4] = p.gauges[dataIdx]
-			} else {
-				rows[idx][3] = "-"
-				rows[idx][4] = "-"
-			}
-
-			idx += 1
-		}
-
-		sort.Slice(rows[2:], func(i, j int) bool {
-			return strings.Compare(rows[2+i][0].(string), rows[2+j][0].(string)) == -1
-		})
-	}
-
 	p.table.ColumnWidths = columnWidths
-	p.table.Rows = rows
 	p.table.SetRect(p.Min.X, p.Min.Y, p.Max.X, p.Max.Y)
+}
+
+// Draw implements the Drawable interface
+func (p *Prospector) Draw(buf *ui.Buffer) {
+	p.view.Draw(buf)
+	if p.err != nil {
+		return
+	}
+
 	p.table.Draw(buf)
 }

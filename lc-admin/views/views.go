@@ -21,6 +21,7 @@ import (
 	"github.com/gizak/termui/v3/widgets"
 )
 
+// View represents an lc-admin screen
 type View interface {
 	ui.Drawable
 	StartUpdate()
@@ -38,6 +39,7 @@ func newView() *view {
 	}
 }
 
+// Draw implements the Drawable interface
 func (v *view) Draw(buf *ui.Buffer) {
 	v.Block.Draw(buf)
 

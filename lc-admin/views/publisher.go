@@ -46,6 +46,7 @@ type publisherResponse struct {
 	} `json:"status"`
 }
 
+// Publisher is a screen for monitoring transports
 type Publisher struct {
 	*view
 	client     *admin.Client
@@ -57,6 +58,7 @@ type Publisher struct {
 	mainGauge  *widgets.Gauge
 }
 
+// NewPublisher creates a new drawable Publisher view
 func NewPublisher(client *admin.Client, updateChan chan<- interface{}) View {
 	p := &Publisher{
 		client:     client,
@@ -65,9 +67,30 @@ func NewPublisher(client *admin.Client, updateChan chan<- interface{}) View {
 
 	p.view = newView()
 	p.table = lcwidgets.NewTable()
+	p.table.ColumnNames = []string{"Server", "Status", "Time(ms) Per Event", "Lines", "Pending", "Last Error Time", "Last Error"}
 	p.mainGauge = widgets.NewGauge()
 
 	return p
+}
+
+// ScrollUp moves the viewable area upwards one row
+func (p *Publisher) ScrollUp() {
+	p.table.ScrollUp()
+}
+
+// PageUp moves the viewable area upwards one page
+func (p *Publisher) PageUp() {
+	p.table.PageUp()
+}
+
+// ScrollDown moves the viewable area downwards one row
+func (p *Publisher) ScrollDown() {
+	p.table.ScrollDown()
+}
+
+// PageDown moves the viewable area downwards one page
+func (p *Publisher) PageDown() {
+	p.table.PageDown()
 }
 
 // StartUpdate begins a background update, and returns result on the update channel
@@ -99,8 +122,63 @@ func (p *Publisher) CompleteUpdate(resp interface{}) {
 	p.mainGauge.Percent = int(p.data.Status.PendingPayloads * 100 / p.data.Status.MaxPendingPayloads)
 	p.mainGauge.Border = false
 	p.mainGauge.Label = fmt.Sprintf("%d/%d", p.data.Status.PendingPayloads, p.data.Status.MaxPendingPayloads)
+
+	var rows [][]interface{}
+	if p.data == nil {
+		rows = make([][]interface{}, 1)
+	} else {
+		rows = make([][]interface{}, len(p.data.Endpoints))
+	}
+
+	if p.data == nil {
+		rows[0] = []interface{}{"Loading...", "", "", "", "", "", ""}
+	} else {
+		idx := 0
+		for _, data := range p.data.Endpoints {
+			rows[idx] = make([]interface{}, 7)
+			rows[idx][0] = data.Server
+			rows[idx][1] = data.Status
+			rows[idx][2] = fmt.Sprintf("%.3f", data.AverageLatency)
+			rows[idx][3] = fmt.Sprintf("%d", data.PublishedLines)
+			rows[idx][4] = fmt.Sprintf("%d", data.PendingPayloads)
+			if data.LastError == nil || data.LastErrorTime == nil {
+				rows[idx][5] = ""
+				rows[idx][6] = ""
+			} else {
+				rows[idx][5] = *data.LastErrorTime
+				rows[idx][6] = *data.LastError
+			}
+
+			idx += 1
+		}
+
+		sort.Slice(rows, func(i, j int) bool {
+			return strings.Compare(rows[i][0].(string), rows[j][0].(string)) == -1
+		})
+	}
+
+	p.table.Rows = rows
 }
 
+// SetRect implements the Drawable interface
+func (p *Publisher) SetRect(x1, y1, x2, y2 int) {
+	p.view.SetRect(x1, y1, x2, y2)
+
+	// 6*3+2 for dividers and padding
+	// 10 for status
+	// 20 for latency
+	// 20 for lines
+	// 10 for pending
+	// 21 for last error date (19 char RFC)
+	// divide rest unevenly
+	calculatedWidth := int((p.Inner.Dx() - 20 - 10 - 20 - 20 - 10 - 21) / 2)
+	columnWidths := []int{int(float64(calculatedWidth) * 0.5), 10, 20, 20, 10, 21, int(float64(calculatedWidth) * 1.5)}
+
+	p.table.ColumnWidths = columnWidths
+	p.table.SetRect(p.Min.X, p.Inner.Min.Y+1, p.Max.X, p.Max.Y)
+}
+
+// Draw implements the Drawable interface
 func (p *Publisher) Draw(buf *ui.Buffer) {
 	p.view.Draw(buf)
 	if p.err != nil {
@@ -132,57 +210,6 @@ func (p *Publisher) Draw(buf *ui.Buffer) {
 	buf.Fill(ui.NewCell(ui.HORIZONTAL_LINE, p.Block.BorderStyle), image.Rect(x, y, x+p.Inner.Dx(), y+1))
 	buf.SetCell(ui.NewCell(ui.VERTICAL_RIGHT, p.Block.BorderStyle), image.Point{p.Min.X, y})
 	buf.SetCell(ui.NewCell(ui.VERTICAL_LEFT, p.Block.BorderStyle), image.Point{p.Max.X - 1, y})
-	y += 1
 
-	// 6*3+2 for dividers and padding
-	// 10 for status
-	// 20 for latency
-	// 20 for lines
-	// 10 for pending
-	// 21 for last error date (19 char RFC)
-	// divide rest unevenly
-	calculatedWidth := int((p.Inner.Dx() - 20 - 10 - 20 - 20 - 10 - 21) / 2)
-	columnWidths := []int{int(float64(calculatedWidth) * 0.5), 10, 20, 20, 10, 21, int(float64(calculatedWidth) * 1.5)}
-
-	var rows [][]interface{}
-	if p.data == nil {
-		rows = make([][]interface{}, 3)
-	} else {
-		rows = make([][]interface{}, 2+len(p.data.Endpoints))
-	}
-
-	rows[0] = []interface{}{"[Server](mod:bold)", "[Status](mod:bold)", "[Time(ms) Per Event](mod:bold)", "[Lines](mod:bold)", "[Pending](mod:bold)", "[Last Error Time](mod:bold)", "[Last Error](mod:bold)"}
-	rows[1] = nil
-
-	if p.data == nil {
-		rows[2] = []interface{}{"Loading...", "", "", "", "", "", ""}
-	} else {
-		idx := 2
-		for _, data := range p.data.Endpoints {
-			rows[idx] = make([]interface{}, 7)
-			rows[idx][0] = data.Server
-			rows[idx][1] = data.Status
-			rows[idx][2] = fmt.Sprintf("%.3f", data.AverageLatency)
-			rows[idx][3] = fmt.Sprintf("%d", data.PublishedLines)
-			rows[idx][4] = fmt.Sprintf("%d", data.PendingPayloads)
-			if data.LastError == nil || data.LastErrorTime == nil {
-				rows[idx][5] = ""
-				rows[idx][6] = ""
-			} else {
-				rows[idx][5] = *data.LastErrorTime
-				rows[idx][6] = *data.LastError
-			}
-
-			idx += 1
-		}
-
-		sort.Slice(rows[2:], func(i, j int) bool {
-			return strings.Compare(rows[2+i][0].(string), rows[2+j][0].(string)) == -1
-		})
-	}
-
-	p.table.ColumnWidths = columnWidths
-	p.table.Rows = rows
-	p.table.SetRect(x-1, y-1, p.Inner.Max.X+1, p.Inner.Max.Y+1)
 	p.table.Draw(buf)
 }

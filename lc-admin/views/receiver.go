@@ -46,6 +46,7 @@ type receiverResponse struct {
 	} `json:"status"`
 }
 
+// Receiver is a screen for monitoring connections in the receiver
 type Receiver struct {
 	*view
 	client     *admin.Client
@@ -56,6 +57,7 @@ type Receiver struct {
 	gauges     []*widgets.Gauge
 }
 
+// NewReceiver creates a new drawable Receiver view
 func NewReceiver(client *admin.Client, updateChan chan<- interface{}) View {
 	p := &Receiver{
 		client:     client,
@@ -64,8 +66,29 @@ func NewReceiver(client *admin.Client, updateChan chan<- interface{}) View {
 
 	p.view = newView()
 	p.table = lcwidgets.NewTable()
+	p.table.ColumnNames = []string{"Remote", "Description", "Lines", "Pending"}
 
 	return p
+}
+
+// ScrollUp moves the viewable area upwards one row
+func (p *Receiver) ScrollUp() {
+	p.table.ScrollUp()
+}
+
+// PageUp moves the viewable area upwards one page
+func (p *Receiver) PageUp() {
+	p.table.PageUp()
+}
+
+// ScrollDown moves the viewable area downwards one row
+func (p *Receiver) ScrollDown() {
+	p.table.ScrollDown()
+}
+
+// PageDown moves the viewable area downwards one page
+func (p *Receiver) PageDown() {
+	p.table.PageDown()
 }
 
 // StartUpdate begins a background update, and returns result on the update channel
@@ -116,34 +139,18 @@ func (p *Receiver) CompleteUpdate(resp interface{}) {
 		p.gauges[idx].Border = false
 		p.gauges[idx].Label = fmt.Sprintf("%d/%d", data.PendingPayloads, 10)
 	}
-}
-
-func (p *Receiver) Draw(buf *ui.Buffer) {
-	p.view.Draw(buf)
-	if p.err != nil {
-		return
-	}
-
-	// 3*3+2 for dividers and padding
-	// 20 for lines
-	// divide amongst remaining 3 columns
-	calculatedWidth := int((p.Inner.Dx() - 11 - 20) / 3)
-	columnWidths := []int{calculatedWidth, calculatedWidth, 20, calculatedWidth}
 
 	var rows [][]interface{}
 	if p.data == nil {
-		rows = make([][]interface{}, 3)
+		rows = make([][]interface{}, 1)
 	} else {
-		rows = make([][]interface{}, 2+len(p.data.Connections))
+		rows = make([][]interface{}, len(p.data.Connections))
 	}
 
-	rows[0] = []interface{}{"[Remote](mod:bold)", "[Description](mod:bold)", "[Lines](mod:bold)", "[Pending](mod:bold)"}
-	rows[1] = nil
-
 	if p.data == nil {
-		rows[2] = []interface{}{"Loading...", "", "", ""}
+		rows[0] = []interface{}{"Loading...", "", "", ""}
 	} else {
-		idx := 2
+		idx := 0
 		for dataIdx, data := range p.data.Connections {
 			rows[idx] = make([]interface{}, 4)
 			rows[idx][0] = data.Remote
@@ -157,13 +164,34 @@ func (p *Receiver) Draw(buf *ui.Buffer) {
 			idx += 1
 		}
 
-		sort.Slice(rows[2:], func(i, j int) bool {
-			return strings.Compare(rows[2+i][0].(string), rows[2+j][0].(string)) == -1
+		sort.Slice(rows, func(i, j int) bool {
+			return strings.Compare(rows[i][0].(string), rows[j][0].(string)) == -1
 		})
 	}
 
-	p.table.ColumnWidths = columnWidths
 	p.table.Rows = rows
+}
+
+// SetRect implements the Drawable interface
+func (p *Receiver) SetRect(x1, y1, x2, y2 int) {
+	p.view.SetRect(x1, y1, x2, y2)
+
+	// 3*3+2 for dividers and padding
+	// 20 for lines
+	// divide amongst remaining 3 columns
+	calculatedWidth := int((p.Inner.Dx() - 11 - 20) / 3)
+	columnWidths := []int{calculatedWidth, calculatedWidth, 20, calculatedWidth}
+
+	p.table.ColumnWidths = columnWidths
 	p.table.SetRect(p.Min.X, p.Min.Y, p.Max.X, p.Max.Y)
+}
+
+// Draw implements the Drawable interface
+func (p *Receiver) Draw(buf *ui.Buffer) {
+	p.view.Draw(buf)
+	if p.err != nil {
+		return
+	}
+
 	p.table.Draw(buf)
 }

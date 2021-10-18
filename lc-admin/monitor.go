@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/driskell/log-courier/lc-admin/lcwidgets"
 	"github.com/driskell/log-courier/lc-admin/views"
 	"github.com/driskell/log-courier/lc-lib/admin"
 	ui "github.com/gizak/termui/v3"
@@ -138,8 +139,6 @@ func (m *monitor) Run() error {
 		select {
 		case e := <-uiEvents:
 			switch e.ID {
-			case "q", "<C-c>":
-				return nil
 			case "<Resize>":
 				payload := e.Payload.(ui.Resize)
 				menu.SetRect(0, 0, termWidth, 1)
@@ -150,6 +149,28 @@ func (m *monitor) Run() error {
 				currentView.SetRect(0, 1, termWidth, termHeight-1)
 				ui.Clear()
 				ui.Render(menu, currentView, status)
+			case "q", "<C-c>":
+				return nil
+			case "u", "<Up>", "<MouseWheelUp>":
+				if scrollable, ok := currentView.(lcwidgets.Scrollable); ok {
+					scrollable.ScrollUp()
+					ui.Render(menu, currentView, status)
+				}
+			case "d", "<Down>", "<MouseWheelDown>":
+				if scrollable, ok := currentView.(lcwidgets.Scrollable); ok {
+					scrollable.ScrollDown()
+					ui.Render(menu, currentView, status)
+				}
+			case "<PageUp>":
+				if scrollable, ok := currentView.(lcwidgets.Scrollable); ok {
+					scrollable.PageUp()
+					ui.Render(menu, currentView, status)
+				}
+			case "<PageDown>":
+				if scrollable, ok := currentView.(lcwidgets.Scrollable); ok {
+					scrollable.PageDown()
+					ui.Render(menu, currentView, status)
+				}
 			default:
 				if view, ok := m.viewsByKey[e.ID]; ok && view.enabled {
 					currentView = view.factory(m.client, m.updateChan)
