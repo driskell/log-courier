@@ -134,30 +134,28 @@ func (p *Prospector) CompleteUpdate(resp interface{}) {
 	if p.data == nil {
 		rows = make([][]interface{}, 1)
 	} else {
-		rows = make([][]interface{}, len(p.data.Files)*50)
+		rows = make([][]interface{}, len(p.data.Files))
 	}
 
 	if p.data == nil {
 		rows[0] = []interface{}{"Loading...", "", "", "", ""}
 	} else {
 		idx := 0
-		for i := 0; i < 50; i++ {
-			for dataIdx, data := range p.data.Files {
-				rows[idx] = make([]interface{}, 5)
-				rows[idx][0] = data.Path + fmt.Sprintf(" %d", i)
-				rows[idx][1] = data.Orphaned
-				rows[idx][2] = data.Status
+		for dataIdx, data := range p.data.Files {
+			rows[idx] = make([]interface{}, 5)
+			rows[idx][0] = data.Path
+			rows[idx][1] = data.Orphaned
+			rows[idx][2] = data.Status
 
-				if data.Harvester != nil {
-					rows[idx][3] = fmt.Sprintf("%.0f", data.Harvester.ProcessedLines)
-					rows[idx][4] = p.gauges[dataIdx]
-				} else {
-					rows[idx][3] = "-"
-					rows[idx][4] = "-"
-				}
-
-				idx += 1
+			if data.Harvester != nil {
+				rows[idx][3] = fmt.Sprintf("%.0f", data.Harvester.ProcessedLines)
+				rows[idx][4] = p.gauges[dataIdx]
+			} else {
+				rows[idx][3] = "-"
+				rows[idx][4] = "-"
 			}
+
+			idx += 1
 		}
 
 		sort.Slice(rows, func(i, j int) bool {
