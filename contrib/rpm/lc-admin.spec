@@ -20,7 +20,7 @@ BuildRequires: git
 lc-admin is a remote administration tool for the Log Courier Suite.
 
 %prep
-%setup -q -n %{name}-%{version}
+%setup -q -n log-courier-%{version}
 
 %build
 # Configure platform specific defaults

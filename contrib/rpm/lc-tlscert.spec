@@ -20,7 +20,7 @@ BuildRequires: git
 lc-tlscert is a utility for quickly generating self-signed certificates.
 
 %prep
-%setup -q -n %{name}-%{version}
+%setup -q -n log-courier-%{version}
 
 %build
 export GOBIN=%{_builddir}/bin
