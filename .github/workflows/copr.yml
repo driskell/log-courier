@@ -72,3 +72,61 @@ jobs:
       with:
         name: log-carver
         path: artifacts/*
+
+  release-lc-admin:
+    name: Release Administration Utility
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: main
+        path: .main
+    - name: Build and Submit
+      uses: driskell/log-courier/.github/actions/rpm@main
+      env:
+        NAME: lc-admin
+        REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+        VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+        COPR_CLI: ${{ secrets.COPR_CLI }}
+        GNU_PG: ${{ secrets.GNU_PG }}
+        TARGET_REPO: log-courier2
+    - name: Upload SRPM
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: lc-admin
+        path: artifacts/*
+
+  release-lc-tlscert:
+    name: Release SSL Certificate Utility
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: main
+        path: .main
+    - name: Build and Submit
+      uses: driskell/log-courier/.github/actions/rpm@main
+      env:
+        NAME: lc-tlscert
+        REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+        VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+        COPR_CLI: ${{ secrets.COPR_CLI }}
+        GNU_PG: ${{ secrets.GNU_PG }}
+        TARGET_REPO: log-courier2
+    - name: Upload SRPM
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: lc-tlscert
+        path: artifacts/*

@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+include /usr/share/dpkg/pkg-info.mk
+
+%:
+	dh $@ --with=systemd
+
+override_dh_auto_clean:
+	# Nothing to do
+
+override_dh_auto_build:
+	# We pre-compiled through cross-compilation already in the source, so just switch to the correct pre-compiled bin
+	# This is so we could use latest Go to compile
+	# Although we can get 1.15 on focal we cannot get anything near it on trusty (oldest supported release)
+	# Thus, until that is EOL (or someone reports this as broken), this is the best way to compile
+	mv "bin-${DEB_HOST_ARCH}" bin
+
+override_dh_auto_install:
+	# Install binary
+	mkdir -p debian/lc-tlscert/usr/bin
+	install -m 0755 bin/lc-tlscert debian/lc-tlscert/usr/bin/lc-tlscert
+
+	# Install copyright and docs
+	mkdir -p debian/lc-tlscert/usr/share/doc/lc-tlscert
+	install -m 0644 debian/copyright debian/lc-tlscert/usr/share/doc/lc-tlscert/copyright
+	cp -av docs/SSLCertificateUtility.md debian/lc-tlscert/usr/share/doc/lc-tlscert/

@@ -3,9 +3,9 @@ Section: contrib/admin
 Priority: optional
 Standards-Version: 3.9.5
 Maintainer: Jason Woods (Driskell) <devel@jasonwoods.me.uk>
-Build-Depends: debhelper (>= 9), git, dpkg-dev
+Build-Depends: debhelper (>= 9), dpkg-dev
 
 Package: log-courier
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, lc-admin (= ${binary:Version}), lc-tlscert (= ${binary:Version})
 Description: Log Courier is a lightweight tool created to ship log files speedily and securely, with low resource usage, to remote Logstash or Log Carver instances.

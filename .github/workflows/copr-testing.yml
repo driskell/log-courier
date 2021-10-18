@@ -68,3 +68,51 @@ jobs:
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2-testing
         SKIP_VERSION_CHECK: 1
+
+  release-lc-admin:
+    name: Release Administration Utility
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: main
+        path: .main
+    - name: Build and Submit
+      uses: driskell/log-courier/.github/actions/rpm@main
+      env:
+        NAME: lc-admin
+        REF: ${{ (github.event.ref && github.event.inputs.ref) || github.ref }}
+        VERSION: v${{ (github.event.inputs && github.event.inputs.run_number) || github.run_number }}${{ (github.event.inputs && github.event.inputs.serial) || '00' }}
+        COPR_CLI: ${{ secrets.COPR_CLI }}
+        GNU_PG: ${{ secrets.GNU_PG }}
+        TARGET_REPO: log-courier2-testing
+        SKIP_VERSION_CHECK: 1
+
+  release-lc-tlscert:
+    name: Release SSL Certificate Utility
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: main
+        path: .main
+    - name: Build and Submit
+      uses: driskell/log-courier/.github/actions/rpm@main
+      env:
+        NAME: lc-tlscert
+        REF: ${{ (github.event.ref && github.event.inputs.ref) || github.ref }}
+        VERSION: v${{ (github.event.inputs && github.event.inputs.run_number) || github.run_number }}${{ (github.event.inputs && github.event.inputs.serial) || '00' }}
+        COPR_CLI: ${{ secrets.COPR_CLI }}
+        GNU_PG: ${{ secrets.GNU_PG }}
+        TARGET_REPO: log-courier2-testing
+        SKIP_VERSION_CHECK: 1

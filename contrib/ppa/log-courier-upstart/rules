@@ -42,4 +42,9 @@ override_dh_auto_install:
 	# Install copyright and docs
 	mkdir -p debian/log-courier/usr/share/doc/log-courier
 	install -m 0644 debian/copyright debian/log-courier/usr/share/doc/log-courier/copyright
-	cp -av docs/log-courier/* debian/log-courier/usr/share/doc/log-courier/
+	cp -av docs/log-courier/*.md debian/log-courier/usr/share/doc/log-courier/
+	mkdir -p debian/log-courier/usr/share/doc/log-courier/codecs
+	cp -av docs/log-courier/codecs/*.md debian/log-courier/usr/share/doc/log-courier/codecs/
+	mkdir -p debian/log-courier/usr/share/doc/log-courier/examples
+	cp -av docs/log-courier/examples/*.conf debian/log-courier/usr/share/doc/log-courier/examples/
+	cp -av docs/log-courier/examples/*.yaml debian/log-courier/usr/share/doc/log-courier/examples/

@@ -23,6 +23,8 @@ Requires(postun): systemd
 BuildRequires: systemd
 %endif
 
+Requires: lc-admin = %{version}
+Requires: lc-tlscert = %{version}
 Requires: logrotate
 
 %description

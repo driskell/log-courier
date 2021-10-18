@@ -40,4 +40,8 @@ override_dh_auto_install:
 	# Install copyright and docs
 	mkdir -p debian/log-carver/usr/share/doc/log-carver
 	install -m 0644 debian/copyright debian/log-carver/usr/share/doc/log-carver/copyright
-	cp -av docs/log-carver/* debian/log-carver/usr/share/doc/log-carver/
+	cp -av docs/log-carver/*.md debian/log-carver/usr/share/doc/log-carver/
+	mkdir -p debian/log-carver/usr/share/doc/log-carver/actions
+	cp -av docs/log-carver/actions/*.md debian/log-carver/usr/share/doc/log-carver/actions/
+	mkdir -p debian/log-carver/usr/share/doc/log-carver/examples
+	cp -av docs/log-carver/examples/*.yaml debian/log-carver/usr/share/doc/log-carver/examples/
