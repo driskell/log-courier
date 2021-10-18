@@ -42,3 +42,6 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(0755,root,root,0755)
 %{_bindir}/lc-tlscert
+
+%defattr(0644,root,root,0755)
+%{_docdir}/%{name}-%{version}

@@ -3,7 +3,7 @@
 %define debug_package %{nil}
 
 Summary: Administration Utility
-Name: lc-tlscert
+Name: lc-admin
 Version: %%VERSION%%
 Release: 1%{dist}
 License: Apache
@@ -53,3 +53,6 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(0755,root,root,0755)
 %{_bindir}/lc-admin
+
+%defattr(0644,root,root,0755)
+%{_docdir}/%{name}-%{version}
