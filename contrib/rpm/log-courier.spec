@@ -40,8 +40,8 @@ export LC_DEFAULT_GENERAL_PERSIST_DIR=%{_var}/lib/log-courier
 export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
 
 export GOBIN=%{_builddir}/bin
-go generate -mod=vendor . ./lc-admin ./lc-tlscert
-go install -mod=vendor . ./lc-admin ./lc-tlscert
+go generate -mod=vendor .
+go install -mod=vendor .
 
 %check
 VERSION=$(%{_builddir}/bin/log-courier --version)
@@ -54,9 +54,6 @@ fi
 # Install binaries
 mkdir -p %{buildroot}%{_sbindir}
 install -m 0755 %{_builddir}/bin/log-courier %{buildroot}%{_sbindir}/log-courier
-mkdir -p %{buildroot}%{_bindir}
-install -m 0755 "%{_builddir}/bin/lc-admin" %{buildroot}%{_bindir}/lc-admin
-install -m 0755 "%{_builddir}/bin/lc-tlscert" %{buildroot}%{_bindir}/lc-tlscert
 
 # Install config directory
 mkdir -p %{buildroot}%{_sysconfdir}/log-courier
@@ -136,8 +133,6 @@ fi
 %files
 %defattr(0755,root,root,0755)
 %{_sbindir}/log-courier
-%{_bindir}/lc-admin
-%{_bindir}/lc-tlscert
 %if 0%{?rhel} < 7
 %{_sysconfdir}/init.d/log-courier
 %endif
