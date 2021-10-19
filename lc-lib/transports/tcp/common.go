@@ -54,6 +54,7 @@ var (
 	clientNameMapping map[string]string = map[string]string{
 		"LCOR": "Log Courier",
 		"LCVR": "Log Carver",
+		"RYLC": "Ruby Log Courier",
 	}
 )
 
@@ -90,7 +91,7 @@ func parseTLSVersion(version string, fallback uint16) (uint16, error) {
 	case "1.3":
 		return tls.VersionTLS13, nil
 	}
-	return tls.VersionTLS10, fmt.Errorf("invalid or unknown TLS version: '%s'", version)
+	return fallback, fmt.Errorf("invalid or unknown TLS version: '%s'", version)
 }
 
 func SetClientName(client string) {

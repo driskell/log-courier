@@ -18,6 +18,7 @@
 # limitations under the License.
 
 require 'log-courier/event_queue'
+require 'log-courier/protocol'
 require 'multi_json'
 require 'thread'
 require 'zlib'
@@ -104,12 +105,13 @@ module LogCourier
   class Client
     def initialize(options = {})
       @options = {
-        logger:       nil,
-        transport:    'tls',
-        spool_size:   1024,
-        idle_timeout: 5,
-        port:         nil,
-        addresses:    [],
+        logger:          nil,
+        transport:       'tls',
+        spool_size:      1024,
+        idle_timeout:    5,
+        port:            nil,
+        addresses:       [],
+        min_tls_version: 1.2,
       }.merge!(options)
 
       @logger = @options[:logger]

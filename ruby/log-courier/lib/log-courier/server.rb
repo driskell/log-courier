@@ -18,6 +18,7 @@
 # limitations under the License.
 
 require 'log-courier/event_queue'
+require 'log-courier/protocol'
 require 'multi_json'
 require 'thread'
 require 'zlib'
@@ -55,7 +56,6 @@ module LogCourier
       @options = {
         logger:     nil,
         transport:  'tls',
-        raw_events: true,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -64,11 +64,8 @@ module LogCourier
       when 'tcp', 'tls'
         require 'log-courier/server_tcp'
         @server = ServerTcp.new(@options)
-      when 'plainzmq', 'zmq'
-        require 'log-courier/server_zmq'
-        @server = ServerZmq.new(@options)
       else
-        fail 'input/courier: \'transport\' must be tcp, tls, plainzmq or zmq'
+        fail 'input/courier: \'transport\' must be tcp or tls'
       end
 
       # Grab the port back and update the logger context
@@ -200,7 +197,7 @@ module LogCourier
 
         # Decode the JSON
         begin
-          event = self.class.get_json_adapter.load(data_buf, :raw => @options[:raw_events])
+          event = self.class.get_json_adapter.load(data_buf)
         rescue self.class.get_json_parseerror => e
           @logger.warn e, :invalid_encodings => invalid_encodings, :hint => 'JSON parse failure, falling back to plain-text' unless @logger.nil?
           event = { 'message' => data_buf }

@@ -32,6 +32,7 @@ module LogCourier
         ssl_certificate:    nil,
         ssl_key:            nil,
         ssl_key_passphrase: nil,
+        min_tls_version:    1.2,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -52,7 +53,10 @@ module LogCourier
     def connect(io_control)
       loop do
         begin
-          break if tls_connect
+          if tls_connect
+            handshake(io_control)
+            break
+          end
         rescue ShutdownSignal
           raise
         end
@@ -68,22 +72,40 @@ module LogCourier
         begin
           run_send io_control
         rescue ShutdownSignal
-        rescue StandardError, NativeException => e
+        rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
           @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
           io_control << ['F']
-          return
         end
       end
       @recv_thread = Thread.new do
         begin
           run_recv io_control
         rescue ShutdownSignal
-        rescue StandardError, NativeException => e
+        rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
           @logger.warn e, :hint => 'Unknown read error' unless @logger.nil?
           io_control << ['F']
-          return
         end
       end
+      return
+    end
+
+    def handshake(io_control)
+      @ssl_client.write ['HELO', 8, 0, 1, 11, 0, 'RYLC'].pack('A4NCCCCA4')
+
+      signature, data = receive
+      if signature != 'VERS'
+        fail "Unexpected message during handshake: #{signature}" if signature != '????'
+        @vers = Protocol.parseHeloVers('')
+        @logger.info 'Remote does not support protocol handshake', :server_version => @vers[:client_version] unless @logger.nil?
+        return
+      end
+
+      @vers = Protocol.parseHeloVers(data)
+      @logger.info 'Remote identified', :server_version => @vers[:client_version] unless @logger.nil?
+    rescue ShutdownSignal
+    rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+      @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
+      io_control << ['F']
       return
     end
 
@@ -163,22 +185,7 @@ module LogCourier
 
     def run_recv(io_control)
       loop do
-        # Grab a header
-        header = @ssl_client.read(8)
-        fail EOFError if header.nil?
-
-        # Decode signature and length
-        signature, length = header.unpack('A4N')
-
-        if length > 1048576
-          # Too big raise error
-          @logger.warn 'Invalid message: data too big', :data_length => length unless @logger.nil?
-          io_control << ['F']
-          break
-        end
-
-        # Read remainder
-        message = @ssl_client.read(length)
+        signature, message = receive
 
         # Pass through to receive
         io_control << ['R', signature, message]
@@ -196,6 +203,25 @@ module LogCourier
       @logger.warn 'Connection closed by server' unless @logger.nil?
       io_control << ['F']
       return
+    end
+
+    def receive
+      # Grab a header
+      header = @ssl_client.read(8)
+      fail EOFError if header.nil?
+
+      # Decode signature and length
+      signature, length = header.unpack('A4N')
+
+      if length > 1048576
+        # Too big raise error
+        fail IOError, 'Invalid message: data too big'
+      end
+
+      # Read remainder
+      message = @ssl_client.read(length)
+
+      return signature, message
     end
 
     def tls_connect
@@ -216,8 +242,15 @@ module LogCourier
           ssl.set_params
           # Modify the default options to ensure SSLv2 and SSLv3 is disabled
           # This retains any beneficial options set by default in the current Ruby implementation
-          ssl.options |= OpenSSL::SSL::OP_NO_SSLv2 if defined?(OpenSSL::SSL::OP_NO_SSLv2)
-          ssl.options |= OpenSSL::SSL::OP_NO_SSLv3 if defined?(OpenSSL::SSL::OP_NO_SSLv3)
+          # TODO: https://github.com/jruby/jruby-openssl/pull/215 is fixed in JRuby 9.3.0.0
+          #       As of 7.15 Logstash, JRuby version is still 9.2
+          #       Once 9.3 is in use we can switch to using min_version and max_version
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv2
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv3
+          ssl.options |= OpenSSL::SSL::OP_NO_TLSv1 if @options[:min_tls_version] > 1
+          ssl.options |= OpenSSL::SSL::OP_NO_TLSv1_1 if @options[:min_tls_version] > 1.1
+          ssl.options |= OpenSSL::SSL::OP_NO_TLSv1_2 if @options[:min_tls_version] > 1.2
+          fail 'Invalid min_tls_version - max is 1.3' if @options[:min_tls_version] > 1.3
 
           # Set the certificate file
           unless @options[:ssl_certificate].nil?
@@ -244,11 +277,11 @@ module LogCourier
         @logger['address'] = address
         @logger['port'] = port
 
-        @logger.info 'Connected successfully' unless @logger.nil?
+        @logger.info 'Connected successfully', :ssl_version => @ssl_client.ssl_version unless @logger.nil?
         return true
       rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
         @logger.warn 'Connection failed', :error => e.message, :address => address, :port => port unless @logger.nil?
-      rescue StandardError, NativeException => e
+      rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
         @logger.warn e, :hint => 'Unknown connection failure', :address => address, :port => port unless @logger.nil?
       end
 

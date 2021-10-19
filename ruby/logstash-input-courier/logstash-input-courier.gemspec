@@ -1,7 +1,7 @@
 # Add platform conditions around java-only dependencies so GitHub dependency chart that is MRI only (I think) still works
 Gem::Specification.new do |gem|
   gem.name              = 'logstash-input-courier'
-  gem.version           = '1.10.1'
+  gem.version           = '1.11.0'
   gem.description       = 'Courier Input Logstash Plugin'
   gem.summary           =
     'Receive events from Log Courier and Logstash using the Courier protocol'

@@ -1,9 +1,8 @@
 PATH
   remote: .
   specs:
-    log-courier (1.10)
+    log-courier (1.11.0)
       cabin (~> 0.6)
-      ffi-rzmq (~> 2.0)
       multi_json (~> 1.10)
 
 GEM
@@ -12,16 +11,10 @@ GEM
     ast (2.4.0)
     cabin (0.9.0)
     diff-lcs (1.2.5)
-    ffi (1.12.2)
-    ffi (1.12.2-java)
-    ffi-rzmq (2.0.7)
-      ffi-rzmq-core (>= 1.0.7)
-    ffi-rzmq-core (1.0.7)
-      ffi
     jaro_winkler (1.5.4)
     jaro_winkler (1.5.4-java)
     jrjackson (0.4.9-java)
-    multi_json (1.14.1)
+    multi_json (1.15.0)
     oj (3.9.0)
     parallel (1.19.1)
     parser (2.7.0.4)
@@ -57,6 +50,7 @@ GEM
 PLATFORMS
   java
   ruby
+  universal-java-14
 
 DEPENDENCIES
   jrjackson (~> 0.4)
@@ -69,4 +63,4 @@ DEPENDENCIES
   ruby-prof (~> 0.15)
 
 BUNDLED WITH
-   1.17.3
+   2.2.29

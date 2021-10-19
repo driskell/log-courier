@@ -70,6 +70,7 @@ module LogCourier
         ssl_verify_ca:         nil,
         max_packet_size:       10_485_760,
         add_peer_fields:       false,
+        min_tls_version:       1.2,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -99,8 +100,15 @@ module LogCourier
           ssl.set_params
           # Modify the default options to ensure SSLv2 and SSLv3 is disabled
           # This retains any beneficial options set by default in the current Ruby implementation
-          ssl.options |= OpenSSL::SSL::OP_NO_SSLv2 if defined?(OpenSSL::SSL::OP_NO_SSLv2)
-          ssl.options |= OpenSSL::SSL::OP_NO_SSLv3 if defined?(OpenSSL::SSL::OP_NO_SSLv3)
+          # TODO: https://github.com/jruby/jruby-openssl/pull/215 is fixed in JRuby 9.3.0.0
+          #       As of 7.15 Logstash, JRuby version is still 9.2
+          #       Once 9.3 is in use we can switch to using min_version and max_version
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv2
+          ssl.options |= OpenSSL::SSL::OP_NO_SSLv3
+          ssl.options |= OpenSSL::SSL::OP_NO_TLSv1 if @options[:min_tls_version] > 1
+          ssl.options |= OpenSSL::SSL::OP_NO_TLSv1_1 if @options[:min_tls_version] > 1.1
+          ssl.options |= OpenSSL::SSL::OP_NO_TLSv1_2 if @options[:min_tls_version] > 1.2
+          fail 'Invalid min_tls_version - max is 1.3' if @options[:min_tls_version] > 1.3
 
           # Set the certificate file
           ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
@@ -170,7 +178,7 @@ module LogCourier
       return
     rescue ShutdownSignal
       return
-    rescue StandardError, NativeException => e
+    rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
       # Some other unknown problem
       @logger.warn e.message, :hint => 'Unknown error, shutting down' unless @logger.nil?
       return
@@ -199,6 +207,8 @@ module LogCourier
             client.close
             return
           end
+
+          @logger.info 'Connection setup successfully', :peer => peer, :ssl_version => client.ssl_version unless @logger.nil?
         end
 
         ConnectionTcp.new(@logger, client, peer, @options).run(&block)
@@ -221,6 +231,12 @@ module LogCourier
       @peer_fields = {}
       @in_progress = false
       @options = options
+      @client = 'Unknown'
+      @major_version = 0
+      @minor_version = 0
+      @patch_version = 0
+      @version = '0.0.0'
+      @client_version = 'Unknown'
 
       if @options[:add_peer_fields]
         @peer_fields['peer'] = peer
@@ -235,46 +251,13 @@ module LogCourier
     end
 
     def run(&block)
-      process_messages &block
-    rescue ShutdownSignal
-      # Shutting down
-      @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
-      return
-    rescue StandardError, NativeException => e
-      # Some other unknown problem
-      @logger.warn e.message, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
-      return
-    end
+      handshake(&block)
 
-    def process_messages
       loop do
-        # Read messages
-        # Each message begins with a header
-        # 4 byte signature
-        # 4 byte length
-        # Normally we would not parse this inside transport, but for TLS we have to in order to locate frame boundaries
-        signature, length = recv(8).unpack('A4N')
-
-        # Sanity
-        if length > @options[:max_packet_size]
-          fail ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
-        end
-
-        # While we're processing, EOF is bad as it may occur during send
-        @in_progress = true
-
-        # Read the message
-        if length == 0
-          data = ''
-        else
-          data = recv(length)
-        end
+        signature, data = receive
 
         # Send for processing
         yield signature, data, self
-
-        # If we EOF next it's a graceful close
-        @in_progress = false
       end
     rescue TimeoutError
       # Timeout of the connection, we were idle too long without a ping/pong
@@ -299,8 +282,71 @@ module LogCourier
       # Connection abort request due to a protocol error
       @logger.warn 'Protocol error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
       return
+    rescue ShutdownSignal
+      # Shutting down
+      @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
+      return
+    rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+      # Some other unknown problem
+      @logger.warn e.message, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
+      return
     ensure
       @fd.close rescue nil
+    end
+
+    def handshake(&block)
+      signature, data = receive
+      if signature == 'JDAT'
+        @helo = Protocol.parseHeloVers('')
+        @logger.info 'Remote does not support protocol handshake', :peer => @peer unless @logger.nil?
+        yield signature, data, self
+        return
+      elsif signature != 'HELO'
+        fail ProtocolError, "unexpected #{signature} message"
+      end
+
+      @helo = Protocol.parseHeloVers(data)
+      @logger.info 'Remote identified', :peer => @peer, :client_version => @helo[:client_version] unless @logger.nil?
+
+      # Flags 1 byte - EVNT flag = 0
+      # (Significant rewrite would be required to support streaming messages as currently we read
+      #  first and then yield for processing. To support EVNT we have to move protocol parsing to
+      #  the connection layer here so we can keep reading until we reach the end of the stream)
+      # Major Version 1 byte
+      # Minor Version 1 byte
+      # Patch Version 1 byte
+      # Client String 4 bytes
+      data = [1, 1, 11, 0, 'RYLC'].pack('CCCCA4')
+      send 'VERS', data
+    end
+
+    def receive()
+      # Read message
+      # Each message begins with a header
+      # 4 byte signature
+      # 4 byte length
+      # Normally we would not parse this inside transport, but for TLS we have to in order to locate frame boundaries
+      signature, length = recv(8).unpack('A4N')
+
+      # Sanity
+      if length > @options[:max_packet_size]
+        fail ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
+      end
+
+      # While we're processing, EOF is bad as it may occur during send
+      @in_progress = true
+
+      # Read the message
+      if length == 0
+        data = ''
+      else
+        data = recv(length)
+      end
+
+      # If we EOF next it's a graceful close
+      @in_progress = false
+
+      return signature, data
     end
 
     def send(signature, message)

@@ -26,16 +26,6 @@ module LogStash
     class Courier < LogStash::Inputs::Base
       config_name 'courier'
 
-      # Disable raw_events in the Log Courier gem if we're Logstash 1.5.5+ or
-      # 2.0.0+. Due to changes in those versions to JrJackson, JSON outputs like
-      # elasticsearch can be broken by our use of raw_events (which defaults
-      # true). See https://github.com/driskell/log-courier/issues/247
-      if Gem::Version.new(LOGSTASH_VERSION) >= Gem::Version.new('1.5.5')
-        RAW_EVENTS = false
-      else
-        RAW_EVENTS = true
-      end
-
       default :codec, 'plain'
 
       # The IP address to listen on
@@ -66,8 +56,8 @@ module LogStash
       # CA certificate to use when verifying client certificates
       config :ssl_verify_ca, validate: :path
 
-      # Curve secret key
-      config :curve_secret_key, validate: :string
+      # Set minimum TLS version
+      config :min_tls_version, validate: :number, default: 1.2
 
       # Max packet size
       config :max_packet_size, validate: :number
@@ -123,10 +113,7 @@ module LogStash
       private
 
       def options
-        result = {
-          raw_events: RAW_EVENTS
-        }
-
+        result = {}
         add_plugin_options result
         add_override_options result
       end
@@ -135,7 +122,7 @@ module LogStash
         [
           :logger, :address, :port, :transport, :ssl_certificate, :ssl_key,
           :ssl_key_passphrase, :ssl_verify, :ssl_verify_default_ca,
-          :ssl_verify_ca, :curve_secret_key
+          :ssl_verify_ca, :min_tls_version, :curve_secret_key
         ].each do |k|
           result[k] = send(k)
         end
