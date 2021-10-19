@@ -1,10 +1,11 @@
 # Change Log
 
-## Future
+## 2.7.0 (Future)
 
 Log Courier / Log Carver
 
 - Added `last_error` and `last_error_time` to `lc-admin` for endpoints, so that the last error can be inspected
+- Added the negotiated TLS version to connection messages and added additional logging where a remote does not support protocol handshakes
 - Improved to `random` transport method so that a failed endpoint remains active and retrying until the switch happens, allowing it's status and last error to be seen in `lc-admin` instead of `endpoints: none`
 - Improved moving average speed calculations
 - Fixed panic in `test` transport when a payload containing a single event is encountered
@@ -24,7 +25,11 @@ Log Carver
 
 Logstash Input Plugin
 
+- **Breaking Change:** Obsoleted and removed the `zmq` transport option
 - Updated dependencies to newer versions
+- Added `min_tls_version` configuration option that now defaults to 1.2 (#357)
+- Added protocol handshake support to output version of connecting clients
+- Added new log messages to output the negotiated TLS version of each connection and, where a handshake occurs, the remote's product and version
 
 ## 2.6.4
 
