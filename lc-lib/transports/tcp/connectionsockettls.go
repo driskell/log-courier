@@ -30,6 +30,7 @@ type connectionSocketTLS struct {
 	server    bool
 	poolDesc  string
 	subject   string
+	desc      string
 	*tls.Conn
 }
 
@@ -62,14 +63,15 @@ func (t *connectionSocketTLS) Setup(ctx context.Context) error {
 		return err
 	}
 
-	t.subject = ""
 	if len(t.ConnectionState().VerifiedChains) > 0 {
 		t.subject = t.ConnectionState().VerifiedChains[0][0].Subject.String()
+		t.desc = t.ConnectionState().VerifiedChains[0][0].Subject.CommonName
 	} else {
 		t.subject = "No client certificate"
+		t.desc = "No client certificate"
 	}
 
-	log.Notice("[%s %s - %s] TLS handshake completed [%s]", side, t.LocalAddr().String(), t.RemoteAddr().String(), t.subject)
+	log.Notice("[%s %s - %s] TLS handshake completed using %s [%s]", side, t.LocalAddr().String(), t.RemoteAddr().String(), getTlsVersionAsString(t.Conn.ConnectionState().Version), t.subject)
 	return nil
 }
 
@@ -83,5 +85,5 @@ func (t *connectionSocketTLS) CloseWrite() error {
 
 // Desc returns the client certificate Subject
 func (t *connectionSocketTLS) Desc() string {
-	return t.subject
+	return t.desc
 }
