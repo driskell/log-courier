@@ -27,10 +27,11 @@ Log Courier is a lightweight shipper. It reads from log files and transmits even
 - Transmits securely using TLS with server and [client verification](docs/log-courier/Configuration.md#ssl-certificate)
 - Codecs for client-side preprocessing of [multiline](docs/log-courier/codecs/Multiline.md) events and [filtering](docs/log-courier/codecs/Filter.md) of unwanted events
 - Native JSON [reader](docs/log-courier/Configuration.md#reader) to support JSON files, even those with no line-termination that makes line-based reading problematic
+- Remote [Administration Utility](docs/AdministrationUtility.md) to inspect monitored log files and connections in real time.
 
 ### Compatible Logstash Versions
 
-Log Courier is compatible with most Logstash versions with a single exception. `>=7.4.0` and `<7.6.0` use a version of JRuby that has a bug making it incompatible and causes log-courier events to stop processing after an indeterminable amount of time (see #370) - please upgrade to 7.6.0 which updates JRuby to a compatible version.
+Log Courier is compatible with all supported versions of Logstash. At the time of writing this is `>= 7.7.x`.
 
 ## Log Carver
 
@@ -41,6 +42,7 @@ Log Carver is a lightweight event processor. It receives events over the Courier
 - Provides several powerful actions for [date processing](docs/log-carver/actions/Date.md), [grokking](docs/log-carver/actions/Grok.md), or simply [computing a new field](docs/log-carver/actions/SetField.md)
 - Support for complex [expressions](docs/log-carver/Configuration.md#expression) when setting fields or performing conditionals
 - Transmit events for storage using the [elasticsearch transport](docs/log-carver/Configuration.md#transport) immediately after processing
+- Remote [Administration Utility](docs/AdministrationUtility.md) to inspect connections in real time.
 
 ## Philosophy
 
