@@ -9,7 +9,6 @@ Logstash instances.
 
 - [Log Courier Suite](#log-courier-suite)
   - [Log Courier](#log-courier)
-    - [Compatible Logstash Versions](#compatible-logstash-versions)
   - [Log Carver](#log-carver)
   - [Philosophy](#philosophy)
   - [Documentation](#documentation)
@@ -28,14 +27,11 @@ Log Courier is a lightweight shipper. It reads from log files and transmits even
 - Codecs for client-side preprocessing of [multiline](docs/log-courier/codecs/Multiline.md) events and [filtering](docs/log-courier/codecs/Filter.md) of unwanted events
 - Native JSON [reader](docs/log-courier/Configuration.md#reader) to support JSON files, even those with no line-termination that makes line-based reading problematic
 - Remote [Administration Utility](docs/AdministrationUtility.md) to inspect monitored log files and connections in real time.
-
-### Compatible Logstash Versions
-
-Log Courier is compatible with all supported versions of Logstash. At the time of writing this is `>= 7.7.x`.
+- Compatible with all supported versions of Logstash. At the time of writing this is `>= 7.7.x`.
 
 ## Log Carver
 
-Log Carver is a lightweight event processor. It receives events over the Courier protocol and performs actions against them to manipulate them into the required format for storage within Elasticsearch, or further processing in Logstash. Connected clients do not receive acknowledgements until the events are acknowledged by the endpoint, whether that be Elasticsearch or another more centralised Log Carver, providing end-to-end guarantee.
+Log Carver is a lightweight event processor and alternative to Logstash. It receives events over the Courier protocol and performs actions against them to manipulate them into the required format for storage within Elasticsearch, or further processing in Logstash. Connected clients do not receive acknowledgements until the events are acknowledged by the endpoint, whether that be Elasticsearch or another more centralised Log Carver, providing end-to-end guarantee.
 
 - Receives events securely using TLS with [client verification](docs/log-carver/Configuration.md#ssl-client-ca-receiver)
 - Supports If/ElseIf/Else [conditionals](docs/log-carver/Configuration.md#conditionals) to process different events in different ways
