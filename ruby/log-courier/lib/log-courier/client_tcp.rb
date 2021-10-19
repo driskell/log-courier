@@ -90,7 +90,7 @@ module LogCourier
     end
 
     def handshake(io_control)
-      @ssl_client.write ['HELO', 8, 0, 1, 11, 0, 'RYLC'].pack('A4NCCCCA4')
+      @ssl_client.write ['HELO', 8, 0, 2, 7, 0, 'RYLC'].pack('A4NCCCCA4')
 
       signature, data = receive
       if signature != 'VERS'

@@ -316,7 +316,7 @@ module LogCourier
       # Minor Version 1 byte
       # Patch Version 1 byte
       # Client String 4 bytes
-      data = [1, 1, 11, 0, 'RYLC'].pack('CCCCA4')
+      data = [1, 2, 7, 0, 'RYLC'].pack('CCCCA4')
       send 'VERS', data
     end
 
