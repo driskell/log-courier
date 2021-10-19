@@ -1,11 +1,11 @@
 general:
   log syslog: false
   log stdout: true
-  persist directory: ./persist/lc1
+  persist directory: ./persist/lc2
   log level: debug
 admin:
   enabled: true
-  listen address: tcp:127.0.0.1:12340
+  listen address: tcp:127.0.0.1:12341
 network:
   servers:
   - 127.0.0.1:12345

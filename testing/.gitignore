@@ -1,2 +1,3 @@
 /*-generated.log
-/.log-courier
+/persist/*/*
+!/persist/*/.gitkeep
