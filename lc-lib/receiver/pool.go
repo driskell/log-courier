@@ -349,10 +349,6 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 					log.Warning("Ignoring duplicate receiver listen address: %s", listen)
 					continue
 				}
-				receiverApi := &api.KeyValue{}
-				receiverApi.SetEntry("listen", api.String(listen))
-				receiverApi.SetEntry("maxPendingPayloads", api.Number(cfgEntry.MaxPendingPayloads))
-				r.apiListeners.AddEntry(listen, receiverApi)
 				if r.receivers != nil {
 					// If already exists as active then reload config
 					if existing, has := r.receiversByListen[listen]; has {
@@ -367,6 +363,10 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 				pool := addresspool.NewPool(listen)
 				newReceiversByListen[listen] = cfgEntry.Factory.NewReceiver(context.Background(), pool, r.eventChan)
 				newReceivers[newReceiversByListen[listen]] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
+				receiverApi := &api.KeyValue{}
+				receiverApi.SetEntry("listen", api.String(listen))
+				receiverApi.SetEntry("maxPendingPayloads", api.Number(cfgEntry.MaxPendingPayloads))
+				r.apiListeners.AddEntry(listen, receiverApi)
 			}
 		}
 	}
