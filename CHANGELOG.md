@@ -1,6 +1,8 @@
 # Change Log
 
-## 2.7.0 (Future)
+## 2.7.0
+
+21st October 2021
 
 Log Courier / Log Carver
 
