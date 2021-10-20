@@ -1,4 +1,4 @@
-name: CI
+name: Golang
 
 on:
   workflow_dispatch:
