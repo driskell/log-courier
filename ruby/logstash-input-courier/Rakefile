@@ -11,9 +11,7 @@ task :default => [:install] do
 end
 
 task :install do
-  Bundler.with_clean_env do
-    sh 'bundle install --jobs 4 --retry 3'
-  end
+  sh 'bundle install --jobs 4 --retry 3'
 end
 
 task release: [:package] do
