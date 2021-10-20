@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag
+        required: true
+  release:
+    types: [published]
+
+jobs:
+  release_log_courier:
+    name: Release Log Courier
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ruby/setup-ruby@v1
+      with:
+        # Build only for our minimum supported version
+        ruby-version: 'jruby-9.2.11.1'
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+    - name: Package and Release
+      env:
+        GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS }}
+      run: |
+        cd ruby/log-courier
+        # Don't need the full bundle to package
+        gem install rake
+        rake release
+    - name: Upload Gem
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: log-courier
+        path: ruby/log-courier/pkg/*.gem
+
+  release_logstash_input_courier:
+    name: Release Logstash Input Courier
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ruby/setup-ruby@v1
+      with:
+        # Build only for our minimum supported version
+        ruby-version: 'jruby-9.2.11.1'
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
+    - name: Package and Release
+      env:
+        GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS }}
+      run: |
+        cd ruby/logstash-input-courier
+        # Don't need the full bundle to package
+        gem install rake
+        rake release
+    - name: Upload Gem
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: logstash-input-courier
+        path: ruby/logstash-input-courier/pkg/*.gem

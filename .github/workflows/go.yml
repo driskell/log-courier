@@ -19,13 +19,6 @@ jobs:
     # Use latest Ubuntu to try work around https://github.com/golang/go/issues/37362
     runs-on: ubuntu-20.04
     steps:
-    # ACT local running on Medium does not have gcc
-    - name: Check CGO
-      run: |
-        if ! which gcc >/dev/null 2>&1; then
-          apt -y update
-          apt -y install build-essential
-        fi
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
@@ -34,8 +27,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
     - name: Get dependencies
-      run: |
-        go get -v -t -d ./...
+      run: go get -v -t -d ./...
     - name: Generate
       run: go generate -v ./...
     - name: Build
