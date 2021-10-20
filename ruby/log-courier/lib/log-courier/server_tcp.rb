@@ -1,6 +1,4 @@
-# encoding: utf-8
-
-# Copyright 2014-2019 Jason Woods and Contributors.
+# Copyright 2014-2021 Jason Woods and Contributors.
 #
 # This file is a modification of code from Logstash Forwarder.
 # Copyright 2012-2013 Jordan Sissel and contributors.
@@ -19,7 +17,6 @@
 
 require 'openssl'
 require 'socket'
-require 'thread'
 
 module LogCourier
   # Wrap around TCPServer to grab last error for use in reporting which peer had an error
@@ -42,12 +39,12 @@ module LogCourier
         peer = sock.peeraddr
       end
       @peer = "#{peer[2]}:#{peer[1]}"
-      return sock
+      sock
     end
 
     def reset_peer
       @peer = 'unknown'
-      return
+      nil
     end
   end
 
@@ -58,30 +55,31 @@ module LogCourier
     # Create a new TLS transport endpoint
     def initialize(options = {})
       @options = {
-        logger:                nil,
-        transport:             'tls',
-        port:                  0,
-        address:               '0.0.0.0',
-        ssl_certificate:       nil,
-        ssl_key:               nil,
-        ssl_key_passphrase:    nil,
-        ssl_verify:            false,
+        logger: nil,
+        transport: 'tls',
+        port: 0,
+        address: '0.0.0.0',
+        ssl_certificate: nil,
+        ssl_key: nil,
+        ssl_key_passphrase: nil,
+        ssl_verify: false,
         ssl_verify_default_ca: false,
-        ssl_verify_ca:         nil,
-        max_packet_size:       10_485_760,
-        add_peer_fields:       false,
-        min_tls_version:       1.2,
+        ssl_verify_ca: nil,
+        max_packet_size: 10_485_760,
+        add_peer_fields: false,
+        min_tls_version: 1.2,
+        disable_handshake: false,
       }.merge!(options)
 
       @logger = @options[:logger]
 
       if @options[:transport] == 'tls'
         [:ssl_certificate, :ssl_key].each do |k|
-          fail "input/courier: '#{k}' is required" if @options[k].nil?
+          raise "input/courier: '#{k}' is required" if @options[k].nil?
         end
 
-        if @options[:ssl_verify] and (!@options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
-          fail 'input/courier: Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
+        if @options[:ssl_verify] && (!@options[:ssl_verify_default_ca] && @options[:ssl_verify_ca].nil?)
+          raise 'input/courier: Either \'ssl_verify_default_ca\' or \'ssl_verify_ca\' must be specified when ssl_verify is true'
         end
       end
 
@@ -108,7 +106,7 @@ module LogCourier
           ssl.options |= OpenSSL::SSL::OP_NO_TLSv1 if @options[:min_tls_version] > 1
           ssl.options |= OpenSSL::SSL::OP_NO_TLSv1_1 if @options[:min_tls_version] > 1.1
           ssl.options |= OpenSSL::SSL::OP_NO_TLSv1_2 if @options[:min_tls_version] > 1.2
-          fail 'Invalid min_tls_version - max is 1.3' if @options[:min_tls_version] > 1.3
+          raise 'Invalid min_tls_version - max is 1.3' if @options[:min_tls_version] > 1.3
 
           # Set the certificate file
           ssl.cert = OpenSSL::X509::Certificate.new(File.read(@options[:ssl_certificate]))
@@ -138,13 +136,11 @@ module LogCourier
           @server = @tcp_server
         end
 
-        if @options[:port] == 0
-          @logger.warn 'Ephemeral port allocated', :transport => @options[:transport], :port => @port unless @logger.nil?
-        end
-      rescue => e
+        @logger&.warn 'Ephemeral port allocated', transport: @options[:transport], port: @port if @options[:port].zero?
+      rescue StandardError, NativeException => e # Until Jruby updated we need NativeException
         raise "input/courier: Failed to initialise: #{e}"
       end
-    end # def initialize
+    end
 
     def run(&block)
       client_threads = {}
@@ -156,14 +152,18 @@ module LogCourier
         client = nil
         begin
           client = @server.accept
-        rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
+        rescue OpenSSL::SSL::SSLError, IOError => e
           # Accept failure or other issue
-          @logger.warn 'Connection failed to accept', :error => e.message, :peer => @tcp_server.peer unless @logger.nil?
-          client.close rescue nil unless client.nil?
+          @logger&.warn 'Connection failed to accept', error: e.message, peer: @tcp_server.peer
+          begin
+            client&.close
+          rescue OpenSSL::SSL::SSLError, IOError
+            # Ignore IO error during close
+          end
           next
         end
 
-    	  @logger.info 'New connection', :peer => @tcp_server.peer unless @logger.nil?
+        @logger&.info 'New connection', peer: @tcp_server.peer
 
         # Clear up finished threads
         client_threads.delete_if do |_, thr|
@@ -175,13 +175,13 @@ module LogCourier
           run_thread client_copy, peer_copy, &block
         end
       end
-      return
+      nil
     rescue ShutdownSignal
-      return
+      nil
     rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
       # Some other unknown problem
-      @logger.warn e.message, :hint => 'Unknown error, shutting down' unless @logger.nil?
-      return
+      @logger&.warn e.message, hint: 'Unknown error, shutting down'
+      nil
     ensure
       # Raise shutdown in all client threads and join then
       client_threads.each do |_, thr|
@@ -196,27 +196,28 @@ module LogCourier
     private
 
     def run_thread(client, peer, &block)
-      begin
-        # Perform the handshake inside the new thread so we don't block TCP accept
-        if @options[:transport] == 'tls'
+      # Perform the handshake inside the new thread so we don't block TCP accept
+      if @options[:transport] == 'tls'
+        begin
+          client.accept
+        rescue OpenSSL::SSL::SSLError, IOError => e
+          # Handshake failure or other issue
+          @logger&.warn 'Connection failed to initialise', error: e.message, peer: peer
           begin
-            client.accept
-          rescue EOFError, OpenSSL::SSL::SSLError, IOError => e
-            # Handshake failure or other issue
-            @logger.warn 'Connection failed to initialise', :error => e.message, :peer => peer unless @logger.nil?
             client.close
-            return
+          rescue OpenSSL::SSL::SSLError, IOError
+            # Ignore during close
           end
-
-          @logger.info 'Connection setup successfully', :peer => peer, :ssl_version => client.ssl_version unless @logger.nil?
+          return
         end
 
-        ConnectionTcp.new(@logger, client, peer, @options).run(&block)
-      rescue ShutdownSignal
-        # Shutting down
-        @logger.info 'Server shutting down, connection closed', :peer => peer unless @logger.nil?
-        return
+        @logger&.info 'Connection setup successfully', peer: peer, ssl_version: client.ssl_version
       end
+
+      ConnectionTcp.new(@logger, client, peer, @options).run(&block)
+    rescue ShutdownSignal
+      # Shutting down
+      @logger&.info 'Server shutting down, connection closed', peer: peer
     end
   end
 
@@ -224,9 +225,9 @@ module LogCourier
   class ConnectionTcp
     attr_accessor :peer
 
-    def initialize(logger, fd, peer, options)
+    def initialize(logger, sfd, peer, options)
       @logger = logger
-      @fd = fd
+      @fd = sfd
       @peer = peer
       @peer_fields = {}
       @in_progress = false
@@ -238,16 +239,16 @@ module LogCourier
       @version = '0.0.0'
       @client_version = 'Unknown'
 
-      if @options[:add_peer_fields]
-        @peer_fields['peer'] = peer
-        if @options[:transport] == 'tls' && !@fd.peer_cert.nil?
-          @peer_fields['peer_ssl_cn'] = get_cn(@fd.peer_cert)
-        end
-      end
+      return unless @options[:add_peer_fields]
+
+      @peer_fields['peer'] = peer
+      return unless @options[:transport] == 'tls' && !@fd.peer_cert.nil?
+
+      @peer_fields['peer_ssl_cn'] = get_cn(@fd.peer_cert)
     end
 
     def add_fields(event)
-      event.merge! @peer_fields if @peer_fields.length != 0
+      event.merge! @peer_fields unless @peer_fields.empty?
     end
 
     def run(&block)
@@ -261,52 +262,111 @@ module LogCourier
       end
     rescue TimeoutError
       # Timeout of the connection, we were idle too long without a ping/pong
-      @logger.warn 'Connection timed out', :peer => @peer unless @logger.nil?
-      return
+      @logger&.warn 'Connection timed out', peer: @peer
+      nil
     rescue EOFError
       if @in_progress
-        @logger.warn 'Unexpected EOF', :peer => @peer unless @logger.nil?
+        @logger&.warn 'Unexpected EOF', peer: @peer
       else
-        @logger.info 'Connection closed', :peer => @peer unless @logger.nil?
+        @logger&.info 'Connection closed', peer: @peer
       end
-      return
+      nil
     rescue OpenSSL::SSL::SSLError => e
       # Read errors, only action is to shutdown which we'll do in ensure
-      @logger.warn 'SSL error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
-      return
+      @logger&.warn 'SSL error, connection aborted', error: e.message, peer: @peer
+      nil
     rescue IOError, Errno::ECONNRESET => e
       # Read errors, only action is to shutdown which we'll do in ensure
-      @logger.warn 'Connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
-      return
+      @logger&.warn 'Connection aborted', error: e.message, peer: @peer
+      nil
     rescue ProtocolError => e
       # Connection abort request due to a protocol error
-      @logger.warn 'Protocol error, connection aborted', :error => e.message, :peer => @peer unless @logger.nil?
-      return
+      @logger&.warn 'Protocol error, connection aborted', error: e.message, peer: @peer
+      nil
     rescue ShutdownSignal
       # Shutting down
-      @logger.info 'Server shutting down, closing connection', :peer => @peer unless @logger.nil?
-      return
+      @logger&.info 'Server shutting down, closing connection', peer: @peer
+      nil
     rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
       # Some other unknown problem
-      @logger.warn e.message, :hint => 'Unknown error, connection aborted', :peer => @peer unless @logger.nil?
-      return
+      @logger&.warn e.message, hint: 'Unknown error, connection aborted', peer: @peer
+      nil
     ensure
-      @fd.close rescue nil
+      begin
+        @fd.close
+      rescue OpenSSL::SSL::SSLError, IOError, NativeException
+        # Ignore during close
+      end
     end
 
-    def handshake(&block)
+    def receive
+      # Read message
+      # Each message begins with a header
+      # 4 byte signature
+      # 4 byte length
+      # Normally we would not parse this inside transport, but for TLS we have to in order to locate frame boundaries
+      signature, length = recv(8).unpack('A4N')
+
+      # Sanity
+      raise ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})" if length > @options[:max_packet_size]
+
+      # While we're processing, EOF is bad as it may occur during send
+      @in_progress = true
+
+      # Read the message
+      data = if length.zero?
+               ''
+             else
+               recv(length)
+             end
+
+      # If we EOF next it's a graceful close
+      @in_progress = false
+
+      [signature, data]
+    end
+
+    def send(signature, message)
+      reset_timeout
+      data = signature + [message.length].pack('N') + message
+      done = 0
+      loop do
+        begin
+          written = @fd.write_nonblock(data[done...data.length])
+        rescue IO::WaitReadable
+          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+
+          retry
+        rescue IO::WaitWritable
+          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+
+          retry
+        end
+        raise ProtocolError, "write failure (#{done}/#{data.length})" if written.zero?
+
+        done += written
+        break if done >= data.length
+      end
+      nil
+    end
+
+    private
+
+    def handshake
+      return if @options[:disable_handshake]
+
       signature, data = receive
       if signature == 'JDAT'
-        @helo = Protocol.parseHeloVers('')
-        @logger.info 'Remote does not support protocol handshake', :peer => @peer unless @logger.nil?
+        @helo = Protocol.parse_helo_vers('')
+        @logger&.info 'Remote does not support protocol handshake', peer: @peer
         yield signature, data, self
         return
       elsif signature != 'HELO'
-        fail ProtocolError, "unexpected #{signature} message"
+        raise ProtocolError, "unexpected #{signature} message"
       end
 
-      @helo = Protocol.parseHeloVers(data)
-      @logger.info 'Remote identified', :peer => @peer, :client_version => @helo[:client_version] unless @logger.nil?
+      @helo = Protocol.parse_helo_vers(data)
+      @logger&.info 'Remote identified', peer: @peer, client_version: @helo[:client_version]
 
       # Flags 1 byte - EVNT flag = 0
       # (Significant rewrite would be required to support streaming messages as currently we read
@@ -320,61 +380,9 @@ module LogCourier
       send 'VERS', data
     end
 
-    def receive()
-      # Read message
-      # Each message begins with a header
-      # 4 byte signature
-      # 4 byte length
-      # Normally we would not parse this inside transport, but for TLS we have to in order to locate frame boundaries
-      signature, length = recv(8).unpack('A4N')
-
-      # Sanity
-      if length > @options[:max_packet_size]
-        fail ProtocolError, "packet too large (#{length} > #{@options[:max_packet_size]})"
-      end
-
-      # While we're processing, EOF is bad as it may occur during send
-      @in_progress = true
-
-      # Read the message
-      if length == 0
-        data = ''
-      else
-        data = recv(length)
-      end
-
-      # If we EOF next it's a graceful close
-      @in_progress = false
-
-      return signature, data
-    end
-
-    def send(signature, message)
-      reset_timeout
-      data = signature + [message.length].pack('N') + message
-      done = 0
-      loop do
-        begin
-          written = @fd.write_nonblock(data[done...data.length])
-        rescue IO::WaitReadable
-          fail TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
-          retry
-        rescue IO::WaitWritable
-          fail TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
-          retry
-        end
-        fail ProtocolError, "write failure (#{done}/#{data.length})" if written == 0
-        done += written
-        break if done >= data.length
-      end
-      return
-    end
-
-    private
-
     def get_cn(cert)
       cert.subject.to_a.find do |oid, value|
-        return value if oid == "CN"
+        return value if oid == 'CN'
       end
       nil
     end
@@ -384,20 +392,20 @@ module LogCourier
       have = ''
       loop do
         begin
-       	  buffer = @fd.read_nonblock need - have.length
+          buffer = @fd.read_nonblock need - have.length
         rescue IO::WaitReadable
-          fail TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+          raise TimeoutError if IO.select([@fd], nil, [@fd], @timeout - Time.now.to_i).nil?
+
           retry
         rescue IO::WaitWritable
-          fail TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+          raise TimeoutError if IO.select(nil, [@fd], [@fd], @timeout - Time.now.to_i).nil?
+
           retry
         end
-        if buffer.nil?
-          fail EOFError
-        elsif buffer.length == 0
-          fail ProtocolError, "read failure (#{have.length}/#{need})"
-        end
-        if have.length == 0
+        raise EOFError if buffer.nil?
+        raise ProtocolError, "read failure (#{have.length}/#{need})" if buffer.length.zero?
+
+        if have.length.zero?
           have = buffer
         else
           have << buffer
@@ -410,7 +418,7 @@ module LogCourier
     def reset_timeout
       # TODO: Make configurable
       @timeout = Time.now.to_i + 1_800
-      return
+      nil
     end
   end
 end

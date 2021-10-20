@@ -14,6 +14,16 @@ on:
         required: true
   push:
     branches: [main]
+    paths:
+    - contrib
+    - docs
+    - 'lc-admin/**'
+    - 'lc-lib/**'
+    - 'lc-tlscert/**'
+    - 'log-carver/**'
+    - log-courier.go
+    - go.mod
+    - go.sum
 
 # NOTE: To test this locally using `act`:
 #       1. Remove the `with` from the first checkout so it can copy your local repository (otherwise you need a GITHUB_TOKEN as it will trigger action/checkout natively)

@@ -8,6 +8,14 @@ name: "CodeQL"
 on:
   push:
     branches: [main]
+    paths:
+    - 'lc-admin/**'
+    - 'lc-lib/**'
+    - 'lc-tlscert/**'
+    - 'log-carver/**'
+    - log-courier.go
+    - go.mod
+    - go.sum
 
 jobs:
   analyze:

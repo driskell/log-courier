@@ -1,6 +1,4 @@
-# encoding: utf-8
-
-# Copyright 2014 Jason Woods.
+# Copyright 2014-2021 Jason Woods
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,17 +25,18 @@ describe 'log-courier gem' do
     @host = Socket.gethostname
   end
 
-  def startup
+  def startup(**kwargs)
     logger = Cabin::Channel.new
-    logger.subscribe STDOUT
+    logger.subscribe $stdout
     logger.level = :debug
 
     # Reset server for each test
     @client = LogCourier::Client.new(
-      :ssl_ca => @ssl_cert.path,
-      :addresses => ['127.0.0.1'],
-      :port => server_port,
-      :logger => logger
+      ssl_ca: @ssl_cert.path,
+      addresses: ['127.0.0.1'],
+      port: server_port,
+      logger: logger,
+      **kwargs,
     )
   end
 
@@ -45,7 +44,39 @@ describe 'log-courier gem' do
     @client.shutdown
   end
 
-  it 'should send and receive events' do
+  it 'should send and receive events with tcp client' do
+    start_server(
+      transport: 'tcp',
+    )
+
+    startup(
+      transport: 'tcp',
+    )
+
+    # Allow 60 seconds
+    Timeout.timeout(60) do
+      5_000.times do |i|
+        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'path' => 'gemfile.log'
+      end
+    end
+
+    # Receive and check
+    i = 0
+    receive_and_check(total: 5_000) do |e|
+      expect(e['message']).to eq "gem line test #{i}"
+      expect(e['host']).to eq @host
+      expect(e['path']).to eq 'gemfile.log'
+      i += 1
+    end
+
+    expect(shutdown).to eq true
+
+    shutdown_server
+  end
+
+  it 'should send and receive events with tls client' do
+    start_server
+
     startup
 
     # Allow 60 seconds
@@ -65,5 +96,63 @@ describe 'log-courier gem' do
     end
 
     expect(shutdown).to eq true
+
+    shutdown_server
+  end
+
+  it 'should send and receive events with tls client that does not handshake' do
+    start_server
+
+    startup(
+      disable_handshake: true,
+    )
+
+    # Allow 60 seconds
+    Timeout.timeout(60) do
+      5_000.times do |i|
+        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'path' => 'gemfile.log'
+      end
+    end
+
+    # Receive and check
+    i = 0
+    receive_and_check(total: 5_000) do |e|
+      expect(e['message']).to eq "gem line test #{i}"
+      expect(e['host']).to eq @host
+      expect(e['path']).to eq 'gemfile.log'
+      i += 1
+    end
+
+    expect(shutdown).to eq true
+
+    shutdown_server
+  end
+
+  it 'should send and receive events with tls server that does not handshake' do
+    start_server(
+      disable_handshake: true,
+    )
+
+    startup
+
+    # Allow 60 seconds
+    Timeout.timeout(60) do
+      5_000.times do |i|
+        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'path' => 'gemfile.log'
+      end
+    end
+
+    # Receive and check
+    i = 0
+    receive_and_check(total: 5_000) do |e|
+      expect(e['message']).to eq "gem line test #{i}"
+      expect(e['host']).to eq @host
+      expect(e['path']).to eq 'gemfile.log'
+      i += 1
+    end
+
+    expect(shutdown).to eq true
+
+    shutdown_server
   end
 end

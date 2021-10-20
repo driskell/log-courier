@@ -1,4 +1,3 @@
-# encoding: utf-8
 require 'logstash/devutils/rspec/spec_helper'
 require 'logstash/inputs/courier'
 require 'lib/rspec_configure'
@@ -11,7 +10,7 @@ describe LogStash::Inputs::Courier do
       @plugin = LogStash::Inputs::Courier.new(
         'port' => 12_345,
         'ssl_certificate' => @ssl_cert.path,
-        'ssl_key' => @ssl_key.path
+        'ssl_key' => @ssl_key.path,
       )
       @plugin.register
       @thread = Thread.new do

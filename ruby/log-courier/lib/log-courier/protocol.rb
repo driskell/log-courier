@@ -1,6 +1,4 @@
-# encoding: utf-8
-
-# Copyright 2014-2019 Jason Woods and Contributors.
+# Copyright 2014-2021 Jason Woods and Contributors.
 #
 # This file is a modification of code from Ruby.
 # Ruby is copyrighted free software by Yukihiro Matsumoto <matz@netlab.jp>.
@@ -21,21 +19,23 @@
 # Name calculation from HELO/VERS
 #
 module LogCourier
+  # Protocol
   module Protocol
-    def self.parseHeloVers(data)
+    def self.parse_helo_vers(data)
       data = "\x00\x00\x00\x00\x00\x00\x00\x00" if data.length < 8
 
       flags, major_version, minor_version, patch_version, client = data.unpack('CCCCA4')
-      case client
-      when 'LCOR'
-        client = 'Log Courier'
-      when 'LCVR'
-        client = 'Log Carver'
-      when 'RYLC'
-        client = 'Ruby Log Courier'
-      else
-        client = 'Unknown'
-      end
+      client = case client
+               when 'LCOR'
+                 'Log Courier'
+               when 'LCVR'
+                 'Log Carver'
+               when 'RYLC'
+                 'Ruby Log Courier'
+               else
+                 'Unknown'
+               end
+
       if major_version != 0 || minor_version != 0 || patch_version != 0
         version = "#{major_version}.#{minor_version}.#{patch_version}"
         client_version = "#{client} v#{version}"
@@ -51,7 +51,7 @@ module LogCourier
         patch_version: patch_version,
         client: client,
         version: version,
-        client_version: client_version
+        client_version: client_version,
       }
     end
   end

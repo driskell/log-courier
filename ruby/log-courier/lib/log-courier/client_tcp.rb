@@ -1,6 +1,4 @@
-# encoding: utf-8
-
-# Copyright 2014-2019 Jason Woods and Contributors.
+# Copyright 2014-2021 Jason Woods and Contributors.
 #
 # This file is a modification of code from Logstash Forwarder.
 # Copyright 2012-2013 Jordan Sissel and contributors.
@@ -19,46 +17,47 @@
 
 require 'openssl'
 require 'socket'
-require 'thread'
 
 module LogCourier
   # TLS transport implementation
   class ClientTcp
     def initialize(options = {})
       @options = {
-        logger:             nil,
-        transport:         'tls',
-        ssl_ca:             nil,
-        ssl_certificate:    nil,
-        ssl_key:            nil,
+        logger: nil,
+        transport: 'tls',
+        ssl_ca: nil,
+        ssl_certificate: nil,
+        ssl_key: nil,
         ssl_key_passphrase: nil,
-        min_tls_version:    1.2,
+        min_tls_version: 1.2,
+        disable_handshake: false,
       }.merge!(options)
 
       @logger = @options[:logger]
 
       [:port, :ssl_ca].each do |k|
-        fail "output/courier: '#{k}' is required" if @options[k].nil?
+        raise "output/courier: '#{k}' is required" if @options[k].nil?
       end
 
-      if @options[:transport] == 'tls'
-        c = 0
-        [:ssl_certificate, :ssl_key].each do
-          c += 1
-        end
-        fail 'output/courier: \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
+      return unless @options[:transport] == 'tls'
+
+      c = 0
+      [:ssl_certificate, :ssl_key].each do
+        c += 1
       end
+      raise 'output/courier: \'ssl_certificate\' and \'ssl_key\' must be specified together' if c == 1
     end
 
     def connect(io_control)
       loop do
         begin
           if tls_connect
-            handshake(io_control)
+            return unless handshake(io_control)
+
             break
           end
         rescue ShutdownSignal
-          raise
+          return
         end
 
         # TODO: Make this configurable
@@ -69,65 +68,44 @@ module LogCourier
       @send_paused = false
 
       @send_thread = Thread.new do
-        begin
-          run_send io_control
-        rescue ShutdownSignal
-        rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
-          @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
-          io_control << ['F']
-        end
+        run_send io_control
+      rescue ShutdownSignal
+        # Shutdown
+      rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+        @logger&.warn e, hint: 'Unknown write error'
+        io_control << ['F']
       end
       @recv_thread = Thread.new do
-        begin
-          run_recv io_control
-        rescue ShutdownSignal
-        rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
-          @logger.warn e, :hint => 'Unknown read error' unless @logger.nil?
-          io_control << ['F']
-        end
+        run_recv io_control
+      rescue ShutdownSignal
+        # Shutdown
+      rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+        @logger&.warn e, hint: 'Unknown read error'
+        io_control << ['F']
       end
-      return
-    end
-
-    def handshake(io_control)
-      @ssl_client.write ['HELO', 8, 0, 2, 7, 0, 'RYLC'].pack('A4NCCCCA4')
-
-      signature, data = receive
-      if signature != 'VERS'
-        fail "Unexpected message during handshake: #{signature}" if signature != '????'
-        @vers = Protocol.parseHeloVers('')
-        @logger.info 'Remote does not support protocol handshake', :server_version => @vers[:client_version] unless @logger.nil?
-        return
-      end
-
-      @vers = Protocol.parseHeloVers(data)
-      @logger.info 'Remote identified', :server_version => @vers[:client_version] unless @logger.nil?
-    rescue ShutdownSignal
-    rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
-      @logger.warn e, :hint => 'Unknown write error' unless @logger.nil?
-      io_control << ['F']
-      return
+      nil
     end
 
     def disconnect
-      @send_thread.raise ShutdownSignal
-      @send_thread.join
-      @recv_thread.raise ShutdownSignal
-      @recv_thread.join
-      return
+      @send_thread&.raise ShutdownSignal
+      @send_thread&.join
+      @recv_thread&.raise ShutdownSignal
+      @recv_thread&.join
+      nil
     end
 
     def send(signature, message)
       # Add to send queue
-      @send_q << [signature, message.length].pack('A4N') + message
-      return
+      @send_q << ([signature, message.length].pack('A4N') + message)
+      nil
     end
 
     def pause_send
       return if @send_paused
+
       @send_paused = true
       @send_q << nil
-      return
+      nil
     end
 
     def send_paused?
@@ -139,10 +117,34 @@ module LogCourier
         @send_paused = false
         @send_q << nil
       end
-      return
+      nil
     end
 
     private
+
+    def handshake(io_control)
+      return true if @options[:disable_handshake]
+
+      @socket.write ['HELO', 8, 0, 2, 7, 0, 'RYLC'].pack('A4NCCCCA4')
+
+      signature, data = receive
+      if signature != 'VERS'
+        raise "Unexpected message during handshake: #{signature}" if signature != '????'
+
+        @vers = Protocol.parse_helo_vers('')
+        @logger&.info 'Remote does not support protocol handshake', server_version: @vers[:client_version]
+        return true
+      end
+
+      @vers = Protocol.parse_helo_vers(data)
+      @logger&.info 'Remote identified', server_version: @vers[:client_version]
+
+      true
+    rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+      @logger&.warn e, hint: 'Unknown write error'
+      io_control << ['F']
+      false
+    end
 
     def run_send(io_control)
       # Ask for something to send
@@ -169,18 +171,15 @@ module LogCourier
           # Ask for more to send while we send this one
           io_control << ['S'] unless paused
 
-          @ssl_client.write message
+          @socket.write message
         end
       end
-      return
     rescue OpenSSL::SSL::SSLError => e
-      @logger.warn 'SSL write error', :error => e.message unless @logger.nil?
+      @logger&.warn 'SSL write error', error: e.message
       io_control << ['F']
-      return
     rescue IOError, Errno::ECONNRESET => e
-      @logger.warn 'Write error', :error => e.message unless @logger.nil?
+      @logger&.warn 'Write error', error: e.message
       io_control << ['F']
-      return
     end
 
     def run_recv(io_control)
@@ -190,38 +189,34 @@ module LogCourier
         # Pass through to receive
         io_control << ['R', signature, message]
       end
-      return
     rescue OpenSSL::SSL::SSLError => e
-      @logger.warn 'SSL read error', :error => e.message unless @logger.nil?
+      @logger&.warn 'SSL read error', error: e.message
       io_control << ['F']
-      return
-    rescue IOError, Errno::ECONNRESET => e
-      @logger.warn 'Read error', :error => e.message unless @logger.nil?
-      io_control << ['F']
-      return
     rescue EOFError
-      @logger.warn 'Connection closed by server' unless @logger.nil?
+      @logger&.warn 'Connection closed by server'
       io_control << ['F']
-      return
+    rescue IOError, Errno::ECONNRESET => e
+      @logger&.warn 'Read error', error: e.message
+      io_control << ['F']
     end
 
     def receive
       # Grab a header
-      header = @ssl_client.read(8)
-      fail EOFError if header.nil?
+      header = @socket.read(8)
+      raise EOFError if header.nil?
 
       # Decode signature and length
       signature, length = header.unpack('A4N')
 
-      if length > 1048576
+      if length > 1_048_576
         # Too big raise error
-        fail IOError, 'Invalid message: data too big'
+        raise IOError, 'Invalid message: data too big'
       end
 
       # Read remainder
-      message = @ssl_client.read(length)
+      message = @socket.read(length)
 
-      return signature, message
+      [signature, message]
     end
 
     def tls_connect
@@ -229,7 +224,7 @@ module LogCourier
       address = @options[:addresses][0]
       port = @options[:port]
 
-      @logger.info 'Connecting', :address => address, :port => port unless @logger.nil?
+      @logger&.info 'Connecting', address: address, port: port
 
       begin
         tcp_socket = TCPSocket.new(address, port)
@@ -250,7 +245,7 @@ module LogCourier
           ssl.options |= OpenSSL::SSL::OP_NO_TLSv1 if @options[:min_tls_version] > 1
           ssl.options |= OpenSSL::SSL::OP_NO_TLSv1_1 if @options[:min_tls_version] > 1.1
           ssl.options |= OpenSSL::SSL::OP_NO_TLSv1_2 if @options[:min_tls_version] > 1.2
-          fail 'Invalid min_tls_version - max is 1.3' if @options[:min_tls_version] > 1.3
+          raise 'Invalid min_tls_version - max is 1.3' if @options[:min_tls_version] > 1.3
 
           # Set the certificate file
           unless @options[:ssl_certificate].nil?
@@ -263,26 +258,28 @@ module LogCourier
           ssl.cert_store = cert_store
           ssl.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
 
-          @ssl_client = OpenSSL::SSL::SSLSocket.new(tcp_socket, ssl)
-
-          socket = @ssl_client.connect
+          @socket = OpenSSL::SSL::SSLSocket.new(tcp_socket, ssl)
+          @socket.connect
 
           # Verify certificate
-          socket.post_connection_check(address)
+          @socket.post_connection_check(address)
+
+          @logger&.info 'Connected successfully', address: address, port: port, ssl_version: @socket.ssl_version
         else
-          socket = tcp_socket.connect
+          @socket = tcp_socket
+
+          @logger&.info 'Connected successfully', address: address, port: port
         end
 
         # Add extra logging data now we're connected
         @logger['address'] = address
         @logger['port'] = port
 
-        @logger.info 'Connected successfully', :ssl_version => @ssl_client.ssl_version unless @logger.nil?
         return true
       rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
-        @logger.warn 'Connection failed', :error => e.message, :address => address, :port => port unless @logger.nil?
+        @logger&.warn 'Connection failed', error: e.message, address: address, port: port
       rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
-        @logger.warn e, :hint => 'Unknown connection failure', :address => address, :port => port unless @logger.nil?
+        @logger&.warn e, hint: 'Unknown connection failure', address: address, port: port
       end
 
       false

@@ -1,6 +1,4 @@
-# encoding: utf-8
-
-# Copyright 2014-2019 Jason Woods and Contributors.
+# Copyright 2014-2021 Jason Woods and Contributors.
 #
 # This file is a modification of code from Ruby.
 # Ruby is copyrighted free software by Yukihiro Matsumoto <matz@netlab.jp>.
@@ -28,23 +26,24 @@
 # The majority of the code is taken from Ruby's SizedQueue<Queue implementation.
 #
 module LogCourier
+  # EventQueue
   class EventQueue
     #
     # Creates a fixed-length queue with a maximum size of +max+.
     #
     def initialize(max)
-      fail ArgumentError, "queue size must be positive" unless max > 0
+      raise ArgumentError, 'queue size must be positive' unless max.positive?
+
       @max = max
       @enque_cond = ConditionVariable.new
       @num_enqueue_waiting = 0
 
       @que = []
-      @que.taint          # enable tainted communication
+      @que.taint # enable tainted communication
       @num_waiting = 0
-      self.taint
+      taint
       @mutex = Mutex.new
       @cond = ConditionVariable.new
-      return
     end
 
     #
@@ -56,7 +55,7 @@ module LogCourier
     # Sets the maximum size of the queue.
     #
     def max=(max)
-      fail ArgumentError, "queue size must be positive" unless max > 0
+      raise ArgumentError, 'queue size must be positive' unless max.positive?
 
       @mutex.synchronize do
         if max <= @max
@@ -69,7 +68,6 @@ module LogCourier
           end
         end
       end
-      max
     end
 
     #
@@ -77,19 +75,19 @@ module LogCourier
     # until space becomes available, up to a maximum of +timeout+ seconds.
     #
     def push(obj, timeout = nil)
-      unless timeout.nil?
-        start = Time.now
-      end
+      start = Time.now unless timeout.nil?
       @mutex.synchronize do
         loop do
           break if @que.length < @max
+
           @num_enqueue_waiting += 1
           begin
             @enque_cond.wait @mutex, timeout
           ensure
             @num_enqueue_waiting -= 1
           end
-          fail TimeoutError if !timeout.nil? and Time.now - start >= timeout
+
+          raise TimeoutError if !timeout.nil? && Time.now - start >= timeout
         end
 
         @que.push obj
@@ -112,11 +110,9 @@ module LogCourier
     # Retrieves data from the queue and runs a waiting thread, if any.
     #
     def pop(*args)
-      retval = pop_timeout *args
+      retval = pop_timeout(*args)
       @mutex.synchronize do
-        if @que.length < @max
-          @enque_cond.signal
-        end
+        @enque_cond.signal if @que.length < @max
       end
       retval
     end
@@ -182,23 +178,22 @@ module LogCourier
     # raised.
     #
     def pop_timeout(timeout = nil)
-      unless timeout.nil?
-        start = Time.now
-      end
+      start = Time.now unless timeout.nil?
       @mutex.synchronize do
         loop do
           return @que.shift unless @que.empty?
-          fail TimeoutError if timeout == 0
+          raise TimeoutError if !timeout.nil? && timeout.zero?
+
           begin
             @num_waiting += 1
             @cond.wait @mutex, timeout
           ensure
             @num_waiting -= 1
           end
-          fail TimeoutError if !timeout.nil? and Time.now - start >= timeout
+          raise TimeoutError if !timeout.nil? && Time.now - start >= timeout
         end
       end
-      return
+      nil
     end
   end
 end

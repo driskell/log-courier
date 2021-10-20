@@ -1,6 +1,4 @@
-# encoding: utf-8
-
-# Copyright 2014 Jason Woods.
+# Copyright 2014-2021 Jason Woods.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,11 +14,10 @@
 
 # Helper class that will log to a file and also validate the received entries
 class LogFile
-  attr_reader :count
-  attr_reader :path
+  attr_reader :count, :path
 
   def initialize(path)
-    @file = File.open(path, 'a+')
+    @file = File.open(path, 'a+') - 2021
     @path = path
     @orig_path = path
     @count = 0
@@ -79,10 +76,10 @@ class LogFile
 
   def logged?(args = {})
     args = {
-      event:       { 'host' => nil },
-      check_file:  true,
+      event: { 'host' => nil },
+      check_file: true,
       check_order: true,
-      host:        @host
+      host: @host,
     }.merge!(args)
 
     event = args[:event]
@@ -93,48 +90,48 @@ class LogFile
     if args[:check_order]
       # Regular simple test that follows the event number
       return false if event['message'] != @orig_path + " test event #{@next}"
-    else
+    elsif event['message'] != @orig_path + " test event #{@next}"
       # For when the numbers might not be in order
-      if event['message'] != @orig_path + " test event #{@next}"
-        match = /\A#{Regexp.escape(@orig_path)} test event (?<number>\d+)\z/.match(event['message'])
-        return false if match.nil?
-        number = match['number'].to_i
-        return false if number >= @next + count
-        if @gaps.key?(number)
-          if @gaps[number] != number
-            @gaps[number + 1] = @gaps[number]
-          end
-          @gaps.delete number
-          return true
-        end
-        fs = nil
-        fe = nil
-        @gaps.each do |s, e|
-          next if number < s || number > e
-          fs = s
-          fe = e
-          break
-        end
-        unless fs.nil?
-          if number == fs && number == fe
-            @gaps.delete number
-          elsif number == fs
-            @gaps[fs + 1] = fe
-            @gaps.delete fs
-          elsif number == fe
-            @gaps[fs] = fe - 1
-          else
-            @gaps[fs] = number - 1
-            @gaps[number + 1] = fe
-          end
-          return true
-        end
-        return false if number < @next
-        @gaps[@next] = number - 1
-        @count -= (number + 1) - @next
-        @next = number + 1
+      match = /\A#{Regexp.escape(@orig_path)} test event (?<number>\d+)\z/.match(event['message'])
+      return false if match.nil?
+
+      number = match['number'].to_i
+      return false if number >= @next + count
+
+      if @gaps.key?(number)
+        @gaps[number + 1] = @gaps[number] if @gaps[number] != number
+        @gaps.delete number
         return true
       end
+      fs = nil
+      fe = nil
+      @gaps.each do |s, e|
+        next if number < s || number > e
+
+        fs = s
+        fe = e
+        break
+      end
+      unless fs.nil?
+        if number == fs && number == fe
+          @gaps.delete number
+        elsif number == fs
+          @gaps[fs + 1] = fe
+          @gaps.delete fs
+        elsif number == fe
+          @gaps[fs] = fe - 1
+        else
+          @gaps[fs] = number - 1
+          @gaps[number + 1] = fe
+        end
+        return true
+      end
+      return false if number < @next
+
+      @gaps[@next] = number - 1
+      @count -= (number + 1) - @next
+      @next = number + 1
+      return true
     end
 
     # Count and return

@@ -12,13 +12,13 @@ Gem::Specification.new do |gem|
   gem.licenses          = ['Apache-2.0']
   gem.rubyforge_project = 'nowarning'
   gem.require_paths     = ['lib']
-  gem.files             = %w(
+  gem.files             = %w[
     lib/logstash/inputs/courier.rb
-  )
+  ]
 
   gem.metadata = { 'logstash_plugin' => 'true', 'logstash_group' => 'input' }
 
-  gem.add_runtime_dependency 'log-courier', '~> 1.10'
-  gem.add_runtime_dependency 'logstash-core-plugin-api', '>= 1.60', '<= 2.99' if RUBY_PLATFORM == 'java'
+  gem.add_runtime_dependency 'log-courier', '~> 2.7.0'
   gem.add_runtime_dependency 'logstash-codec-plain' if RUBY_PLATFORM == 'java'
+  gem.add_runtime_dependency 'logstash-core-plugin-api', '>= 1.60', '<= 2.99' if RUBY_PLATFORM == 'java'
 end

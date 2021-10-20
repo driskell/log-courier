@@ -1,6 +1,5 @@
-/.bundle
-/.logstash
-/.vagrant
 /pkg
 /spec/tmp
 /vendor
+/logstash
+/logstash.tar.gz

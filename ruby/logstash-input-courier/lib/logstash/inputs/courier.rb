@@ -1,6 +1,4 @@
-# encoding: utf-8
-
-# Copyright 2014 Jason Woods.
+# Copyright 2014-2021 Jason Woods.
 #
 # This file is a modification of code from Logstash Forwarder.
 # Copyright 2012-2013 Jordan Sissel and contributors.
@@ -79,12 +77,10 @@ module LogStash
       # using client certificates
       config :add_peer_fields, validate: :boolean
 
-      public
-
       def register
         @logger.info(
           'Starting courier input listener',
-          address: "#{@host}:#{@port}"
+          address: "#{@host}:#{@port}",
         )
 
         require 'log-courier/server'
@@ -96,9 +92,7 @@ module LogStash
       # and is then caught by the pipeline worker - so we needn't do anything here
       def run(output_queue)
         @log_courier.run do |event|
-          if event.key?('tags') && !event['tags'].is_a?(Array)
-            event['tags'] = [event['tags']]
-          end
+          event['tags'] = [event['tags']] if event.key?('tags') && !event['tags'].is_a?(Array)
           event = LogStash::Event.new(event)
           decorate event
           output_queue << event
@@ -122,7 +116,7 @@ module LogStash
         [
           :logger, :address, :port, :transport, :ssl_certificate, :ssl_key,
           :ssl_key_passphrase, :ssl_verify, :ssl_verify_default_ca,
-          :ssl_verify_ca, :min_tls_version, :curve_secret_key
+          :ssl_verify_ca, :min_tls_version,
         ].each do |k|
           result[k] = send(k)
         end

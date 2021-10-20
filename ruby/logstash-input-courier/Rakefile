@@ -4,8 +4,20 @@ require 'rubygems/package_task'
 gemspec = Gem::Specification.load('logstash-input-courier.gemspec')
 Gem::PackageTask.new(gemspec).define
 
-task :default do
-  Rake::Task[:package].invoke
+task :default => [:install] do
+  require 'rspec/core/rake_task'
+  RSpec::Core::RakeTask.new(:spec)
+  Rake::Task[:spec].invoke
+end
+
+task :install do
+  Bundler.with_clean_env do
+    sh 'bundle install --jobs 4 --retry 3'
+  end
+end
+
+task release: [:package] do
+  sh "gem push pkg/log-courier-#{gemspec.version}.gem"
 end
 
 task :clean do

@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+    - 'ruby/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+    - 'ruby/**'
+
+jobs:
+  test_log_courier:
+    strategy:
+      matrix:
+        # Logstash 7.7.0 is our earliest supported version, which uses JRuby 9.2.11.1, compatible with Ruby 2.5.x
+        # Test also against 9.3.1.0 which is latest version and comaptible with Ruby 2.6.x
+        ruby: ['ruby-2.5.9', 'jruby-9.2.11.1', 'ruby-2.6.8', 'jruby-9.3.1.0']
+    name: Test Log Courier ${{ matrix.ruby }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby }}
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Test
+      run: |
+        cd ruby/log-courier
+        bundle install
+        bundle exec rake
+
+  package_log_courier:
+    name: Build Log Courier
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ruby/setup-ruby@v1
+      with:
+        # Build only for our minimum supported version
+        ruby-version: 'jruby-9.2.11.1'
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Package
+      run: |
+        cd ruby/log-courier
+        # Don't need the full bundle to package
+        gem install rake
+        rake package
+    - name: Upload Gem
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: log-courier
+        path: pkg/*.gem
+
+  test_logstash_input_courier:
+    strategy:
+      matrix:
+        # Logstash 7.7.0 is our earliest supported version, which uses JRuby 9.2.11.1, compatible with Ruby 2.5.x
+        # Test also against 9.3.1.0 which is latest version and comaptible with Ruby 2.6.x
+        ruby: ['ruby-2.5.9', 'jruby-9.2.11.1', 'ruby-2.6.8', 'jruby-9.3.1.0']
+    name: Test Logstash Input Courier ${{ matrix.ruby }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby }}
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Test
+      run: |
+        cd ruby/logstash-input-courier
+        ./download_logstash.sh
+        bundle install
+        bundle exec rake
+
+  package_logstash_input_courier:
+    name: Build Logstash Input Courier
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ruby/setup-ruby@v1
+      with:
+        # Build only for our minimum supported version
+        ruby-version: 'jruby-9.2.11.1'
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Package
+      run: |
+        cd ruby/logstash-input-courier
+        # Don't need the full bundle to package
+        gem install rake
+        rake package
+    - name: Upload Gem
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: logstash-input-courier
+        path: pkg/*.gem

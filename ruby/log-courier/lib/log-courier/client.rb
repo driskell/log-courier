@@ -1,6 +1,4 @@
-# encoding: utf-8
-
-# Copyright 2014-2019 Jason Woods and Contributors.
+# Copyright 2014-2021 Jason Woods and Contributors.
 #
 # This file is a modification of code from Logstash Forwarder.
 # Copyright 2012-2013 Jordan Sissel and contributors.
@@ -20,42 +18,23 @@
 require 'log-courier/event_queue'
 require 'log-courier/protocol'
 require 'multi_json'
-require 'thread'
 require 'zlib'
 
-class NativeException; end
+# Dummy until its no longer needed
+class NativeException
+  def dummy; end
+end
 
 module LogCourier
   class TimeoutError < StandardError; end
+
   class ShutdownSignal < StandardError; end
+
   class ProtocolError < StandardError; end
 
   # Describes a pending payload
   class PendingPayload
-    # TODO(driskell): Consolidate singleton into another file
-    class << self
-      @json_adapter
-      @json_parseerror
-
-      def get_json_adapter
-        @json_adapter = MultiJson.adapter.instance if @json_adapter.nil?
-        @json_adapter
-      end
-
-      def get_json_parseerror
-        if @json_parseerror.nil?
-          @json_parseerror = get_json_adapter.class::ParseError
-        end
-        @json_parseerror
-      end
-    end
-
-    attr_accessor :next
-    attr_accessor :nonce
-    attr_accessor :events
-    attr_accessor :last_sequence
-    attr_accessor :sequence_len
-    attr_accessor :payload
+    attr_accessor :next, :nonce, :events, :last_sequence, :sequence_len, :payload
 
     def initialize(events, nonce)
       @events = events
@@ -65,27 +44,27 @@ module LogCourier
     end
 
     def generate
-      fail ArgumentError, 'Corrupt payload' if @events.length == 0
+      raise ArgumentError, 'Corrupt payload' if @events.length.zero?
 
       buffer = Zlib::Deflate.new
 
       # Write each event in JSON format
       events.each do |event|
-        json_data = self.class.get_json_adapter.dump(event)
+        json_data = MultiJson.dump(event)
         # Add length and then the data
         buffer << [json_data.bytesize].pack('N') << json_data
       end
 
       # Generate and store the payload
-      @payload = nonce + buffer.finish()
+      @payload = nonce + buffer.finish
       @last_sequence = 0
       @sequence_len = @events.length
     end
 
     def ack(sequence)
-      if sequence <= @last_sequence
-        return 0, false
-      elsif sequence >= @sequence_len
+      return 0, false if sequence <= @last_sequence
+
+      if sequence >= @sequence_len
         lines = @sequence_len - @last_sequence
         @last_sequence = sequence
         @payload = nil
@@ -97,7 +76,7 @@ module LogCourier
       @last_sequence = sequence
       @payload = nil
       @events.shift(lines)
-      return lines, false
+      [lines, false]
     end
   end
 
@@ -105,13 +84,14 @@ module LogCourier
   class Client
     def initialize(options = {})
       @options = {
-        logger:          nil,
-        transport:       'tls',
-        spool_size:      1024,
-        idle_timeout:    5,
-        port:            nil,
-        addresses:       [],
+        logger: nil,
+        transport: 'tls',
+        spool_size: 1024,
+        idle_timeout: 5,
+        port: nil,
+        addresses: [],
         min_tls_version: 1.2,
+        disable_handshake: false,
       }.merge!(options)
 
       @logger = @options[:logger]
@@ -121,11 +101,11 @@ module LogCourier
         require 'log-courier/client_tcp'
         @client = ClientTcp.new(@options)
       else
-        fail 'output/courier: \'transport\' must be tcp or tls'
+        raise 'output/courier: \'transport\' must be tcp or tls'
       end
 
-      fail 'output/courier: \'addresses\' must contain at least one address' if @options[:addresses].empty?
-      fail 'output/courier: \'addresses\' only supports a single address at this time' if @options[:addresses].length > 1
+      raise 'output/courier: \'addresses\' must contain at least one address' if @options[:addresses].empty?
+      raise 'output/courier: \'addresses\' only supports a single address at this time' if @options[:addresses].length > 1
 
       @event_queue = EventQueue.new @options[:spool_size]
       @pending_payloads = {}
@@ -162,10 +142,10 @@ module LogCourier
     def publish(event)
       # Pass the event into the spooler
       @event_queue << event
-      return
+      nil
     end
 
-    def shutdown(force=false)
+    def shutdown(force = false) # rubocop:disable Style/OptionalBooleanParameter
       if force
         # Raise a shutdown signal in the spooler and wait for it
         @spooler_thread.raise ShutdownSignal
@@ -177,7 +157,7 @@ module LogCourier
         @io_control << ['!', nil]
       end
       @io_thread.join
-      return @pending_payloads.length == 0
+      @pending_payloads.length.zero?
     end
 
     private
@@ -192,9 +172,7 @@ module LogCourier
           loop do
             event = @event_queue.pop next_flush - Time.now.to_i
 
-            if event.nil?
-              raise ShutdownSignal
-            end
+            raise ShutdownSignal if event.nil?
 
             spooled.push(event)
 
@@ -202,13 +180,13 @@ module LogCourier
           end
         rescue TimeoutError
           # Hit timeout but no events, keep waiting
-          next if spooled.length == 0
+          next if spooled.length.zero?
         end
 
         if spooled.length >= @options[:spool_size]
-          @logger.debug 'Flushing full spool', :events => spooled.length unless @logger.nil?
+          @logger&.debug 'Flushing full spool', events: spooled.length
         else
-          @logger.debug 'Flushing spool due to timeout', :events => spooled.length unless @logger.nil?
+          @logger&.debug 'Flushing spool due to timeout', events: spooled.length
         end
 
         # Pass through to io_control but only if we're ready to send
@@ -219,9 +197,8 @@ module LogCourier
 
         @io_control << ['E', spooled]
       end
-      return
     rescue ShutdownSignal
-      return
+      # Shutdown
     end
 
     def run_io
@@ -242,175 +219,159 @@ module LogCourier
       end
 
       @client.disconnect
-      return
     rescue ShutdownSignal
       # Ensure disconnected
       @client.disconnect
     end
 
-    def run_io_loop()
+    def run_io_loop
       io_stop = false
       can_send = false
 
       # IO loop
       loop do
-        begin
-          action = @io_control.pop @timeout - Time.now.to_i
+        action = @io_control.pop @timeout - Time.now.to_i
 
-          # Process the action
-          case action[0]
-          when 'S'
-            # If we're flushing through the pending, pick from there
-            unless @retry_payload.nil?
-              @logger.debug 'Send is ready, retrying previous payload' unless @logger.nil?
+        # Process the action
+        case action[0]
+        when 'S'
+          # If we're flushing through the pending, pick from there
+          unless @retry_payload.nil?
+            @logger&.debug 'Send is ready, retrying previous payload'
 
-              # Regenerate data if we need to
-              @retry_payload.generate if @retry_payload.payload.nil?
+            # Regenerate data if we need to
+            @retry_payload.generate if @retry_payload.payload.nil?
 
-              # Send and move onto next
-              @client.send 'JDAT', @retry_payload.payload
+            # Send and move onto next
+            @client.send 'JDAT', @retry_payload.payload
 
-              @retry_payload = @retry_payload.next
+            @retry_payload = @retry_payload.next
 
-              # If first send, exit idle mode
-              if @retry_payload == @first_payload
-                @timeout = Time.now.to_i + @network_timeout
-              end
-              next
-            end
+            # If first send, exit idle mode
+            @timeout = Time.now.to_i + @network_timeout if @retry_payload == @first_payload
 
-            # Ready to send, allow spooler to pass us something if we don't
-            # have something already
-            if @received_payloads.length != 0
-              @logger.debug 'Send is ready, using events from backlog' unless @logger.nil?
-              send_payload @received_payloads.pop()
-            else
-              @logger.debug 'Send is ready, requesting events' unless @logger.nil?
+            next
+          end
 
-              can_send = true
+          # Ready to send, allow spooler to pass us something if we don't
+          # have something already
+          if @received_payloads.length.zero?
+            @logger&.debug 'Send is ready, requesting events'
 
-              @send_mutex.synchronize do
-                @send_ready = true
-                @send_cond.signal
-              end
-            end
-          when 'E'
-            # Were we expecting a payload? Store it if not
-            if can_send
-              @logger.debug 'Sending events', :events => action[1].length unless @logger.nil?
-              send_payload action[1]
-              can_send = false
-            else
-              @logger.debug 'Events received when not ready; saved to backlog' unless @logger.nil?
-              @received_payloads.push action[1]
-            end
-          when 'R'
-            # Received a message
-            signature, message = action[1..2]
-            case signature
-            when 'PONG'
-              process_pong message
-            when 'ACKN'
-              process_ackn message
-            else
-              # Unknown message - only listener is allowed to respond with a "????" message
-              # TODO: What should we do? Just ignore for now and let timeouts conquer
-            end
+            can_send = true
 
-            # Any pending payloads left?
-            if @pending_payloads.length == 0
-              # Handle shutdown
-              if io_stop
-                raise ShutdownSignal
-              end
-
-              # Enter idle mode
-              @timeout = Time.now.to_i + @keepalive_timeout
-            else
-              # Set network timeout
-              @timeout = Time.now.to_i + @network_timeout
-            end
-          when 'F'
-            # Reconnect, an error occurred
-            break
-          when '!'
-            @logger.debug 'Shutdown request received' unless @logger.nil?
-
-            # Shutdown request received
-            if @pending_payloads.length == 0
-              raise ShutdownSignal
-            end
-
-            @logger.debug 'Delaying shutdown due to pending payloads', :payloads => @pending_payloads.length unless @logger.nil?
-
-            io_stop = true
-
-            # Stop spooler sending
-            can_send = false
             @send_mutex.synchronize do
-              @send_ready = false
+              @send_ready = true
+              @send_cond.signal
             end
+          else
+            @logger&.debug 'Send is ready, using events from backlog'
+            send_payload @received_payloads.pop
           end
-        rescue TimeoutError
-          if @pending_payloads != 0
-            # Network timeout
-            fail TimeoutError
+        when 'E'
+          # Were we expecting a payload? Store it if not
+          if can_send
+            @logger&.debug 'Sending events', events: action[1].length
+            send_payload action[1]
+            can_send = false
+          else
+            @logger&.debug 'Events received when not ready; saved to backlog'
+            @received_payloads.push action[1]
           end
+        when 'R'
+          # Received a message
+          signature, message = action[1..2]
+          case signature
+          when 'PONG'
+            process_pong message
+          when 'ACKN'
+            process_ackn message
+          end
+          # else
+          # Unknown message - only listener is allowed to respond with a "????" message
+          # TODO: What should we do? Just ignore for now and let timeouts conquer
 
-          # Keepalive timeout hit, send a PING unless we were awaiting a PONG
-          if @pending_ping
-            # Timed out, break into reconnect
-            fail TimeoutError
+          # Any pending payloads left?
+          if @pending_payloads.length.zero?
+            # Handle shutdown
+            raise ShutdownSignal if io_stop
+
+            # Enter idle mode
+            @timeout = Time.now.to_i + @keepalive_timeout
+          else
+            # Set network timeout
+            @timeout = Time.now.to_i + @network_timeout
           end
+        when 'F'
+          # Reconnect, an error occurred
+          break
+        when '!'
+          @logger&.debug 'Shutdown request received'
+
+          # Shutdown request received
+          raise ShutdownSignal if @pending_payloads.length.zero?
+
+          @logger&.debug 'Delaying shutdown due to pending payloads', payloads: @pending_payloads.length
+
+          io_stop = true
 
           # Stop spooler sending
           can_send = false
           @send_mutex.synchronize do
             @send_ready = false
           end
-
-          # Send PING
-          send_ping
-
-          @timeout = Time.now.to_i + @network_timeout
         end
+      rescue TimeoutError
+        # Handle network timeout
+        raise TimeoutError if @pending_payloads != 0
+
+        # Keepalive timeout hit, timeout if we were waiting for a pong
+        raise TimeoutError if @pending_ping
+
+        # Stop spooler sending
+        can_send = false
+        @send_mutex.synchronize do
+          @send_ready = false
+        end
+
+        # Send PING
+        send_ping
+
+        @timeout = Time.now.to_i + @network_timeout
+
+        next
       end
     rescue ProtocolError => e
       # Reconnect required due to a protocol error
-      @logger.warn 'Protocol error', :error => e.message unless @logger.nil?
+      @logger&.warn 'Protocol error', error: e.message
     rescue TimeoutError
       # Reconnect due to timeout
-      @logger.warn 'Timeout occurred' unless @logger.nil?
-    rescue ShutdownSignal => e
+      @logger&.warn 'Timeout occurred'
+    rescue ShutdownSignal
       raise
     rescue StandardError, NativeException => e
       # Unknown error occurred
-      @logger.warn e, :hint => 'Unknown error' unless @logger.nil?
+      @logger&.warn e, hint: 'Unknown error'
     end
 
     def send_payload(payload)
       # If we have too many pending payloads, pause the IO
-      if @pending_payloads.length + 1 >= @max_pending_payloads
-        @client.pause_send
-      end
+      @client.pause_send if @pending_payloads.length + 1 >= @max_pending_payloads
 
       # Received some events - send them
       send_jdat payload
 
       # Leave idle mode if this is the first payload after idle
-      if @pending_payloads.length == 1
-        @timeout = Time.now.to_i + @network_timeout
-      end
+      @timeout = Time.now.to_i + @network_timeout if @pending_payloads.length == 1
     end
 
     def generate_nonce
-      (0...16).map { rand(256).chr }.join("")
+      (0...16).map { rand(256).chr }.join
     end
 
     def send_ping
       # Send it
       @client.send 'PING', ''
-      return
     end
 
     def send_jdat(events)
@@ -424,54 +385,51 @@ module LogCourier
 
       if @first_payload.nil?
         @first_payload = payload
-        @last_payload = payload
       else
         @last_payload.next = payload
-        @last_payload = payload
       end
+      @last_payload = payload
 
       # Send it
       @client.send 'JDAT', payload.payload
-      return
     end
 
     def process_pong(message)
       # Sanity
-      fail ProtocolError, "Unexpected data attached to pong message (#{message.bytesize})" if message.bytesize != 0
+      raise ProtocolError, "Unexpected data attached to pong message (#{message.bytesize})" if message.bytesize != 0
 
-      @logger.debug 'PONG message received' unless @logger.nil? || !@logger.debug?
+      @logger&.debug 'PONG message received' || !@logger&.debug?
 
       # No longer pending a PONG
       @ping_pending = false
-      return
     end
 
     def process_ackn(message)
       # Sanity
-      fail ProtocolError, "ACKN message size invalid (#{message.bytesize})" if message.bytesize != 20
+      raise ProtocolError, "ACKN message size invalid (#{message.bytesize})" if message.bytesize != 20
 
       # Grab nonce
       nonce, sequence = message.unpack('a16N')
 
-      if !@logger.nil? && @logger.debug?
+      if @logger&.debug?
         nonce_str = nonce.each_byte.map do |b|
           b.to_s(16).rjust(2, '0')
         end
 
-        @logger.debug 'ACKN message received', :nonce => nonce_str.join, :sequence => sequence
+        @logger&.debug 'ACKN message received', nonce: nonce_str.join, sequence: sequence
       end
 
       # Find the payload - skip if we couldn't as it will just a duplicated ACK
       return unless @pending_payloads.key?(nonce)
 
       payload = @pending_payloads[nonce]
-      lines, complete = payload.ack(sequence)
+      _, complete = payload.ack(sequence)
 
-      if complete
-        @pending_payloads.delete nonce
-        @first_payload = payload.next
-        @client.resume_send if @client.send_paused?
-      end
+      return unless complete
+
+      @pending_payloads.delete nonce
+      @first_payload = payload.next
+      @client.resume_send if @client.send_paused?
     end
   end
 end
