@@ -4,8 +4,28 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    paths:
+    - contrib
+    - docs
+    - 'lc-admin/**'
+    - 'lc-lib/**'
+    - 'lc-tlscert/**'
+    - 'log-carver/**'
+    - log-courier.go
+    - go.mod
+    - go.sum
   pull_request:
     branches: [ main ]
+    paths:
+    - contrib
+    - docs
+    - 'lc-admin/**'
+    - 'lc-lib/**'
+    - 'lc-tlscert/**'
+    - 'log-carver/**'
+    - log-courier.go
+    - go.mod
+    - go.sum
 
 jobs:
   build:
