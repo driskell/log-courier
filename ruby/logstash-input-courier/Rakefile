@@ -15,7 +15,7 @@ task :install do
 end
 
 task release: [:package] do
-  sh "gem push pkg/log-courier-#{gemspec.version}.gem"
+  sh "gem push pkg/logstash-input-courier-#{gemspec.version}-java.gem"
 end
 
 task :clean do
