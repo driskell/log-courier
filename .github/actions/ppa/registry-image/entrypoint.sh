@@ -60,7 +60,9 @@ for DIST in trusty xenial bionic focal; do
 	tar -xzf ~/"${NAME}_${VERSION#v}.orig.tar.gz"
 	cd ~/"${NAME}"
 	rm -rf debian
-	if [ "$DIST" == "trusty" ]; then
+	if [ -d "/github/workspace/.main/contrib/ppa/${NAME}" ]; then
+		cp -rf "/github/workspace/.main/contrib/ppa/${NAME}" debian
+	elif [ "$DIST" == "trusty" ]; then
 		cp -rf "/github/workspace/.main/contrib/ppa/${NAME}-upstart" debian
 	else
 		cp -rf "/github/workspace/.main/contrib/ppa/${NAME}-systemd" debian
