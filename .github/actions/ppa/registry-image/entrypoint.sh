@@ -14,7 +14,7 @@ echo '::endgroup::'
 
 if [ "${DRELEASE}" != 1 ]; then
 	echo "::group::Downloading original source for ${VERSION#v}-${RELEASE} from previous release"
-	wget -q "https://launchpad.net/~devel-k/+archive/ubuntu/log-courier2/+sourcefiles/log-courier/${VERSION#v}-${RELEASE}~trusty$(( DRELEASE - 1 ))/${NAME}_${VERSION#v}.orig.tar.gz" -O ~/"${NAME}_${VERSION#v}.orig.tar.gz"
+	wget -q "https://launchpad.net/~devel-k/+archive/ubuntu/log-courier2/+sourcefiles/${NAME}/${VERSION#v}-${RELEASE}~trusty$(( DRELEASE - 1 ))/${NAME}_${VERSION#v}.orig.tar.gz" -O ~/"${NAME}_${VERSION#v}.orig.tar.gz"
 	echo '::endgroup::'
 else
 	echo "::group::Generating sources for $REF"
