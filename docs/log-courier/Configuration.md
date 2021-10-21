@@ -625,12 +625,17 @@ Boolean. Optional. Default: true
 Adds an automatic "host" field to generated events that contains the `host`
 value from the general configuration section.
 
+With [`enable ecs`](#enable-ecs), two fields will appear with the same value at `host.name` and `host.hostname`.
+Please read the documentation for [`enable ecs`](#enable-ecs) as this field change is not backwards compatible.
+
 ### `add offset field`
 
 Boolean. Optional. Default: true
 
 Adds an automatic "offset" field to generated events that contains the current
 offset in the current data stream.
+
+With [`enable ecs`](#enable-ecs), this field will appear at `log.offset`.
 
 *Beware that this value will reset when a file rotates or is truncated and is
 generally not useful. It will be kept configurable to allow full compatibility
@@ -650,6 +655,8 @@ Boolean. Optional. Default: false
 
 Adds an automatic "timezone" field to generated events that contains the local
 machine's local timezone in the format, "-0700 MST".
+
+With [`enable ecs`](#enable-ecs), this field will appear at `event.timezone`.
 
 ### `codecs`
 
