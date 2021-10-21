@@ -33,13 +33,15 @@ const (
 
 // StreamConfig holds the configuration for a log stream
 type StreamConfig struct {
-	AddHostField     bool                   `config:"add host field"`
-	AddTimezoneField bool                   `config:"add timezone field"`
-	EnableECS        bool                   `config:"enable ecs"`
-	Fields           map[string]interface{} `config:"fields"`
+	AddHostField         bool                   `config:"add host field"`
+	AddTimezoneField     bool                   `config:"add timezone field"`
+	AddTimezoneNameField bool                   `config:"add timezone name field"`
+	EnableECS            bool                   `config:"enable ecs"`
+	Fields               map[string]interface{} `config:"fields"`
 
-	genConfig *config.General
-	timezone  string
+	genConfig    *config.General
+	timezone     string
+	timezoneName string
 }
 
 // Defaults initialises the default configuration for a log stream
@@ -49,6 +51,7 @@ func (sc *StreamConfig) Defaults() {
 	sc.EnableECS = defaultEnableECS
 
 	sc.timezone = time.Now().Format("-0700 MST")
+	sc.timezoneName = time.Local.String()
 }
 
 // Validate validates the stream configuration and also stores a copy of the
@@ -93,6 +96,10 @@ func (sc *StreamConfig) Decorate(data map[string]interface{}) map[string]interfa
 		} else {
 			data["timezone"] = sc.timezone
 		}
+	}
+
+	if sc.AddTimezoneNameField {
+		data["timezone_name"] = sc.timezoneName
 	}
 
 	for k := range sc.genConfig.GlobalFields {

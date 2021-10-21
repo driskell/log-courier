@@ -54,6 +54,7 @@
     - [`add offset field`](#add-offset-field)
     - [`add path field`](#add-path-field)
     - [`add timezone field`](#add-timezone-field)
+    - [`add timezone name field`](#add-timezone-name-field)
     - [`codecs`](#codecs)
     - [`dead time`](#dead-time)
     - [`enable ecs`](#enable-ecs)
@@ -656,7 +657,16 @@ Boolean. Optional. Default: false
 Adds an automatic "timezone" field to generated events that contains the local
 machine's local timezone in the format, "-0700 MST".
 
+NOTE: This field CANNOT be parsed using the Logstash Date Filter plugin. Use `add timezone name field` to add a field compatible with this filter.
+
 With [`enable ecs`](#enable-ecs), this field will appear at `event.timezone`.
+
+### `add timezone name field`
+
+Adds an automatic "timezone_name" field to generated events that contains the local
+machine's local timezone name, such as "UTC" or "Europe/London".
+
+This field can be parsed using the Logstash Date Filter plugin.
 
 ### `codecs`
 
