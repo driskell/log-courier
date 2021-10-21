@@ -41,7 +41,7 @@ jobs:
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
-    - name: Upload SRPM
+    - name: Upload Sources
       uses: actions/upload-artifact@v2
       if: ${{ always() }}
       with:
@@ -70,7 +70,7 @@ jobs:
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
-    - name: Upload SRPM
+    - name: Upload Sources
       uses: actions/upload-artifact@v2
       if: ${{ always() }}
       with:
@@ -99,7 +99,7 @@ jobs:
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
-    - name: Upload SRPM
+    - name: Upload Sources
       uses: actions/upload-artifact@v2
       if: ${{ always() }}
       with:
@@ -128,7 +128,7 @@ jobs:
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
         COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
-    - name: Upload SRPM
+    - name: Upload Sources
       uses: actions/upload-artifact@v2
       if: ${{ always() }}
       with:
