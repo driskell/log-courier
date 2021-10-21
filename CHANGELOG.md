@@ -1,5 +1,14 @@
 # Change Log
 
+## 2.7.3 (Future)
+
+Future
+
+Log Courier
+
+- Add new [`add timezone name field`](docs/log-courier/Configuration.md#add-timezone-name-field) configuration that adds the timezone name such as `UTC` or `Europe/London` for use with the Logstash Date Filter. The existing `timezone` / `event.timezone` (ECS) fields were in a format the filter could not use (#345)
+- Fix race that might cause a file to use a configuration other than the first configuration it matches (#367)
+
 ## 2.7.2
 
 21st October 2021
@@ -31,7 +40,7 @@ Log Courier / Log Carver
 
 Log Carver
 
-- Added `max pending payloads` configuration to `receiver` section, to ensure clients cannot DoS Log Carver
+- Added [`max pending payloads`](docs/log-carver/Configuration.md#max-pending-payloads-receiver) configuration to `receiver` section, to ensure clients cannot DoS Log Carver
 - Fix a connection failing during attempt to gracefully shut it down
 - Fix a possible deadlock in receiver shutdown due to late acknowledgements for a failed connection during shutdown
 
@@ -45,7 +54,7 @@ Logstash Input Plugin
 
 - **Breaking Change:** Obsoleted and removed the `zmq` transport option
 - Updated dependencies to newer versions
-- Added `min_tls_version` configuration option that now defaults to 1.2 (#357)
+- Added [`min_tls_version`](docs/LogstashIntegration.md) configuration option that now defaults to 1.2 (#357)
 - Added protocol handshake support to output version of connecting clients
 - Added new log messages to output the negotiated TLS version of each connection and, where a handshake occurs, the remote's product and version
 
