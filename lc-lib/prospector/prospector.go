@@ -237,7 +237,7 @@ func (p *Prospector) processFile(file string, cfg *FileConfig) {
 	info, isKnown := p.prospectorindex[file]
 	// Have we already processed this file in an earlier prospector declaration?
 	// We do not support merging as it requires a full rewrite of how we handle file status
-	if info.sameIteration(p.iteration) {
+	if info.seenInIteration(p.iteration) {
 		return
 	}
 
