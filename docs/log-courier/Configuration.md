@@ -234,6 +234,8 @@ unix:/var/run/log-courier/admin.socket
 
 The files configuration lists the file sets that contain the logs you wish to ship. It is an array of file set configurations. In addition to the configuration parameters specified below, each file group may also have [Stream Configuration](#stream-configuration) parameters specified.
 
+If a file matches multiple entries in the configuration, it will use only the first that it encounters. Any configuration that appears after the first matching configuration will be ignored for that file.
+
 For example:
 
 ```yaml
