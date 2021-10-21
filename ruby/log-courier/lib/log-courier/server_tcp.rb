@@ -368,15 +368,15 @@ module LogCourier
       @helo = Protocol.parse_helo_vers(data)
       @logger&.info 'Remote identified', peer: @peer, client_version: @helo[:client_version]
 
-      # Flags 1 byte - EVNT flag = 0
+      # Flags 4 bytes - EVNT flag = 0
       # (Significant rewrite would be required to support streaming messages as currently we read
       #  first and then yield for processing. To support EVNT we have to move protocol parsing to
       #  the connection layer here so we can keep reading until we reach the end of the stream)
-      # Major Version 1 byte
-      # Minor Version 1 byte
-      # Patch Version 1 byte
+      # Major Version 4 bytes
+      # Minor Version 4 bytes
+      # Patch Version 4 bytes
       # Client String 4 bytes
-      data = [1, 2, 7, 0, 'RYLC'].pack('CCCCA4')
+      data = [0, 2, 7, 2, 'RYLC'].pack('NNNNA4')
       send 'VERS', data
     end
 

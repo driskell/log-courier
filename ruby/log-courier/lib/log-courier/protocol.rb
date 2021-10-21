@@ -22,9 +22,9 @@ module LogCourier
   # Protocol
   module Protocol
     def self.parse_helo_vers(data)
-      data = "\x00\x00\x00\x00\x00\x00\x00\x00" if data.length < 8
+      data = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" if data.length < 8
 
-      flags, major_version, minor_version, patch_version, client = data.unpack('CCCCA4')
+      flags, major_version, minor_version, patch_version, client = data.unpack('NNNNA4')
       client = case client
                when 'LCOR'
                  'Log Courier'

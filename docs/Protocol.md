@@ -73,7 +73,13 @@ Data for this message is currently defined as follows:
 
 ```text
 +---+---+---+---+
-| F | M | m | p |
+| Flags         |
++---+---+---+---+
+| Major Version |
++---+---+---+---+
+| Minor Version |
++---+---+---+---+
+| Patch Version |
 +---+---+---+---+
 | Client        |
 +---+---+---+---+
@@ -81,16 +87,16 @@ Data for this message is currently defined as follows:
 +
 ```
 
-F = 1-byte of Bit Flags defined as follows:
+Flags = 1-byte of Bit Flags defined as follows:
 
 - Bit 1: EVNT message stream is supported
 - Bits 2-8: Reserved
 
-M = Major version of client
+Major Version = Major version of client
 
-m = minor version of client
+Minor Version = Minor version of client
 
-p = patch version of client
+Patch Version = Patch version of client
 
 Client = 4-character ASCII identifier of the client. All "LC" prefix are reserved. See [Known Clients](#known-clients).
 

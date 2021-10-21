@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    log-courier (2.7.0)
+    log-courier (2.7.2)
       cabin (~> 0.6)
       multi_json (~> 1.10)
 

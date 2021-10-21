@@ -125,7 +125,7 @@ module LogCourier
     def handshake(io_control)
       return true if @options[:disable_handshake]
 
-      @socket.write ['HELO', 8, 0, 2, 7, 0, 'RYLC'].pack('A4NCCCCA4')
+      @socket.write ['HELO', 20, 0, 2, 7, 2, 'RYLC'].pack('A4NNNNNA4')
 
       signature, data = receive
       if signature != 'VERS'

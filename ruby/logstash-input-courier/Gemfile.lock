@@ -1,15 +1,15 @@
 PATH
   remote: ../log-courier
   specs:
-    log-courier (2.7.0)
+    log-courier (2.7.2)
       cabin (~> 0.6)
       multi_json (~> 1.10)
 
 PATH
   remote: .
   specs:
-    logstash-input-courier (2.7.0-java)
-      log-courier (~> 2.7.0)
+    logstash-input-courier (2.7.2-java)
+      log-courier (~> 2.7.2)
       logstash-codec-plain
       logstash-core-plugin-api (>= 1.60, <= 2.99)
 
