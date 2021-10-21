@@ -139,6 +139,10 @@ func (pi *prospectorInfo) update(fileinfo os.FileInfo, iteration uint32) {
 	pi.lastSeen = iteration
 }
 
+func (pi *prospectorInfo) seenInIteration(iteration uint32) bool {
+	return pi.lastSeen == iteration
+}
+
 func (pi *prospectorInfo) maybeOrphaned() {
 	pi.orphaned = orphanedMaybe
 }

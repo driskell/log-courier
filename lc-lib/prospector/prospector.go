@@ -235,6 +235,11 @@ func (p *Prospector) processFile(file string, cfg *FileConfig) {
 
 	// Check the current info against our index
 	info, isKnown := p.prospectorindex[file]
+	// Have we already processed this file in an earlier prospector declaration?
+	// We do not support merging as it requires a full rewrite of how we handle file status
+	if info.sameIteration(p.iteration) {
+		return
+	}
 
 	// Stat the file, following any symlinks
 	// TODO: Low priority. Trigger loadFileId here for Windows instead of
