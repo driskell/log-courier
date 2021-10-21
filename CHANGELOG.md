@@ -1,5 +1,21 @@
 # Change Log
 
+## 2.7.2
+
+21st October 2021
+
+Logstash Input Plugin
+
+- Fix compatibility issue between Ruby Log Courier and Go Log Courier caused by a discrepency in the HELO/VERS protocol message that form the handshake
+
+## 2.7.1
+
+21st October 2021
+
+Logstash Input Plugin
+
+- Fix missing protocol.rb file causing import error
+
 ## 2.7.0
 
 21st October 2021
