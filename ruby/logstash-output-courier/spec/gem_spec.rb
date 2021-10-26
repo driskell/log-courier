@@ -26,7 +26,7 @@ describe LogStash::Outputs::Courier do
   context 'logstash-output-courier' do
     it 'sends events' do
       @plugin = LogStash::Outputs::Courier.new(
-        'hosts' => ['127.0.0.1'],
+        'addresses' => ['127.0.0.1'],
         'port' => 12_345,
         'ssl_ca' => @ssl_cert.path,
       )
