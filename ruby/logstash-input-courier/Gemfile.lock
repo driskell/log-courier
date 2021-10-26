@@ -8,7 +8,7 @@ PATH
 PATH
   remote: .
   specs:
-    logstash-input-courier (2.7.3-java)
+    logstash-input-courier (2.7.4-java)
       log-courier (~> 2.7.3)
       logstash-codec-plain
       logstash-core-plugin-api (>= 1.60, <= 2.99)
