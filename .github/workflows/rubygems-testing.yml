@@ -53,3 +53,26 @@ jobs:
       with:
         name: logstash-input-courier
         path: ruby/logstash-input-courier/pkg/*.gem
+
+  package_logstash_output_courier:
+    name: Build Logstash Output Courier
+    runs-on: ubuntu-latest
+    steps:
+    - uses: ruby/setup-ruby@v1
+      with:
+        # Build only for our minimum supported version
+        ruby-version: 'jruby-9.2.11.1'
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Package
+      run: |
+        cd ruby/logstash-output-courier
+        # Don't need the full bundle to package
+        gem install rake
+        rake package
+    - name: Upload Gem
+      uses: actions/upload-artifact@v2
+      if: ${{ always() }}
+      with:
+        name: logstash-output-courier
+        path: ruby/logstash-output-courier/pkg/*.gem

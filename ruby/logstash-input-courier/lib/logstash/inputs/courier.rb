@@ -119,7 +119,7 @@ module LogStash
 
       def add_override_options(result)
         # Honour the defaults in the LogCourier gem
-        [:max_packet_size, :peer_recv_queue, :add_peer_fields].each do |k|
+        [:max_packet_size, :add_peer_fields].each do |k|
           result[k] = send(k) unless send(k).nil?
         end
         result

@@ -1,5 +1,13 @@
 # Change Log
 
+## 2.7.4
+
+26st October 2021
+
+Logstash Input Plugin
+
+- Fix regression caused by removal of `peer_recv_queue` - some code remained that was still attempting to access it
+
 ## 2.7.3
 
 26th October 2021
