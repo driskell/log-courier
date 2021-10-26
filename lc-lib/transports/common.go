@@ -18,7 +18,12 @@ package transports
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"fmt"
+	"io/ioutil"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 )
@@ -236,6 +241,67 @@ func NewPingEvent(context context.Context) *PingEvent {
 // Context returns the endpoint associated with this event
 func (e *PingEvent) Context() context.Context {
 	return e.context
+}
+
+// ParseTLSVersion parses a TLS version string into the tls library value for min/max config
+// We explicitly refuse SSLv3 to mitigate POODLE vulnerability
+func ParseTLSVersion(version string, fallback uint16) (uint16, error) {
+	switch version {
+	case "":
+		return fallback, nil
+	case "1.0":
+		return tls.VersionTLS10, nil
+	case "1.1":
+		return tls.VersionTLS11, nil
+	case "1.2":
+		return tls.VersionTLS12, nil
+	case "1.3":
+		return tls.VersionTLS13, nil
+	}
+	return fallback, fmt.Errorf("invalid or unknown TLS version: '%s'", version)
+}
+
+// GetTlsVersionAsString returns a string representation of the TLS version
+func GetTlsVersionAsString(version uint16) string {
+	switch version {
+	case tls.VersionTLS10:
+		return "TLSv1"
+	case tls.VersionTLS11:
+		return "TLSv1.1"
+	case tls.VersionTLS12:
+		return "TLSv1.2"
+	case tls.VersionTLS13:
+		return "TLSv1.3"
+	}
+	return fmt.Sprintf("Unknown (%d)", version)
+}
+
+// AddCertificates returns a new slice containing the given certificate list and the contents of the given file added
+func AddCertificates(certificateList []*x509.Certificate, file string) ([]*x509.Certificate, error) {
+	pemdata, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	rest := pemdata
+	var block *pem.Block
+	var pemBlockNum = 1
+	for {
+		block, rest = pem.Decode(rest)
+		if block != nil {
+			if block.Type != "CERTIFICATE" {
+				return nil, fmt.Errorf("block %d does not contain a certificate", pemBlockNum)
+			}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse CA certificate in block %d", pemBlockNum)
+			}
+			certificateList = append(certificateList, cert)
+			pemBlockNum++
+		} else {
+			break
+		}
+	}
+	return certificateList, nil
 }
 
 // init registers this module provider

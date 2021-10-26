@@ -1,5 +1,20 @@
 # Change Log
 
+## 2.8.0
+
+Future
+
+Log Courier / Log Carver
+
+- Fixed transports sometimes not restarting when configuration is changed
+
+Log Carver
+
+- Added `es-https` transport to use encrypted HTTPS communication with Elasticsearch
+- Added `min tls version` and `max tls version` to `es-https` transport
+- Added `ssl ca` for `es-https` transport to allow certificate pinning
+- Added `username` and `password` for `es` and `es-https` transports to allow Basic authentication scheme
+
 ## 2.7.4
 
 26th October 2021

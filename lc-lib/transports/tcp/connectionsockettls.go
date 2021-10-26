@@ -21,6 +21,8 @@ import (
 	"crypto/tls"
 	"net"
 	"time"
+
+	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 // connectionSocketTLS wraps a TCP socket with TLS
@@ -71,7 +73,7 @@ func (t *connectionSocketTLS) Setup(ctx context.Context) error {
 		t.desc = "No client certificate"
 	}
 
-	log.Notice("[%s %s - %s] TLS handshake completed using %s [%s]", side, t.LocalAddr().String(), t.RemoteAddr().String(), getTlsVersionAsString(t.Conn.ConnectionState().Version), t.subject)
+	log.Notice("[%s %s - %s] TLS handshake completed using %s [%s]", side, t.LocalAddr().String(), t.RemoteAddr().String(), transports.GetTlsVersionAsString(t.Conn.ConnectionState().Version), t.subject)
 	return nil
 }
 

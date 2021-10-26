@@ -65,13 +65,13 @@ func NewReceiverTCPFactory(p *config.Parser, configPath string, unUsed map[strin
 func (f *ReceiverTCPFactory) Validate(p *config.Parser, configPath string) (err error) {
 	if f.transport == TransportTCPTLS {
 		for idx, clientCA := range f.SSLClientCA {
-			if err = f.addCa(clientCA, fmt.Sprintf("%sssl client ca[%d]", configPath, idx)); err != nil {
-				return err
+			if f.caList, err = transports.AddCertificates(f.caList, clientCA); err != nil {
+				return fmt.Errorf("failure loading %sssl client ca[%d]: %s", configPath, idx, err)
 			}
 		}
 	} else {
 		if len(f.SSLClientCA) > 0 {
-			return fmt.Errorf("%[1]sssl client ca is not supported when the transport is tcp", configPath)
+			return fmt.Errorf("%sssl client ca is not supported when the transport is tcp", configPath)
 		}
 	}
 

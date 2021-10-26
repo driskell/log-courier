@@ -594,12 +594,10 @@ Available values: "tcp", "tls"
 
 *Depending on how log-courier was built, some transports may not be available. Run `log-courier -list-supported` to see the list of transports available in a specific build of log-courier.*
 
-Sets the transport to use when sending logs to the endpoints. "tls" is
-recommended for most users.
+Sets the transport to use when sending logs to the endpoints. "tls" is recommended for most users.
 
-"tcp" is an **insecure** equivalent to "tls" that does not encrypt traffic or
-authenticate the identity of endpoints. This should only be used on trusted
-internal networks. If in doubt, use the secure authenticating transport "tls".
+"tls" sends events to a host using the Courier protocol, such as Log Carver. "tcp" is the equivalent but
+without TLS encryption and peer verification and should only be used on internal networks.
 
 ## `stdin`
 

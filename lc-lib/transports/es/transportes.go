@@ -21,6 +21,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +30,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +60,7 @@ type transportES struct {
 	config       *TransportESFactory
 	netConfig    *transports.Config
 	pool         *addresspool.Pool
+	clients      map[string]*http.Client
 	eventChan    chan<- transports.Event
 
 	// Internal
@@ -72,9 +76,52 @@ type transportES struct {
 // ReloadConfig returns true if the transport needs to be restarted in order
 // for the new configuration to apply
 func (t *transportES) ReloadConfig(netConfig *transports.Config) bool {
-	// Check other changes
-	if t.netConfig.MaxPendingPayloads != netConfig.MaxPendingPayloads || t.netConfig.Timeout != netConfig.Timeout {
+	// Check template chanages
+	newConfig := netConfig.Factory.(*TransportESFactory)
+	if newConfig.IndexPattern != t.config.IndexPattern {
 		return true
+	}
+	if newConfig.MinTLSVersion != t.config.MinTLSVersion {
+		return true
+	}
+	if newConfig.MaxTLSVersion != t.config.MaxTLSVersion {
+		return true
+	}
+	if newConfig.Password != t.config.Password {
+		return true
+	}
+	if newConfig.Retry != t.config.Retry {
+		return true
+	}
+	if newConfig.RetryMax != t.config.RetryMax {
+		return true
+	}
+	if newConfig.Routines != t.config.Routines {
+		return true
+	}
+	if newConfig.TemplateFile != t.config.TemplateFile {
+		return true
+	}
+	if newConfig.Username != t.config.Username {
+		return true
+	}
+	if !reflect.DeepEqual(newConfig.TemplatePatterns, t.config.TemplatePatterns) {
+		return true
+	}
+	if netConfig.MaxPendingPayloads != t.netConfig.MaxPendingPayloads {
+		return true
+	}
+	if netConfig.Timeout != t.netConfig.Timeout {
+		return true
+	}
+
+	if len(newConfig.caList) != len(t.config.caList) {
+		return true
+	}
+	for index := range newConfig.caList {
+		if !reflect.DeepEqual(newConfig.caList[index].Raw, t.config.caList[index].Raw) {
+			return true
+		}
 	}
 
 	return false
@@ -151,12 +198,12 @@ func (t *transportES) populateNodeInfo() error {
 		return err
 	}
 
-	httpRequest, err := http.NewRequestWithContext(t.ctx, "GET", fmt.Sprintf("http://%s/_nodes/http", server.String()), nil)
+	httpRequest, err := t.createRequest(t.ctx, "GET", server.String(), "/_nodes/http", nil)
 	if err != nil {
 		return err
 	}
 
-	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	httpResponse, err := t.getClient(t.pool.Host()).Do(httpRequest)
 	if err != nil {
 		return err
 	}
@@ -229,7 +276,7 @@ func (t *transportES) installTemplate() error {
 		return nil
 	}
 
-	httpRequest, err := http.NewRequestWithContext(t.ctx, "PUT", fmt.Sprintf("http://%s/_template/%s", server.String(), name), templateReader)
+	httpRequest, err := t.createRequest(t.ctx, "PUT", server.String(), fmt.Sprintf("/_template/%s", name), templateReader)
 	if err != nil {
 		return err
 	}
@@ -237,7 +284,7 @@ func (t *transportES) installTemplate() error {
 	httpRequest.Header.Add("Content-Type", "application/json")
 	httpRequest.Header.Add("Content-Length", fmt.Sprintf("%d", templateLen))
 
-	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	httpResponse, err := t.getClient(t.pool.Host()).Do(httpRequest)
 	if err != nil {
 		return err
 	}
@@ -257,12 +304,12 @@ func (t *transportES) installTemplate() error {
 
 // checkTemplate checks if template is already installed at the given server
 func (t *transportES) checkTemplate(server *net.TCPAddr, name string) (bool, error) {
-	httpRequest, err := http.NewRequestWithContext(t.ctx, "HEAD", fmt.Sprintf("http://%s/_template/%s", server.String(), name), nil)
+	httpRequest, err := t.createRequest(t.ctx, "HEAD", server.String(), fmt.Sprintf("/_template/%s", name), nil)
 	if err != nil {
 		return false, err
 	}
 
-	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	httpResponse, err := t.getClient(t.pool.Host()).Do(httpRequest)
 	if err != nil {
 		return false, err
 	}
@@ -338,6 +385,7 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	// Pool Next() is not race-safe
 	t.poolMutex.Lock()
 	server, err := t.pool.Next()
+	host := t.pool.Host()
 	t.poolMutex.Unlock()
 	if err != nil {
 		return err
@@ -354,9 +402,9 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	var url string
 	if t.maxMajorVersion >= 7 {
 		// No longer need _type when >= 7
-		url = fmt.Sprintf("http://%s/%s/_bulk", server.String(), defaultIndex)
+		url = fmt.Sprintf("/%s/_bulk", defaultIndex)
 	} else {
-		url = fmt.Sprintf("http://%s/%s/_doc/_bulk", server.String(), defaultIndex)
+		url = fmt.Sprintf("/%s/_doc/_bulk", defaultIndex)
 	}
 	log.Debugf("[T %s - %d] Performing Elasticsearch bulk request of %d events via %s", t.pool.Server(), id, request.Remaining(), url)
 
@@ -370,7 +418,7 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 		return err
 	}
 
-	httpRequest, err := http.NewRequestWithContext(t.ctx, "POST", url, bodyBuffer)
+	httpRequest, err := t.createRequest(t.ctx, "POST", server.String(), url, bodyBuffer)
 	if err != nil {
 		return err
 	}
@@ -379,7 +427,7 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	httpRequest.Header.Add("Content-Type", "application/x-ndjson")
 	httpRequest.Header.Add("Content-Encoding", "gzip")
 
-	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	httpResponse, err := t.getClient(host).Do(httpRequest)
 	if err != nil {
 		return err
 	}
@@ -467,4 +515,53 @@ func (t *transportES) Shutdown() {
 		// Trigger graceful shutdown
 		close(t.payloadChan)
 	}
+}
+
+// createRequest creates a new http.Request and adds default headers
+func (t *transportES) createRequest(ctx context.Context, method string, host string, url string, body io.Reader) (*http.Request, error) {
+	var scheme string
+	if t.config.transport == TransportESHTTPS {
+		scheme = "https"
+	} else {
+		scheme = "http"
+	}
+
+	request, err := http.NewRequestWithContext(ctx, method, fmt.Sprintf("%s://%s/%s", scheme, host, url), body)
+	if err != nil {
+		return nil, err
+	}
+
+	if t.config.Username != "" && t.config.Password != "" {
+		request.SetBasicAuth(t.config.Username, t.config.Password)
+	}
+
+	return request, nil
+}
+
+// getClient returns a http.Client for the given server
+func (t *transportES) getClient(server string) *http.Client {
+	if client, ok := t.clients[server]; ok {
+		return client
+	}
+
+	certPool := x509.NewCertPool()
+	for _, cert := range t.config.caList {
+		certPool.AddCert(cert)
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSHandshakeTimeout: t.netConfig.Timeout,
+			TLSClientConfig: &tls.Config{
+				RootCAs:    certPool,
+				ServerName: server,
+				MinVersion: t.config.minTLSVersion,
+				MaxVersion: t.config.maxTLSVersion,
+			},
+		},
+		Timeout: t.netConfig.Timeout,
+	}
+
+	t.clients[server] = client
+	return client
 }

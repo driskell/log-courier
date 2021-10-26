@@ -37,6 +37,7 @@
     - [`max tls version`](#max-tls-version)
     - [`method`](#method)
     - [`min tls version`](#min-tls-version)
+    - [`password`](#password)
     - [`reconnect backoff`](#reconnect-backoff)
     - [`reconnect backoff max`](#reconnect-backoff-max)
     - [`retry backoff`](#retry-backoff)
@@ -52,6 +53,7 @@
     - [`template patterns`](#template-patterns)
     - [`timeout`](#timeout)
     - [`transport`](#transport)
+    - [`username`](#username)
   - [`pipelines`](#pipelines)
     - [Actions](#actions)
     - [Conditionals](#conditionals)
@@ -450,7 +452,7 @@ cause excessive memory usage.*
 
 String. Optional. Default: ""
 Available values: 1.0, 1.1, 1.2, 1.3
-Available when `transport` is `tls`
+Available when `transport` is one of: `tls`, `es-https`
 
 If specified, limits the TLS version to the given value. When not specified, the TLS version is only limited by the versions supported by Golang at build time. At the time of writing, this was 1.3.
 
@@ -483,9 +485,16 @@ available endpoints.
 
 String. Optional. Default: 1.2
 Available values: 1.0, 1.1, 1.2, 1.3
-Available when `transport` is `tls`
+Available when `transport` is one of: `tls`, `es-https`
 
 Sets the minimum TLS version allowed for connections on this transport. The TLS handshake will fail for any connection that is unable to negotiate a minimum of this version of TLS.
+
+### `password`
+
+String. Optional. Default none
+Available when `transport` is one of: `es`, `es-https`
+
+Enables Basic authentication for the transport, using this password. Use in conjunction with [`username`](#username).
 
 ### `reconnect backoff`
 
@@ -511,7 +520,7 @@ exponential increase of `reconnect backoff` from becoming too high.
 ### `retry backoff`
 
 Duration. Optional. Default: 0  
-Available when `transport` is `es`
+Available when `transport` is one of: `es`, `es-https`
 
 Pause this long before retrying a bulk operation on Elasticsearch. If the remote endpoint is overwhelmed, this slows down the rate of bulk indexing attempts. On each consecutive failure, the pause is exponentially increased.
 
@@ -520,7 +529,7 @@ When set to 0, the initial retry attempt is made immediately. The second attempt
 ### `retry backoff max`
 
 Duration. Optional. Default: 300s  
-Available when `transport` is `es`
+Available when `transport` is one of: `es`, `es-https`
 
 The maximum time to wait between retry attempts. This prevents the exponential increase of `retry backoff` from becoming too high.
 
@@ -542,7 +551,7 @@ use RFC 2782 style lookups of the form `_service._proto.example.com`.
 ### `routines`
 
 Number. Optional. Default: 4. Min: 1. Max: 32
-Available when `transport` is `es`
+Available when `transport` is one of: `es`, `es-https`
 
 The number of bulk requests to perform at any one moment in time. Increasing this will make more simultaneous requests to Elasticsearch, increasing resource usage on that side, whilst increasing the speed of indexing.
 
@@ -563,35 +572,35 @@ How multiple endpoints are managed is defined by the `method` configuration.
 ### `ssl ca`
 
 Filepath. Required  
-Available when `transport` is one of: `tls`
+Available when `transport` is one of: `tls`, `es-https`
 
 Path to a PEM encoded certificate file to use to verify the connected endpoint.
 
 ### `ssl certificate`
 
 Filepath. Optional  
-Available when `transport` is one of: `tls`
+Available when `transport` is `tls`
 
 Path to a PEM encoded certificate file to use as the client certificate.
 
 ### `ssl key`
 
 Filepath. Required with `ssl certificate`  
-Available when `transport` is one of: `tls`
+Available when `transport` is `tls`
 
 Path to a PEM encoded private key to use with the client certificate.
 
 ### `template file`
 
 String. Optional
-Available when `transport` is `es`
+Available when `transport` is one of: `es`, `es-https`
 
 Specify a path to an index template to be installed instead of the builtin one that Log Carver provides. See [Index Templates](#index-templates) for more information.
 
 ### `template patterns`
 
 Array of Strings. Optional. Default: Single item of "logstash-*"
-Available when `transport` is `es`
+Available when `transport` is one of: `es`, `es-https`
 
 When using the builtin index template that Log Carver provides, this can be used to override the indices patterns that the template will apply to. See [Index Templates](#index-templates) for more information.
 
@@ -608,17 +617,24 @@ time period the connection will be closed and reset.
 ### `transport`
 
 String. Optional. Default: "tls"  
-Available values: "tcp", "tls", "es"
+Available values: "tcp", "tls", "es", "es-https"
 
 *Depending on how log-carver was built, some transports may not be available. Run `log-carver -list-supported` to see the list of transports available in a specific build of log-carver.*
 
-Sets the transport to use when sending logs to the endpoints. "es" is recommended for most users.
+Sets the transport to use when sending logs to the endpoints. "es-https" is recommended for most users.
 
-"es" sends events to an Elasticsearch cluster. It will also install a template called `logstash` if one does not exist. If you are migrating from Logstash this template will already exist. It should be compatible if you haven't used the Log Courier `enable ecs` configuration.
+"es-https" sends events to an Elasticsearch cluster using HTTPS. "es" sends events using HTTP only.
+It will also install a template called `logstash` if one does not exist. If you are migrating from Logstash this template will already exist. It should be compatible if you haven't used the Log Courier `enable ecs` configuration.
 
-"tcp" is an **insecure** equivalent to "tls" that does not encrypt traffic or
-authenticate the identity of endpoints. This should only be used on trusted
-internal networks. If in doubt, use the secure authenticating transport "tls".
+"tls" sends events to a host using the Courier protocol, such as Log Carver. "tcp" is the equivalent but
+without TLS encryption and peer verification and should only be used on internal networks.
+
+### `username`
+
+String. Optional. Default none
+Available when `transport` is one of: `es`, `es-https`
+
+Enables Basic authentication for the transport, using this username. Use in conjunction with [`password`](#password).
 
 ## `pipelines`
 

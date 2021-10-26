@@ -18,6 +18,8 @@ package es
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -34,11 +36,17 @@ const (
 	defaultRetry        time.Duration = 0 * time.Second
 	defaultRetryMax     time.Duration = 300 * time.Second
 	defaultIndexPattern string        = "logstash-%{+2006-01-02}"
+
+	// Default to TLS 1.2 minimum, supported since Go 1.2
+	defaultMinTLSVersion = tls.VersionTLS12
+	defaultMaxTLSVersion = 0
 )
 
 var (
 	// TransportES is the transport name for ES HTTP
 	TransportES = "es"
+	// TransportESHTTPS is the transport name for ES HTTPS
+	TransportESHTTPS = "es-https"
 
 	defaultTemplatePatterns []string = []string{"logstash-*"}
 )
@@ -53,74 +61,107 @@ type TransportESFactory struct {
 	templatePatternSingleJSON string
 
 	// Configuration
-	Routines         int           `config:"routines"`
+	MinTLSVersion    string        `config:"min tls version"`
+	MaxTLSVersion    string        `config:"max tls version"`
+	IndexPattern     string        `config:"index pattern"`
+	Password         string        `config:"password"`
 	Retry            time.Duration `config:"retry backoff"`
 	RetryMax         time.Duration `config:"retry backoff max"`
-	IndexPattern     string        `config:"index pattern"`
+	Routines         int           `config:"routines"`
+	SSLCA            string        `config:"ssl ca"`
+	Username         string        `config:"username"`
 	TemplateFile     string        `config:"template file"`
 	TemplatePatterns []string      `config:"template patterns"`
 
 	// Internal
-	template []byte
+	template      []byte
+	caList        []*x509.Certificate
+	minTLSVersion uint16
+	maxTLSVersion uint16
 }
 
 // NewTransportESFactory create a new TransportESFactory from the provided
 // configuration data, reporting back any configuration errors it discovers
 func NewTransportESFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (transports.TransportFactory, error) {
-	var err error
-
 	ret := &TransportESFactory{
 		config:    p.Config(),
 		transport: name,
 	}
-
-	if err = p.Populate(ret, unUsed, configPath, true); err != nil {
+	if err := p.Populate(ret, unUsed, configPath, true); err != nil {
 		return nil, err
 	}
+	return ret, nil
+}
 
-	if ret.Routines < 1 {
-		return nil, fmt.Errorf("%sroutines cannot be less than 1", configPath)
+// Validate the configuration
+func (f *TransportESFactory) Validate(p *config.Parser, configPath string) (err error) {
+	if f.Routines < 1 {
+		return fmt.Errorf("%sroutines cannot be less than 1", configPath)
 	}
-	if ret.Routines > 32 {
-		return nil, fmt.Errorf("%sroutines cannot be more than 32", configPath)
-	}
-
-	if ret.IndexPattern == "" {
-		return nil, fmt.Errorf("%sindex pattern is required", configPath)
+	if f.Routines > 32 {
+		return fmt.Errorf("%sroutines cannot be more than 32", configPath)
 	}
 
-	if ret.TemplateFile != "" {
-		file, err := os.Open(ret.TemplateFile)
+	if f.IndexPattern == "" {
+		return fmt.Errorf("%sindex pattern is required", configPath)
+	}
+
+	if f.TemplateFile != "" {
+		var file *os.File
+		file, err = os.Open(f.TemplateFile)
 		if err != nil {
-			return nil, err
+			return
 		}
 		defer func() {
 			file.Close()
 		}()
-		ret.template, err = ioutil.ReadAll(file)
+		f.template, err = ioutil.ReadAll(file)
 		if err != nil {
-			return nil, err
+			return
 		}
 	} else {
-		if len(ret.TemplatePatterns) == 0 {
-			return nil, fmt.Errorf("%[1]stemplate patterns is required when %[1]stemplate file is not set", configPath)
+		if len(f.TemplatePatterns) == 0 {
+			return fmt.Errorf("%[1]stemplate patterns is required when %[1]stemplate file is not set", configPath)
 		}
 
 		var result []byte
-		result, err = json.Marshal(ret.TemplatePatterns)
+		result, err = json.Marshal(f.TemplatePatterns)
 		if err != nil {
 			panic(fmt.Sprintf("%stemplate patterns failed to encode: %s", configPath, err))
 		}
-		ret.templatePatternsJSON = string(result)
+		f.templatePatternsJSON = string(result)
 
-		result, err = json.Marshal(ret.TemplatePatterns[0])
+		result, err = json.Marshal(f.TemplatePatterns[0])
 		if err != nil {
 			panic(fmt.Sprintf("%stemplate patterns failed to encode: %s", configPath, err))
 		}
-		ret.templatePatternSingleJSON = string(result)
+		f.templatePatternSingleJSON = string(result)
 	}
 
-	return ret, nil
+	if f.transport == TransportESHTTPS {
+		// Check tls versions
+		f.minTLSVersion, err = transports.ParseTLSVersion(f.MinTLSVersion, defaultMinTLSVersion)
+		if err != nil {
+			return
+		}
+		f.maxTLSVersion, err = transports.ParseTLSVersion(f.MaxTLSVersion, defaultMaxTLSVersion)
+		if err != nil {
+			return
+		}
+		// Check SSLCA
+		if f.caList, err = transports.AddCertificates(f.caList, f.SSLCA); err != nil {
+			return fmt.Errorf("failure loading %sssl ca: %s", configPath, err)
+		}
+	} else {
+		if len(f.MinTLSVersion) > 0 || len(f.MaxTLSVersion) > 0 {
+			return fmt.Errorf("%[1]smin tls version and %[1]smax tls version are not supported when the transport is es", configPath)
+		}
+		if len(f.SSLCA) > 0 {
+			return fmt.Errorf("%[1]sssl ca is not supported when the transport is es", configPath)
+		}
+	}
+
+	return nil
 }
 
 // Defaults sets the default configuration values
@@ -153,4 +194,5 @@ func (f *TransportESFactory) NewTransport(ctx context.Context, pool *addresspool
 // Register the transports
 func init() {
 	transports.RegisterTransport(TransportES, NewTransportESFactory)
+	transports.RegisterTransport(TransportESHTTPS, NewTransportESFactory)
 }

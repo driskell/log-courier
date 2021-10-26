@@ -25,6 +25,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"reflect"
 	"sync"
 	"time"
 
@@ -57,15 +58,44 @@ type transportTCP struct {
 // for the new configuration to apply
 func (t *transportTCP) ReloadConfig(netConfig *transports.Config) bool {
 	newConfig := netConfig.Factory.(*TransportTCPFactory)
-
-	// TODO: Check timestamps of underlying certificate files to detect changes
-	if newConfig.SSLCertificate != t.config.SSLCertificate || newConfig.SSLKey != t.config.SSLKey || newConfig.SSLCA != t.config.SSLCA {
+	if newConfig.MinTLSVersion != t.config.MinTLSVersion {
+		return true
+	}
+	if newConfig.MaxTLSVersion != t.config.MaxTLSVersion {
+		return true
+	}
+	if newConfig.Reconnect != t.config.Reconnect {
+		return true
+	}
+	if newConfig.ReconnectMax != t.config.ReconnectMax {
+		return true
+	}
+	if newConfig.SSLCertificate != t.config.SSLCertificate {
+		return true
+	}
+	if newConfig.SSLKey != t.config.SSLKey {
+		return true
+	}
+	if newConfig.SSLCA != t.config.SSLCA {
+		return true
+	}
+	if netConfig.MaxPendingPayloads != t.netConfig.MaxPendingPayloads {
+		return true
+	}
+	if netConfig.Timeout != t.netConfig.Timeout {
 		return true
 	}
 
-	// Check if timeout or max pending payloads changed
-	if netConfig.Timeout != t.netConfig.Timeout || netConfig.MaxPendingPayloads != t.netConfig.MaxPendingPayloads {
+	if !reflect.DeepEqual(newConfig.certificate.Certificate, t.config.certificate.Certificate) {
 		return true
+	}
+	if len(newConfig.caList) != len(t.config.caList) {
+		return true
+	}
+	for index := range newConfig.caList {
+		if !reflect.DeepEqual(newConfig.caList[index].Raw, t.config.caList[index].Raw) {
+			return true
+		}
 	}
 
 	return false

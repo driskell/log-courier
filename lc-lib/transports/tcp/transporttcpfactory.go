@@ -72,8 +72,8 @@ func (f *TransportTCPFactory) Validate(p *config.Parser, configPath string) (err
 		if len(f.SSLCA) == 0 {
 			return fmt.Errorf("%sssl ca is required when the transport is tls", configPath)
 		}
-		if err := f.addCa(f.SSLCA, configPath+"ssl ca"); err != nil {
-			return err
+		if f.caList, err = transports.AddCertificates(f.caList, f.SSLCA); err != nil {
+			return fmt.Errorf("failure loading %sssl ca: %s", configPath, err)
 		}
 	} else {
 		if len(f.SSLCA) > 0 {

@@ -337,11 +337,13 @@ func (e *Endpoint) PullBackPending() []*payload.Payload {
 	return pending
 }
 
-// ReloadConfig submits a new configuration to the transport, and returns true
-// if the transports requested that it be restarted in order for the
-// configuration to take effect
-func (e *Endpoint) ReloadConfig(netConfig *transports.Config) bool {
-	return e.transport.ReloadConfig(netConfig)
+// ReloadConfig submits a new configuration to the transport, and fails
+// it if it requests to be restarted, so that the new configuration can
+// take effect
+func (e *Endpoint) ReloadConfig(netConfig *transports.Config) {
+	if e.transport.ReloadConfig(netConfig) {
+		e.shutdownTransport()
+	}
 }
 
 // resetPayloads resets the internal state for pending payloads

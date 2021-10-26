@@ -22,11 +22,10 @@ package tcp
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 
 	"github.com/driskell/log-courier/lc-lib/config"
+	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 type TlsConfiguration struct {
@@ -43,22 +42,25 @@ type TlsConfiguration struct {
 }
 
 func (f *TlsConfiguration) tlsValidate(transport string, p *config.Parser, configPath string) (err error) {
-	// Check tls versions
-	f.minTLSVersion, err = parseTLSVersion(f.MinTLSVersion, defaultMinTLSVersion)
-	if err != nil {
-		return err
-	}
-	f.maxTLSVersion, err = parseTLSVersion(f.MaxTLSVersion, defaultMaxTLSVersion)
-	if err != nil {
-		return err
-	}
-
 	// Only allow SSL configurations if using TLS
 	if transport != TransportTCPTLS {
+		if len(f.MinTLSVersion) > 0 || len(f.MaxTLSVersion) > 0 {
+			return fmt.Errorf("%[1]smin tls version and %[1]smax tls version are not supported when the transport is tcp", configPath)
+		}
 		if len(f.SSLCertificate) > 0 || len(f.SSLKey) > 0 {
 			return fmt.Errorf("%[1]sssl certificate and %[1]sssl key are not supported when the transport is tcp", configPath)
 		}
 		return nil
+	}
+
+	// Check tls versions
+	f.minTLSVersion, err = transports.ParseTLSVersion(f.MinTLSVersion, defaultMinTLSVersion)
+	if err != nil {
+		return err
+	}
+	f.maxTLSVersion, err = transports.ParseTLSVersion(f.MaxTLSVersion, defaultMaxTLSVersion)
+	if err != nil {
+		return err
 	}
 
 	if len(f.SSLCertificate) > 0 || len(f.SSLKey) > 0 {
@@ -86,32 +88,5 @@ func (f *TlsConfiguration) tlsValidate(transport string, p *config.Parser, confi
 		}
 	}
 
-	return nil
-}
-
-func (f *TlsConfiguration) addCa(file string, configPath string) error {
-	pemdata, err := ioutil.ReadFile(file)
-	if err != nil {
-		return fmt.Errorf("failed loading %s: %s", configPath, err)
-	}
-	rest := pemdata
-	var block *pem.Block
-	var pemBlockNum = 1
-	for {
-		block, rest = pem.Decode(rest)
-		if block != nil {
-			if block.Type != "CERTIFICATE" {
-				return fmt.Errorf("failure loading %s: block %d does not contain a certificate", configPath, pemBlockNum)
-			}
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return fmt.Errorf("failure loading %s: failed to parse CA certificate in block %d", configPath, pemBlockNum)
-			}
-			f.caList = append(f.caList, cert)
-			pemBlockNum++
-		} else {
-			break
-		}
-	}
 	return nil
 }

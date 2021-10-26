@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
+	"reflect"
 	"sync"
 	"time"
 
@@ -36,16 +37,33 @@ type receiverTCP struct {
 // for the new configuration to apply
 func (t *receiverTCP) ReloadConfig(cfg *config.Config, factory transports.ReceiverFactory) bool {
 	newConfig := factory.(*ReceiverTCPFactory)
+	if newConfig.MinTLSVersion != t.config.MinTLSVersion {
+		return true
+	}
+	if newConfig.MaxTLSVersion != t.config.MaxTLSVersion {
+		return true
+	}
+	if newConfig.SSLCertificate != t.config.SSLCertificate {
+		return true
+	}
+	if !reflect.DeepEqual(newConfig.SSLClientCA, t.config.SSLClientCA) {
+		return true
+	}
+	if newConfig.SSLKey != t.config.SSLKey {
+		return true
+	}
+	if newConfig.SSLKey != t.config.SSLKey {
+		return true
+	}
 
-	// TODO: Check timestamps of underlying certificate files to detect changes
-	if newConfig.SSLCertificate != t.config.SSLCertificate || newConfig.SSLKey != t.config.SSLKey {
+	if !reflect.DeepEqual(newConfig.certificate.Certificate, t.config.certificate.Certificate) {
 		return true
 	}
-	if len(newConfig.SSLClientCA) != len(t.config.SSLClientCA) {
+	if len(newConfig.caList) != len(t.config.caList) {
 		return true
 	}
-	for i, clientCA := range newConfig.SSLClientCA {
-		if clientCA != t.config.SSLClientCA[i] {
+	for index := range newConfig.caList {
+		if !reflect.DeepEqual(newConfig.caList[index].Raw, t.config.caList[index].Raw) {
 			return true
 		}
 	}
