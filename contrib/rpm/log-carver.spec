@@ -23,8 +23,8 @@ Requires(postun): systemd
 BuildRequires: systemd
 %endif
 
-Requires: lc-admin = %{version}
-Requires: lc-tlscert = %{version}
+Requires: lc-admin
+Requires: lc-tlscert
 Requires: logrotate
 Requires: geolite2-city
 

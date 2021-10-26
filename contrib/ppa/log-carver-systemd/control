@@ -7,5 +7,5 @@ Build-Depends: debhelper (>= 9), dh-systemd, dpkg-dev
 
 Package: log-carver
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, lc-admin, lc-tlscert
 Description: Log Carver is a lightweight tool created to process events from Log Courier speedily and securely, with low resource usage.
