@@ -13,6 +13,7 @@
 # limitations under the License.
 
 require 'cabin'
+require 'fileutils'
 require 'log-courier/client'
 require 'log-courier/server'
 
