@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"time"
 
@@ -185,6 +186,7 @@ func (f *TransportESFactory) NewTransport(ctx context.Context, pool *addresspool
 		netConfig:    transports.FetchConfig(f.config),
 		pool:         pool,
 		eventChan:    eventChan,
+		clients:      make(map[string]*http.Client),
 	}
 
 	ret.startController()
