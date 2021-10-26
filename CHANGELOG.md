@@ -2,7 +2,7 @@
 
 ## 2.7.4
 
-26st October 2021
+26th October 2021
 
 Logstash Input Plugin
 
