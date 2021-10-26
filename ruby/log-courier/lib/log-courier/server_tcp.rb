@@ -137,7 +137,7 @@ module LogCourier
         end
 
         @logger&.warn 'Ephemeral port allocated', transport: @options[:transport], port: @port if @options[:port].zero?
-      rescue StandardError, NativeException => e # Until Jruby updated we need NativeException
+      rescue StandardError => e
         raise "input/courier: Failed to initialise: #{e}"
       end
     end
@@ -178,7 +178,7 @@ module LogCourier
       nil
     rescue ShutdownSignal
       nil
-    rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+    rescue StandardError => e
       # Some other unknown problem
       @logger&.warn e.message, hint: 'Unknown error, shutting down'
       nil
@@ -275,7 +275,7 @@ module LogCourier
       # Read errors, only action is to shutdown which we'll do in ensure
       @logger&.warn 'SSL error, connection aborted', error: e.message, peer: @peer
       nil
-    rescue IOError, Errno::ECONNRESET => e
+    rescue IOError, SystemCallError => e
       # Read errors, only action is to shutdown which we'll do in ensure
       @logger&.warn 'Connection aborted', error: e.message, peer: @peer
       nil
@@ -287,14 +287,14 @@ module LogCourier
       # Shutting down
       @logger&.info 'Server shutting down, closing connection', peer: @peer
       nil
-    rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+    rescue StandardError => e
       # Some other unknown problem
       @logger&.warn e.message, hint: 'Unknown error, connection aborted', peer: @peer
       nil
     ensure
       begin
         @fd.close
-      rescue OpenSSL::SSL::SSLError, IOError, NativeException
+      rescue OpenSSL::SSL::SSLError, IOError
         # Ignore during close
       end
     end
@@ -376,7 +376,7 @@ module LogCourier
       # Minor Version 4 bytes
       # Patch Version 4 bytes
       # Client String 4 bytes
-      data = [0, 2, 7, 2, 'RYLC'].pack('NNNNA4')
+      data = [0, MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION, 'RYLC'].pack('NNNNA4')
       send 'VERS', data
     end
 

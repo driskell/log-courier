@@ -17,13 +17,9 @@
 
 require 'log-courier/event_queue'
 require 'log-courier/protocol'
+require 'log-courier/version'
 require 'multi_json'
 require 'zlib'
-
-# NativeException in case it is missing
-class NativeException
-  def dummy; end
-end
 
 module LogCourier
   class TimeoutError < StandardError; end

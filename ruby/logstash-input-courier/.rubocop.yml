@@ -1,5 +1,7 @@
 AllCops:
   NewCops: enable
+Layout/LineLength:
+  Max: 140
 Metrics/AbcSize:
   Enabled: false
 Metrics/BlockLength:
@@ -10,13 +12,11 @@ Metrics/ClassLength:
   Enabled: false
 Metrics/CyclomaticComplexity:
   Enabled: false
-Metrics/LineLength:
-  Max: 140
 Metrics/PerceivedComplexity:
   Enabled: false
 Metrics/MethodLength:
   Enabled: false
-Naming/Filename:
+Naming/FileName:
   Enabled: false
 Style/FrozenStringLiteralComment:
   Enabled: false

@@ -1,63 +1,143 @@
 PATH
+  remote: ../log-courier
+  specs:
+    log-courier (2.7.3)
+      cabin (~> 0.6)
+      multi_json (~> 1.10)
+
+PATH
   remote: .
   specs:
-    logstash-output-courier (1.8.4.pre.1.pre.g45888c8)
-      log-courier (~> 1.9)
-      logstash-core (>= 1.4, < 3)
+    logstash-output-courier (2.7.3-java)
+      log-courier (~> 2.7.3)
+      logstash-codec-plain
+      logstash-core-plugin-api (>= 1.60, <= 2.99)
+
+PATH
+  remote: logstash/logstash-core-plugin-api
+  specs:
+    logstash-core-plugin-api (2.1.16-java)
+      logstash-core (= 7.7.0)
+
+PATH
+  remote: logstash/logstash-core
+  specs:
+    logstash-core (7.7.0-java)
+      chronic_duration (~> 0.10)
+      clamp (~> 0.6)
+      concurrent-ruby (~> 1)
+      elasticsearch (~> 5)
+      filesize (~> 0.2)
+      gems (~> 1)
+      i18n (~> 1)
+      jrjackson (= 0.4.11)
+      jruby-openssl (~> 0.10)
+      manticore (~> 0.6)
+      minitar (~> 0.8)
+      mustermann (~> 1.0.3)
+      pry (~> 0.12)
+      puma (~> 4)
+      rack (~> 2)
+      rubyzip (~> 1)
+      sinatra (~> 2)
+      stud (~> 0.0.19)
+      thread_safe (~> 0.3.6)
+      treetop (~> 1)
 
 GEM
   remote: https://rubygems.org/
   specs:
-    ast (2.1.0)
-    astrolabe (1.3.1)
-      parser (~> 2.2)
-    cabin (0.7.2)
+    ast (2.4.2)
+    cabin (0.9.0)
+    chronic_duration (0.10.6)
+      numerizer (~> 0.1.1)
     clamp (0.6.5)
-    coderay (1.1.0)
-    concurrent-ruby (0.9.2-java)
+    coderay (1.1.3)
+    concurrent-ruby (1.1.9)
     diff-lcs (1.2.5)
-    ffi (1.9.10-java)
-    ffi-rzmq (2.0.4)
-      ffi-rzmq-core (>= 1.0.1)
-    ffi-rzmq-core (1.0.4)
-      ffi (~> 1.9)
-    filesize (0.0.4)
-    gems (0.8.3)
-    i18n (0.6.9)
-    jrjackson (0.3.7)
-    jruby-openssl (0.9.12-java)
-    log-courier (1.9.0)
-      cabin (~> 0.6)
-      ffi-rzmq (~> 2.0)
-      multi_json (~> 1.10)
-    logstash-core (2.0.0-java)
-      cabin (~> 0.7.0)
-      clamp (~> 0.6.5)
-      concurrent-ruby (~> 0.9.1)
-      filesize (= 0.0.4)
-      gems (~> 0.8.3)
-      i18n (= 0.6.9)
-      jrjackson (~> 0.3.6)
-      jruby-openssl (>= 0.9.11)
-      minitar (~> 0.5.4)
-      pry (~> 0.10.1)
-      stud (~> 0.0.19)
-      thread_safe (~> 0.3.5)
-      treetop (< 1.5.0)
-    method_source (0.8.2)
-    minitar (0.5.4)
-    multi_json (1.11.2)
-    parser (2.2.3.0)
-      ast (>= 1.1, < 3.0)
+    elasticsearch (5.0.5)
+      elasticsearch-api (= 5.0.5)
+      elasticsearch-transport (= 5.0.5)
+    elasticsearch-api (5.0.5)
+      multi_json
+    elasticsearch-transport (5.0.5)
+      faraday
+      multi_json
+    faraday (1.8.0)
+      faraday-em_http (~> 1.0)
+      faraday-em_synchrony (~> 1.0)
+      faraday-excon (~> 1.1)
+      faraday-httpclient (~> 1.0.1)
+      faraday-net_http (~> 1.0)
+      faraday-net_http_persistent (~> 1.1)
+      faraday-patron (~> 1.0)
+      faraday-rack (~> 1.0)
+      multipart-post (>= 1.2, < 3)
+      ruby2_keywords (>= 0.0.4)
+    faraday-em_http (1.0.0)
+    faraday-em_synchrony (1.0.0)
+    faraday-excon (1.1.0)
+    faraday-httpclient (1.0.1)
+    faraday-net_http (1.0.1)
+    faraday-net_http_persistent (1.2.0)
+    faraday-patron (1.0.0)
+    faraday-rack (1.0.0)
+    ffi (1.15.4-java)
+    filesize (0.2.0)
+    fivemat (1.3.7)
+    gem_publisher (1.5.0)
+    gems (1.2.0)
+    i18n (1.8.10)
+      concurrent-ruby (~> 1.0)
+    jrjackson (0.4.11-java)
+    jruby-openssl (0.10.7-java)
+    kramdown (1.14.0)
+    logstash-codec-plain (3.1.0)
+      logstash-core-plugin-api (>= 1.60, <= 2.99)
+      logstash-mixin-ecs_compatibility_support (~> 1.3)
+      logstash-mixin-event_support (~> 1.0)
+    logstash-devutils (2.2.1-java)
+      fivemat
+      gem_publisher
+      kramdown (= 1.14.0)
+      logstash-codec-plain
+      logstash-core (>= 6.3)
+      minitar
+      rake
+      rspec (~> 3.0)
+      rspec-wait
+      stud (>= 0.0.20)
+    logstash-mixin-ecs_compatibility_support (1.3.0-java)
+      logstash-core (>= 6.0.0)
+    logstash-mixin-event_support (1.0.1-java)
+      logstash-core (>= 6.8)
+    manticore (0.7.1-java)
+      openssl_pkcs8_pure
+    method_source (1.0.0)
+    minitar (0.9)
+    multi_json (1.15.0)
+    multipart-post (2.1.1)
+    mustermann (1.0.3)
+    nio4r (2.5.8-java)
+    numerizer (0.1.1)
+    openssl_pkcs8_pure (0.0.0.2)
+    parallel (1.21.0)
+    parser (3.0.2.0)
+      ast (~> 2.4.1)
     polyglot (0.3.5)
-    powerpack (0.1.1)
-    pry (0.10.3-java)
-      coderay (~> 1.1.0)
-      method_source (~> 0.8.1)
-      slop (~> 3.4)
+    pry (0.14.1-java)
+      coderay (~> 1.1)
+      method_source (~> 1.0)
       spoon (~> 0.0)
-    rainbow (2.0.0)
+    puma (4.3.10-java)
+      nio4r (~> 2.0)
+    rack (2.2.3)
+    rack-protection (2.1.0)
+      rack
+    rainbow (3.0.0)
     rake (10.4.2)
+    regexp_parser (2.1.1)
+    rexml (3.2.5)
     rspec (3.3.0)
       rspec-core (~> 3.3.0)
       rspec-expectations (~> 3.3.0)
@@ -71,32 +151,50 @@ GEM
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.3.0)
     rspec-support (3.3.0)
-    rubocop (0.35.0)
-      astrolabe (~> 1.3)
-      parser (>= 2.2.3.0, < 3.0)
-      powerpack (~> 0.1)
-      rainbow (>= 1.99.1, < 3.0)
+    rspec-wait (0.0.9)
+      rspec (>= 3, < 4)
+    rubocop (1.22.2)
+      parallel (~> 1.10)
+      parser (>= 3.0.0.0)
+      rainbow (>= 2.2.2, < 4.0)
+      regexp_parser (>= 1.8, < 3.0)
+      rexml
+      rubocop-ast (>= 1.12.0, < 2.0)
       ruby-progressbar (~> 1.7)
-    ruby-progressbar (1.7.5)
-    slop (3.6.0)
-    spoon (0.0.4)
+      unicode-display_width (>= 1.4.0, < 3.0)
+    rubocop-ast (1.12.0)
+      parser (>= 3.0.1.1)
+    ruby-progressbar (1.11.0)
+    ruby2_keywords (0.0.5)
+    rubyzip (1.3.0)
+    sinatra (2.1.0)
+      mustermann (~> 1.0)
+      rack (~> 2.2)
+      rack-protection (= 2.1.0)
+      tilt (~> 2.0)
+    spoon (0.0.6)
       ffi
-    stud (0.0.22)
-    thread_safe (0.3.5-java)
-    treetop (1.4.15)
-      polyglot
-      polyglot (>= 0.3.1)
+    stud (0.0.23)
+    thread_safe (0.3.6-java)
+    tilt (2.0.10)
+    treetop (1.6.11)
+      polyglot (~> 0.3)
+    unicode-display_width (2.1.0)
 
 PLATFORMS
   java
+  universal-java-14
 
 DEPENDENCIES
+  log-courier!
+  logstash-core!
+  logstash-core-plugin-api!
+  logstash-devutils
   logstash-output-courier!
   rake
   rspec (~> 3.1)
   rspec-core (~> 3.1)
   rubocop
-  ruby-prof (~> 0.15)
 
 BUNDLED WITH
-   1.10.6
+   2.2.29

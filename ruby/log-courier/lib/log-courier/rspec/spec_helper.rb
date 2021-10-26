@@ -13,69 +13,117 @@
 # limitations under the License.
 
 require 'cabin'
+require 'log-courier/client'
 require 'log-courier/server'
 
+TEMP_PATH = File.join(File.dirname(__FILE__), 'tmp')
+EVENT_WAIT_COUNT = 50
+EVENT_WAIT_TIME = 0.5
+
 # Common helpers for testing both ruby client and the courier
-shared_context 'Helpers' do
+shared_context 'LogCourier' do
   before :all do
     Thread.abort_on_exception = true
+
+    FileUtils.rm_r(TEMP_PATH) if File.directory?(TEMP_PATH)
+    Dir.mkdir(TEMP_PATH)
 
     @ssl_cert = File.open(File.join(TEMP_PATH, 'ssl_cert'), 'w')
     @ssl_key = File.open(File.join(TEMP_PATH, 'ssl_key'), 'w')
     @ssl_csr = File.open(File.join(TEMP_PATH, 'ssl_csr'), 'w')
 
     # Generate the ssl key
-    system("openssl req -config spec/lib/openssl.cnf -new -batch -keyout #{@ssl_key.path} -out #{@ssl_csr.path}")
+    cnf_path = "#{File.dirname(__FILE__)}/openssl.cnf"
+    system("openssl req -config #{cnf_path} -new -batch -keyout #{@ssl_key.path} -out #{@ssl_csr.path}")
     system(
-      "openssl x509 -extfile spec/lib/openssl.cnf -extensions extensions_section -req -days 365 -in #{@ssl_csr.path}" \
+      "openssl x509 -extfile #{cnf_path} -extensions extensions_section -req -days 365 -in #{@ssl_csr.path}" \
       " -signkey #{@ssl_key.path} -out #{@ssl_cert.path}",
     )
   end
 
   after :all do
-    [@ssl_cert, @ssl_key, @ssl_csr].each do |f|
-      File.unlink(f.path) if File.file?(f.path)
-    end
+    FileUtils.rm_r(TEMP_PATH) if File.directory?(TEMP_PATH)
   end
 
   before :each do
-    # When we add a file we log it here, so after we can remove them
-    @files = []
-
     @event_queue = SizedQueue.new 10_000
 
+    @clients = {}
     @servers = {}
     @server_counts = {}
     @server_threads = {}
   end
 
   after :each do
-    # Remove any files we created for the test
-    @files.each(&:close)
-
-    @files = []
+    unless @servers.length.zero?
+      id, = @servers.first
+      raise "Server was not shutdown: #{id}"
+    end
+    unless @clients.length.zero?
+      id, = @clients.first
+      raise "Client was not shutdown: #{id}"
+    end
   end
 
-  # A helper that starts a Log Courier server
+  def start_client(**args)
+    args = {
+      id: '__default__',
+      transport: 'tls',
+      addresses: ['127.0.0.1'],
+    }.merge!(**args)
+
+    args[:ssl_ca] = @ssl_cert.path if args[:transport] == 'tls'
+
+    id = args[:id]
+    args[:port] = server_port(id) unless args.key?(:port)
+
+    logger = Cabin::Channel.new
+    logger.subscribe $stdout
+    logger['instance'] = "Client #{id}"
+    logger.level = :debug
+
+    # Reset server for each test
+    @clients[id] = LogCourier::Client.new(
+      logger: logger,
+      **args,
+    )
+  end
+
+  def shutdown_client(which = nil)
+    which = if which.nil?
+              @clients.keys
+            else
+              [which]
+            end
+    which.each do |id|
+      @clients[id].shutdown
+      @clients.delete id
+    end
+    nil
+  end
+
   def start_server(**args)
     args = {
       id: '__default__',
       transport: 'tls',
     }.merge!(**args)
 
+    if args[:transport] == 'tls'
+      args[:ssl_certificate] = @ssl_cert.path
+      args[:ssl_key] = @ssl_key.path
+    end
+
     id = args[:id]
 
     logger = Cabin::Channel.new
     logger.subscribe $stdout
-    logger['instance'] = id
+    logger['instance'] = "Server #{id}"
     logger.level = :debug
 
     raise 'Server already initialised' if @servers.key?(id)
 
     # Reset server for each test
     @servers[id] = LogCourier::Server.new(
-      ssl_certificate: @ssl_cert.path,
-      ssl_key: @ssl_key.path,
       logger: logger,
       **args,
     )
@@ -89,6 +137,7 @@ shared_context 'Helpers' do
     rescue LogCourier::ShutdownSignal
       0
     end
+    @servers[id]
   end
 
   # A helper to shutdown a Log Courier server
@@ -105,6 +154,7 @@ shared_context 'Helpers' do
       @server_counts.delete id
       @servers.delete id
     end
+    nil
   end
 
   # A helper to get the port a server is bound to
@@ -117,32 +167,7 @@ shared_context 'Helpers' do
     @server_counts[id]
   end
 
-  # A helper that creates a new log file
-  def create_log(type = LogFile, path = nil)
-    path ||= File.join(TEMP_PATH, 'logs', "log-#{@files.length}")
-
-    # Return a new file for testing, and log it for cleanup afterwards
-    f = type.new(path)
-    @files.push(f)
-    f
-  end
-
-  # Rename a log file and create a new one in its place
-  def rotate(logfile, prefix = '')
-    old_name = logfile.path
-
-    new_name = if prefix == ''
-                 "#{logfile.path}r"
-               else
-                 File.join(File.dirname(f.path), "#{prefix}#{File.basename(f.path)}r")
-               end
-
-    logfile.rename new_name
-
-    create_log(logfile.class, old_name)
-  end
-
-  def receive_and_check(args = {}, &block)
+  def receive_and_check(args = {})
     args = {
       total: nil,
       check: true,
@@ -181,20 +206,12 @@ shared_context 'Helpers' do
         total -= 1
         next unless check
 
-        if block.nil?
-          found = @files.find do |f|
-            next unless f.pending?
-
-            f.logged?({ event: e }.merge!(args))
-          end
-          expect(found).to_not be_nil, "Event received not recognised: #{e}"
-        else
-          block.call e
-        end
+        yield e
       end
     end
 
     # Fancy calculation to give a nice "expected" output of expected num of events
     expect(orig_total - total).to eq orig_total
+    nil
   end
 end

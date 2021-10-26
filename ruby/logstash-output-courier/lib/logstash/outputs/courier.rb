@@ -1,6 +1,4 @@
-# encoding: utf-8
-
-# Copyright 2014 Jason Woods.
+# Copyright 2014-2021 Jason Woods.
 #
 # This file is a modification of code from Logstash Forwarder.
 # Copyright 2012-2013 Jordan Sissel and contributors.
@@ -26,16 +24,14 @@ module LogStash
     class Courier < LogStash::Outputs::Base
       config_name 'courier'
 
-      # Compatibility with Logstash 1.4 requires milestone
-      if Gem::Version.new(LOGSTASH_VERSION) < Gem::Version.new('1.5.0')
-        milestone 2
-      end
-
       # The list of addresses Log Courier should send to
-      config :hosts, validate: :array, required: true
+      config :addresses, validate: :array, required: true
 
       # The port to connect to
       config :port, validate: :number, required: true
+
+      # The transport type to use
+      config :transport, validate: :string, default: 'tls'
 
       # CA certificate for validation of the server
       config :ssl_ca, validate: :path, required: true
@@ -49,35 +45,32 @@ module LogStash
       # SSL key passphrase to use
       config :ssl_key_passphrase, validate: :password
 
+      # Set minimum TLS version
+      config :min_tls_version, validate: :number, default: 1.2
+
       # Maximum number of events to spool before forcing a flush
       config :spool_size, validate: :number, default: 1024
 
       # Maximum time to wait for a full spool before forcing a flush
       config :idle_timeout, validate: :number, default: 5
 
-      public
-
       def register
         @logger.info 'Starting courier output'
 
         require 'log-courier/client'
         @client = LogCourier::Client.new(options)
+        nil
       end
 
       def receive(event)
         return unless output?(event)
+
         @client.publish event.to_hash
+        nil
       end
 
-      # Logstash < 2.0.0 shutdown
-      def teardown
-        close
-      end
-
-      # Logstash >= 2.0.0 shutdown
       def close
         @client.shutdown
-        finished
         nil
       end
 
@@ -85,14 +78,12 @@ module LogStash
 
       def options
         result = {}
-
         [
-          :logger, :addresses, :port, :ssl_ca, :ssl_certificate, :ssl_key,
-          :ssl_key_passphrase, :spool_size, :idle_timeout
+          :logger, :addresses, :port, :transport, :ssl_ca, :ssl_certificate, :ssl_key,
+          :ssl_key_passphrase, :spool_size, :idle_timeout, :min_tls_version,
         ].each do |k|
           result[k] = send(k)
         end
-
         result
       end
 

@@ -1,13 +1,22 @@
 # Change Log
 
-## 2.7.3 (Future)
+## 2.7.3
 
-Future
+26th October 2021
 
 Log Courier
 
 - Add new [`add timezone name field`](docs/log-courier/Configuration.md#add-timezone-name-field) configuration that adds the timezone name such as `UTC` or `Europe/London` for use with the Logstash Date Filter. The existing `timezone` / `event.timezone` (ECS) fields were in a format the filter could not use (#345)
 - Fix race that might cause a file to use a configuration other than the first configuration it matches (#367)
+
+Logstash Input Plugin
+
+- Removed `peer_recv_queue` configuration as it is unused. Only a single payload is received and processed at any one time by the plugin.
+
+Logstash Output Plugin
+
+- Now maintained again and updated to use latest log-courier ruby implementation which includes protocol handshake support
+- Added support for `tcp` only output
 
 ## 2.7.2
 

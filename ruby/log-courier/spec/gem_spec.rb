@@ -12,119 +12,90 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'cabin'
 require 'timeout'
-require 'lib/common'
-
-require 'log-courier/client'
+require 'log-courier/rspec/spec_helper'
 
 describe 'log-courier gem' do
-  include_context 'Helpers'
-
-  before :all do
-    @host = Socket.gethostname
-  end
-
-  def startup(**kwargs)
-    logger = Cabin::Channel.new
-    logger.subscribe $stdout
-    logger.level = :debug
-
-    # Reset server for each test
-    @client = LogCourier::Client.new(
-      ssl_ca: @ssl_cert.path,
-      addresses: ['127.0.0.1'],
-      port: server_port,
-      logger: logger,
-      **kwargs,
-    )
-  end
-
-  def shutdown
-    @client.shutdown
-  end
+  include_context 'LogCourier'
 
   it 'should send and receive events with tcp client' do
     start_server(
       transport: 'tcp',
     )
 
-    startup(
+    client = start_client(
       transport: 'tcp',
     )
 
     # Allow 60 seconds
     Timeout.timeout(60) do
       5_000.times do |i|
-        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'path' => 'gemfile.log'
+        client.publish 'message' => "gem line test #{i}", 'host' => 'testing.example.com', 'path' => 'gemfile.log'
+      end
+
+      # Receive and check
+      i = 0
+      receive_and_check(total: 5_000) do |e|
+        expect(e['message']).to eq "gem line test #{i}"
+        expect(e['host']).to eq 'testing.example.com'
+        expect(e['path']).to eq 'gemfile.log'
+        i += 1
       end
     end
 
-    # Receive and check
-    i = 0
-    receive_and_check(total: 5_000) do |e|
-      expect(e['message']).to eq "gem line test #{i}"
-      expect(e['host']).to eq @host
-      expect(e['path']).to eq 'gemfile.log'
-      i += 1
-    end
-
-    expect(shutdown).to eq true
-
+    shutdown_client
     shutdown_server
   end
 
   it 'should send and receive events with tls client' do
     start_server
 
-    startup
+    client = start_client
 
     # Allow 60 seconds
     Timeout.timeout(60) do
       5_000.times do |i|
-        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'path' => 'gemfile.log'
+        client.publish 'message' => "gem line test #{i}", 'host' => 'testing.example.com', 'path' => 'gemfile.log'
+      end
+
+      # Receive and check
+      i = 0
+      receive_and_check(total: 5_000) do |e|
+        expect(e['message']).to eq "gem line test #{i}"
+        expect(e['host']).to eq 'testing.example.com'
+        expect(e['path']).to eq 'gemfile.log'
+        i += 1
       end
     end
 
-    # Receive and check
-    i = 0
-    receive_and_check(total: 5_000) do |e|
-      expect(e['message']).to eq "gem line test #{i}"
-      expect(e['host']).to eq @host
-      expect(e['path']).to eq 'gemfile.log'
-      i += 1
-    end
-
-    expect(shutdown).to eq true
-
+    shutdown_client
     shutdown_server
   end
 
   it 'should send and receive events with tls client that does not handshake' do
     start_server
 
-    startup(
+    client = start_client(
       disable_handshake: true,
     )
 
     # Allow 60 seconds
     Timeout.timeout(60) do
       5_000.times do |i|
-        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'path' => 'gemfile.log'
+        client.publish 'message' => "gem line test #{i}", 'host' => 'testing.example.com', 'path' => 'gemfile.log'
+      end
+
+      # Receive and check
+      i = 0
+      receive_and_check(total: 5_000) do |e|
+        expect(e['message']).to eq "gem line test #{i}"
+        expect(e['host']).to eq 'testing.example.com'
+        expect(e['path']).to eq 'gemfile.log'
+        i += 1
       end
     end
 
-    # Receive and check
-    i = 0
-    receive_and_check(total: 5_000) do |e|
-      expect(e['message']).to eq "gem line test #{i}"
-      expect(e['host']).to eq @host
-      expect(e['path']).to eq 'gemfile.log'
-      i += 1
-    end
-
-    expect(shutdown).to eq true
-
+    shutdown_client
     shutdown_server
   end
 
@@ -133,26 +104,25 @@ describe 'log-courier gem' do
       disable_handshake: true,
     )
 
-    startup
+    client = start_client
 
     # Allow 60 seconds
     Timeout.timeout(60) do
       5_000.times do |i|
-        @client.publish 'message' => "gem line test #{i}", 'host' => @host, 'path' => 'gemfile.log'
+        client.publish 'message' => "gem line test #{i}", 'host' => 'testing.example.com', 'path' => 'gemfile.log'
+      end
+
+      # Receive and check
+      i = 0
+      receive_and_check(total: 5_000) do |e|
+        expect(e['message']).to eq "gem line test #{i}"
+        expect(e['host']).to eq 'testing.example.com'
+        expect(e['path']).to eq 'gemfile.log'
+        i += 1
       end
     end
 
-    # Receive and check
-    i = 0
-    receive_and_check(total: 5_000) do |e|
-      expect(e['message']).to eq "gem line test #{i}"
-      expect(e['host']).to eq @host
-      expect(e['path']).to eq 'gemfile.log'
-      i += 1
-    end
-
-    expect(shutdown).to eq true
-
+    shutdown_client
     shutdown_server
   end
 end

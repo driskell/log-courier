@@ -35,11 +35,11 @@ module LogCourier
 
       @logger = @options[:logger]
 
-      [:port, :ssl_ca].each do |k|
-        raise "output/courier: '#{k}' is required" if @options[k].nil?
-      end
+      raise "output/courier: 'port' is required" if @options[:port].nil?
 
       return unless @options[:transport] == 'tls'
+
+      raise "output/courier: 'ssl_ca' is required if 'transport' is 'tls'" if @options[:ssl_ca].nil?
 
       c = 0
       [:ssl_certificate, :ssl_key].each do
@@ -71,7 +71,7 @@ module LogCourier
         run_send io_control
       rescue ShutdownSignal
         # Shutdown
-      rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+      rescue StandardError => e
         @logger&.warn e, hint: 'Unknown write error'
         io_control << ['F']
       end
@@ -79,7 +79,7 @@ module LogCourier
         run_recv io_control
       rescue ShutdownSignal
         # Shutdown
-      rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+      rescue StandardError => e
         @logger&.warn e, hint: 'Unknown read error'
         io_control << ['F']
       end
@@ -125,7 +125,7 @@ module LogCourier
     def handshake(io_control)
       return true if @options[:disable_handshake]
 
-      @socket.write ['HELO', 20, 0, 2, 7, 2, 'RYLC'].pack('A4NNNNNA4')
+      @socket.write ['HELO', 20, 0, MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION, 'RYLC'].pack('A4NNNNNA4')
 
       signature, data = receive
       if signature != 'VERS'
@@ -140,7 +140,7 @@ module LogCourier
       @logger&.info 'Remote identified', server_version: @vers[:client_version]
 
       true
-    rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
+    rescue StandardError => e
       @logger&.warn e, hint: 'Unknown write error'
       io_control << ['F']
       false
@@ -177,7 +177,7 @@ module LogCourier
     rescue OpenSSL::SSL::SSLError => e
       @logger&.warn 'SSL write error', error: e.message
       io_control << ['F']
-    rescue IOError, Errno::ECONNRESET => e
+    rescue IOError, SystemCallError => e
       @logger&.warn 'Write error', error: e.message
       io_control << ['F']
     end
@@ -195,7 +195,7 @@ module LogCourier
     rescue EOFError
       @logger&.warn 'Connection closed by server'
       io_control << ['F']
-    rescue IOError, Errno::ECONNRESET => e
+    rescue IOError, SystemCallError => e
       @logger&.warn 'Read error', error: e.message
       io_control << ['F']
     end
@@ -271,15 +271,11 @@ module LogCourier
           @logger&.info 'Connected successfully', address: address, port: port
         end
 
-        # Add extra logging data now we're connected
-        @logger['address'] = address
-        @logger['port'] = port
-
         return true
-      rescue OpenSSL::SSL::SSLError, IOError, Errno::ECONNRESET => e
+      rescue OpenSSL::SSL::SSLError, IOError, SystemCallError => e
         @logger&.warn 'Connection failed', error: e.message, address: address, port: port
-      rescue StandardError, NativeException => e # Can remove NativeException after 9.2.14.0 JRuby
-        @logger&.warn e, hint: 'Unknown connection failure', address: address, port: port
+      rescue StandardError => e
+        @logger&.warn 'Unknown connection failure', hint: e.message, address: address, port: port
       end
 
       false

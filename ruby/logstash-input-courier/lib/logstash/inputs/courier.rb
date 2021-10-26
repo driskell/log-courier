@@ -60,14 +60,6 @@ module LogStash
       # Max packet size
       config :max_packet_size, validate: :number
 
-      # The size of the internal queue for each peer
-      #
-      # Sent payloads will be dropped when the queue is full
-      #
-      # This setting should max the max_pending_payloads Log Courier
-      # configuration
-      config :peer_recv_queue, validate: :number
-
       # Add additional fields to events that identity the peer
       #
       # This setting is only effective with the tcp and tls transports
@@ -85,6 +77,7 @@ module LogStash
 
         require 'log-courier/server'
         @log_courier = LogCourier::Server.new options
+        nil
       end
 
       # Logstash < 2.0.0 shutdown raises LogStash::ShutdownSignal in this thread
@@ -97,11 +90,12 @@ module LogStash
           decorate event
           output_queue << event
         end
+        nil
       end
 
-      # Logstash >= 2.0.0 shutdown
-      def stop
+      def close
         @log_courier.stop
+        nil
       end
 
       private
@@ -120,6 +114,7 @@ module LogStash
         ].each do |k|
           result[k] = send(k)
         end
+        result
       end
 
       def add_override_options(result)

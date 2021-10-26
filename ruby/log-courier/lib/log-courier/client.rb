@@ -17,13 +17,9 @@
 
 require 'log-courier/event_queue'
 require 'log-courier/protocol'
+require 'log-courier/version'
 require 'multi_json'
 require 'zlib'
-
-# Dummy until its no longer needed
-class NativeException
-  def dummy; end
-end
 
 module LogCourier
   class TimeoutError < StandardError; end
@@ -349,7 +345,7 @@ module LogCourier
       @logger&.warn 'Timeout occurred'
     rescue ShutdownSignal
       raise
-    rescue StandardError, NativeException => e
+    rescue StandardError => e
       # Unknown error occurred
       @logger&.warn e, hint: 'Unknown error'
     end
