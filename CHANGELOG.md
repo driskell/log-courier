@@ -15,6 +15,10 @@ Log Carver
 - Added `ssl ca` for `es-https` transport to allow certificate pinning
 - Added `username` and `password` for `es` and `es-https` transports to allow Basic authentication scheme
 
+`lc-admin`
+
+- Added `-carver` option to connect to automatically detect the administration socket from Log Carver's configuration file or from known defaults
+
 ## 2.7.4
 
 26th October 2021

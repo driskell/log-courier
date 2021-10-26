@@ -31,7 +31,12 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run -mod=vendor ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile admin.DefaultAdminBind
+//go:generate go run -mod=vendor ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile admin.DefaultAdminBind defaultCarverConfigurationFile defaultCarverAdminBind
+
+var (
+	defaultCarverConfigurationFile string
+	defaultCarverAdminBind         string
+)
 
 type commandProcessor interface {
 	ProcessCommand(string) bool
@@ -53,8 +58,12 @@ func main() {
 
 func (a *lcAdmin) startUp() {
 	var version bool
+	var carver bool
 
 	flag.BoolVar(&version, "version", false, "display the lc-admin version")
+	if defaultCarverAdminBind != "" {
+		flag.BoolVar(&carver, "carver", false, "connect to log-carver instead of log-courier")
+	}
 	flag.BoolVar(&a.quiet, "quiet", false, "quietly execute the command line argument and output only the result")
 	flag.BoolVar(&a.watch, "watch", false, "repeat the command specified on the command line every second")
 	flag.BoolVar(&a.legacy, "legacy", false, "connect to v1 Log Courier instances")
@@ -81,6 +90,15 @@ func (a *lcAdmin) startUp() {
 		if version {
 			os.Exit(0)
 		}
+	}
+
+	// If connecting to carver - change admin.DefaultAdminBind
+	if carver {
+		if a.adminConnect != "" {
+			fmt.Printf("Cannot use both -carver and -connect at the same time")
+		}
+		config.DefaultConfigurationFile = defaultCarverConfigurationFile
+		admin.DefaultAdminBind = defaultCarverAdminBind
 	}
 
 	// Enable config logging if requested
@@ -125,6 +143,9 @@ func (a *lcAdmin) loadConfig() {
 		}
 
 		a.adminConnect = adminConfig.Bind
+	} else if a.configFile != "" {
+		fmt.Printf("Cannot use both -config and -connect at the same time")
+		os.Exit(1)
 	}
 }
 

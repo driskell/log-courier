@@ -26,6 +26,8 @@ lc-admin is a remote administration tool for the Log Courier Suite.
 # Configure platform specific defaults
 export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-courier/log-courier.yaml
 export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-courier/admin.socket
+export LC_DEFAULT_CARVER_CONFIGURATION_FILE=%{_sysconfdir}/log-carver/log-carver.yaml
+export LC_DEFAULT_CARVER_ADMIN_BIND=unix:%{_var}/run/log-carver/admin.socket
 
 export GOBIN=%{_builddir}/bin
 go generate -mod=vendor ./lc-admin

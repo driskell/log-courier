@@ -29,10 +29,21 @@ else
 	echo '::group::Precompiling via cross-compilation as no Go version exists in PPA that is suitable for all distributions'
 	cd ~/"${NAME}"
 	# Configure platform specific defaults
-	export LC_DEFAULT_CONFIGURATION_FILE=/etc/log-courier/log-courier.yaml
-	export LC_DEFAULT_GENERAL_PERSIST_DIR=/var/lib/log-courier
-	export LC_DEFAULT_ADMIN_BIND=unix:/var/run/log-courier/admin.socket
-	go generate -mod=vendor . ./lc-admin ./log-carver
+	LC_DEFAULT_CONFIGURATION_FILE=/etc/log-courier/log-courier.yaml \
+		LC_DEFAULT_GENERAL_PERSIST_DIR=/var/lib/log-courier \
+		LC_DEFAULT_ADMIN_BIND=unix:/var/run/log-courier/admin.socket \
+		go generate -mod=vendor .
+
+	LC_DEFAULT_CONFIGURATION_FILE=/etc/log-carver/log-carver.yaml \
+		LC_DEFAULT_GENERAL_PERSIST_DIR=/var/lib/log-carver \
+		LC_DEFAULT_ADMIN_BIND=unix:/var/run/log-carver/admin.socket \
+		go generate -mod=vendor ./log-carver
+
+	LC_DEFAULT_CONFIGURATION_FILE=/etc/log-courier/log-courier.yaml \
+		LC_DEFAULT_CARVER_CONFIGURATION_FILE=/etc/log-carver/log-courier.yaml \
+		LC_DEFAULT_CARVER_ADMIN_BIND=unix:/var/run/log-carver/admin.socket \
+		go generate -mod=vendor ./lc-admin
+
 	mkdir "$(pwd)/bin-i386" "$(pwd)/bin-amd64"
 	GOARCH=386 go build -mod=vendor -o "$(pwd)/bin-i386" . ./lc-admin ./log-carver ./lc-tlscert
 	GOARCH=amd64 go build -mod=vendor -o "$(pwd)/bin-amd64" . ./lc-admin ./log-carver ./lc-tlscert
