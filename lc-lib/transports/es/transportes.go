@@ -526,7 +526,7 @@ func (t *transportES) createRequest(ctx context.Context, method string, host str
 		scheme = "http"
 	}
 
-	request, err := http.NewRequestWithContext(ctx, method, fmt.Sprintf("%s://%s/%s", scheme, host, url), body)
+	request, err := http.NewRequestWithContext(ctx, method, fmt.Sprintf("%s://%s%s", scheme, host, url), body)
 	if err != nil {
 		return nil, err
 	}
