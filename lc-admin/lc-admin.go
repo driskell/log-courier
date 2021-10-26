@@ -68,7 +68,7 @@ func (a *lcAdmin) startUp() {
 	flag.BoolVar(&a.watch, "watch", false, "repeat the command specified on the command line every second")
 	flag.BoolVar(&a.legacy, "legacy", false, "connect to v1 Log Courier instances")
 	flag.StringVar(&a.adminConnect, "connect", "", "the remote instance to connect to")
-	flag.StringVar(&a.configFile, "config", config.DefaultConfigurationFile, "read the connection address from the given configuration file (ignored if connect specified)")
+	flag.StringVar(&a.configFile, "config", "", "read the connection address from the given configuration file (ignored if connect specified)")
 	flag.BoolVar(&a.configDebug, "config-debug", false, "Enable configuration parsing debug logs on the console")
 
 	flag.Usage = func() {
@@ -96,6 +96,7 @@ func (a *lcAdmin) startUp() {
 	if carver {
 		if a.adminConnect != "" {
 			fmt.Printf("Cannot use both -carver and -connect at the same time")
+			os.Exit(1)
 		}
 		config.DefaultConfigurationFile = defaultCarverConfigurationFile
 		admin.DefaultAdminBind = defaultCarverAdminBind
