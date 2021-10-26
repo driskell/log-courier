@@ -115,38 +115,41 @@ func (a *lcAdmin) startUp() {
 }
 
 func (a *lcAdmin) loadConfig() {
-	if a.configFile == "" && a.adminConnect == "" {
-		if admin.DefaultAdminBind == "" {
+	if a.configFile != "" && a.adminConnect != "" {
+		fmt.Printf("Cannot use both -config and -connect at the same time")
+		os.Exit(1)
+	}
+
+	if a.adminConnect != "" {
+		return
+	}
+
+	if a.configFile == "" {
+		if config.DefaultConfigurationFile == "" {
 			fmt.Printf("Either -connect or -config must be specified\n")
 			flag.PrintDefaults()
 			os.Exit(1)
 		} else {
-			a.adminConnect = admin.DefaultAdminBind
+			a.configFile = config.DefaultConfigurationFile
 		}
-		return
 	}
 
-	if a.adminConnect == "" {
-		fmt.Printf("Loading configuration: %s\n", a.configFile)
+	fmt.Printf("Loading configuration: %s\n", a.configFile)
 
-		// Load admin connect address from the configuration file
-		config := config.NewConfig()
-		if err := config.Load(a.configFile, false); err != nil {
-			fmt.Printf("Configuration error: %s\n", err)
-			os.Exit(1)
-		}
-
-		adminConfig := config.Section("admin").(*admin.Config)
-		if !adminConfig.Enabled {
-			fmt.Printf("Unable to connect: the admin interface is disabled\n")
-			os.Exit(1)
-		}
-
-		a.adminConnect = adminConfig.Bind
-	} else if a.configFile != "" {
-		fmt.Printf("Cannot use both -config and -connect at the same time")
+	// Load admin connect address from the configuration file
+	config := config.NewConfig()
+	if err := config.Load(a.configFile, false); err != nil {
+		fmt.Printf("Configuration error: %s\n", err)
 		os.Exit(1)
 	}
+
+	adminConfig := config.Section("admin").(*admin.Config)
+	if !adminConfig.Enabled {
+		fmt.Printf("Unable to connect: the admin interface is disabled\n")
+		os.Exit(1)
+	}
+
+	a.adminConnect = adminConfig.Bind
 }
 
 func (a *lcAdmin) Run() {
