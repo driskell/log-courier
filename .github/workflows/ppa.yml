@@ -10,8 +10,6 @@ on:
         description: Dist Release
         required: true
         default: '1'
-  release:
-    types: [published]
 
 # NOTE: To test this locally using `act`:
 #       1. Remove the `with` from the first checkout so it can copy your local repository (otherwise you need a GITHUB_TOKEN as it will trigger action/checkout natively)
