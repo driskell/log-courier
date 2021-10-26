@@ -11,6 +11,7 @@ gem 'oj', '~> 3.13.9', :platforms => :mri
 gem 'jrjackson', '~> 0.4.11',  :platforms => :jruby
 
 group :development do
+  gem 'fileutils'
   gem 'rake'
   gem 'rubocop'
 end

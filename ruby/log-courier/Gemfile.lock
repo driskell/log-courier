@@ -11,8 +11,10 @@ GEM
     ast (2.4.2)
     cabin (0.9.0)
     diff-lcs (1.4.4)
+    fileutils (1.6.0)
     jrjackson (0.4.11-java)
     multi_json (1.15.0)
+    oj (3.13.9)
     parallel (1.21.0)
     parser (3.0.2.0)
       ast (~> 2.4.1)
@@ -44,14 +46,17 @@ GEM
       unicode-display_width (>= 1.4.0, < 3.0)
     rubocop-ast (1.12.0)
       parser (>= 3.0.1.1)
+    ruby-prof (1.4.3)
     ruby-progressbar (1.11.0)
     unicode-display_width (2.1.0)
 
 PLATFORMS
   java
   universal-java-14
+  x86_64-darwin-20
 
 DEPENDENCIES
+  fileutils
   jrjackson (~> 0.4.11)
   log-courier!
   oj (~> 3.13.9)
