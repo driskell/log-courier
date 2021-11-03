@@ -13,6 +13,7 @@ PrivateTmp=true
 StandardError=syslog
 User=log-carver
 Group=log-carver
+RuntimeDirectory=log-carver
 
 [Install]
 WantedBy=multi-user.target
