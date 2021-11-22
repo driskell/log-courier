@@ -15,6 +15,7 @@ Log Carver
 - Added `min tls version` and `max tls version` to `es-https` transport
 - Added `ssl ca` for `es-https` transport to allow certificate pinning
 - Added `username` and `password` for `es` and `es-https` transports to allow Basic authentication scheme
+- Improved Elasticsearch bulk response validation
 - Fixed missing `RuntimeDirectory` in Log Carver systemd configuration which is necessary for default admin socket listen location
 
 `lc-admin`
