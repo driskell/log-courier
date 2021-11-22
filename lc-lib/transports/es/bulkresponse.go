@@ -69,6 +69,8 @@ func (b *bulkResponse) parse() error {
 		return err
 	}
 
+	var hasTook, hasItems bool
+
 	for {
 		// Expect } or key:value
 		key, err := b.parseKeyOrEnd()
@@ -81,10 +83,18 @@ func (b *bulkResponse) parse() error {
 
 		switch *key {
 		case "took":
+			if hasTook {
+				return errors.New("unexpected duplicate key \"took\"")
+			}
+			hasTook = true
 			if err := b.decoder.Decode(&b.Took); err != nil {
 				return err
 			}
 		case "items":
+			if hasItems {
+				return errors.New("unexpected duplicate key \"items\"")
+			}
+			hasItems = true
 			if err := b.parseItems(); err != nil {
 				return err
 			}
@@ -97,6 +107,13 @@ func (b *bulkResponse) parse() error {
 
 	if b.decoder.More() {
 		return errors.New("unexpected tokens at end of stream")
+	}
+
+	if !hasTook {
+		return errors.New("response is missing \"took\" key")
+	}
+	if !hasItems {
+		return errors.New("response is missing \"items\" key")
 	}
 
 	return nil
@@ -260,8 +277,9 @@ func (b *bulkResponse) parseArrayNextOrEnd() (json.Token, error) {
 		if delim == json.Delim(']') {
 			return nil, nil
 		}
+		return delim, nil
 	}
-	return delim, nil
+	return token, nil
 }
 
 // consumeValue takes away an entire value
