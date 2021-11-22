@@ -2,11 +2,12 @@
 
 ## 2.8.0
 
-Future
+22nd November 2021
 
 Log Courier / Log Carver
 
 - Fixed transports sometimes not restarting when configuration is changed
+- Fix regression caused by fix for #367 that can cause Log Courier to crash on startup
 
 Log Carver
 
