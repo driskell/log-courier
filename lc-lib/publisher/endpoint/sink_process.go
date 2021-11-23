@@ -99,4 +99,8 @@ func (s *Sink) processAck(ack *transports.AckEvent, endpoint *Endpoint) {
 	}
 
 	endpoint.shutdownTransport()
+
+	endpoint.mutex.Lock()
+	endpoint.status = endpointStatusClosed
+	endpoint.mutex.Unlock()
 }

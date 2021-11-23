@@ -114,10 +114,6 @@ func (e *Endpoint) Next() *Endpoint {
 
 // shutdownTransport signals the transport to start shutting down
 func (e *Endpoint) shutdownTransport() {
-	if e.status != endpointStatusClosing {
-		return
-	}
-
 	log.Debugf("[E %s] Endpoint is now shutting down", e.Server())
 	e.transport.Shutdown()
 
@@ -127,7 +123,9 @@ func (e *Endpoint) shutdownTransport() {
 	})
 
 	// Set status to closed, so we know shutdown has now been triggered
+	e.mutex.Lock()
 	e.status = endpointStatusClosed
+	e.mutex.Unlock()
 }
 
 // Server returns the server string from the configuration file that this

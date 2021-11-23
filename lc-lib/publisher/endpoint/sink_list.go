@@ -160,16 +160,19 @@ func (s *Sink) ShutdownEndpoint(server string) bool {
 		s.failedList.Remove(&endpoint.failedElement)
 	}
 
-	endpoint.mutex.Lock()
-	endpoint.status = endpointStatusClosing
-	endpoint.mutex.Unlock()
-
 	// If we still have pending payloads wait for them to finish
 	if endpoint.NumPending() != 0 {
+		endpoint.mutex.Lock()
+		endpoint.status = endpointStatusClosing
+		endpoint.mutex.Unlock()
 		return true
 	}
 
 	endpoint.shutdownTransport()
+
+	endpoint.mutex.Lock()
+	endpoint.status = endpointStatusClosed
+	endpoint.mutex.Unlock()
 
 	return true
 }

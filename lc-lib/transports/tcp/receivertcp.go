@@ -55,8 +55,13 @@ func (t *receiverTCP) ReloadConfig(cfg *config.Config, factory transports.Receiv
 	if newConfig.SSLKey != t.config.SSLKey {
 		return true
 	}
-
-	if !reflect.DeepEqual(newConfig.certificate.Certificate, t.config.certificate.Certificate) {
+	if newConfig.certificate != nil && t.config.certificate != nil {
+		if !reflect.DeepEqual(newConfig.certificate.Certificate, t.config.certificate.Certificate) {
+			return true
+		}
+	} else if newConfig.certificate != nil {
+		return true
+	} else if t.config.certificate != nil {
 		return true
 	}
 	if len(newConfig.caList) != len(t.config.caList) {

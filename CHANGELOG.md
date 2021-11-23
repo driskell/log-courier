@@ -1,5 +1,14 @@
 # Change Log
 
+## 2.8.1
+
+Future
+
+Log Courier / Log Carver
+
+- Fixed crash during configuration reload for `tcp` receiver and transport
+- Fixed reload of configuration not correctly updating endpoints
+
 ## 2.8.0
 
 22nd November 2021

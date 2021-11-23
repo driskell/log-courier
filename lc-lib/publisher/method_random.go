@@ -154,8 +154,7 @@ func (m *methodRandom) reloadConfig(netConfig *transports.Config) {
 		return
 	}
 
-	// If the current active endpoint is no longer present, shut it down
-	// onFinish will trigger a new endpoint connection
+	// Find and reload the current endpoint
 	for _, server := range m.netConfig.Servers {
 		if server == currentServer {
 			// Still present, all good, pass through the reload
@@ -163,9 +162,6 @@ func (m *methodRandom) reloadConfig(netConfig *transports.Config) {
 			return
 		}
 	}
-
-	// Not present in server list, shut down
-	m.sink.ShutdownEndpoint(currentServer)
 }
 
 func (m *methodRandom) destroy() {
