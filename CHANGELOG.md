@@ -8,6 +8,7 @@ Log Courier / Log Carver
 
 - Fixed crash during configuration reload for `tcp` receiver and transport
 - Fixed reload of configuration not correctly updating endpoints
+- Fixed reload of configuration sometimes causing a deadlock with hugh CPU
 
 ## 2.8.0
 

@@ -83,7 +83,7 @@ func (s *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, af
 	if after == nil {
 		s.orderedList.PushFront(&endpoint.orderedElement)
 	} else {
-		s.orderedList.MoveAfter(&endpoint.orderedElement, &after.orderedElement)
+		s.orderedList.InsertAfter(&endpoint.orderedElement, &after.orderedElement)
 	}
 	if s.api != nil {
 		s.api.AddEntry(server, endpoint.apiEntry())
@@ -107,7 +107,7 @@ func (s *Sink) FindEndpoint(server string) *Endpoint {
 func (s *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
 	if after == nil {
 		s.mutex.Lock()
-		s.orderedList.PushFront(&endpoint.orderedElement)
+		s.orderedList.MoveToFront(&endpoint.orderedElement)
 		s.mutex.Unlock()
 		return
 	}

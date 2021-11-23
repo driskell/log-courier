@@ -129,13 +129,21 @@ func (l *List) Remove(e *Element) interface{} {
 }
 
 // PushFront inserts a new element e at the front of list l and returns e.
+// Does nothing and returns e if the item is already in a list.
 func (l *List) PushFront(e *Element) *Element {
+	if e.list != nil {
+		return e
+	}
 	l.lazyInit()
 	return l.insert(e, &l.root)
 }
 
 // PushBack inserts a new element e at the back of list l and returns e.
+// Does nothing and returns e if the item is already in a list.
 func (l *List) PushBack(e *Element) *Element {
+	if e.list != nil {
+		return e
+	}
 	l.lazyInit()
 	return l.insert(e, l.root.prev)
 }
