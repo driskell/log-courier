@@ -11,5 +11,5 @@ require (
 	google.golang.org/genproto v0.0.0-20210831024726-fe130286e0e2
 	gopkg.in/op/go-logging.v1 v1.0.0-20160211212156-b2cb9fa56473
 	gopkg.in/tylerb/graceful.v1 v1.2.15
-	gopkg.in/yaml.v2 v2.2.8
+	gopkg.in/yaml.v2 v2.4.0
 )
