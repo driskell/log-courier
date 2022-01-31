@@ -30,13 +30,18 @@ type apiArrayEntry struct {
 	entry Navigatable
 }
 
+// MarshalJSON forwards to the inner array entry
+func (a *apiArrayEntry) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.entry)
+}
+
 // Array represents an array of entries in the API accessible through a
 // primary key
 // Thread safe
 type Array struct {
 	mutex    sync.RWMutex
 	entryMap map[string]*apiArrayEntry
-	entries  []Navigatable
+	entries  []*apiArrayEntry
 }
 
 // AddEntry a new array entry
@@ -59,7 +64,7 @@ func (a *Array) AddEntry(key string, entry Navigatable) {
 
 	a.entryMap[key] = arrayEntry
 
-	a.entries = append(a.entries, entry)
+	a.entries = append(a.entries, arrayEntry)
 }
 
 // RemoveEntry removes an array entry
@@ -79,6 +84,7 @@ func (a *Array) RemoveEntry(key string) {
 	delete(a.entryMap, key)
 	for i := entry.row; i+1 < len(a.entries); i++ {
 		a.entries[i] = a.entries[i+1]
+		a.entries[i].row--
 	}
 	a.entries = a.entries[:len(a.entries)-1]
 }
@@ -106,7 +112,7 @@ func (a *Array) Get(path string) (Navigatable, error) {
 		return nil, nil
 	}
 
-	return a.entries[entryNum], nil
+	return a.entries[entryNum].entry, nil
 }
 
 // Call an API
@@ -173,7 +179,7 @@ func (a *Array) Update() error {
 	defer a.mutex.RUnlock()
 
 	for _, entry := range a.entries {
-		if err := entry.Update(); err != nil {
+		if err := entry.entry.Update(); err != nil {
 			return err
 		}
 	}
