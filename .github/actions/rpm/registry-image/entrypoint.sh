@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Need git 2.x for shallow clones by golang
+# Do before enabling errors as it doesn't support set -e and will cause an immediate exit
+source scl_source enable rh-git218
+
 set -eo pipefail
 
 VERSION=${VERSION#refs/tags/}
