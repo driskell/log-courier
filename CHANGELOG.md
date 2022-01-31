@@ -1,5 +1,15 @@
 # Change Log
 
+## 2.9.0
+
+Future
+
+Log Carver
+
+- Updated CEL Go library to 0.9.0
+- Implemented CEL Go string extensions and base64 encoder
+- Implemented JSON encoder (json_encode and json_decode CEL Go functions)
+
 ## 2.8.1
 
 23rd November 2021

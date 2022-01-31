@@ -19,21 +19,27 @@ package processor
 import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
+	celext "github.com/google/cel-go/ext"
+
+	"github.com/driskell/log-courier/lc-lib/processor/ext"
 )
 
-var celEnv cel.Env
+var celEnv *cel.Env
 var celErr error
 
 // cachedCelEnv returns a globally cached cel.Env for use in checking and parsing
-func cachedCelEnv() (cel.Env, error) {
+func cachedCelEnv() (*cel.Env, error) {
 	if celEnv != nil || celErr != nil {
 		return celEnv, celErr
 	}
 
 	return cel.NewEnv(
 		cel.Declarations(
-			decls.NewIdent("event", decls.NewMapType(decls.String, decls.Any), nil),
+			decls.NewVar("event", decls.NewMapType(decls.String, decls.Any)),
 		),
+		celext.Strings(),
+		celext.Encoders(),
+		ext.JsonEncoder(),
 	)
 }
 
