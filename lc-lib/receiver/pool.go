@@ -151,7 +151,8 @@ ReceiverLoop:
 			for _, item := range events[1:] {
 				nextConnection := item.Context().Value(transports.ContextConnection)
 				nextPosition := item.Context().Value(poolContextEventPosition).(*poolEventPosition)
-				if nextConnection != connection || *nextPosition.nonce != *position.nonce {
+				// Also check for backwards or same sequence - this effectively manages cases of duplicate nonce as sequence will remain same or reset to 0
+				if nextConnection != connection || *nextPosition.nonce != *position.nonce || nextPosition.sequence <= position.sequence {
 					r.ackEventsEvent(currentContext, connection, position.nonce, position.sequence)
 					currentContext = item.Context()
 					connection = nextConnection
