@@ -57,10 +57,10 @@ func (p *protocol) serverNegotiation() (transports.Event, error) {
 
 	heloMessage, ok := message.(*protocolHELO)
 	if !ok {
-		if messageImpl, ok := message.(eventsMessage); ok {
+		if messageImpl, ok := message.(transports.EventsEvent); ok {
 			// Backwards compatible path with older log-courier which do not perform a negotiation
 			log.Infof("[R %s < %s] Remote does not support protocol handshake", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String())
-			return transports.NewEventsEvent(p.conn.Context(), messageImpl.Nonce(), messageImpl.Events()), nil
+			return messageImpl, nil
 		}
 		return nil, fmt.Errorf("unexpected %T during negotiation, expected protocolHELO", message)
 	}
@@ -116,12 +116,14 @@ func (p *protocol) SendEvents(nonce string, events []*event.Event) error {
 	for idx, item := range events {
 		eventsAsBytes[idx] = item.Bytes()
 	}
-	var msg eventsMessage
+
 	if p.supportsEvnt {
-		msg = &protocolEVNT{nonce: &nonce, events: eventsAsBytes}
-	} else {
-		msg = &protocolJDAT{nonce: &nonce, events: eventsAsBytes}
+		msg := &protocolEVNT{nonce: &nonce, events: eventsAsBytes}
+		log.Debugf("[T %s > %s] Sending %s payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
+		return p.conn.SendMessage(msg)
 	}
+
+	msg := &protocolJDAT{nonce: &nonce, events: eventsAsBytes}
 	log.Debugf("[T %s > %s] Sending %s payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
 	return p.conn.SendMessage(msg)
 }
@@ -194,33 +196,27 @@ func (p *protocol) Read() (transports.Event, error) {
 		return nil, err
 	}
 
-	var transportEvent transports.Event = nil
-	// TODO: Can events be interfaces so we can just pass on the message itself if it implements the interface?
 	if p.isClient {
-		switch messageImpl := message.(type) {
-		case *protocolACKN:
-			transportEvent = transports.NewAckEvent(p.conn.Context(), messageImpl.nonce, messageImpl.sequence)
-			log.Debugf("[T %s < %s] Received acknowledgement for nonce %x with sequence %d", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), *messageImpl.nonce, messageImpl.sequence)
+		switch transportEvent := message.(type) {
+		case transports.AckEvent:
+			log.Debugf("[T %s < %s] Received acknowledgement for nonce %x with sequence %d", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), transportEvent.Nonce(), transportEvent.Sequence())
+			return transportEvent, nil
 		case *protocolPONG:
-			transportEvent = transports.NewPongEvent(p.conn.Context())
 			log.Debugf("[T %s < %s] Received pong", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String())
+			return transportEvent, nil
 		}
 	} else {
-		switch messageImpl := message.(type) {
+		switch transportEvent := message.(type) {
 		case *protocolPING:
-			transportEvent = transports.NewPingEvent(p.conn.Context())
 			log.Debugf("[R %s < %s] Received ping", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String())
-		case eventsMessage:
-			transportEvent = transports.NewEventsEvent(p.conn.Context(), messageImpl.Nonce(), messageImpl.Events())
-			log.Debugf("[R %s < %s] Received payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), *messageImpl.Nonce(), len(messageImpl.Events()))
+			return transportEvent, nil
+		case transports.EventsEvent:
+			log.Debugf("[R %s < %s] Received payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), transportEvent.Nonce(), transportEvent.Count())
+			return transportEvent, nil
 		}
 	}
 
-	if transportEvent == nil {
-		return nil, fmt.Errorf("unknown protocol message %T", message)
-	}
-
-	return transportEvent, nil
+	return nil, fmt.Errorf("unknown protocol message %T", message)
 }
 
 // NonBlocking returns false because courier protocol blocks until full messages are received

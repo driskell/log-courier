@@ -16,8 +16,6 @@
 
 package courier
 
-import "github.com/driskell/log-courier/lc-lib/transports/tcp"
-
 const (
 	// TransportTCPTCP is the transport name for plain TCP
 	TransportCourier = "tcp"
@@ -36,12 +34,6 @@ var (
 		"RYLC": "Ruby Log Courier",
 	}
 )
-
-type eventsMessage interface {
-	tcp.ProtocolMessage
-	Nonce() *string
-	Events() [][]byte
-}
 
 func SetClientName(client string) {
 	clientName = client

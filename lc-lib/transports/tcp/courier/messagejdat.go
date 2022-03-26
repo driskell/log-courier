@@ -19,14 +19,19 @@ package courier
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 
+	"github.com/driskell/log-courier/lc-lib/transports"
 	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 type protocolJDAT struct {
+	transports.EventsEvent
+	ctx    context.Context
 	nonce  *string
 	events [][]byte
 }
@@ -87,7 +92,7 @@ func newProtocolJDAT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessag
 		events = append(events, data)
 	}
 
-	return &protocolJDAT{nonce: &nonce, events: events}, nil
+	return &protocolJDAT{ctx: conn.Context(), nonce: &nonce, events: events}, nil
 }
 
 // Type returns a human-readable name for the message type
@@ -151,7 +156,29 @@ func (p *protocolJDAT) Nonce() *string {
 	return p.nonce
 }
 
+// Context returns the connection context
+func (p *protocolJDAT) Context() context.Context {
+	return p.ctx
+}
+
 // Events returns the events - this implements eventsMessage
-func (p *protocolJDAT) Events() [][]byte {
-	return p.events
+func (p *protocolJDAT) Events() []map[string]interface{} {
+	events := make([]map[string]interface{}, 0, len(p.events))
+	for _, data := range p.events {
+		var decoded map[string]interface{}
+		err := json.Unmarshal(data, &decoded)
+		if err != nil {
+			decoded = make(map[string]interface{})
+			decoded["message"] = err.Error()
+			decoded["tags"] = "_unmarshal_failure"
+		}
+		events = append(events, decoded)
+	}
+
+	return events
+}
+
+// Count returns the number of events
+func (p *protocolJDAT) Count() uint32 {
+	return uint32(len(p.events))
 }

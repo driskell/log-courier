@@ -65,7 +65,6 @@ type ProtocolFactory interface {
 }
 
 type ProtocolMessage interface {
-	Type() string
 	Write(Connection) error
 }
 

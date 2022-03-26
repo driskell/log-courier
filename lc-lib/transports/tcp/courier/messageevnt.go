@@ -18,15 +18,20 @@ package courier
 
 import (
 	"compress/zlib"
+	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 
+	"github.com/driskell/log-courier/lc-lib/transports"
 	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 type protocolEVNT struct {
+	transports.EventsEvent
+	ctx    context.Context
 	nonce  *string
 	events [][]byte
 }
@@ -83,12 +88,17 @@ func newProtocolEVNT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessag
 		events = append(events, data)
 	}
 
-	return &protocolEVNT{nonce: &nonce, events: events}, nil
+	return &protocolEVNT{ctx: conn.Context(), nonce: &nonce, events: events}, nil
 }
 
 // Type returns a human-readable name for the message type
 func (p *protocolEVNT) Type() string {
 	return "EVNT"
+}
+
+// Context returns the connection context
+func (p *protocolEVNT) Context() context.Context {
+	return p.ctx
 }
 
 // Write writes a payload to the socket
@@ -133,6 +143,23 @@ func (p *protocolEVNT) Nonce() *string {
 }
 
 // Events returns the events - this implements eventsMessage
-func (p *protocolEVNT) Events() [][]byte {
-	return p.events
+func (p *protocolEVNT) Events() []map[string]interface{} {
+	events := make([]map[string]interface{}, 0, len(p.events))
+	for _, data := range p.events {
+		var decoded map[string]interface{}
+		err := json.Unmarshal(data, &decoded)
+		if err != nil {
+			decoded = make(map[string]interface{})
+			decoded["message"] = err.Error()
+			decoded["tags"] = "_unmarshal_failure"
+		}
+		events = append(events, decoded)
+	}
+
+	return events
+}
+
+// Count returns the number of events
+func (p *protocolEVNT) Count() uint32 {
+	return uint32(len(p.events))
 }

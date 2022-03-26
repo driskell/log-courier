@@ -51,11 +51,6 @@ const (
 	ContextReceiver TransportContext = "receiver"
 )
 
-// Event is the interface implemented by all event structures
-type Event interface {
-	Context() context.Context
-}
-
 // StatusChange holds a value that represents a change in transport status
 type StatusChange int
 
@@ -66,8 +61,27 @@ const (
 	Finished
 )
 
+// Event is the interface implemented by all event structures
+type Event interface {
+	Context() context.Context
+}
+
+type AckEvent interface {
+	Event
+	Nonce() *string
+	Sequence() uint32
+}
+
+type EventsEvent interface {
+	Event
+	Events() []map[string]interface{}
+	Nonce() *string
+	Count() uint32
+}
+
 // StatusEvent contains information about a status change for a transport
 type StatusEvent struct {
+	Event
 	context      context.Context
 	statusChange StatusChange
 	err          error
@@ -97,39 +111,9 @@ func (e *StatusEvent) Err() error {
 	return e.err
 }
 
-// AckEvent contains information on which events have been acknowledged
-type AckEvent struct {
-	context  context.Context
-	nonce    *string
-	sequence uint32
-}
-
-// NewAckEvent generates a new AckEvent for the given Endpoint
-func NewAckEvent(context context.Context, nonce *string, sequence uint32) *AckEvent {
-	return &AckEvent{
-		context:  context,
-		nonce:    nonce,
-		sequence: sequence,
-	}
-}
-
-// Context returns the endpoint associated with this event
-func (e *AckEvent) Context() context.Context {
-	return e.context
-}
-
-// Nonce returns the nonce value
-func (e *AckEvent) Nonce() *string {
-	return e.nonce
-}
-
-// Sequence returns the sequence value
-func (e *AckEvent) Sequence() uint32 {
-	return e.sequence
-}
-
 // ConnectEvent marks the start of a new connection on a reciver
 type ConnectEvent struct {
+	Event
 	context context.Context
 	remote  string
 	desc    string
@@ -138,9 +122,9 @@ type ConnectEvent struct {
 // NewConnectEvent generates a new ConnectEvent for the given Endpoint
 func NewConnectEvent(context context.Context, remote string, desc string) *ConnectEvent {
 	return &ConnectEvent{
-		context,
-		remote,
-		desc,
+		context: context,
+		remote:  remote,
+		desc:    desc,
 	}
 }
 
@@ -159,44 +143,9 @@ func (e *ConnectEvent) Desc() string {
 	return e.desc
 }
 
-// EventsEvent contains events received from a transport
-type EventsEvent struct {
-	context context.Context
-	nonce   *string
-	events  [][]byte
-}
-
-// NewEventsEvent generates a new EventsEvent for the given Endpoint
-func NewEventsEvent(context context.Context, nonce *string, events [][]byte) *EventsEvent {
-	return &EventsEvent{
-		context: context,
-		nonce:   nonce,
-		events:  events,
-	}
-}
-
-// Context returns the endpoint associated with this event
-func (e *EventsEvent) Context() context.Context {
-	return e.context
-}
-
-// Nonce returns the nonce
-func (e *EventsEvent) Nonce() *string {
-	return e.nonce
-}
-
-// Events returns the events
-func (e *EventsEvent) Events() [][]byte {
-	return e.events
-}
-
-// Count returns the number of events in the payload
-func (e *EventsEvent) Count() uint32 {
-	return uint32(len(e.events))
-}
-
 // EndEvent marks the end of a stream of events from an endpoint
 type EndEvent struct {
+	Event
 	context context.Context
 }
 
@@ -214,6 +163,7 @@ func (e *EndEvent) Context() context.Context {
 
 // PongEvent is received when a transport has responded to a Ping() request
 type PongEvent struct {
+	Event
 	context context.Context
 }
 
@@ -231,6 +181,7 @@ func (e *PongEvent) Context() context.Context {
 
 // PingEvent is received when a transport has responded to a Ping() request
 type PingEvent struct {
+	Event
 	context context.Context
 }
 
@@ -244,6 +195,70 @@ func NewPingEvent(context context.Context) *PingEvent {
 // Context returns the endpoint associated with this event
 func (e *PingEvent) Context() context.Context {
 	return e.context
+}
+
+// ackEvent contains information on which events have been acknowledged
+type ackEvent struct {
+	AckEvent
+	context  context.Context
+	nonce    *string
+	sequence uint32
+}
+
+// NewAckEvent generates a new AckEvent for the given Endpoint
+func NewAckEvent(context context.Context, nonce *string, sequence uint32) AckEvent {
+	return &ackEvent{
+		context:  context,
+		nonce:    nonce,
+		sequence: sequence,
+	}
+}
+
+// Context returns the endpoint associated with this event
+func (e *ackEvent) Context() context.Context {
+	return e.context
+}
+
+// Nonce returns the nonce value
+func (e *ackEvent) Nonce() *string {
+	return e.nonce
+}
+
+// Sequence returns the sequence value
+func (e *ackEvent) Sequence() uint32 {
+	return e.sequence
+}
+
+// eventsEvent contains information about an events bundle
+type eventsEvent struct {
+	EventsEvent
+	context context.Context
+	nonce   *string
+	events  []map[string]interface{}
+}
+
+// NewEventsEvent generates a new EventsEvent for the given bundle of events
+func NewEventsEvent(context context.Context, nonce *string, events []map[string]interface{}) EventsEvent {
+	return &eventsEvent{
+		context: context,
+		nonce:   nonce,
+		events:  events,
+	}
+}
+
+// Context returns the endpoint associated with this event
+func (e *eventsEvent) Context() context.Context {
+	return e.context
+}
+
+// Nonce returns the nonce value
+func (e *eventsEvent) Nonce() *string {
+	return e.nonce
+}
+
+// Events returns the events
+func (e *eventsEvent) Events() []map[string]interface{} {
+	return e.events
 }
 
 // ParseTLSVersion parses a TLS version string into the tls library value for min/max config

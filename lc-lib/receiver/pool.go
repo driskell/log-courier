@@ -178,7 +178,7 @@ ReceiverLoop:
 				r.connectionStatus[connection] = newPoolConnectionStatus(r, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc())
 				r.apiConnections.AddEntry(eventImpl.Remote(), r.connectionStatus[connection])
 				r.connectionLock.Unlock()
-			case *transports.EventsEvent:
+			case transports.EventsEvent:
 				r.connectionLock.Lock()
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
@@ -192,7 +192,7 @@ ReceiverLoop:
 				var events = make([]*event.Event, len(eventImpl.Events()))
 				for idx, item := range eventImpl.Events() {
 					ctx := context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{nonce: eventImpl.Nonce(), sequence: uint32(idx + 1)})
-					events[idx] = event.NewEventFromBytes(ctx, r, item)
+					events[idx] = event.NewEvent(ctx, r, item)
 				}
 				spool = append(spool, events)
 				spoolChan = r.output

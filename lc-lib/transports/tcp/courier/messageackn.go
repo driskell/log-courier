@@ -17,13 +17,17 @@
 package courier
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 
+	"github.com/driskell/log-courier/lc-lib/transports"
 	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 type protocolACKN struct {
+	transports.AckEvent
+	ctx      context.Context
 	nonce    *string
 	sequence uint32
 }
@@ -41,12 +45,17 @@ func newProtocolACKN(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessag
 
 	nonce := string(message[:16])
 	sequence := binary.BigEndian.Uint32(message[16:])
-	return &protocolACKN{nonce: &nonce, sequence: sequence}, nil
+	return &protocolACKN{ctx: conn.Context(), nonce: &nonce, sequence: sequence}, nil
 }
 
 // Type returns a human-readable name for the message type
 func (p *protocolACKN) Type() string {
 	return "ACKN"
+}
+
+// Context returns the connection context
+func (p *protocolACKN) Context() context.Context {
+	return p.ctx
 }
 
 // Write writes a payload to the connection
