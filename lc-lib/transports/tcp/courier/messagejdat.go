@@ -14,40 +14,41 @@
  * limitations under the License.
  */
 
-package tcp
+package courier
 
 import (
+	"bytes"
 	"compress/zlib"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
-	"math"
+
+	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
-type protocolEVNT struct {
+type protocolJDAT struct {
 	nonce  *string
 	events [][]byte
 }
 
-// Reads the events from existing data
-func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, error) {
-	if conn.isClient {
-		return nil, errors.New("protocol error: Unexpected JDAT message received on client connection")
+// newProtocolJDAT creates a new structure from wire-bytes
+func newProtocolJDAT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
+	if bodyLength < 17 {
+		return nil, fmt.Errorf("protocol error: Corrupt message (JDAT size %d < 17)", bodyLength)
 	}
 
-	if bodyLength != math.MaxUint32 {
-		return nil, fmt.Errorf("protocol error: Corrupt message (EVNT size %d != %d)", bodyLength, uint32(math.MaxUint32))
+	if bodyLength > 10485760 {
+		return nil, fmt.Errorf("protocol error: Message body too large (%d > 10485760)", bodyLength)
 	}
 
-	data := make([]byte, 16)
+	data := make([]byte, bodyLength)
 	if _, err := conn.Read(data); err != nil {
 		return nil, err
 	}
 
-	nonce := string(data)
+	nonce := string(data[:16])
 
-	decompressor, err := zlib.NewReader(conn)
+	decompressor, err := zlib.NewReader(bytes.NewReader(data[16:]))
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +65,7 @@ func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, erro
 		}
 
 		if size > 10485760 {
-			return nil, ErrEventTooLarge
+			return nil, tcp.ErrEventTooLarge
 		}
 
 		data := make([]byte, size)
@@ -77,7 +78,7 @@ func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, erro
 			}
 			if err != nil {
 				if err == io.EOF {
-					return nil, ErrUnexpectedEnd
+					return nil, tcp.ErrUnexpectedEnd
 				}
 				return nil, err
 			}
@@ -86,30 +87,22 @@ func newProtocolEVNT(conn *connection, bodyLength uint32) (protocolMessage, erro
 		events = append(events, data)
 	}
 
-	return &protocolEVNT{nonce: &nonce, events: events}, nil
+	return &protocolJDAT{nonce: &nonce, events: events}, nil
 }
 
 // Type returns a human-readable name for the message type
-func (p *protocolEVNT) Type() string {
-	return "EVNT"
+func (p *protocolJDAT) Type() string {
+	return "JDAT"
 }
 
 // Write writes a payload to the socket
-func (p *protocolEVNT) Write(conn *connection) error {
-	// Encapsulate the data into the message
-	// 4-byte message header (EVNT = EVNT Data, Compressed, Enhanced over JDAT in that it streams and has no size prefix)
-	// 4-byte uint32 data length of 0xFFFF (stream)
-	// 16-byte nonce
-	// compressed stream
-	if _, err := conn.Write([]byte{'E', 'V', 'N', 'T', 255, 255, 255, 255}); err != nil {
-		return err
-	}
+func (p *protocolJDAT) Write(conn tcp.Connection) error {
+	var eventBuffer bytes.Buffer
 
-	if _, err := conn.Write([]byte(*p.nonce)); err != nil {
-		return err
-	}
-
-	compressor, err := zlib.NewWriterLevel(conn, 3)
+	// Create the compressed data payload
+	// The event data is each event, prefixed with a 4-byte uint32 length, one
+	// after the other
+	compressor, err := zlib.NewWriterLevel(&eventBuffer, 3)
 	if err != nil {
 		return err
 	}
@@ -124,15 +117,41 @@ func (p *protocolEVNT) Write(conn *connection) error {
 		}
 	}
 
-	return compressor.Close()
+	if err := compressor.Close(); err != nil {
+		return err
+	}
+
+	// Encapsulate the data into the message
+	// 4-byte message header (JDAT = JSON Data, Compressed)
+	// 4-byte uint32 data length
+	// 16-byte nonce
+	// Compressed data
+	if _, err := conn.Write([]byte{'J', 'D', 'A', 'T'}); err != nil {
+		return err
+	}
+
+	var length [4]byte
+	binary.BigEndian.PutUint32(length[:], uint32(len(*p.nonce)+eventBuffer.Len()))
+	if _, err := conn.Write(length[:]); err != nil {
+		return err
+	}
+
+	if _, err := conn.Write([]byte(*p.nonce)); err != nil {
+		return err
+	}
+
+	if _, err = conn.Write(eventBuffer.Bytes()); err != nil {
+		return err
+	}
+	return conn.Flush()
 }
 
 // Nonce returns the nonce - this implements eventsMessage
-func (p *protocolEVNT) Nonce() *string {
+func (p *protocolJDAT) Nonce() *string {
 	return p.nonce
 }
 
 // Events returns the events - this implements eventsMessage
-func (p *protocolEVNT) Events() [][]byte {
+func (p *protocolJDAT) Events() [][]byte {
 	return p.events
 }

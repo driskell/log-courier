@@ -352,11 +352,12 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 				if r.receivers != nil {
 					// If already exists as active then reload config
 					if existing, has := r.receiversByListen[listen]; has {
-						// Receiver already exists, update its configuration
-						existing.ReloadConfig(newConfig, cfgEntry.Factory)
-						newReceivers[existing] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
-						newReceiversByListen[listen] = existing
-						continue
+						// Receiver already exists, does it need restarting? If so let us create new, otherwise keep it
+						if !existing.Factory().ShouldRestart(cfgEntry.Factory) {
+							newReceivers[existing] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
+							newReceiversByListen[listen] = existing
+							continue
+						}
 					}
 				}
 				// Create new receiver

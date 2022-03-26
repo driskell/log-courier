@@ -62,7 +62,7 @@ RetrySend:
 			select {
 			case <-w.receiverShutdownChan:
 				// Shutdown
-				return length, errHardCloseRequested
+				return length, ErrHardCloseRequested
 			default:
 				goto RetrySend
 			}

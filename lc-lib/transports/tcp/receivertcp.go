@@ -1,3 +1,19 @@
+/*
+ * Copyright 2012-2020 Jason Woods and contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package tcp
 
 import (
@@ -6,12 +22,10 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
-	"reflect"
 	"sync"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -20,60 +34,23 @@ type receiverTCP struct {
 	// Constructor
 	ctx          context.Context
 	shutdownFunc context.CancelFunc
-	config       *ReceiverTCPFactory
+	config       *ReceiverFactory
 	pool         *addresspool.Pool
 	eventChan    chan<- transports.Event
 	connections  map[*connection]*connection
 	backoff      *core.ExpBackoff
 
 	// Internal
-	connMutex    sync.Mutex
-	connWait     sync.WaitGroup
-	shutdownChan chan struct{}
-	shutdownOnce sync.Once
+	connMutex       sync.Mutex
+	connWait        sync.WaitGroup
+	shutdownChan    chan struct{}
+	shutdownOnce    sync.Once
+	protocolFactory ProtocolFactory
 }
 
-// ReloadConfig returns true if the transport needs to be restarted in order
-// for the new configuration to apply
-func (t *receiverTCP) ReloadConfig(cfg *config.Config, factory transports.ReceiverFactory) bool {
-	newConfig := factory.(*ReceiverTCPFactory)
-	if newConfig.MinTLSVersion != t.config.MinTLSVersion {
-		return true
-	}
-	if newConfig.MaxTLSVersion != t.config.MaxTLSVersion {
-		return true
-	}
-	if newConfig.SSLCertificate != t.config.SSLCertificate {
-		return true
-	}
-	if !reflect.DeepEqual(newConfig.SSLClientCA, t.config.SSLClientCA) {
-		return true
-	}
-	if newConfig.SSLKey != t.config.SSLKey {
-		return true
-	}
-	if newConfig.SSLKey != t.config.SSLKey {
-		return true
-	}
-	if newConfig.certificate != nil && t.config.certificate != nil {
-		if !reflect.DeepEqual(newConfig.certificate.Certificate, t.config.certificate.Certificate) {
-			return true
-		}
-	} else if newConfig.certificate != nil {
-		return true
-	} else if t.config.certificate != nil {
-		return true
-	}
-	if len(newConfig.caList) != len(t.config.caList) {
-		return true
-	}
-	for index := range newConfig.caList {
-		if !reflect.DeepEqual(newConfig.caList[index].Raw, t.config.caList[index].Raw) {
-			return true
-		}
-	}
-
-	return false
+// Factory returns the associated factory
+func (t *receiverTCP) Factory() transports.ReceiverFactory {
+	return t.config
 }
 
 // startController starts the controller
@@ -104,8 +81,8 @@ func (t *receiverTCP) controllerRoutine() {
 	// Request all connections to stop receiving and wait for them to finally close once the final ack is sent and nil message sent
 	log.Infof("[R %s] Receiver shutting down and waiting for final acknowledgements to be sent", t.pool.Server())
 	t.connMutex.Lock()
-	for _, connection := range t.connections {
-		t.ShutdownConnectionRead(connection.ctx, fmt.Errorf("exiting"))
+	for _, conn := range t.connections {
+		t.ShutdownConnectionRead(conn.ctx, fmt.Errorf("exiting"))
 	}
 	t.connMutex.Unlock()
 	t.connWait.Wait()
@@ -177,15 +154,13 @@ func (t *receiverTCP) acceptLoop(desc string, tcplistener *net.TCPListener) erro
 // Acknowledge sends the correct connection an acknowledgement
 func (t *receiverTCP) Acknowledge(ctx context.Context, nonce *string, sequence uint32) error {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Debugf("[R %s > %s] Sending acknowledgement for nonce %x with sequence %d", connection.socket.LocalAddr().String(), connection.socket.RemoteAddr().String(), *nonce, sequence)
-	return connection.SendMessage(&protocolACKN{nonce: nonce, sequence: sequence})
+	return connection.protocol.Acknowledge(nonce, sequence)
 }
 
 // Pong sends the correct connection a pong response
 func (t *receiverTCP) Pong(ctx context.Context) error {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
-	log.Debugf("[R %s > %s] Sending pong", connection.socket.LocalAddr().String(), connection.socket.RemoteAddr().String())
-	return connection.SendMessage(&protocolPONG{})
+	return connection.protocol.Pong()
 }
 
 // FailConnection shuts down a connection that has failed
@@ -222,21 +197,21 @@ func (t *receiverTCP) Shutdown() {
 func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 	tlsConfig = new(tls.Config)
 
-	tlsConfig.MinVersion = t.config.minTLSVersion
-	tlsConfig.MaxVersion = t.config.maxTLSVersion
+	tlsConfig.MinVersion = t.config.MinTLSVersion
+	tlsConfig.MaxVersion = t.config.MaxTLSVersion
 
 	// Set the certificate if we set one
-	if t.config.certificate != nil {
-		tlsConfig.Certificates = []tls.Certificate{*t.config.certificate}
+	if t.config.Certificate != nil {
+		tlsConfig.Certificates = []tls.Certificate{*t.config.Certificate}
 	}
 
 	// Set CA for client verification
 	tlsConfig.ClientCAs = x509.NewCertPool()
-	for _, cert := range t.config.caList {
+	for _, cert := range t.config.CaList {
 		tlsConfig.ClientCAs.AddCert(cert)
 	}
 
-	if len(t.config.caList) != 0 && t.config.SSLVerifyPeers {
+	if len(t.config.CaList) != 0 && t.config.SSLVerifyPeers {
 		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
@@ -248,13 +223,13 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 	log.Noticef("[R %s - %s] New connection", socket.LocalAddr().String(), socket.RemoteAddr().String())
 
 	var connectionSocket connectionSocket
-	if t.config.transport == TransportTCPTLS {
+	if t.config.EnableTls {
 		connectionSocket = newConnectionSocketTLS(socket, t.getTLSConfig(), true, t.pool.Server())
 	} else {
 		connectionSocket = newConnectionSocketTCP(socket)
 	}
 
-	conn := newConnection(t.ctx, connectionSocket, t.pool.Server(), false, t.eventChan)
+	conn := newConnection(t.ctx, connectionSocket, t.protocolFactory, t.pool.Server(), false, t.eventChan)
 
 	t.connMutex.Lock()
 	t.connections[conn] = conn
@@ -268,10 +243,10 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	defer t.connWait.Done()
 
-	if err := conn.Run(func() {
+	if err := conn.run(func() {
 		conn.sendEvent(transports.NewConnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc()))
 	}); err != nil {
-		if err == errHardCloseRequested {
+		if err == ErrHardCloseRequested {
 			log.Noticef("[R %s - %s] Client forcefully disconnected", socket.LocalAddr().String(), socket.RemoteAddr().String())
 		} else {
 			log.Errorf("[R %s - %s] Client failed: %s", socket.LocalAddr().String(), socket.RemoteAddr().String(), err)

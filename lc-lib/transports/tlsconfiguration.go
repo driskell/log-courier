@@ -17,34 +17,40 @@
  * limitations under the License.
  */
 
-package tcp
+package transports
 
 import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"reflect"
 
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/transports"
+)
+
+const (
+	// Default to TLS 1.2 minimum, supported since Go 1.2
+	defaultMinTLSVersion = tls.VersionTLS12
+	defaultMaxTLSVersion = 0
 )
 
 type TlsConfiguration struct {
-	SSLCertificate string `config:"ssl certificate"`
-	SSLKey         string `config:"ssl key"`
-	MinTLSVersion  string `config:"min tls version"`
-	MaxTLSVersion  string `config:"max tls version"`
+	SSLCertificate      string `config:"ssl certificate"`
+	SSLKey              string `config:"ssl key"`
+	MinTLSVersionString string `config:"min tls version"`
+	MaxTLSVersionString string `config:"max tls version"`
 
-	certificate     *tls.Certificate
-	certificateList []*x509.Certificate
-	caList          []*x509.Certificate
-	minTLSVersion   uint16
-	maxTLSVersion   uint16
+	Certificate     *tls.Certificate
+	CertificateList []*x509.Certificate
+	CaList          []*x509.Certificate
+	MinTLSVersion   uint16
+	MaxTLSVersion   uint16
 }
 
-func (f *TlsConfiguration) tlsValidate(transport string, p *config.Parser, configPath string) (err error) {
+func (f *TlsConfiguration) TlsValidate(enableTls bool, p *config.Parser, configPath string) (err error) {
 	// Only allow SSL configurations if using TLS
-	if transport != TransportTCPTLS {
-		if len(f.MinTLSVersion) > 0 || len(f.MaxTLSVersion) > 0 {
+	if !enableTls {
+		if len(f.MinTLSVersionString) > 0 || len(f.MaxTLSVersionString) > 0 {
 			return fmt.Errorf("%[1]smin tls version and %[1]smax tls version are not supported when the transport is tcp", configPath)
 		}
 		if len(f.SSLCertificate) > 0 || len(f.SSLKey) > 0 {
@@ -54,11 +60,11 @@ func (f *TlsConfiguration) tlsValidate(transport string, p *config.Parser, confi
 	}
 
 	// Check tls versions
-	f.minTLSVersion, err = transports.ParseTLSVersion(f.MinTLSVersion, defaultMinTLSVersion)
+	f.MinTLSVersion, err = ParseTLSVersion(f.MinTLSVersionString, defaultMinTLSVersion)
 	if err != nil {
 		return err
 	}
-	f.maxTLSVersion, err = transports.ParseTLSVersion(f.MaxTLSVersion, defaultMaxTLSVersion)
+	f.MaxTLSVersion, err = ParseTLSVersion(f.MaxTLSVersionString, defaultMaxTLSVersion)
 	if err != nil {
 		return err
 	}
@@ -77,16 +83,52 @@ func (f *TlsConfiguration) tlsValidate(transport string, p *config.Parser, confi
 			return fmt.Errorf("failed loading %sssl certificate': %s", configPath, err)
 		}
 
-		f.certificate = &certificate
+		f.Certificate = &certificate
 
-		for _, certBytes := range f.certificate.Certificate {
+		for _, certBytes := range f.Certificate.Certificate {
 			thisCert, err := x509.ParseCertificate(certBytes)
 			if err != nil {
 				return fmt.Errorf("failed loading %sssl certificate: %s", configPath, err)
 			}
-			f.certificateList = append(f.certificateList, thisCert)
+			f.CertificateList = append(f.CertificateList, thisCert)
 		}
 	}
 
 	return nil
+}
+
+func (f *TlsConfiguration) HasChanged(newConfig *TlsConfiguration) bool {
+	if newConfig.MinTLSVersion != f.MinTLSVersion {
+		return true
+	}
+	if newConfig.MaxTLSVersion != f.MaxTLSVersion {
+		return true
+	}
+	if newConfig.SSLCertificate != f.SSLCertificate {
+		return true
+	}
+	if newConfig.SSLKey != f.SSLKey {
+		return true
+	}
+	if newConfig.SSLKey != f.SSLKey {
+		return true
+	}
+	if newConfig.Certificate != nil && f.Certificate != nil {
+		if !reflect.DeepEqual(newConfig.Certificate.Certificate, f.Certificate.Certificate) {
+			return true
+		}
+	} else if newConfig.Certificate != nil {
+		return true
+	} else if f.Certificate != nil {
+		return true
+	}
+	if len(newConfig.CaList) != len(f.CaList) {
+		return true
+	}
+	for index := range newConfig.CaList {
+		if !reflect.DeepEqual(newConfig.CaList[index].Raw, f.CaList[index].Raw) {
+			return true
+		}
+	}
+	return false
 }

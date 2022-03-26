@@ -39,10 +39,9 @@ type transportTest struct {
 	finished  bool
 }
 
-// ReloadConfig returns true if the transport needs to be restarted in order
-// for the new configuration to apply
-func (t *transportTest) ReloadConfig(netConfig *transports.Config) bool {
-	return false
+// Factory returns the associated factory
+func (t *transportTest) Factory() transports.TransportFactory {
+	return t.config
 }
 
 // SendEvents sends an event message with given nonce to the transport - only valid after Started transport event received

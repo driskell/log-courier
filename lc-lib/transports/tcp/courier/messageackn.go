@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-package tcp
+package courier
 
 import (
 	"encoding/binary"
 	"fmt"
+
+	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 type protocolACKN struct {
@@ -27,7 +29,7 @@ type protocolACKN struct {
 }
 
 // newProtocolACKN reads a new protocolACKN
-func newProtocolACKN(conn *connection, bodyLength uint32) (protocolMessage, error) {
+func newProtocolACKN(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
 	if bodyLength != 20 {
 		return nil, fmt.Errorf("protocol error: Corrupt message (ACKN size %d != 20)", bodyLength)
 	}
@@ -48,7 +50,7 @@ func (p *protocolACKN) Type() string {
 }
 
 // Write writes a payload to the connection
-func (p *protocolACKN) Write(conn *connection) error {
+func (p *protocolACKN) Write(conn tcp.Connection) error {
 	// Encapsulate the ack into a message
 	// 4-byte message header (ACKN)
 	// 4-byte message length
@@ -64,6 +66,8 @@ func (p *protocolACKN) Write(conn *connection) error {
 
 	var sequence [4]byte
 	binary.BigEndian.PutUint32(sequence[:], uint32(p.sequence))
-	_, err := conn.Write(sequence[:])
-	return err
+	if _, err := conn.Write(sequence[:]); err != nil {
+		return err
+	}
+	return conn.Flush()
 }

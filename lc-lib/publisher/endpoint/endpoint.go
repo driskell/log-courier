@@ -339,7 +339,7 @@ func (e *Endpoint) PullBackPending() []*payload.Payload {
 // it if it requests to be restarted, so that the new configuration can
 // take effect
 func (e *Endpoint) ReloadConfig(netConfig *transports.Config) {
-	if e.transport.ReloadConfig(netConfig) {
+	if e.transport.Factory().ShouldRestart(netConfig.Factory) {
 		e.shutdownTransport()
 	}
 }

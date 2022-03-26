@@ -18,13 +18,12 @@ package es
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -37,10 +36,6 @@ const (
 	defaultRetry        time.Duration = 0 * time.Second
 	defaultRetryMax     time.Duration = 300 * time.Second
 	defaultIndexPattern string        = "logstash-%{+2006-01-02}"
-
-	// Default to TLS 1.2 minimum, supported since Go 1.2
-	defaultMinTLSVersion = tls.VersionTLS12
-	defaultMaxTLSVersion = 0
 )
 
 var (
@@ -62,23 +57,19 @@ type TransportESFactory struct {
 	templatePatternSingleJSON string
 
 	// Configuration
-	MinTLSVersion    string        `config:"min tls version"`
-	MaxTLSVersion    string        `config:"max tls version"`
 	IndexPattern     string        `config:"index pattern"`
 	Password         string        `config:"password"`
 	Retry            time.Duration `config:"retry backoff"`
 	RetryMax         time.Duration `config:"retry backoff max"`
 	Routines         int           `config:"routines"`
-	SSLCA            string        `config:"ssl ca"`
 	Username         string        `config:"username"`
 	TemplateFile     string        `config:"template file"`
 	TemplatePatterns []string      `config:"template patterns"`
 
 	// Internal
-	template      []byte
-	caList        []*x509.Certificate
-	minTLSVersion uint16
-	maxTLSVersion uint16
+	template []byte
+
+	*transports.TlsConfiguration
 }
 
 // NewTransportESFactory create a new TransportESFactory from the provided
@@ -139,30 +130,7 @@ func (f *TransportESFactory) Validate(p *config.Parser, configPath string) (err 
 		f.templatePatternSingleJSON = string(result)
 	}
 
-	if f.transport == TransportESHTTPS {
-		// Check tls versions
-		f.minTLSVersion, err = transports.ParseTLSVersion(f.MinTLSVersion, defaultMinTLSVersion)
-		if err != nil {
-			return
-		}
-		f.maxTLSVersion, err = transports.ParseTLSVersion(f.MaxTLSVersion, defaultMaxTLSVersion)
-		if err != nil {
-			return
-		}
-		// Check SSLCA
-		if f.caList, err = transports.AddCertificates(f.caList, f.SSLCA); err != nil {
-			return fmt.Errorf("failure loading %sssl ca: %s", configPath, err)
-		}
-	} else {
-		if len(f.MinTLSVersion) > 0 || len(f.MaxTLSVersion) > 0 {
-			return fmt.Errorf("%[1]smin tls version and %[1]smax tls version are not supported when the transport is es", configPath)
-		}
-		if len(f.SSLCA) > 0 {
-			return fmt.Errorf("%[1]sssl ca is not supported when the transport is es", configPath)
-		}
-	}
-
-	return nil
+	return f.TlsConfiguration.TlsValidate(f.transport == TransportESHTTPS, p, configPath)
 }
 
 // Defaults sets the default configuration values
@@ -191,6 +159,39 @@ func (f *TransportESFactory) NewTransport(ctx context.Context, pool *addresspool
 
 	ret.startController()
 	return ret
+}
+
+// ReloadConfig returns true if the transport needs to be restarted in order
+// for the new configuration to apply
+func (t *TransportESFactory) ShouldRestart(newConfig transports.TransportFactory) bool {
+	// Check template chanages
+	newConfigImpl := newConfig.(*TransportESFactory)
+	if newConfigImpl.IndexPattern != t.IndexPattern {
+		return true
+	}
+	if newConfigImpl.Password != t.Password {
+		return true
+	}
+	if newConfigImpl.Retry != t.Retry {
+		return true
+	}
+	if newConfigImpl.RetryMax != t.RetryMax {
+		return true
+	}
+	if newConfigImpl.Routines != t.Routines {
+		return true
+	}
+	if newConfigImpl.TemplateFile != t.TemplateFile {
+		return true
+	}
+	if newConfigImpl.Username != t.Username {
+		return true
+	}
+	if !reflect.DeepEqual(newConfigImpl.TemplatePatterns, t.TemplatePatterns) {
+		return true
+	}
+
+	return t.TlsConfiguration.HasChanged(newConfigImpl.TlsConfiguration)
 }
 
 // Register the transports

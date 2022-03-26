@@ -33,9 +33,9 @@ var ErrForcedFailure = errors.New("failed by endpoint manager")
 type Transport interface {
 	Fail()
 	Ping() error
-	ReloadConfig(*Config) bool
 	Shutdown()
 	SendEvents(string, []*event.Event) error
+	Factory() TransportFactory
 }
 
 // TransportFactory is the interface that all transport factories implement. The
@@ -44,6 +44,7 @@ type Transport interface {
 // configuration
 type TransportFactory interface {
 	NewTransport(context.Context, *addresspool.Pool, chan<- Event) Transport
+	ShouldRestart(TransportFactory) bool
 }
 
 // TransportRegistrarFunc is a callback that validates the configuration for

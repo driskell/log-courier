@@ -14,32 +14,38 @@
  * limitations under the License.
  */
 
-package tcp
+package courier
 
-import "fmt"
+import (
+	"fmt"
 
-type protocolPONG struct {
+	"github.com/driskell/log-courier/lc-lib/transports/tcp"
+)
+
+type protocolPING struct {
 }
 
-// newProtocolPONG reads a new protocolPONG
-func newProtocolPONG(conn *connection, bodyLength uint32) (protocolMessage, error) {
+// newProtocolPING reads a new protocolPING
+func newProtocolPING(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
 	if bodyLength != 0 {
-		return nil, fmt.Errorf("protocol error: Corrupt message PONG size %d != 0", bodyLength)
+		return nil, fmt.Errorf("protocol error: Corrupt message PING size %d != 0", bodyLength)
 	}
 
-	return &protocolPONG{}, nil
+	return &protocolPING{}, nil
 }
 
 // Type returns a human-readable name for the message type
-func (p *protocolPONG) Type() string {
-	return "PONG"
+func (p *protocolPING) Type() string {
+	return "PING"
 }
 
 // Write writes a payload to the socket
-func (p *protocolPONG) Write(conn *connection) error {
+func (p *protocolPING) Write(conn tcp.Connection) error {
 	// Encapsulate the ping into a message
-	// 4-byte message header (PONG)
-	// 4-byte uint32 data length (0 length for PONG)
-	_, err := conn.Write([]byte{'P', 'O', 'N', 'G', 0, 0, 0, 0})
-	return err
+	// 4-byte message header (PING)
+	// 4-byte uint32 data length (0 length for PING)
+	if _, err := conn.Write([]byte{'P', 'I', 'N', 'G', 0, 0, 0, 0}); err != nil {
+		return err
+	}
+	return conn.Flush()
 }

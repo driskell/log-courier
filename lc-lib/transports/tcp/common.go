@@ -20,23 +20,16 @@ import (
 	"context"
 	_ "crypto/sha256" // Support for newer SSL signature algorithms
 	_ "crypto/sha512" // Support for newer SSL signature algorithms
-	"crypto/tls"
 	"errors"
 	"net"
+
+	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 const (
 	// This is how often we should check for disconnect/shutdown during socket reads
 	socketIntervalSeconds = 1
-
-	// Default to TLS 1.2 minimum, supported since Go 1.2
-	defaultMinTLSVersion = tls.VersionTLS12
-	defaultMaxTLSVersion = 0
-
-	// TransportTCPTCP is the transport name for plain TCP
-	TransportTCPTCP = "tcp"
-	// TransportTCPTLS is the transport name for encrypted TLS
-	TransportTCPTLS = "tls"
 )
 
 var (
@@ -46,15 +39,8 @@ var (
 	// ErrUnexpectedEnd occurs when a message ends unexpectedly
 	ErrUnexpectedEnd = errors.New("unexpected end of JDAT compressed entry")
 
-	// clientName holds the client identifier to send in VERS and HELO
-	clientName string = "\x00\x00\x00\x00"
-
-	// clientNameMapping holds mapping from short name to full name for HELO and VERS
-	clientNameMapping map[string]string = map[string]string{
-		"LCOR": "Log Courier",
-		"LCVR": "Log Carver",
-		"RYLC": "Ruby Log Courier",
-	}
+	// ErrIOWouldBlock is returned when a protocol is non-blocking and a read would block longer than the socket interval
+	ErrIOWouldBlock = errors.New("IO would block")
 )
 
 type connectionSocket interface {
@@ -64,17 +50,31 @@ type connectionSocket interface {
 	CloseWrite() error
 }
 
-type protocolMessage interface {
+type Protocol interface {
+	Negotiation() (transports.Event, error)
+	SendEvents(string, []*event.Event) error
+	Ping() error
+	Pong() error
+	Acknowledge(*string, uint32) error
+	Read() (transports.Event, error)
+	NonBlocking() bool
+}
+
+type ProtocolFactory interface {
+	NewProtocol(Connection) Protocol
+}
+
+type ProtocolMessage interface {
 	Type() string
-	Write(*connection) error
+	Write(Connection) error
 }
 
-type eventsMessage interface {
-	protocolMessage
-	Nonce() *string
-	Events() [][]byte
-}
-
-func SetClientName(client string) {
-	clientName = client
+type Connection interface {
+	Context() context.Context
+	Write(data []byte) (int, error)
+	Flush() error
+	Read(data []byte) (int, error)
+	SendMessage(message ProtocolMessage) error
+	LocalAddr() net.Addr
+	RemoteAddr() net.Addr
 }

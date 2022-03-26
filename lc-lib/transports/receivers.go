@@ -25,13 +25,13 @@ import (
 
 // Receiver is the generic interface that all receivers implement
 type Receiver interface {
-	ReloadConfig(*config.Config, ReceiverFactory) bool
 	Acknowledge(context.Context, *string, uint32) error
 	Pong(context.Context) error
 	FailConnection(context.Context, error)
 	ShutdownConnection(context.Context)
 	ShutdownConnectionRead(context.Context, error)
 	Shutdown()
+	Factory() ReceiverFactory
 }
 
 // ReceiverFactory is the interface that all receiver factories implement. The
@@ -40,6 +40,7 @@ type Receiver interface {
 // configuration
 type ReceiverFactory interface {
 	NewReceiver(context.Context, *addresspool.Pool, chan<- Event) Receiver
+	ShouldRestart(ReceiverFactory) bool
 }
 
 // ReceiverRegistrarFunc is a callback that validates the configuration for

@@ -34,6 +34,9 @@ var (
 
 	// ErrInvalidState occurs when a send cannot happen because the connection has closed
 	ErrInvalidState = errors.New("invalid connection state")
+
+	// NilNonce represents the displayed nonce for an event bundle where the source does not use nonces
+	NilNonce string = "-"
 )
 
 // TransportContext

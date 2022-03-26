@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package tcp
+package courier
 
 import (
 	"encoding/binary"
 	"fmt"
 
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 type protocolVERS struct {
@@ -33,7 +34,7 @@ type protocolVERS struct {
 }
 
 // createProtocolVERS makes a new sendable version
-func createProtocolVERS() protocolMessage {
+func createProtocolVERS() tcp.ProtocolMessage {
 	protocolFlags := make([]byte, 4)
 	// SupportsEVNT flag
 	protocolFlags[0] = protocolFlags[0] | 0x01
@@ -48,7 +49,7 @@ func createProtocolVERS() protocolMessage {
 }
 
 // newProtocolVERS reads a new protocolVERS
-func newProtocolVERS(t *connection, bodyLength uint32) (protocolMessage, error) {
+func newProtocolVERS(t tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
 	if bodyLength > 32 {
 		return nil, fmt.Errorf("protocol error: Corrupt message (VERS size %d > 32)", bodyLength)
 	}
@@ -76,7 +77,7 @@ func (p *protocolVERS) Type() string {
 }
 
 // Write writes a payload to the socket
-func (p *protocolVERS) Write(conn *connection) error {
+func (p *protocolVERS) Write(conn tcp.Connection) error {
 	// Encapsulate the message
 	// 4-byte message header (VERS)
 	// 4-byte uint32 data length (1 length for VERS)
@@ -98,8 +99,10 @@ func (p *protocolVERS) Write(conn *connection) error {
 	copy(data[16:20], []byte(p.client[:4]))
 	copy(data[20:], p.reserved)
 
-	_, err := conn.Write(data)
-	return err
+	if _, err := conn.Write(data); err != nil {
+		return err
+	}
+	return conn.Flush()
 }
 
 // SupportsEVNT returns true if the remote side supports the enhanced message
