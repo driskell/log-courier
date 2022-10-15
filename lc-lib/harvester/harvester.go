@@ -84,6 +84,7 @@ type Harvester struct {
 	lastCheck       time.Time
 
 	// Cross routine access (lock required)
+	completion           float64
 	orphaned             bool
 	orphanTime           time.Time
 	lastLineCount        uint64
@@ -326,6 +327,14 @@ func (h *Harvester) takeMeasurements(isPipelineBlocked bool) error {
 	if h.offset > h.lastSize {
 		h.lastSize = h.offset
 	}
+	if h.lastOffset >= h.lastSize {
+		h.completion = 100
+	} else {
+		h.completion = float64(h.lastOffset) * 100 / float64(h.lastSize)
+		if h.completion >= 100 {
+			h.completion = 99
+		}
+	}
 	if h.lastStaleOffset > h.offset {
 		h.staleBytes = h.lastStaleOffset - h.offset
 	} else {
@@ -371,7 +380,9 @@ func (h *Harvester) statCheck(info os.FileInfo, isPipelineBlocked bool) (err err
 	// This scenario is only reached if a file is held open by a blocked/slow pipeline
 	if h.streamConfig.HoldTime > 0 && h.isOrphaned() {
 		if age := time.Since(h.orphanTime); age > h.streamConfig.HoldTime {
-			completion := h.calculateCompletion()
+			h.mutex.RLock()
+			completion := h.completion
+			h.mutex.RUnlock()
 			if completion >= 100 {
 				readAge := time.Since(h.lastReadTime)
 				log.Infof("Stopping harvest of %s; file was deleted %v ago (\"hold time\"); all data was processed; last change was %v ago", h.path, age-(age%time.Second), readAge-(readAge%time.Second))
@@ -513,18 +524,6 @@ func (h *Harvester) SetOrphaned() {
 	h.mutex.Unlock()
 }
 
-// calculateCompletion returns completion percentage of the file
-func (h *Harvester) calculateCompletion() float64 {
-	defer func() {
-		h.mutex.RUnlock()
-	}()
-	h.mutex.RLock()
-	if h.lastOffset >= h.lastSize {
-		return 100
-	}
-	return float64(h.lastOffset) * 100 / float64(h.lastSize)
-}
-
 // isOrphaned returns if orphaned
 func (h *Harvester) isOrphaned() bool {
 	h.mutex.RLock()
@@ -550,7 +549,7 @@ func (h *Harvester) APIEncodable() api.Encodable {
 		apiEncodable.SetEntry("orphaned", api.Number(0))
 	}
 
-	apiEncodable.SetEntry("completion", api.Float(h.calculateCompletion()))
+	apiEncodable.SetEntry("completion", api.Float(h.completion))
 	if h.lastEOFOff == nil {
 		apiEncodable.SetEntry("last_eof_offset", api.Null)
 	} else {
