@@ -17,7 +17,7 @@ Gem::Specification.new do |gem|
 
   gem.metadata = { 'logstash_plugin' => 'true', 'logstash_group' => 'output' }
 
-  gem.add_runtime_dependency 'log-courier', '~> 2.7.3'
+  gem.add_runtime_dependency 'log-courier', '= 2.7.3'
   gem.add_runtime_dependency 'logstash-codec-plain' if RUBY_PLATFORM == 'java'
   gem.add_runtime_dependency 'logstash-core-plugin-api', '>= 1.60', '<= 2.99' if RUBY_PLATFORM == 'java'
 end

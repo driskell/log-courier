@@ -1,0 +1,16 @@
+{
+  "name": "log-courier",
+  "version": "2.9.0",
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/driskell/log-courier.git"
+  },
+  "author": "",
+  "license": "Apache",
+  "devDependencies": {
+    "@commitlint/cli": "^17.1.2",
+    "@commitlint/config-conventional": "^17.1.0",
+    "standard-version": "^9.5.0"
+  }
+}

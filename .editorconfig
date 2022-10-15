@@ -13,3 +13,7 @@ tab_width = 2
 [{*.rb,*.gemspec,Rakefile,Gemfile,Gemfile.lock}]
 indent_style = space
 tab_width = 2
+
+[*.js]
+indent_style = space
+tab_width = 2
