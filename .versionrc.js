@@ -5,6 +5,7 @@ module.exports = {
     name: 'conventionalcommits'
   },
   bumpFiles: [
+    'package.json',
     {
       filename: 'lc-lib/core/version.go',
       updater: 'contrib/version-updaters/version.go.js'
