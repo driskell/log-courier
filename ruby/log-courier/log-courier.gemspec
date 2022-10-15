@@ -10,12 +10,13 @@ Gem::Specification.new do |gem|
   gem.rubyforge_project = 'nowarning'
   gem.require_paths     = ['lib']
   gem.files             = [
-    'lib/log-courier/client.rb',
     'lib/log-courier/client_tcp.rb',
+    'lib/log-courier/client.rb',
     'lib/log-courier/event_queue.rb',
     'lib/log-courier/protocol.rb',
-    'lib/log-courier/server.rb',
     'lib/log-courier/server_tcp.rb',
+    'lib/log-courier/server.rb',
+    'lib/log-courier/version.rb',
     'lib/log-courier/rspec/spec_helper.rb',
   ]
 
