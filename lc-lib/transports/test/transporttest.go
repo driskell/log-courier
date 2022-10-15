@@ -74,9 +74,13 @@ func (t *transportTest) delayAction(action func(), message string) {
 	if t.config.MinDelay != t.config.MaxDelay {
 		delay = delay + rand.Int63n(t.config.MaxDelay-t.config.MinDelay)
 	}
+	// Always launch in another routine - must not block the publisher
+	// which can happen if we attempt to return to the eventChan on same channel we received
 	if delay == 0 {
-		log.Debugf("%s", message)
-		action()
+		go func() {
+			log.Debugf("%s", message)
+			action()
+		}()
 	} else {
 		log.Debugf("%s (delaying %d seconds)", message, delay)
 		go func() {

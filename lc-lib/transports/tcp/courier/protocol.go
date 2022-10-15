@@ -199,19 +199,19 @@ func (p *protocol) Read() (transports.Event, error) {
 	if p.isClient {
 		switch transportEvent := message.(type) {
 		case transports.AckEvent:
-			log.Debugf("[T %s < %s] Received acknowledgement for nonce %x with sequence %d", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), transportEvent.Nonce(), transportEvent.Sequence())
+			log.Debugf("[T %s < %s] Received acknowledgement for nonce %x with sequence %d", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), *transportEvent.Nonce(), transportEvent.Sequence())
 			return transportEvent, nil
 		case *protocolPONG:
 			log.Debugf("[T %s < %s] Received pong", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String())
-			return transportEvent, nil
+			return transports.NewPongEvent(p.conn.Context()), nil
 		}
 	} else {
 		switch transportEvent := message.(type) {
 		case *protocolPING:
 			log.Debugf("[R %s < %s] Received ping", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String())
-			return transportEvent, nil
+			return transports.NewPingEvent(p.conn.Context()), nil
 		case transports.EventsEvent:
-			log.Debugf("[R %s < %s] Received payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), transportEvent.Nonce(), transportEvent.Count())
+			log.Debugf("[R %s < %s] Received payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), *transportEvent.Nonce(), transportEvent.Count())
 			return transportEvent, nil
 		}
 	}

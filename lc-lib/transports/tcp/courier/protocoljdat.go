@@ -30,11 +30,12 @@ import (
 )
 
 type protocolJDAT struct {
-	transports.EventsEvent
 	ctx    context.Context
 	nonce  *string
 	events [][]byte
 }
+
+var _ transports.EventsEvent = (*protocolJDAT)(nil)
 
 // newProtocolJDAT creates a new structure from wire-bytes
 func newProtocolJDAT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {

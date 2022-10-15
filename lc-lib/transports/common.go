@@ -81,11 +81,12 @@ type EventsEvent interface {
 
 // StatusEvent contains information about a status change for a transport
 type StatusEvent struct {
-	Event
 	context      context.Context
 	statusChange StatusChange
 	err          error
 }
+
+var _ Event = (*StatusEvent)(nil)
 
 // NewStatusEvent generates a new StatusEvent for the given context
 func NewStatusEvent(context context.Context, statusChange StatusChange, err error) *StatusEvent {
@@ -113,11 +114,12 @@ func (e *StatusEvent) Err() error {
 
 // ConnectEvent marks the start of a new connection on a reciver
 type ConnectEvent struct {
-	Event
 	context context.Context
 	remote  string
 	desc    string
 }
+
+var _ Event = (*ConnectEvent)(nil)
 
 // NewConnectEvent generates a new ConnectEvent for the given Endpoint
 func NewConnectEvent(context context.Context, remote string, desc string) *ConnectEvent {
@@ -145,9 +147,10 @@ func (e *ConnectEvent) Desc() string {
 
 // EndEvent marks the end of a stream of events from an endpoint
 type EndEvent struct {
-	Event
 	context context.Context
 }
+
+var _ Event = (*EndEvent)(nil)
 
 // NewEndEvent generates a new EndEvent for the given Endpoint
 func NewEndEvent(context context.Context) *EndEvent {
@@ -163,9 +166,10 @@ func (e *EndEvent) Context() context.Context {
 
 // PongEvent is received when a transport has responded to a Ping() request
 type PongEvent struct {
-	Event
 	context context.Context
 }
+
+var _ Event = (*PongEvent)(nil)
 
 // NewPongEvent generates a new PongEvent for the given Endpoint
 func NewPongEvent(context context.Context) *PongEvent {
@@ -181,9 +185,10 @@ func (e *PongEvent) Context() context.Context {
 
 // PingEvent is received when a transport has responded to a Ping() request
 type PingEvent struct {
-	Event
 	context context.Context
 }
+
+var _ Event = (*PingEvent)(nil)
 
 // NewPingEvent generates a new PingEvent for the given Endpoint
 func NewPingEvent(context context.Context) *PingEvent {
@@ -199,11 +204,12 @@ func (e *PingEvent) Context() context.Context {
 
 // ackEvent contains information on which events have been acknowledged
 type ackEvent struct {
-	AckEvent
 	context  context.Context
 	nonce    *string
 	sequence uint32
 }
+
+var _ AckEvent = (*ackEvent)(nil)
 
 // NewAckEvent generates a new AckEvent for the given Endpoint
 func NewAckEvent(context context.Context, nonce *string, sequence uint32) AckEvent {
@@ -231,11 +237,12 @@ func (e *ackEvent) Sequence() uint32 {
 
 // eventsEvent contains information about an events bundle
 type eventsEvent struct {
-	EventsEvent
 	context context.Context
 	nonce   *string
 	events  []map[string]interface{}
 }
+
+var _ EventsEvent = (*eventsEvent)(nil)
 
 // NewEventsEvent generates a new EventsEvent for the given bundle of events
 func NewEventsEvent(context context.Context, nonce *string, events []map[string]interface{}) EventsEvent {
@@ -259,6 +266,11 @@ func (e *eventsEvent) Nonce() *string {
 // Events returns the events
 func (e *eventsEvent) Events() []map[string]interface{} {
 	return e.events
+}
+
+// Count returns the number of events in the payload
+func (e *eventsEvent) Count() uint32 {
+	return uint32(len(e.events))
 }
 
 // ParseTLSVersion parses a TLS version string into the tls library value for min/max config

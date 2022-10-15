@@ -19,12 +19,10 @@ package courier
 import (
 	"fmt"
 
-	"github.com/driskell/log-courier/lc-lib/transports"
 	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 type protocolPING struct {
-	*transports.PingEvent
 }
 
 // newProtocolPING reads a new protocolPING
@@ -33,7 +31,7 @@ func newProtocolPING(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessag
 		return nil, fmt.Errorf("protocol error: Corrupt message PING size %d != 0", bodyLength)
 	}
 
-	return &protocolPING{transports.NewPingEvent(conn.Context())}, nil
+	return &protocolPING{}, nil
 }
 
 // Type returns a human-readable name for the message type

@@ -30,11 +30,12 @@ import (
 )
 
 type protocolEVNT struct {
-	transports.EventsEvent
 	ctx    context.Context
 	nonce  *string
 	events [][]byte
 }
+
+var _ transports.EventsEvent = (*protocolEVNT)(nil)
 
 // Reads the events from existing data
 func newProtocolEVNT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {

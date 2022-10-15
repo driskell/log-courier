@@ -26,11 +26,12 @@ import (
 )
 
 type protocolACKN struct {
-	transports.AckEvent
 	ctx      context.Context
 	nonce    *string
 	sequence uint32
 }
+
+var _ transports.AckEvent = (*protocolACKN)(nil)
 
 // newProtocolACKN reads a new protocolACKN
 func newProtocolACKN(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
@@ -56,6 +57,16 @@ func (p *protocolACKN) Type() string {
 // Context returns the connection context
 func (p *protocolACKN) Context() context.Context {
 	return p.ctx
+}
+
+// Nonce returns the nonce being acknowledged
+func (p *protocolACKN) Nonce() *string {
+	return p.nonce
+}
+
+// Sequence returns the sequence being acknowledged
+func (p *protocolACKN) Sequence() uint32 {
+	return p.sequence
 }
 
 // Write writes a payload to the connection
