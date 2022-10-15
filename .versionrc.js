@@ -1,5 +1,4 @@
 module.exports = {
-  tagPrefix: '',
   infile: 'CHANGELOG.md',
   preset: {
     name: 'conventionalcommits'
