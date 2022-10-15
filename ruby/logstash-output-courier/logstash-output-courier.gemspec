@@ -9,7 +9,6 @@ Gem::Specification.new do |gem|
   gem.email             = ['devel@jasonwoods.me.uk']
   gem.platform          = 'java' if RUBY_PLATFORM == 'java'
   gem.licenses          = ['Apache-2.0']
-  gem.rubyforge_project = 'nowarning'
   gem.require_paths     = ['lib']
   gem.files             = [
     'lib/logstash/outputs/courier.rb',
