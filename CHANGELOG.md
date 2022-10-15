@@ -1,4 +1,14 @@
-# Change Log
+# Changelog
+
+All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+
+## [2.9.1](https://github.com/driskell/log-courier/compare/v2.9.0...v2.9.1) (2022-10-15)
+
+
+### Bug Fixes
+
+* Fix installation issue of gems due to missing version.rb file ([a2dc5e4](https://github.com/driskell/log-courier/commit/a2dc5e4f680f0b66d0abf1e13006ddc240629110)), closes [#393](https://github.com/driskell/log-courier/issues/393)
+* Fix recursive lock in harvester blocking admin socket ([dc03b40](https://github.com/driskell/log-courier/commit/dc03b40da03a0b1982418e5f85d33125bc3d3ea6)), closes [#394](https://github.com/driskell/log-courier/issues/394)
 
 ## 2.9.0
 
