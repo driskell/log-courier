@@ -14,28 +14,31 @@
  * limitations under the License.
  */
 
-package tcp
+package courier
 
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/binary"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"io"
+
+	"github.com/driskell/log-courier/lc-lib/transports"
+	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 type protocolJDAT struct {
+	ctx    context.Context
 	nonce  *string
 	events [][]byte
 }
 
-// newProtocolJDAT creates a new structure from wire-bytes
-func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, error) {
-	if conn.isClient {
-		return nil, errors.New("protocol error: Unexpected JDAT message received on client connection")
-	}
+var _ transports.EventsEvent = (*protocolJDAT)(nil)
 
+// newProtocolJDAT creates a new structure from wire-bytes
+func newProtocolJDAT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
 	if bodyLength < 17 {
 		return nil, fmt.Errorf("protocol error: Corrupt message (JDAT size %d < 17)", bodyLength)
 	}
@@ -68,7 +71,7 @@ func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, erro
 		}
 
 		if size > 10485760 {
-			return nil, ErrEventTooLarge
+			return nil, tcp.ErrEventTooLarge
 		}
 
 		data := make([]byte, size)
@@ -81,7 +84,7 @@ func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, erro
 			}
 			if err != nil {
 				if err == io.EOF {
-					return nil, ErrUnexpectedEnd
+					return nil, tcp.ErrUnexpectedEnd
 				}
 				return nil, err
 			}
@@ -90,7 +93,7 @@ func newProtocolJDAT(conn *connection, bodyLength uint32) (protocolMessage, erro
 		events = append(events, data)
 	}
 
-	return &protocolJDAT{nonce: &nonce, events: events}, nil
+	return &protocolJDAT{ctx: conn.Context(), nonce: &nonce, events: events}, nil
 }
 
 // Type returns a human-readable name for the message type
@@ -99,7 +102,7 @@ func (p *protocolJDAT) Type() string {
 }
 
 // Write writes a payload to the socket
-func (p *protocolJDAT) Write(conn *connection) error {
+func (p *protocolJDAT) Write(conn tcp.Connection) error {
 	var eventBuffer bytes.Buffer
 
 	// Create the compressed data payload
@@ -143,8 +146,10 @@ func (p *protocolJDAT) Write(conn *connection) error {
 		return err
 	}
 
-	_, err = conn.Write(eventBuffer.Bytes())
-	return err
+	if _, err = conn.Write(eventBuffer.Bytes()); err != nil {
+		return err
+	}
+	return conn.Flush()
 }
 
 // Nonce returns the nonce - this implements eventsMessage
@@ -152,7 +157,29 @@ func (p *protocolJDAT) Nonce() *string {
 	return p.nonce
 }
 
+// Context returns the connection context
+func (p *protocolJDAT) Context() context.Context {
+	return p.ctx
+}
+
 // Events returns the events - this implements eventsMessage
-func (p *protocolJDAT) Events() [][]byte {
-	return p.events
+func (p *protocolJDAT) Events() []map[string]interface{} {
+	events := make([]map[string]interface{}, 0, len(p.events))
+	for _, data := range p.events {
+		var decoded map[string]interface{}
+		err := json.Unmarshal(data, &decoded)
+		if err != nil {
+			decoded = make(map[string]interface{})
+			decoded["message"] = err.Error()
+			decoded["tags"] = "_unmarshal_failure"
+		}
+		events = append(events, decoded)
+	}
+
+	return events
+}
+
+// Count returns the number of events
+func (p *protocolJDAT) Count() uint32 {
+	return uint32(len(p.events))
 }

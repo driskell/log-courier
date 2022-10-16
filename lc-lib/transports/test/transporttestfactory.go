@@ -91,6 +91,18 @@ func (f *TransportTestFactory) Defaults() {
 	f.MaxDelay = math.MaxInt64
 }
 
+// ShouldRestart returns true if config change needs to restart the transport
+func (f *TransportTestFactory) ShouldRestart(newConfig transports.TransportFactory) bool {
+	newConfigImpl := newConfig.(*TransportTestFactory)
+	if newConfigImpl.MinDelay != f.MinDelay {
+		return true
+	}
+	if newConfigImpl.MaxDelay != f.MaxDelay {
+		return true
+	}
+	return false
+}
+
 // Register the transports
 func init() {
 	transports.RegisterTransport(TransportTest, NewTransportTestFactory)

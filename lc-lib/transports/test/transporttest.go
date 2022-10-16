@@ -39,10 +39,9 @@ type transportTest struct {
 	finished  bool
 }
 
-// ReloadConfig returns true if the transport needs to be restarted in order
-// for the new configuration to apply
-func (t *transportTest) ReloadConfig(netConfig *transports.Config) bool {
-	return false
+// Factory returns the associated factory
+func (t *transportTest) Factory() transports.TransportFactory {
+	return t.config
 }
 
 // SendEvents sends an event message with given nonce to the transport - only valid after Started transport event received
@@ -75,9 +74,13 @@ func (t *transportTest) delayAction(action func(), message string) {
 	if t.config.MinDelay != t.config.MaxDelay {
 		delay = delay + rand.Int63n(t.config.MaxDelay-t.config.MinDelay)
 	}
+	// Always launch in another routine - must not block the publisher
+	// which can happen if we attempt to return to the eventChan on same channel we received
 	if delay == 0 {
-		log.Debugf("%s", message)
-		action()
+		go func() {
+			log.Debugf("%s", message)
+			action()
+		}()
 	} else {
 		log.Debugf("%s (delaying %d seconds)", message, delay)
 		go func() {

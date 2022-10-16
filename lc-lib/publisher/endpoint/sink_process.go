@@ -36,7 +36,7 @@ func (s *Sink) ProcessEvent(event transports.Event) (endpoint *Endpoint, err err
 	switch msg := event.(type) {
 	case *transports.StatusEvent:
 		s.processStatusChange(msg, endpoint)
-	case *transports.AckEvent:
+	case transports.AckEvent:
 		s.processAck(msg, endpoint)
 	case *transports.PongEvent:
 		endpoint.processPong(s.OnPong)
@@ -85,7 +85,7 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 	}
 }
 
-func (s *Sink) processAck(ack *transports.AckEvent, endpoint *Endpoint) {
+func (s *Sink) processAck(ack transports.AckEvent, endpoint *Endpoint) {
 	complete := endpoint.processAck(ack, s.OnAck)
 
 	// Everything after here runs when a payload is fully completed

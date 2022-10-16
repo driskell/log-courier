@@ -68,7 +68,7 @@ func (lr *LineReader) BufferedLen() int {
 }
 
 // ReadItem returns a line event from the file
-// Returns ErrMaxDataSizeExceed if the line was cut short because it was longer
+// Returns ErrMaxDataSizeTruncation if the line was cut short because it was longer
 // than the maximum line length allowed. Subsequent returned lines will be a
 // continuation of the cut line, with the final segment returning nil error
 func (lr *LineReader) ReadItem() (map[string]interface{}, int, error) {

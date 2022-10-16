@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
-package tcp
+package courier
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/driskell/log-courier/lc-lib/transports/tcp"
+)
 
 type protocolUNKN struct {
 }
 
 // newProtocolUNKN reads a new protocolUNKN
-func newProtocolUNKN(conn *connection, bodyLength uint32) (protocolMessage, error) {
+func newProtocolUNKN(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
 	if bodyLength != 0 {
 		return nil, fmt.Errorf("protocol error: Corrupt message UNKN size %d != 0", bodyLength)
 	}
@@ -36,10 +40,12 @@ func (p *protocolUNKN) Type() string {
 }
 
 // Write writes a payload to the socket
-func (p *protocolUNKN) Write(conn *connection) error {
+func (p *protocolUNKN) Write(conn tcp.Connection) error {
 	// Encapsulate the message
 	// 4-byte message header (UNKN)
 	// 4-byte uint32 data length (0 length for UNKN)
-	_, err := conn.Write([]byte{'?', '?', '?', '?', 0, 0, 0, 0})
-	return err
+	if _, err := conn.Write([]byte{'?', '?', '?', '?', 0, 0, 0, 0}); err != nil {
+		return err
+	}
+	return conn.Flush()
 }

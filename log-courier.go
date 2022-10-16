@@ -30,7 +30,7 @@ import (
 	_ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/plain"
 
-	tcp "github.com/driskell/log-courier/lc-lib/transports/tcp"
+	"github.com/driskell/log-courier/lc-lib/transports/tcp/courier"
 	_ "github.com/driskell/log-courier/lc-lib/transports/test"
 )
 
@@ -45,7 +45,7 @@ var (
 )
 
 func main() {
-	tcp.SetClientName("LCOR")
+	courier.SetClientName("LCOR")
 
 	app = core.NewApp("Log Courier", core.LogCourierVersion)
 	flag.BoolVar(&stdin, "stdin", false, "Read from stdin instead of files listed in the config file")

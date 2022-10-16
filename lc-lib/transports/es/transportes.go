@@ -30,7 +30,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -73,58 +72,9 @@ type transportES struct {
 	maxMajorVersion int
 }
 
-// ReloadConfig returns true if the transport needs to be restarted in order
-// for the new configuration to apply
-func (t *transportES) ReloadConfig(netConfig *transports.Config) bool {
-	// Check template chanages
-	newConfig := netConfig.Factory.(*TransportESFactory)
-	if newConfig.IndexPattern != t.config.IndexPattern {
-		return true
-	}
-	if newConfig.MinTLSVersion != t.config.MinTLSVersion {
-		return true
-	}
-	if newConfig.MaxTLSVersion != t.config.MaxTLSVersion {
-		return true
-	}
-	if newConfig.Password != t.config.Password {
-		return true
-	}
-	if newConfig.Retry != t.config.Retry {
-		return true
-	}
-	if newConfig.RetryMax != t.config.RetryMax {
-		return true
-	}
-	if newConfig.Routines != t.config.Routines {
-		return true
-	}
-	if newConfig.TemplateFile != t.config.TemplateFile {
-		return true
-	}
-	if newConfig.Username != t.config.Username {
-		return true
-	}
-	if !reflect.DeepEqual(newConfig.TemplatePatterns, t.config.TemplatePatterns) {
-		return true
-	}
-	if netConfig.MaxPendingPayloads != t.netConfig.MaxPendingPayloads {
-		return true
-	}
-	if netConfig.Timeout != t.netConfig.Timeout {
-		return true
-	}
-
-	if len(newConfig.caList) != len(t.config.caList) {
-		return true
-	}
-	for index := range newConfig.caList {
-		if !reflect.DeepEqual(newConfig.caList[index].Raw, t.config.caList[index].Raw) {
-			return true
-		}
-	}
-
-	return false
+// Factory returns the associated factory
+func (t *transportES) Factory() transports.TransportFactory {
+	return t.config
 }
 
 // startController starts the controller
@@ -545,7 +495,7 @@ func (t *transportES) getClient(server string) *http.Client {
 	}
 
 	certPool := x509.NewCertPool()
-	for _, cert := range t.config.caList {
+	for _, cert := range t.config.CaList {
 		certPool.AddCert(cert)
 	}
 
@@ -555,8 +505,8 @@ func (t *transportES) getClient(server string) *http.Client {
 			TLSClientConfig: &tls.Config{
 				RootCAs:    certPool,
 				ServerName: server,
-				MinVersion: t.config.minTLSVersion,
-				MaxVersion: t.config.maxTLSVersion,
+				MinVersion: t.config.MinTLSVersion,
+				MaxVersion: t.config.MaxTLSVersion,
 			},
 		},
 		Timeout: t.netConfig.Timeout,

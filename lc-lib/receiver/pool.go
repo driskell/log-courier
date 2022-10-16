@@ -151,7 +151,8 @@ ReceiverLoop:
 			for _, item := range events[1:] {
 				nextConnection := item.Context().Value(transports.ContextConnection)
 				nextPosition := item.Context().Value(poolContextEventPosition).(*poolEventPosition)
-				if nextConnection != connection || *nextPosition.nonce != *position.nonce {
+				// Also check for backwards or same sequence - this effectively manages cases of duplicate nonce as sequence will remain same or reset to 0
+				if nextConnection != connection || *nextPosition.nonce != *position.nonce || nextPosition.sequence <= position.sequence {
 					r.ackEventsEvent(currentContext, connection, position.nonce, position.sequence)
 					currentContext = item.Context()
 					connection = nextConnection
@@ -177,7 +178,7 @@ ReceiverLoop:
 				r.connectionStatus[connection] = newPoolConnectionStatus(r, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc())
 				r.apiConnections.AddEntry(eventImpl.Remote(), r.connectionStatus[connection])
 				r.connectionLock.Unlock()
-			case *transports.EventsEvent:
+			case transports.EventsEvent:
 				r.connectionLock.Lock()
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
@@ -191,7 +192,7 @@ ReceiverLoop:
 				var events = make([]*event.Event, len(eventImpl.Events()))
 				for idx, item := range eventImpl.Events() {
 					ctx := context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{nonce: eventImpl.Nonce(), sequence: uint32(idx + 1)})
-					events[idx] = event.NewEventFromBytes(ctx, r, item)
+					events[idx] = event.NewEvent(ctx, r, item)
 				}
 				spool = append(spool, events)
 				spoolChan = r.output
@@ -352,11 +353,12 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 				if r.receivers != nil {
 					// If already exists as active then reload config
 					if existing, has := r.receiversByListen[listen]; has {
-						// Receiver already exists, update its configuration
-						existing.ReloadConfig(newConfig, cfgEntry.Factory)
-						newReceivers[existing] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
-						newReceiversByListen[listen] = existing
-						continue
+						// Receiver already exists, does it need restarting? If so let us create new, otherwise keep it
+						if !existing.Factory().ShouldRestart(cfgEntry.Factory) {
+							newReceivers[existing] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
+							newReceiversByListen[listen] = existing
+							continue
+						}
 					}
 				}
 				// Create new receiver

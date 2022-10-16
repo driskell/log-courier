@@ -67,7 +67,7 @@ func (jr *JSONReader) BufferedLen() int {
 }
 
 // ReadItem returns the next JSON structure from the file
-// Returns ErrMaxDataSizeExceed if the data cannot be completed read because it is longer
+// Returns ErrMaxDataSizeExceeded if the data cannot be completed read because it is longer
 // than the maximum data length allowed
 func (jr *JSONReader) ReadItem() (map[string]interface{}, int, error) {
 	var event map[string]interface{}

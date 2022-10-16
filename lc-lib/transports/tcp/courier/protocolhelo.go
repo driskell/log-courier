@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package tcp
+package courier
 
 import (
 	"encoding/binary"
 	"fmt"
 
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 type protocolHELO struct {
@@ -33,7 +34,7 @@ type protocolHELO struct {
 }
 
 // createProtocolHELO makes a new sendable version
-func createProtocolHELO() protocolMessage {
+func createProtocolHELO() tcp.ProtocolMessage {
 	protocolFlags := make([]byte, 4)
 	return &protocolHELO{
 		protocolFlags: protocolFlags,
@@ -46,7 +47,7 @@ func createProtocolHELO() protocolMessage {
 }
 
 // newProtocolHELO reads a new protocolHELO
-func newProtocolHELO(t *connection, bodyLength uint32) (protocolMessage, error) {
+func newProtocolHELO(t tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
 	if bodyLength > 32 {
 		return nil, fmt.Errorf("protocol error: Corrupt message (HELO size %d > 32)", bodyLength)
 	}
@@ -74,7 +75,7 @@ func (p *protocolHELO) Type() string {
 }
 
 // Write writes a payload to the socket
-func (p *protocolHELO) Write(conn *connection) error {
+func (p *protocolHELO) Write(conn tcp.Connection) error {
 	// Encapsulate the message
 	// 4-byte message header (HELO)
 	// 4-byte uint32 data length
@@ -96,8 +97,10 @@ func (p *protocolHELO) Write(conn *connection) error {
 	copy(data[16:20], []byte(p.client[:4]))
 	copy(data[20:], p.reserved)
 
-	_, err := conn.Write(data)
-	return err
+	if _, err := conn.Write(data); err != nil {
+		return err
+	}
+	return conn.Flush()
 }
 
 func (p *protocolHELO) Client() string {

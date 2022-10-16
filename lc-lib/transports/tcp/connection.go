@@ -21,11 +21,8 @@ package tcp
 
 import (
 	"bufio"
-	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -37,7 +34,7 @@ import (
 // errHardCloseRequested is used to signal hard close requested
 var (
 	// errHardCloseRequested occurs when the connection was closed forcefully and a hard close is requested
-	errHardCloseRequested = errors.New("connection shutdown was requested")
+	ErrHardCloseRequested = errors.New("connection shutdown was requested")
 )
 
 type connection struct {
@@ -45,11 +42,11 @@ type connection struct {
 	ctx          context.Context
 	shutdownFunc context.CancelFunc
 	socket       connectionSocket
+	protocol     Protocol
 	poolServer   string
 	isClient     bool
 	eventChan    chan<- transports.Event
-	sendChan     chan protocolMessage
-	supportsEvnt bool
+	sendChan     chan ProtocolMessage
 	rwBuffer     bufio.ReadWriter
 
 	// senderErr stores exit error from sender so if receiver succeeds but sender not we can return it
@@ -66,7 +63,7 @@ type connection struct {
 	sendShutdownLock sync.RWMutex
 }
 
-func newConnection(ctx context.Context, socket connectionSocket, poolServer string, isClient bool, eventChan chan<- transports.Event) *connection {
+func newConnection(ctx context.Context, socket connectionSocket, protocolFactory ProtocolFactory, poolServer string, isClient bool, eventChan chan<- transports.Event) *connection {
 	ret := &connection{
 		socket:     socket,
 		poolServer: poolServer,
@@ -74,9 +71,11 @@ func newConnection(ctx context.Context, socket connectionSocket, poolServer stri
 		eventChan:  eventChan,
 		// TODO: Make configurable. Allow up to 100 pending messages.
 		// This will cope with a max pending payload size of 100 for each connection by allowing 100 acks to be queued
-		sendChan:             make(chan protocolMessage, 100),
+		sendChan:             make(chan ProtocolMessage, 100),
 		receiverShutdownChan: make(chan struct{}),
 	}
+
+	ret.protocol = protocolFactory.NewProtocol(ret)
 
 	ret.ctx, ret.shutdownFunc = context.WithCancel(context.WithValue(ctx, transports.ContextConnection, ret))
 
@@ -84,7 +83,7 @@ func newConnection(ctx context.Context, socket connectionSocket, poolServer stri
 }
 
 // Run starts the connection and all its routines
-func (t *connection) Run(startedCallback func()) error {
+func (t *connection) run(startedCallback func()) error {
 	t.rwBuffer.Reader = bufio.NewReader(t.socket)
 	t.rwBuffer.Writer = bufio.NewWriter(t.socket)
 
@@ -92,16 +91,9 @@ func (t *connection) Run(startedCallback func()) error {
 		return err
 	}
 
-	var event transports.Event
-	if t.isClient {
-		if err := t.clientNegotiation(); err != nil {
-			return err
-		}
-	} else {
-		var err error
-		if event, err = t.serverNegotiation(); err != nil {
-			return err
-		}
+	event, err := t.protocol.Negotiation()
+	if err != nil {
+		return err
 	}
 
 	if startedCallback != nil {
@@ -118,7 +110,7 @@ func (t *connection) Run(startedCallback func()) error {
 
 	t.wait.Add(1)
 	go t.senderRoutine()
-	err := t.receiver()
+	err = t.receiver()
 	if err != nil && err != io.EOF {
 		// Teardown if error occurs and it wasn't a graceful EOF (nil err means CloseRead called so also graceful)
 		t.shutdownFunc()
@@ -145,71 +137,6 @@ func (t *connection) Run(startedCallback func()) error {
 	return err
 }
 
-// serverNegotiation works out the protocol version supported by the remote
-func (t *connection) serverNegotiation() (transports.Event, error) {
-	message, err := t.readMsg()
-	if err != nil {
-		if err == errHardCloseRequested {
-			return nil, err
-		}
-		return nil, fmt.Errorf("unexpected end of negotiation: %s", err)
-	}
-
-	heloMessage, ok := message.(*protocolHELO)
-	if !ok {
-		if messageImpl, ok := message.(eventsMessage); ok {
-			// Backwards compatible path with older log-courier which do not perform a negotiation
-			log.Infof("[R %s < %s] Remote does not support protocol handshake", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
-			return transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events()), nil
-		}
-		return nil, fmt.Errorf("unexpected %T during negotiation, expected protocolHELO", message)
-	}
-
-	log.Infof("[R %s < %s] Remote identified as %s", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String(), heloMessage.Client())
-
-	log.Debugf("[R %s > %s] Sending protocol version", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
-	if err := t.writeMsg(createProtocolVERS()); err != nil {
-		return nil, err
-	}
-
-	return nil, nil
-}
-
-// clientNegotiation works out the protocol version supported by the remote
-func (t *connection) clientNegotiation() error {
-	log.Debugf("[T %s > %s] Sending hello", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
-	if err := t.writeMsg(createProtocolHELO()); err != nil {
-		return err
-	}
-
-	message, err := t.readMsg()
-	if err != nil {
-		if err == errHardCloseRequested {
-			return err
-		}
-		return fmt.Errorf("unexpected end of negotiation: %s", err)
-	}
-
-	versMessage, ok := message.(*protocolVERS)
-	if !ok {
-		if _, isUnkn := message.(*protocolUNKN); isUnkn {
-			t.supportsEvnt = false
-			log.Infof("[R %s < %s] Remote does not support protocol handshake", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
-			return nil
-		}
-		return fmt.Errorf("unexpected %T reply to negotiation, expected protocolVERS", message)
-	}
-
-	log.Infof("[T %s < %s] Remote identified as %s", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String(), versMessage.Client())
-
-	t.supportsEvnt = versMessage.SupportsEVNT()
-	if t.supportsEvnt {
-		log.Debugf("[T %s < %s] Remote supports enhanced EVNT messages", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
-	}
-
-	return nil
-}
-
 // senderRoutine wraps the sender into a routine and handles error communication
 func (t *connection) senderRoutine() {
 	defer func() {
@@ -222,11 +149,11 @@ func (t *connection) senderRoutine() {
 // sender handles socket writes
 func (t *connection) sender() error {
 	for {
-		var msg protocolMessage
+		var msg ProtocolMessage
 
 		select {
 		case <-t.ctx.Done():
-			return errHardCloseRequested
+			return ErrHardCloseRequested
 		case msg = <-t.sendChan:
 			// Is this the end message? nil? No more to send?
 			if msg == nil {
@@ -235,25 +162,10 @@ func (t *connection) sender() error {
 			}
 		}
 
-		if err := t.writeMsg(msg); err != nil {
+		if err := msg.Write(t); err != nil {
 			return err
 		}
 	}
-}
-
-// writeMsg sends a message
-func (t *connection) writeMsg(msg protocolMessage) error {
-	// Write deadline is managed by our net.Conn wrapper that TLS will call
-	// into and keeps retrying writes until timeout or error
-	err := msg.Write(t)
-	if err == nil {
-		err = t.rwBuffer.Flush()
-	}
-	if err != nil {
-		// Fail the transport
-		return err
-	}
-	return nil
 }
 
 // sendEvent ships an event structure whilst also monitoring for
@@ -262,7 +174,7 @@ func (t *connection) sendEvent(transportEvent transports.Event) error {
 	select {
 	case <-t.ctx.Done():
 		// Teardown - end now
-		return errHardCloseRequested
+		return ErrHardCloseRequested
 	case t.eventChan <- transportEvent:
 	}
 	return nil
@@ -272,36 +184,10 @@ func (t *connection) sendEvent(transportEvent transports.Event) error {
 // Returns nil error on shutdown, or an actual error
 func (t *connection) receiver() (err error) {
 	for {
-		var message protocolMessage
-		message, err = t.readMsg()
+		var transportEvent transports.Event
+		transportEvent, err = t.protocol.Read()
 		if err != nil {
 			break
-		}
-
-		var transportEvent transports.Event = nil
-		// TODO: Can events be interfaces so we can just pass on the message itself if it implements the interface?
-		if t.isClient {
-			switch messageImpl := message.(type) {
-			case *protocolACKN:
-				transportEvent = transports.NewAckEvent(t.ctx, messageImpl.nonce, messageImpl.sequence)
-				log.Debugf("[T %s < %s] Received acknowledgement for nonce %x with sequence %d", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String(), *messageImpl.nonce, messageImpl.sequence)
-			case *protocolPONG:
-				transportEvent = transports.NewPongEvent(t.ctx)
-				log.Debugf("[T %s < %s] Received pong", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
-			}
-		} else {
-			switch messageImpl := message.(type) {
-			case *protocolPING:
-				transportEvent = transports.NewPingEvent(t.ctx)
-				log.Debugf("[R %s < %s] Received ping", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String())
-			case eventsMessage:
-				transportEvent = transports.NewEventsEvent(t.ctx, messageImpl.Nonce(), messageImpl.Events())
-				log.Debugf("[R %s < %s] Received payload with nonce %x and %d events", t.socket.LocalAddr().String(), t.socket.RemoteAddr().String(), *messageImpl.Nonce(), len(messageImpl.Events()))
-			}
-		}
-
-		if transportEvent == nil {
-			return fmt.Errorf("unknown protocol message %T", message)
 		}
 
 		if err := t.sendEvent(transportEvent); err != nil {
@@ -319,46 +205,12 @@ func (t *connection) receiver() (err error) {
 	return
 }
 
-// readMsg reads a message from the connection
-// Returns nil message if shutdown, with an optional error
-func (t *connection) readMsg() (protocolMessage, error) {
-	var header [8]byte
-
-	if err := t.receiverRead(header[:]); err != nil {
-		return nil, err
-	}
-
-	// Grab length of message
-	bodyLength := binary.BigEndian.Uint32(header[4:8])
-
-	var newFunc func(*connection, uint32) (protocolMessage, error)
-	switch {
-	case bytes.Equal(header[0:4], []byte("????")): // UNKN
-		newFunc = newProtocolUNKN
-	case bytes.Equal(header[0:4], []byte("HELO")):
-		newFunc = newProtocolHELO
-	case bytes.Equal(header[0:4], []byte("VERS")):
-		newFunc = newProtocolVERS
-	case bytes.Equal(header[0:4], []byte("PING")):
-		newFunc = newProtocolPING
-	case bytes.Equal(header[0:4], []byte("PONG")):
-		newFunc = newProtocolPONG
-	case bytes.Equal(header[0:4], []byte("ACKN")):
-		newFunc = newProtocolACKN
-	case bytes.Equal(header[0:4], []byte("JDAT")):
-		newFunc = newProtocolJDAT
-	case bytes.Equal(header[0:4], []byte("EVNT")):
-		newFunc = newProtocolEVNT
-	default:
-		return nil, fmt.Errorf("unexpected message code: %s", header[0:4])
-	}
-
-	return newFunc(t, bodyLength)
-}
-
-// receiverRead will repeatedly read from the socket until the given byte array
-// is filled, or sender signals an error
-func (t *connection) receiverRead(data []byte) error {
+// Read will receive data from the connection and implements io.Reader
+// Used by protocol structures to fetch message data
+// It should be noted that Read here will never return an incomplete read, and as such
+// the int return will always be the length of the message, unless an error occurs, in
+// which case it will be 0.
+func (t *connection) Read(data []byte) (int, error) {
 	var err error
 	received := 0
 
@@ -366,7 +218,7 @@ ReceiverReadLoop:
 	for {
 		select {
 		case <-t.ctx.Done():
-			err = errHardCloseRequested
+			err = ErrHardCloseRequested
 			break ReceiverReadLoop
 		case <-t.receiverShutdownChan:
 			// Stop receiving any more data so we can gracefully close
@@ -381,25 +233,31 @@ ReceiverReadLoop:
 
 			if received >= len(data) {
 				// Success
-				return nil
+				return received, nil
 			}
 
 			if err == nil {
+				if t.protocol.NonBlocking() {
+					return received, ErrIOWouldBlock
+				}
 				// Keep trying
 				continue
 			}
 
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				if t.protocol.NonBlocking() {
+					return received, ErrIOWouldBlock
+				}
 				// Keep trying
 				continue
 			}
 
 			// Pass an error back
-			return err
+			return received, err
 		}
 	}
 
-	return err
+	return received, err
 }
 
 // Teardown ends the connection forcefully, usually due to a problem
@@ -422,7 +280,7 @@ func (t *connection) CloseRead() {
 // Once an EOF occurs on the read side (or a CloseRead occurs) shutdown will be complete
 // If the connection is running too slow and the queue is full then ErrCongestion is returned
 // If the connection closed or CloseWrite has already happened it will return ErrInvalidState
-func (t *connection) SendMessage(message protocolMessage) error {
+func (t *connection) SendMessage(message ProtocolMessage) error {
 	if message == nil {
 		t.sendShutdownLock.Lock()
 		defer t.sendShutdownLock.Unlock()
@@ -450,23 +308,6 @@ func (t *connection) SendMessage(message protocolMessage) error {
 	return nil
 }
 
-// SupportsEVNT returns true if this connection supports EVNT messages
-func (t *connection) SupportsEVNT() bool {
-	return t.supportsEvnt
-}
-
-// Read will receive data from the connection and implements io.Reader
-// Used by protocol structures to fetch message data
-// It should be noted that Read here will never return an incomplete read, and as such
-// the int return will always be the length of the message, unless an error occurs, in
-// which case it will be 0.
-func (t *connection) Read(message []byte) (int, error) {
-	if err := t.receiverRead(message); err != nil {
-		return 0, err
-	}
-	return len(message), nil
-}
-
 // ReadByte will receive one byte from the connection and implement io.ByteReader
 // Used by protocol structures to fetch message data
 // io.ByteReader is necessary for compression readers to not read too much
@@ -482,4 +323,24 @@ func (t *connection) ReadByte() (byte, error) {
 // Used by protocol structures to send a message
 func (t *connection) Write(data []byte) (int, error) {
 	return t.rwBuffer.Write(data)
+}
+
+// Flush any remaining data in the rwBuffer to the connection
+func (t *connection) Flush() error {
+	return t.rwBuffer.Flush()
+}
+
+// LocalAddr returns the remote endpoint
+func (t *connection) LocalAddr() net.Addr {
+	return t.socket.LocalAddr()
+}
+
+// RemoteAddr returns the remote endpoint
+func (t *connection) RemoteAddr() net.Addr {
+	return t.socket.RemoteAddr()
+}
+
+// Context returns the connection context
+func (t *connection) Context() context.Context {
+	return t.ctx
 }

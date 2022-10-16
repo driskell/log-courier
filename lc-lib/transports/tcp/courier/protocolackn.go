@@ -14,20 +14,27 @@
  * limitations under the License.
  */
 
-package tcp
+package courier
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
+
+	"github.com/driskell/log-courier/lc-lib/transports"
+	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 type protocolACKN struct {
+	ctx      context.Context
 	nonce    *string
 	sequence uint32
 }
 
+var _ transports.AckEvent = (*protocolACKN)(nil)
+
 // newProtocolACKN reads a new protocolACKN
-func newProtocolACKN(conn *connection, bodyLength uint32) (protocolMessage, error) {
+func newProtocolACKN(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
 	if bodyLength != 20 {
 		return nil, fmt.Errorf("protocol error: Corrupt message (ACKN size %d != 20)", bodyLength)
 	}
@@ -39,7 +46,7 @@ func newProtocolACKN(conn *connection, bodyLength uint32) (protocolMessage, erro
 
 	nonce := string(message[:16])
 	sequence := binary.BigEndian.Uint32(message[16:])
-	return &protocolACKN{nonce: &nonce, sequence: sequence}, nil
+	return &protocolACKN{ctx: conn.Context(), nonce: &nonce, sequence: sequence}, nil
 }
 
 // Type returns a human-readable name for the message type
@@ -47,8 +54,23 @@ func (p *protocolACKN) Type() string {
 	return "ACKN"
 }
 
+// Context returns the connection context
+func (p *protocolACKN) Context() context.Context {
+	return p.ctx
+}
+
+// Nonce returns the nonce being acknowledged
+func (p *protocolACKN) Nonce() *string {
+	return p.nonce
+}
+
+// Sequence returns the sequence being acknowledged
+func (p *protocolACKN) Sequence() uint32 {
+	return p.sequence
+}
+
 // Write writes a payload to the connection
-func (p *protocolACKN) Write(conn *connection) error {
+func (p *protocolACKN) Write(conn tcp.Connection) error {
 	// Encapsulate the ack into a message
 	// 4-byte message header (ACKN)
 	// 4-byte message length
@@ -64,6 +86,8 @@ func (p *protocolACKN) Write(conn *connection) error {
 
 	var sequence [4]byte
 	binary.BigEndian.PutUint32(sequence[:], uint32(p.sequence))
-	_, err := conn.Write(sequence[:])
-	return err
+	if _, err := conn.Write(sequence[:]); err != nil {
+		return err
+	}
+	return conn.Flush()
 }

@@ -27,7 +27,7 @@ type poolEventPosition struct {
 }
 
 type poolEventProgress struct {
-	event    *transports.EventsEvent
+	event    transports.EventsEvent
 	sequence uint32
 }
 
