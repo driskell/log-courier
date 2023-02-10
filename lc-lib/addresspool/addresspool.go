@@ -80,7 +80,7 @@ func (p *Pool) Next() (*net.TCPAddr, error) {
 	}
 
 	if p.hostIsIP {
-		p.desc = fmt.Sprintf("%s", next)
+		p.desc = next.String()
 	} else {
 		p.desc = fmt.Sprintf("%s (%s)", next, p.host)
 	}
@@ -102,7 +102,9 @@ func (p *Pool) Host() string {
 
 // Desc returns a friendly description of the last returned server.
 // Example for an IP: 127.0.0.1
-//                Hostname: localhost (127.0.0.1)
+//
+//	Hostname: localhost (127.0.0.1)
+//
 // TODO: Improve Desc result for SRV records to include the SRV record
 func (p *Pool) Desc() string {
 	return p.desc
@@ -132,11 +134,11 @@ func (p *Pool) populateAddresses() error {
 	var port uint64
 	var err error
 	if p.host, portStr, err = net.SplitHostPort(p.server); err != nil {
-		return fmt.Errorf("Invalid hostport given: %s", p.server)
+		return fmt.Errorf("invalid hostport given: %s", p.server)
 	}
 
 	if port, err = strconv.ParseUint(portStr, 10, 16); err != nil {
-		return fmt.Errorf("Invalid port given: %s", portStr)
+		return fmt.Errorf("invalid port given: %s", portStr)
 	}
 
 	if p.hostIsIP, err = p.populateLookup(p.host, int(port)); err != nil {
@@ -148,7 +150,8 @@ func (p *Pool) populateAddresses() error {
 
 // processSrv looks up SRV records based on the SRV settings
 // TODO: processSrv sets Host() to the SRV record name, not the target hostname,
-//       which would potentially break certificate name verification
+//
+//	which would potentially break certificate name verification
 func (p *Pool) processSrv(server string) ([]*net.SRV, error) {
 	var service, protocol string
 

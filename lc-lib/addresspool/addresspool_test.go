@@ -1,4 +1,3 @@
-// +build ignore
 /*
  * Copyright 2012-2020 Jason Woods and contributors
  *
@@ -26,48 +25,48 @@ func TestPoolIP(t *testing.T) {
 	addr, err := pool.Next()
 
 	if err != nil {
-		t.Error("Address pool did not parse IP correctly: ", err)
+		t.Error("Address pool did not parse IP correctly:", err)
 	} else if addr == nil {
 		t.Error("Address pool returned nil addr")
 	} else if pool.Server() != "127.0.0.1:1234" {
-		t.Error("Address pool did not return correct server: ", pool.Server())
+		t.Error("Address pool did not return correct server:", pool.Server())
 	} else if pool.Host() != "127.0.0.1" {
-		t.Error("Address pool did not return correct host: ", pool.Host())
+		t.Error("Address pool did not return correct host:", pool.Host())
 	} else if pool.Desc() != "127.0.0.1:1234" {
-		t.Error("Address pool did not return correct desc: ", pool.Desc())
+		t.Error("Address pool did not return correct desc:", pool.Desc())
 	} else if addr.String() != "127.0.0.1:1234" {
-		t.Error("Address pool did not return correct addr: ", addr.String())
+		t.Error("Address pool did not return correct addr:", addr.String())
 	}
 }
 
 func TestPoolHost(t *testing.T) {
-	pool := NewPool("google-public-dns-a.google.com:555")
+	pool := NewPool("host.test.woods.dev:555")
 	addr, err := pool.Next()
 
 	if err != nil {
-		t.Error("Address pool did not parse IP correctly: ", err)
+		t.Error("Address pool did not parse IP correctly:", err)
 	} else if addr == nil {
 		t.Error("Address pool returned nil addr")
-	} else if pool.Server() != "google-public-dns-a.google.com:555" {
-		t.Error("Address pool did not return correct server: ", pool.Server())
-	} else if pool.Host() != "google-public-dns-a.google.com" {
-		t.Error("Address pool did not return correct host: ", pool.Host())
-	} else if pool.Desc() != "8.8.8.8:555 (google-public-dns-a.google.com)" && pool.Desc() != "[2001:4860:4860::8888]:555 (google-public-dns-a.google.com)" {
-		t.Error("Address pool did not return correct desc: ", pool.Desc())
+	} else if pool.Server() != "host.test.woods.dev:555" {
+		t.Error("Address pool did not return correct server:", pool.Server())
+	} else if pool.Host() != "host.test.woods.dev" {
+		t.Error("Address pool did not return correct host:", pool.Host())
+	} else if pool.Desc() != "8.8.8.8:555 (host.test.woods.dev)" && pool.Desc() != "[2001:4860:4860::8888]:555 (host.test.woods.dev)" {
+		t.Error("Address pool did not return correct desc:", pool.Desc())
 	} else if addr.String() != "8.8.8.8:555" && addr.String() != "[2001:4860:4860::8888]:555" {
-		t.Error("Address pool did not return correct addr: ", addr.String())
+		t.Error("Address pool did not return correct addr:", addr.String())
 	}
 }
 
 func TestPoolHostMultiple(t *testing.T) {
-	pool := NewPool("google.com:555")
+	pool := NewPool("multihost.test.woods.dev:555")
 
 	for i := 0; i < 2; i++ {
 		addr, err := pool.Next()
 
 		// Should have succeeeded
 		if err != nil {
-			t.Error("Address pool did not parse Host correctly: ", err)
+			t.Error("Address pool did not parse Host correctly:", err)
 		} else if addr == nil {
 			t.Error("Address pool returned nil addr")
 		}
@@ -81,27 +80,27 @@ func TestPoolHostMultiple(t *testing.T) {
 }
 
 func TestPoolSrv(t *testing.T) {
-	pool := NewPool("@_xmpp-server._tcp.google.com")
+	pool := NewPool("@_test._tcp.test.woods.dev")
 	addr, err := pool.Next()
 
 	// Should have succeeeded
 	if err != nil {
-		t.Error("Address pool did not parse SRV correctly: ", err)
-	} else if addr == nil {
-		t.Error("Address pool returned nil addr")
+		t.Error("Address pool did not parse SRV correctly:", err)
+	} else if addr.String() != "8.8.8.8:1234" {
+		t.Error("Address pool returned incorrect addr:", addr.String())
 	}
 }
 
 func TestPoolSrvRfc(t *testing.T) {
-	pool := NewPool("@google.com")
-	pool.SetRfc2782(true, "xmpp-server")
+	pool := NewPool("@test.woods.dev")
+	pool.SetRfc2782(true, "test")
 	addr, err := pool.Next()
 
 	// Should have succeeeded
 	if err != nil {
-		t.Error("Address pool did not parse RFC SRV correctly: ", err)
-	} else if addr == nil {
-		t.Error("Address pool did not returned nil addr")
+		t.Error("Address pool did not parse RFC SRV correctly:", err)
+	} else if addr.String() != "8.8.8.8:1234" {
+		t.Error("Address pool returned incorrect addr:", addr.String())
 	}
 }
 
@@ -117,7 +116,7 @@ func TestPoolInvalid(t *testing.T) {
 }
 
 func TestPoolHostFailure(t *testing.T) {
-	pool := NewPool("google-public-dns-not-exist.google.com:1234")
+	pool := NewPool("missing.test.woods.dev:1234")
 	_, err := pool.Next()
 
 	// Should have failed
@@ -128,7 +127,7 @@ func TestPoolHostFailure(t *testing.T) {
 }
 
 func TestPoolIsLast(t *testing.T) {
-	pool := NewPool("outlook.com:1234")
+	pool := NewPool("multihost.test.woods.dev:1234")
 
 	// Should report as last
 	if !pool.IsLast() {
