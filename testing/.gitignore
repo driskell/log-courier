@@ -1,3 +1,5 @@
 /*-generated.log
 /persist/*/*
 !/persist/*/.gitkeep
+/cert/*
+!/cert/.gitkeep

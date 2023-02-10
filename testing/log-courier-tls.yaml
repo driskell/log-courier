@@ -1,0 +1,27 @@
+general:
+  log syslog: false
+  log stdout: true
+  persist directory: ./persist/lc1
+  log level: debug
+admin:
+  enabled: true
+  listen address: tcp:127.0.0.1:12340
+network:
+  servers:
+  - 127.0.0.1:12345
+  - 127.0.0.1:12346
+  transport: tls
+  ssl ca: ./cert/selfsigned.crt
+files:
+- paths:
+  - multiline-generated.log
+  codecs:
+  - name: multiline
+    patterns:
+    - "!$"
+    previous timeout: 30s
+    max multiline bytes: 524288
+  fields:
+    type: nginx
+- paths:
+  - singleline-generated.log
