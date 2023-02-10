@@ -186,7 +186,7 @@ FieldLoop:
 				// Embed means we recurse into the field, but pull it's values from the
 				// same level within the configuration file we loaded
 				if vField.Kind() != reflect.Ptr {
-					panic(fmt.Sprintf("Embedded configuration field is not a pointer to struct: %s", vField.Kind().String()))
+					panic(fmt.Sprintf("Embedded configuration field is not a pointer to struct at %s (%s): %s", configPath, tField.Name, vField.Kind().String()))
 				}
 
 				if vField.IsZero() || vField.IsNil() {
@@ -203,7 +203,7 @@ FieldLoop:
 				// file key being the map key
 				// This is generally not exported so don't check that
 				if vField.Kind() != reflect.Map {
-					panic(fmt.Sprintf("Dynamic configuration field is not a map: %s", vField.Kind().String()))
+					panic(fmt.Sprintf("Dynamic configuration field is not a map at %s (%s): %s", configPath, tField.Name, vField.Kind().String()))
 				}
 
 				dynamicKeys := vField.MapKeys()
@@ -225,7 +225,7 @@ FieldLoop:
 				// without needing to create new configuration sections
 				// This means all values of the map should be structs
 				if vField.Kind() != reflect.Map {
-					panic(fmt.Sprintf("Embedded dynamic configuration field is not a map: %s", vField.Kind().String()))
+					panic(fmt.Sprintf("Embedded dynamic configuration field is not a map at %s (%s): %s", configPath, tField.Name, vField.Kind().String()))
 				}
 
 				dynamicKeys := vField.MapKeys()
@@ -233,7 +233,7 @@ FieldLoop:
 					// Unwrap interface{}
 					target := vField.MapIndex(key).Elem()
 					if target.Kind() != reflect.Ptr {
-						panic(fmt.Sprintf("Embedded dynamic configuration field item is not a pointer to struct: %s", target.Kind().String()))
+						panic(fmt.Sprintf("Embedded dynamic configuration field item is not a pointer to struct at %s (%s[%s]): %s", configPath, tField.Name, key.String(), target.Kind().String()))
 					}
 					if target.IsZero() || target.IsNil() {
 						target.Set(reflect.New(target.Type().Elem()))
@@ -248,7 +248,7 @@ FieldLoop:
 				// Embed slice allows us to take a slice into a specific field of a struct
 				// This allows extra metadata to be built around the slice
 				if vField.Kind() != reflect.Slice {
-					panic(fmt.Sprintf("Embedded slice configuration field is not a slice: %s", vField.Kind().String()))
+					panic(fmt.Sprintf("Embedded slice configuration field is not a slice at %s (%s): %s", configPath, tField.Name, vField.Kind().String()))
 				}
 
 				// Populate the slice - trim the forward slash from the config path end too
@@ -270,7 +270,7 @@ FieldLoop:
 		if !hasCheckedInput {
 			// Check the incoming data is the right type, a map
 			if vRawConfig.IsValid() && vRawConfig.Type().Kind() != reflect.Map {
-				return fmt.Errorf("Option %s must be a hash", configPath)
+				return fmt.Errorf("option %s must be a hash", configPath)
 			}
 
 			hasCheckedInput = true
@@ -594,7 +594,7 @@ func (p *Parser) prepareDefaults(value reflect.Value, configPath string) {
 
 	//defaultsFunc := value.MethodByName("Defaults")
 
-	// Does the configuration structure have InitDefaults method? Call it to
+	// Does the configuration structure have Defaults method? Call it to
 	// pre-populate the default values before we overwrite the ones given by
 	// rawConfig
 	log.Debugf("Initialising defaults: %s (%s)", value.Type().String(), configPath)
