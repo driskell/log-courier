@@ -35,7 +35,7 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run -mod=vendor ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile admin.DefaultAdminBind processor.DefaultGeoIPActionDatabase
+//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile admin.DefaultAdminBind processor.DefaultGeoIPActionDatabase
 
 var (
 	app *core.App
