@@ -283,10 +283,10 @@ module LogCourier
       # Connection abort request due to a protocol error
       @logger&.warn 'Protocol error, connection aborted', error: e.message, peer: @peer
       nil
-    rescue ShutdownSignal
+    rescue ShutdownSignal => e
       # Shutting down
       @logger&.info 'Server shutting down, closing connection', peer: @peer
-      nil
+      raise e
     rescue StandardError => e
       # Some other unknown problem
       @logger&.warn e.message, hint: 'Unknown error, connection aborted', peer: @peer

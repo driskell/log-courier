@@ -70,13 +70,13 @@ module LogStash
       config :add_peer_fields, validate: :boolean
 
       def register
-        @logger.info(
-          'Starting courier input listener',
-          address: "#{@host}:#{@port}",
-        )
-
         require 'log-courier/server'
         @log_courier = LogCourier::Server.new options
+
+        @logger.info(
+          'Started courier input listener',
+          address: "#{@host}:#{@port}",
+        )
         nil
       end
 
@@ -93,8 +93,18 @@ module LogStash
         nil
       end
 
-      def close
+      def stop
+        @logger.info(
+          'Stopping courier input listener',
+          address: "#{@host}:#{@port}",
+        )
+
         @log_courier.stop
+
+        @logger.info(
+          'Stopped courier input listener',
+          address: "#{@host}:#{@port}",
+        )
         nil
       end
 

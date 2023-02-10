@@ -55,10 +55,10 @@ module LogStash
       config :idle_timeout, validate: :number, default: 5
 
       def register
-        @logger.info 'Starting courier output'
-
         require 'log-courier/client'
         @client = LogCourier::Client.new(options)
+
+        @logger.info 'Started courier output'
         nil
       end
 
@@ -70,7 +70,9 @@ module LogStash
       end
 
       def close
+        @logger.info 'Stopping courier output'
         @client.shutdown
+        @logger.info 'Stopped courier output'
         nil
       end
 

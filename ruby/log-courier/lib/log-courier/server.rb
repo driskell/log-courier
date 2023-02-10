@@ -51,53 +51,46 @@ module LogCourier
 
       # Grab the port back and update the logger context
       @port = @server.port
+
+      # TODO: Make queue size configurable
+      @event_queue = EventQueue.new 1
+
+      @server_thread = Thread.new do
+        # Receive messages and process them
+        @server.run do |signature, message, comm|
+          case signature
+          when 'PING'
+            process_ping message, comm
+          when 'JDAT'
+            process_jdat message, comm, @event_queue
+          else
+            if comm.peer.nil?
+              @logger&.warn 'Unknown message received', from: 'unknown'
+            else
+              @logger&.warn 'Unknown message received', from: comm.peer
+            end
+            # Don't kill a client that sends a bad message
+            # Just reject it and let it send it again, potentially to another server
+            comm.send '????', ''
+          end
+        end
+      end
     end
 
     def run(&block)
-      # TODO: Make queue size configurable
-      @event_queue = EventQueue.new 1
-      server_thread = nil
+      loop do
+        event = @event_queue.pop
+        break if event.nil?
 
-      begin
-        server_thread = Thread.new do
-          # Receive messages and process them
-          @server.run do |signature, message, comm|
-            case signature
-            when 'PING'
-              process_ping message, comm
-            when 'JDAT'
-              process_jdat message, comm, @event_queue
-            else
-              if comm.peer.nil?
-                @logger&.warn 'Unknown message received', from: 'unknown'
-              else
-                @logger&.warn 'Unknown message received', from: comm.peer
-              end
-              # Don't kill a client that sends a bad message
-              # Just reject it and let it send it again, potentially to another server
-              comm.send '????', ''
-            end
-          end
-        end
-
-        loop do
-          event = @event_queue.pop
-          break if event.nil?
-
-          block.call event
-        end
-      ensure
-        # Signal the server thread to stop
-        unless server_thread.nil?
-          server_thread.raise ShutdownSignal
-          server_thread.join
-        end
+        block.call event
       end
       nil
     end
 
     def stop
+      @server_thread.raise ShutdownSignal
       @event_queue << nil
+      @server_thread.join
       nil
     end
 

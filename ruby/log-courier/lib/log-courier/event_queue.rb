@@ -142,6 +142,7 @@ module LogCourier
     def clear
       @mutex.synchronize do
         @que.clear
+        @enque_cond.signal if @que.length < @max
       end
       self
     end
