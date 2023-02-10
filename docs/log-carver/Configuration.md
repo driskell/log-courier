@@ -753,7 +753,7 @@ Sets the minimum TLS version allowed for connections on this transport. The TLS 
 
 ### `ssl certificate` (receiver)
 
-Filepath. Optional
+Filepath. Required
 Available when `transport` is `tls`
 
 Path to a PEM encoded certificate file to use as the server certificate.
@@ -769,7 +769,7 @@ A list of paths to PEM encoded client certificate authorities that can be used t
 
 ### `ssl key` (receiver)
 
-Filepath. Optional
+Filepath. Required with `ssl certificate`  
 Available when `transport` is `tls`
 
 Path to a PEM encoded private key to use with the server certificate.

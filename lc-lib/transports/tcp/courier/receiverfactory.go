@@ -29,7 +29,7 @@ import (
 // ReceiverFactory holds the configuration from the configuration file
 // It allows creation of ReceiverTCP instances that use this configuration
 type ReceiverFactory struct {
-	*tcp.ReceiverFactory
+	*tcp.ReceiverFactory `,config:"embed"`
 
 	// Constructor
 	config         *config.Config
@@ -55,15 +55,6 @@ func NewReceiverFactory(p *config.Parser, configPath string, unUsed map[string]i
 		return nil, err
 	}
 	return ret, nil
-}
-
-// Validate the configuration
-func (f *ReceiverFactory) Validate(p *config.Parser, configPath string) (err error) {
-	if err = f.ReceiverFactory.Validate(p, configPath); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // NewReceiver returns a new Receiver interface using the settings from the ReceiverFactory

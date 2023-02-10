@@ -21,9 +21,6 @@ package tcp
 
 import (
 	"context"
-	"fmt"
-	"reflect"
-	"regexp"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -32,32 +29,12 @@ import (
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
-const (
-	defaultSSLVerifyPeers = true
-)
-
-// Factory holds common TCP factory settings
-type Factory struct {
-	config         *config.Config
-	hostportRegexp *regexp.Regexp
-}
-
-func newFactory(config *config.Config) *Factory {
-	return &Factory{
-		config:         config,
-		hostportRegexp: regexp.MustCompile(`^\[?([^]]+)\]?:([0-9]+)$`),
-	}
-}
-
 type ReceiverFactory struct {
-	*Factory
+	*Factory `config:",embed"`
 
 	EnableTls bool
 
-	SSLClientCA    []string `config:"ssl client ca"`
-	SSLVerifyPeers bool     `config:"verify_peers"`
-
-	*transports.TlsConfiguration `config:",embed"`
+	*transports.ServerTlsConfiguration `config:",embed"`
 }
 
 func NewReceiverFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, enableTls bool) (*ReceiverFactory, error) {
@@ -95,40 +72,14 @@ func (f *ReceiverFactory) NewReceiverWithProtocol(ctx context.Context, pool *add
 	return ret
 }
 
-// Defaults sets the default configuration values
 func (f *ReceiverFactory) Defaults() {
-	f.SSLVerifyPeers = defaultSSLVerifyPeers
 }
 
-// Validate the configuration
 func (f *ReceiverFactory) Validate(p *config.Parser, configPath string) (err error) {
-	if f.EnableTls {
-		for idx, clientCA := range f.SSLClientCA {
-			if f.CaList, err = transports.AddCertificates(f.CaList, clientCA); err != nil {
-				return fmt.Errorf("failure loading %sssl client ca[%d]: %s", configPath, idx, err)
-			}
-		}
-	} else {
-		if len(f.SSLClientCA) > 0 {
-			return fmt.Errorf("%sssl client ca is not supported when the transport is tcp", configPath)
-		}
-	}
-
-	if err = f.TlsValidate(f.EnableTls, p, configPath); err != nil {
-		return err
-	}
-
-	return nil
+	return f.ServerTlsConfiguration.TlsValidate(f.EnableTls, p, configPath)
 }
 
 func (f *ReceiverFactory) ShouldRestart(newFactory transports.ReceiverFactory) bool {
 	newFactoryImpl := newFactory.(*ReceiverFactory)
-
-	if !reflect.DeepEqual(newFactoryImpl.SSLClientCA, f.SSLClientCA) {
-		return true
-	}
-	if f.TlsConfiguration.HasChanged(newFactoryImpl.TlsConfiguration) {
-		return true
-	}
-	return false
+	return f.ServerTlsConfiguration.HasChanged(newFactoryImpl.ServerTlsConfiguration)
 }

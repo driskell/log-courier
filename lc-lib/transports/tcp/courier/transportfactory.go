@@ -21,7 +21,6 @@ package courier
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -33,7 +32,7 @@ import (
 // TransportFactory holds the configuration from the configuration file
 // It allows creation of TransportTCP instances that use this configuration
 type TransportFactory struct {
-	*tcp.TransportFactory
+	*tcp.TransportFactory `,config:"embed"`
 
 	// Constructor
 	config         *config.Config
@@ -59,24 +58,6 @@ func NewTransportFactory(p *config.Parser, configPath string, unUsed map[string]
 		return nil, err
 	}
 	return ret, nil
-}
-
-// Validate the configuration
-func (f *TransportFactory) Validate(p *config.Parser, configPath string) (err error) {
-	if f.transport == TransportCourierTLS {
-		if len(f.SSLCA) == 0 {
-			return fmt.Errorf("%sssl ca is required when the transport is tls", configPath)
-		}
-		if f.CaList, err = transports.AddCertificates(f.CaList, f.SSLCA); err != nil {
-			return fmt.Errorf("failure loading %sssl ca: %s", configPath, err)
-		}
-	} else {
-		if len(f.SSLCA) > 0 {
-			return fmt.Errorf("%[1]sssl ca is not supported when the transport is tcp", configPath)
-		}
-	}
-
-	return f.TransportFactory.Validate(p, configPath)
 }
 
 // NewTransport returns a new Transport interface using the settings from the

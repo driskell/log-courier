@@ -21,8 +21,6 @@ package tcp
 
 import (
 	"context"
-	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -37,15 +35,14 @@ const (
 )
 
 type TransportFactory struct {
-	*Factory
+	*Factory `config:",embed"`
 
 	EnableTls bool
 
 	Reconnect    time.Duration `config:"reconnect backoff"`
 	ReconnectMax time.Duration `config:"reconnect backoff max"`
-	SSLCA        string        `config:"ssl ca"`
 
-	*transports.TlsConfiguration `config:",embed"`
+	*transports.ClientTlsConfiguration `config:",embed"`
 }
 
 func NewTransportFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, enableTls bool) (*TransportFactory, error) {
@@ -89,22 +86,8 @@ func (f *TransportFactory) Defaults() {
 	f.ReconnectMax = defaultReconnectMax
 }
 
-// Validate the configuration
 func (f *TransportFactory) Validate(p *config.Parser, configPath string) (err error) {
-	if f.EnableTls {
-		if len(f.SSLCA) == 0 {
-			return fmt.Errorf("%sssl ca is required when the transport is tls", configPath)
-		}
-		if f.CaList, err = transports.AddCertificates(f.CaList, f.SSLCA); err != nil {
-			return fmt.Errorf("failure loading %sssl ca: %s", configPath, err)
-		}
-	} else {
-		if len(f.SSLCA) > 0 {
-			return fmt.Errorf("%[1]sssl ca is not supported when the transport is tcp", configPath)
-		}
-	}
-
-	return f.TlsValidate(f.EnableTls, p, configPath)
+	return f.ClientTlsConfiguration.TlsValidate(f.EnableTls, p, configPath)
 }
 
 func (f *TransportFactory) ShouldRestart(newFactory transports.TransportFactory) bool {
@@ -115,10 +98,7 @@ func (f *TransportFactory) ShouldRestart(newFactory transports.TransportFactory)
 	if newFactoryImpl.ReconnectMax != f.ReconnectMax {
 		return true
 	}
-	if !reflect.DeepEqual(newFactoryImpl.SSLCA, f.SSLCA) {
-		return true
-	}
-	if f.TlsConfiguration.HasChanged(newFactoryImpl.TlsConfiguration) {
+	if f.ClientTlsConfiguration.HasChanged(newFactoryImpl.ClientTlsConfiguration) {
 		return true
 	}
 	return false

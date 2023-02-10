@@ -65,11 +65,12 @@ type TransportESFactory struct {
 	Username         string        `config:"username"`
 	TemplateFile     string        `config:"template file"`
 	TemplatePatterns []string      `config:"template patterns"`
+	SSLCA            string        `config:"ssl ca"`
 
 	// Internal
 	template []byte
 
-	*transports.TlsConfiguration
+	*transports.ClientTlsConfiguration `config:",embed"`
 }
 
 // NewTransportESFactory create a new TransportESFactory from the provided
@@ -130,7 +131,7 @@ func (f *TransportESFactory) Validate(p *config.Parser, configPath string) (err 
 		f.templatePatternSingleJSON = string(result)
 	}
 
-	return f.TlsConfiguration.TlsValidate(f.transport == TransportESHTTPS, p, configPath)
+	return f.ClientTlsConfiguration.TlsValidate(f.transport == TransportESHTTPS, p, configPath)
 }
 
 // Defaults sets the default configuration values
@@ -191,7 +192,7 @@ func (t *TransportESFactory) ShouldRestart(newConfig transports.TransportFactory
 		return true
 	}
 
-	return t.TlsConfiguration.HasChanged(newConfigImpl.TlsConfiguration)
+	return t.ClientTlsConfiguration.HasChanged(newConfigImpl.ClientTlsConfiguration)
 }
 
 // Register the transports

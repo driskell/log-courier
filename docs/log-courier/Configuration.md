@@ -722,7 +722,7 @@ This will become default in a future major version change as a breaking change, 
 
 Enable Elastic Common Schema (ECS) fields in events. By default, events are generated in a similar style to Filebeat and the original Logstash Forwarder. This will enable ECS compatible fields instead **which are not backwards compatible**. This will need a change to the template used within Elasticsearch to make the fields usable. Additionally, you will need to ensure you are using fresh indexes as the ECS field types differ in such a way Elasticsearch will refuse to store them if it had previously stored non-ECS fields. Specifically, the `host` field changes from a string to an object containing `name` and `hostname`.
 
-See [Event Format](#event-format) for more information.
+See [Event Format](../Events.md#event-format) for more information.
 
 ### `fields`
 
