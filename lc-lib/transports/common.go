@@ -23,7 +23,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 )
@@ -308,7 +308,7 @@ func GetTlsVersionAsString(version uint16) string {
 
 // AddCertificates returns a new slice containing the given certificate list and the contents of the given file added
 func AddCertificates(certificateList []*x509.Certificate, file string) ([]*x509.Certificate, error) {
-	pemdata, err := ioutil.ReadFile(file)
+	pemdata, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}

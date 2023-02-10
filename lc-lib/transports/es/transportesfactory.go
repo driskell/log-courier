@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"reflect"
@@ -108,7 +108,7 @@ func (f *TransportESFactory) Validate(p *config.Parser, configPath string) (err 
 		defer func() {
 			file.Close()
 		}()
-		f.template, err = ioutil.ReadAll(file)
+		f.template, err = io.ReadAll(file)
 		if err != nil {
 			return
 		}

@@ -17,7 +17,7 @@
 package config
 
 import (
-	"io/ioutil"
+	"os"
 
 	"gopkg.in/yaml.v2"
 )
@@ -27,7 +27,7 @@ func loadYAMLFile(path string, rawConfig interface{}) (err error) {
 	var data []byte
 
 	// Read the entire file
-	if data, err = ioutil.ReadFile(path); err != nil {
+	if data, err = os.ReadFile(path); err != nil {
 		return
 	}
 

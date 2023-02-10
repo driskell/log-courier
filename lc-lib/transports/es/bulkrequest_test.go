@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 
@@ -59,7 +59,7 @@ func TestRequestCreate(t *testing.T) {
 
 func TestRequestReadFull(t *testing.T) {
 	request := createTestBulkRequest(3, "2020-03-07", "2020-03-07")
-	result, err := ioutil.ReadAll(request)
+	result, err := io.ReadAll(request)
 	if err != nil {
 		t.Errorf("Failed to encode: %s", err)
 	}
@@ -87,7 +87,7 @@ func TestRequestReadFull(t *testing.T) {
 
 func TestRequestReadMultiple(t *testing.T) {
 	request := createTestBulkRequest(3, "2020-03-07", "2020-03-14")
-	result, err := ioutil.ReadAll(request)
+	result, err := io.ReadAll(request)
 	if err != nil {
 		t.Errorf("Failed to encode: %s", err)
 	}
@@ -115,10 +115,10 @@ func TestRequestReadMultiple(t *testing.T) {
 
 func TestRequestReadReset(t *testing.T) {
 	request := createTestBulkRequest(3, "2020-03-07", "2020-03-14")
-	if _, err := ioutil.ReadAll(request); err != nil {
+	if _, err := io.ReadAll(request); err != nil {
 		t.Errorf("Failed to encode: %s", err)
 	}
-	result, err := ioutil.ReadAll(request)
+	result, err := io.ReadAll(request)
 	if err != nil {
 		t.Errorf("Failed to encode: %s", err)
 	}
@@ -126,7 +126,7 @@ func TestRequestReadReset(t *testing.T) {
 		t.Errorf("Unexpected result: %s", string(result))
 	}
 	request.Reset()
-	result, err = ioutil.ReadAll(request)
+	result, err = io.ReadAll(request)
 	if err != nil {
 		t.Errorf("Failed to encode: %s", err)
 	}
@@ -159,7 +159,7 @@ func TestRequestMark(t *testing.T) {
 		t.Errorf("Unexpected ack sequence: %d", request.AckSequence())
 	}
 	request.Reset()
-	result, err := ioutil.ReadAll(request)
+	result, err := io.ReadAll(request)
 	if err != nil {
 		t.Errorf("Failed to encode: %s", err)
 	}

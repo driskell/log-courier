@@ -17,7 +17,7 @@
 package core
 
 import (
-	"io/ioutil"
+	"io"
 	golog "log"
 	"os"
 
@@ -81,7 +81,7 @@ func (f *defaultLogBackend) Reopen() (err error) {
 
 func (f *defaultLogBackend) Close() {
 	// Discard logs before closing
-	golog.SetOutput(ioutil.Discard)
+	golog.SetOutput(io.Discard)
 
 	if f.file != nil {
 		f.file.Close()
