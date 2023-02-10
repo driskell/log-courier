@@ -47,9 +47,22 @@ func registerTransport(name string, dialer dialerFunc, listener listenerFunc) {
 
 func splitAdminConnectString(adminConnect string) []string {
 	connect := strings.SplitN(adminConnect, ":", 2)
-	if len(connect) == 1 {
-		connect = append(connect, connect[0])
+	if connect[0] == "unix" {
+		if len(connect) < 2 {
+			connect = append(connect, "")
+		}
+		return connect
+	}
+
+	if connect[0] != "tcp" && connect[0] != "tcp4" && connect[0] != "tcp6" {
+		if len(connect) < 2 {
+			connect = append(connect, connect[0])
+		} else if connect[0] != "" {
+			connect[1] = connect[0] + ":" + connect[1]
+		}
 		connect[0] = "tcp"
+	} else if len(connect) < 2 {
+		connect = append(connect, "")
 	}
 
 	return connect

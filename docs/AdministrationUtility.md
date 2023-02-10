@@ -91,7 +91,8 @@ Default: tcp:127.0.0.1:1234
 Connect to the REST API using the specified address. Any `-config` option is
 ignored if `-connect` is used.
 
-The address must be in the format `transport:address`.
+The address is in the format `transport:address` or just `address`, in which case
+"tcp" is the assumed transport.
 
 Allowed transports are "tcp", "tcp4", "tcp6" (Windows and *nix) and "unix"
 (*nix only). For the tcp transports the address format is `host:port`. For the
