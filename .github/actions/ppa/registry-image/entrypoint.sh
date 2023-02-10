@@ -64,7 +64,7 @@ CF713BECBB9DA51E892E8AD0117FF0FC7420BA3F:6:
 EOF
 echo '::endgroup::'
 
-for DIST in trusty xenial bionic focal; do
+for DIST in trusty xenial bionic focal jammy; do
 	echo "::group::Preparing debian package for $DIST"
 	rm -rf ~/"${NAME}"
 	cd ~
