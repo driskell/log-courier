@@ -2,6 +2,9 @@ general:
   log syslog: false
   log stdout: true
   log level: debug
+admin:
+  enabled: true
+  listen address: tcp:127.0.0.1:12341
 receivers:
 - listen:
   - 127.0.0.1:12345
