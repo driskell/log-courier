@@ -98,6 +98,18 @@ func (p *Prospector) StartUpdate() {
 		p.updateChan <- err
 		return
 	}
+
+	// Sort the files - they are not sorted at the moment
+	// TODO: This should be resolved in prospector side
+	sort.Slice(resp.Files, func(i int, j int) bool {
+		cmp := strings.Compare(resp.Files[i].Path, resp.Files[j].Path)
+		if cmp == 0 {
+			// Equal - compare on ID
+			return strings.Compare(resp.Files[i].Id, resp.Files[j].Id) < 0
+		}
+		return cmp < 0
+	})
+
 	p.updateChan <- &resp
 }
 
