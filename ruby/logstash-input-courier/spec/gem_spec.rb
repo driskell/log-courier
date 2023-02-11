@@ -54,7 +54,7 @@ describe LogStash::Inputs::Courier do
       end
 
       shutdown_client
-      @plugin.close
+      @plugin.stop
       @thread.join
     end
   end
