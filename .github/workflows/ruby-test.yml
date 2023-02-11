@@ -54,12 +54,12 @@ jobs:
       id: cache-logstash
       uses: actions/cache@v3
       with:
-        path: ruby/logstash-input-courier/logstash
-        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/logstash-input-courier/setup-logstash.sh') }}
+        path: ruby/logstash
+        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/setup-logstash.sh') }}
     - name: Bootstrap Logstash for development
       if: steps.cache-logstash.outputs.cache-hit != 'true'
       run: |
-        cd ruby/logstash-input-courier
+        cd ruby
         ./setup_logstash.sh
     - name: Test
       run: |
@@ -87,12 +87,12 @@ jobs:
       id: cache-logstash
       uses: actions/cache@v3
       with:
-        path: ruby/logstash-input-courier/logstash
-        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/logstash-input-courier/setup-logstash.sh') }}
+        path: ruby/logstash
+        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/setup-logstash.sh') }}
     - name: Bootstrap Logstash for development
       if: steps.cache-logstash.outputs.cache-hit != 'true'
       run: |
-        cd ruby/logstash-input-courier
+        cd ruby
         ./setup_logstash.sh
     - name: Test
       run: |
