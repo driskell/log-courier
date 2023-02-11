@@ -573,12 +573,20 @@ Available when `transport` is `tls`
 
 Path to a PEM encoded certificate file to use to verify the connected endpoint.
 
+NOTE: SHA1 signed certificates will be no longer supported for security reasons
+from version 2.10.0. Setting the environment variable `GODEBUG` to `x509sha1=1`
+will temporarily enable support, but users should update their certificates.
+
 ### `ssl certificate`
 
 Filepath. Optional  
 Available when `transport` is `tls`
 
 Path to a PEM encoded certificate file to use as the client certificate.
+
+NOTE: SHA1 signed certificates will be no longer supported for security reasons
+from version 2.10.0. Setting the environment variable `GODEBUG` to `x509sha1=1`
+will temporarily enable support, but users should update their certificates.
 
 ### `ssl key`
 

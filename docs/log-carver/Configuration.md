@@ -760,12 +760,20 @@ Path to a PEM encoded certificate file to use as the server certificate.
 
 This is the counterpart of Log Courier's [`ssl ca`](../log-courier/Configuration.md#ssl-ca).
 
+NOTE: SHA1 signed certificates will be no longer supported for security reasons
+from version 2.10.0. Setting the environment variable `GODEBUG` to `x509sha1=1`
+will temporarily enable support, but users should update their certificates.
+
 ### `ssl client ca` (receiver)
 
 Array of Filepaths. Optional
 Available when `transport` is `tls`
 
 A list of paths to PEM encoded client certificate authorities that can be used to verify client certificates. This is the counterpart to Log Courier's [`ssl certificate`](../log-courier/Configuration.md#ssl-certificate).
+
+NOTE: SHA1 signed certificates will be no longer supported for security reasons
+from version 2.10.0. Setting the environment variable `GODEBUG` to `x509sha1=1`
+will temporarily enable support, but users should update their certificates.
 
 ### `ssl key` (receiver)
 
