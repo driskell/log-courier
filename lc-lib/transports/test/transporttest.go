@@ -48,7 +48,7 @@ func (t *transportTest) Factory() transports.TransportFactory {
 func (t *transportTest) SendEvents(nonce string, events []*event.Event) error {
 	endSequence := uint32(len(events))
 	sequence := endSequence
-	if sequence > 1 && rand.Intn(1) == 0 {
+	if sequence > 1 && rand.Intn(2) == 0 {
 		// Generate a split acknowledgement
 		sequence = uint32(rand.Intn(int(sequence)-1) + 1)
 	}
