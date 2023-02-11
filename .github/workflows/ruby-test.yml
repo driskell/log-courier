@@ -27,7 +27,7 @@ jobs:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Test
       run: |
         cd ruby/log-courier
@@ -49,7 +49,7 @@ jobs:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Load cached Logstash
       id: cache-logstash
       uses: actions/cache@v3
@@ -82,7 +82,7 @@ jobs:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Load cached Logstash
       id: cache-logstash
       uses: actions/cache@v3

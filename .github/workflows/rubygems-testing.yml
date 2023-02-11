@@ -17,7 +17,7 @@ jobs:
         # Build only for our minimum supported version
         ruby-version: 'jruby-9.2.11.1'
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Package
       run: |
         cd ruby/log-courier
@@ -40,7 +40,7 @@ jobs:
         # Build only for our minimum supported version
         ruby-version: 'jruby-9.2.11.1'
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Package
       run: |
         cd ruby/logstash-input-courier
@@ -63,7 +63,7 @@ jobs:
         # Build only for our minimum supported version
         ruby-version: 'jruby-9.2.11.1'
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Package
       run: |
         cd ruby/logstash-output-courier
