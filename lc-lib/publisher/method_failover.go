@@ -50,14 +50,14 @@ func (m *methodFailover) onFail(endpoint *endpoint.Endpoint) {
 
 	// Current endpoint failed, are all failed? We'd have to ignore
 	if m.sink.Count() == len(m.netConfig.Servers) {
-		log.Warning("[Failover] All endpoints have failed, awaiting recovery")
+		log.Warning("[P Failover] All endpoints have failed, awaiting recovery")
 		return
 	}
 
 	// Add on extra endpoints
 	m.failoverPosition++
 	newServer := m.netConfig.Servers[m.failoverPosition]
-	log.Warning("[Failover] Initiating failover to: %s", newServer)
+	log.Warning("[P Failover] Initiating failover to: %s", newServer)
 
 	// Check it's not already there (it may be still shutting down from a previous
 	// recovery)
@@ -102,7 +102,7 @@ func (m *methodFailover) onStarted(endpoint *endpoint.Endpoint) {
 
 	// This is the best endpoint, use it, close all later endpoints
 	m.currentEndpoint = endpoint
-	log.Info("[Failover] A higher priority endpoint has recovered: %s", endpoint.Server())
+	log.Info("[P Failover] A higher priority endpoint has recovered: %s", endpoint.Server())
 
 	for next := endpoint.Next(); next != nil; next = next.Next() {
 		m.sink.ShutdownEndpoint(next.Server())
@@ -134,7 +134,7 @@ func (m *methodFailover) reloadConfig(netConfig *transports.Config) {
 
 			// If there was no current, we're initialising, use this one
 			if m.currentEndpoint == nil {
-				log.Info("[Failover] Initialised priority endpoint: %s", last.Server())
+				log.Info("[P Failover] Initialised priority endpoint: %s", last.Server())
 				m.currentEndpoint = last
 				foundCurrent = true
 			}

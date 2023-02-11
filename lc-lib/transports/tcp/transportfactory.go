@@ -21,6 +21,7 @@ package tcp
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -65,6 +66,7 @@ func (f *TransportFactory) NewTransport(context.Context, *addresspool.Pool, chan
 func (f *TransportFactory) NewTransportWithProtocol(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Transport {
 	cancelCtx, shutdownFunc := context.WithCancel(ctx)
 
+	backoffName := fmt.Sprintf("[T %s] Reconnect", pool.Server())
 	ret := &transportTCP{
 		ctx:             cancelCtx,
 		shutdownFunc:    shutdownFunc,
@@ -72,7 +74,7 @@ func (f *TransportFactory) NewTransportWithProtocol(ctx context.Context, pool *a
 		netConfig:       transports.FetchConfig(f.config),
 		pool:            pool,
 		eventChan:       eventChan,
-		backoff:         core.NewExpBackoff(pool.Server()+" Reconnect", f.Reconnect, f.ReconnectMax),
+		backoff:         core.NewExpBackoff(backoffName, f.Reconnect, f.ReconnectMax),
 		protocolFactory: protocolFactory,
 	}
 

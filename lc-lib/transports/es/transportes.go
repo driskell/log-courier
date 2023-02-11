@@ -116,7 +116,7 @@ func (t *transportES) controllerRoutine() {
 
 // setupAssociation gathers cluster information and installs templates
 func (t *transportES) setupAssociation() bool {
-	backoffName := fmt.Sprintf("%s Setup Retry", t.pool.Server())
+	backoffName := fmt.Sprintf("[T %s] Setup Retry", t.pool.Server())
 	backoff := core.NewExpBackoff(backoffName, t.config.Retry, t.config.RetryMax)
 
 	for {
@@ -170,7 +170,7 @@ func (t *transportES) populateNodeInfo(addr *addresspool.Address) error {
 		return fmt.Errorf("failed to calculate maximum version number for cluster: %s", err)
 	}
 
-	log.Infof("[T %s] Successfully retrieved Elasticsearch node information (major version: %d)", t.pool.Server(), t.maxMajorVersion)
+	log.Infof("[T %s] Successfully retrieved Elasticsearch node information (major version: %d)", addr.Desc(), t.maxMajorVersion)
 
 	return nil
 }
@@ -236,7 +236,7 @@ func (t *transportES) installTemplate(addr *addresspool.Address) error {
 		return fmt.Errorf("unexpected status: %s [Body: %s]", httpResponse.Status, body)
 	}
 
-	log.Infof("[T %s] Successfully installed Elasticsearch index template: %s", t.pool.Server(), name)
+	log.Infof("[T %s] Successfully installed Elasticsearch index template: %s", addr.Desc(), name)
 
 	return nil
 }
@@ -284,7 +284,7 @@ func (t *transportES) httpRoutine(id int) {
 		case payload := <-t.payloadChan:
 			if payload == nil {
 				// Graceful shutdown
-				log.Infof("[T %s - %d] Elasticsearch routine stopped gracefully", t.pool.Server(), id)
+				log.Infof("[T %s]{%d} Elasticsearch routine stopped gracefully", t.pool.Server(), id)
 				return
 			}
 
@@ -343,7 +343,7 @@ func (t *transportES) performBulkRequest(addr *addresspool.Address, id int, requ
 	} else {
 		url = fmt.Sprintf("/%s/_doc/_bulk", defaultIndex)
 	}
-	log.Debugf("[T %s - %d] Performing Elasticsearch bulk request of %d events via %s", t.pool.Server(), id, request.Remaining(), url)
+	log.Debugf("[T %s]{%d} Performing Elasticsearch bulk request of %d events to %s", addr.Desc(), id, request.Remaining(), url)
 
 	request.Reset()
 	bodyBuffer := new(bytes.Buffer)
@@ -381,14 +381,14 @@ func (t *transportES) performBulkRequest(addr *addresspool.Address, id int, requ
 
 	if len(response.Errors) != 0 {
 		for _, errorValue := range response.Errors {
-			log.Warningf("[T %s - %d] Failed to index event: %s", t.pool.Server(), id, errorValue.Error())
+			log.Warningf("[T %s]{%d} Failed to index event: %s", addr.Desc(), id, errorValue.Error())
 		}
 	}
 
 	if request.Remaining() == 0 {
-		log.Debugf("[T %s - %d] Elasticsearch request complete (took %dms; created %d; errors %d)", t.pool.Server(), id, response.Took, request.Created()-created, len(response.Errors))
+		log.Debugf("[T %s]{%d} Elasticsearch request complete (took %dms; created %d; errors %d)", addr.Desc(), id, response.Took, request.Created()-created, len(response.Errors))
 	} else {
-		log.Warningf("[T %s - %d] Elasticsearch request partially complete (took %dms; created %d; errors %d; retrying %d)", t.pool.Server(), id, response.Took, request.Created()-created, len(response.Errors), request.Remaining())
+		log.Warningf("[T %s]{%d} Elasticsearch request partially complete (took %dms; created %d; errors %d; retrying %d)", addr.Desc(), id, response.Took, request.Created()-created, len(response.Errors), request.Remaining())
 	}
 	return nil
 }

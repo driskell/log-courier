@@ -43,7 +43,6 @@ type connection struct {
 	shutdownFunc context.CancelFunc
 	socket       connectionSocket
 	protocol     Protocol
-	poolServer   string
 	isClient     bool
 	eventChan    chan<- transports.Event
 	sendChan     chan ProtocolMessage
@@ -63,12 +62,11 @@ type connection struct {
 	sendShutdownLock sync.RWMutex
 }
 
-func newConnection(ctx context.Context, socket connectionSocket, protocolFactory ProtocolFactory, poolServer string, isClient bool, eventChan chan<- transports.Event) *connection {
+func newConnection(ctx context.Context, socket connectionSocket, protocolFactory ProtocolFactory, isClient bool, eventChan chan<- transports.Event) *connection {
 	ret := &connection{
-		socket:     socket,
-		poolServer: poolServer,
-		isClient:   isClient,
-		eventChan:  eventChan,
+		socket:    socket,
+		isClient:  isClient,
+		eventChan: eventChan,
 		// TODO: Make configurable. Allow up to 100 pending messages.
 		// This will cope with a max pending payload size of 100 for each connection by allowing 100 acks to be queued
 		sendChan:             make(chan ProtocolMessage, 100),

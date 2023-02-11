@@ -63,7 +63,7 @@ func (m *methodLoadbalance) reloadConfig(netConfig *transports.Config) {
 				m.netConfig.AddressPools[n],
 				last,
 			)
-			log.Info("[Loadbalance] Initialised new endpoint: %s", last.Server())
+			log.Info("[P Loadbalance] Initialised new endpoint: %s", last.Server())
 			continue
 		}
 

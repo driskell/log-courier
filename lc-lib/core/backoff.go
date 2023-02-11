@@ -66,7 +66,7 @@ func (e *ExpBackoff) Trigger() time.Duration {
 
 	// Did we recover for long enough? Reset delay
 	if e.expCount != 0 && time.Since(e.lastTrigger) > nextDelay {
-		log.Debug("[%s] Backoff had recovered, resetting failured count", e.name)
+		log.Debug("%s - Backoff had recovered, resetting failured count", e.name)
 		nextDelay = e.calculateDelay(0)
 		e.expCount = 0
 	}
@@ -79,7 +79,7 @@ func (e *ExpBackoff) Trigger() time.Duration {
 		nextDelay = e.maxDelay
 	}
 
-	log.Debug("[%s] Backoff (%d failures): %v", e.name, e.expCount, nextDelay)
+	log.Debug("%s - Backoff (%d failures): %v", e.name, e.expCount, nextDelay)
 	return nextDelay
 }
 

@@ -227,7 +227,7 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 		connectionSocket = newConnectionSocketTCP(socket)
 	}
 
-	conn := newConnection(t.ctx, connectionSocket, t.protocolFactory, t.pool.Server(), false, t.eventChan)
+	conn := newConnection(t.ctx, connectionSocket, t.protocolFactory, false, t.eventChan)
 
 	t.connMutex.Lock()
 	t.connections[conn] = conn

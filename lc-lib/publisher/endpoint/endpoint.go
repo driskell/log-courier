@@ -80,7 +80,8 @@ func (e *Endpoint) Init() {
 	e.ctx = context.WithValue(context.Background(), ContextSelf, e)
 
 	e.warming = true
-	e.backoff = core.NewExpBackoff(e.server+" Failure", e.sink.config.Backoff, e.sink.config.BackoffMax)
+	backoffName := fmt.Sprintf("[E %s] Failure", e.server)
+	e.backoff = core.NewExpBackoff(backoffName, e.sink.config.Backoff, e.sink.config.BackoffMax)
 
 	e.readyElement.Value = e
 	e.failedElement.Value = e

@@ -21,6 +21,7 @@ package tcp
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -55,6 +56,7 @@ func (f *ReceiverFactory) NewReceiver(context.Context, *addresspool.Pool, chan<-
 
 // NewReceiverWithProtocol creates a new receiver with the given protocol
 func (f *ReceiverFactory) NewReceiverWithProtocol(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Receiver {
+	backoffName := fmt.Sprintf("[R %s] Receiver Reset", pool.Server())
 	ret := &receiverTCP{
 		config:       f,
 		pool:         pool,
@@ -62,7 +64,7 @@ func (f *ReceiverFactory) NewReceiverWithProtocol(ctx context.Context, pool *add
 		connections:  make(map[*connection]*connection),
 		shutdownChan: make(chan struct{}),
 		// TODO: Own values
-		backoff:         core.NewExpBackoff(pool.Server()+" Receiver Reset", 0, 300*time.Second),
+		backoff:         core.NewExpBackoff(backoffName, 0, 300*time.Second),
 		protocolFactory: protocolFactory,
 	}
 

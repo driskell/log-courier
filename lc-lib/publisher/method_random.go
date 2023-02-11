@@ -42,7 +42,7 @@ func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodR
 		generator:    rand.New(rand.NewSource(int64(time.Now().Nanosecond()))),
 	}
 
-	ret.backoff = core.NewExpBackoff("Random", ret.netConfig.Backoff, ret.netConfig.BackoffMax)
+	ret.backoff = core.NewExpBackoff("[P Random]", ret.netConfig.Backoff, ret.netConfig.BackoffMax)
 
 	if sink.Count() == 0 {
 		// Empty sink, connect to a random endpoint
@@ -70,7 +70,7 @@ func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodR
 				ret.activeServer = k
 				foundAcceptable = true
 
-				log.Debug("[Random] Utilising existing endpoint connection: %s", server)
+				log.Debug("[P Random] Utilising existing endpoint connection: %s", server)
 
 				// Reload it
 				endpoint.ReloadConfig(netConfig)
@@ -82,7 +82,7 @@ func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodR
 		// should have removed endpoints that don't exist in the configuration, or
 		// at the very least placed them into a closing status
 		if !foundAcceptable {
-			log.Warning("[Random] Method reload discovered inconsistent Endpoint status: %s", endpoint.Server())
+			log.Warning("[P Random] Method reload discovered inconsistent Endpoint status: %s", endpoint.Server())
 			sink.ShutdownEndpoint(endpoint.Server())
 		}
 	}
@@ -119,7 +119,7 @@ func (m *methodRandom) connectRandom() {
 		}
 	}
 
-	log.Info("[Random] Randomly selected new endpoint: %s", server)
+	log.Info("[P Random] Randomly selected new endpoint: %s", server)
 
 	m.sink.AddEndpoint(server, addressPool)
 }
@@ -128,7 +128,7 @@ func (m *methodRandom) onFail(endpoint *endpoint.Endpoint) {
 	// Failed endpoint - keep it alive until backoff triggers new connection
 	// This way we still have an endpoint with a last error in monitor
 	m.sink.Scheduler.SetCallback(m, m.backoff.Trigger(), func() {
-		log.Warning("[Random] Giving up on failed endpoint: %s", endpoint.Server())
+		log.Warning("[P Random] Giving up on failed endpoint: %s", endpoint.Server())
 		m.sink.ShutdownEndpoint(endpoint.Server())
 	})
 }
