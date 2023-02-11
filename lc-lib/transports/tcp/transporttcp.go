@@ -132,7 +132,7 @@ func (t *transportTCP) reconnectWait() bool {
 }
 
 // getTLSConfig returns the TLS configuration for the connection
-func (t *transportTCP) getTLSConfig() (tlsConfig *tls.Config) {
+func (t *transportTCP) getTLSConfig(servername string) (tlsConfig *tls.Config) {
 	tlsConfig = new(tls.Config)
 
 	tlsConfig.MinVersion = t.config.MinTLSVersion
@@ -150,7 +150,7 @@ func (t *transportTCP) getTLSConfig() (tlsConfig *tls.Config) {
 	}
 
 	// Set the tlsConfig server name for server validation (required since Go 1.3)
-	tlsConfig.ServerName = t.pool.Host()
+	tlsConfig.ServerName = servername
 
 	return
 }
@@ -164,26 +164,24 @@ func (t *transportTCP) connect() (*connection, error) {
 		return nil, fmt.Errorf("failed to select next address: %s", err)
 	}
 
-	desc := t.pool.Desc()
+	log.Infof("[T %s] Attempting to connect", addr.Desc())
 
-	log.Infof("[T %s] Attempting to connect to %s", t.pool.Server(), desc)
-
-	socket, err := net.DialTimeout("tcp", addr.String(), t.netConfig.Timeout)
+	socket, err := net.DialTimeout("tcp", addr.Addr().String(), t.netConfig.Timeout)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to %s: %s", desc, err)
+		return nil, fmt.Errorf("failed to connect to %s: %s", addr.Desc(), err)
 	}
 
 	// Now wrap in TLS if this is the TLS transport
 	var connectionSocket connectionSocket
 	if t.config.EnableTls {
-		connectionSocket = newConnectionSocketTLS(socket.(*net.TCPConn), t.getTLSConfig(), false, t.pool.Server())
+		connectionSocket = newConnectionSocketTLS(socket.(*net.TCPConn), t.getTLSConfig(addr.Host()), false, t.pool.Server())
 	} else {
 		connectionSocket = newConnectionSocketTCP(socket.(*net.TCPConn))
 	}
 
 	conn := newConnection(t.ctx, connectionSocket, t.protocolFactory, t.pool.Server(), true, t.eventChan)
 
-	log.Noticef("[T %s - %s] Connected to %s", socket.LocalAddr().String(), socket.RemoteAddr().String(), desc)
+	log.Noticef("[T %s - %s] Connected", socket.LocalAddr().String(), socket.RemoteAddr().String())
 	return conn, nil
 }
 

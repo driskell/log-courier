@@ -116,18 +116,16 @@ func (t *receiverTCP) listen() error {
 		return fmt.Errorf("failed to select next address: %s", err)
 	}
 
-	desc := t.pool.Desc()
+	log.Infof("[R %s] Attempting to listen", addr.Desc())
 
-	log.Infof("[R %s] Attempting to listen on %s", t.pool.Server(), desc)
-
-	tcplistener, err := net.ListenTCP("tcp", addr)
+	tcplistener, err := net.ListenTCP("tcp", addr.Addr())
 	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %s", desc, err)
+		return fmt.Errorf("failed to listen on %s: %s", addr.Desc(), err)
 	}
 
-	log.Noticef("[R %s] Listening on %s", tcplistener.Addr().String(), desc)
+	log.Noticef("[R %s] Listening", addr.Desc())
 
-	return t.acceptLoop(desc, tcplistener)
+	return t.acceptLoop(addr.Desc(), tcplistener)
 }
 
 // acceptLoop creates new connections and pushes them to the controller to

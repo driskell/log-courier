@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -121,14 +120,15 @@ func (t *transportES) setupAssociation() bool {
 	backoff := core.NewExpBackoff(backoffName, t.config.Retry, t.config.RetryMax)
 
 	for {
-		if err := t.populateNodeInfo(); err != nil {
-			log.Errorf("[T %s] Failed to fetch Elasticsearch node information: %s", t.pool.Server(), err)
+		addr, err := t.pool.Next()
+		if err != nil {
+			log.Errorf("[T %s] Failed to resolve Elasticsearch node address: %s", addr.Desc(), err)
+		} else if err := t.populateNodeInfo(addr); err != nil {
+			log.Errorf("[T %s] Failed to fetch Elasticsearch node information: %s", addr.Desc(), err)
+		} else if err := t.installTemplate(addr); err != nil {
+			log.Errorf("[T %s] Failed to install Elasticsearch index template: %s", addr.Desc(), err)
 		} else {
-			if err := t.installTemplate(); err != nil {
-				log.Errorf("[T %s] Failed to install Elasticsearch index template: %s", t.pool.Server(), err)
-			} else {
-				return false
-			}
+			return false
 		}
 
 		if t.retryWait(backoff) {
@@ -141,18 +141,13 @@ func (t *transportES) setupAssociation() bool {
 }
 
 // populateNodeInfo populates the nodeInfo structure
-func (t *transportES) populateNodeInfo() error {
-	server, err := t.pool.Next()
+func (t *transportES) populateNodeInfo(addr *addresspool.Address) error {
+	httpRequest, err := t.createRequest(t.ctx, "GET", addr.Addr().String(), "/_nodes/http", nil)
 	if err != nil {
 		return err
 	}
 
-	httpRequest, err := t.createRequest(t.ctx, "GET", server.String(), "/_nodes/http", nil)
-	if err != nil {
-		return err
-	}
-
-	httpResponse, err := t.getClient(t.pool.Host()).Do(httpRequest)
+	httpResponse, err := t.getClient(addr.Addr().String()).Do(httpRequest)
 	if err != nil {
 		return err
 	}
@@ -181,12 +176,7 @@ func (t *transportES) populateNodeInfo() error {
 }
 
 // installTemplate checks if template installation is needed
-func (t *transportES) installTemplate() error {
-	server, err := t.pool.Next()
-	if err != nil {
-		return err
-	}
-
+func (t *transportES) installTemplate(addr *addresspool.Address) error {
 	name := "logstash"
 	var (
 		templateReader io.Reader
@@ -218,14 +208,14 @@ func (t *transportES) installTemplate() error {
 		templateLen = len(template)
 	}
 
-	installed, err := t.checkTemplate(server, name)
+	installed, err := t.checkTemplate(addr, name)
 	if err != nil {
 		return err
 	} else if installed {
 		return nil
 	}
 
-	httpRequest, err := t.createRequest(t.ctx, "PUT", server.String(), fmt.Sprintf("/_template/%s", name), templateReader)
+	httpRequest, err := t.createRequest(t.ctx, "PUT", addr.Addr().String(), fmt.Sprintf("/_template/%s", name), templateReader)
 	if err != nil {
 		return err
 	}
@@ -233,7 +223,7 @@ func (t *transportES) installTemplate() error {
 	httpRequest.Header.Add("Content-Type", "application/json")
 	httpRequest.Header.Add("Content-Length", fmt.Sprintf("%d", templateLen))
 
-	httpResponse, err := t.getClient(t.pool.Host()).Do(httpRequest)
+	httpResponse, err := t.getClient(addr.Addr().String()).Do(httpRequest)
 	if err != nil {
 		return err
 	}
@@ -252,13 +242,13 @@ func (t *transportES) installTemplate() error {
 }
 
 // checkTemplate checks if template is already installed at the given server
-func (t *transportES) checkTemplate(server *net.TCPAddr, name string) (bool, error) {
-	httpRequest, err := t.createRequest(t.ctx, "HEAD", server.String(), fmt.Sprintf("/_template/%s", name), nil)
+func (t *transportES) checkTemplate(addr *addresspool.Address, name string) (bool, error) {
+	httpRequest, err := t.createRequest(t.ctx, "HEAD", addr.Addr().String(), fmt.Sprintf("/_template/%s", name), nil)
 	if err != nil {
 		return false, err
 	}
 
-	httpResponse, err := t.getClient(t.pool.Host()).Do(httpRequest)
+	httpResponse, err := t.getClient(addr.Addr().String()).Do(httpRequest)
 	if err != nil {
 		return false, err
 	}
@@ -302,8 +292,15 @@ func (t *transportES) httpRoutine(id int) {
 			request := newBulkRequest(t.config.IndexPattern, payload.events)
 
 			for {
-				if err := t.performBulkRequest(id, request); err != nil {
-					log.Errorf("[T %s - %d] Elasticsearch request failed: %s", t.pool.Server(), id, err)
+				// Pool Next() is not race-safe
+				t.poolMutex.Lock()
+				addr, err := t.pool.Next()
+				t.poolMutex.Unlock()
+				if err == nil {
+					err = t.performBulkRequest(addr, id, request)
+				}
+				if err != nil {
+					log.Errorf("[T %s]{%d} Elasticsearch request failed: %s", addr.Desc(), id, err)
 				}
 
 				if request.AckSequence() != lastAckSequence {
@@ -330,16 +327,7 @@ func (t *transportES) httpRoutine(id int) {
 }
 
 // performBulkRequest performs a bulk request to the Elasticsearch server
-func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
-	// Pool Next() is not race-safe
-	t.poolMutex.Lock()
-	server, err := t.pool.Next()
-	host := t.pool.Host()
-	t.poolMutex.Unlock()
-	if err != nil {
-		return err
-	}
-
+func (t *transportES) performBulkRequest(addr *addresspool.Address, id int, request *bulkRequest) error {
 	// Store what's already created so we can calculate what this specific request created
 	created := request.Created()
 
@@ -367,7 +355,7 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 		return err
 	}
 
-	httpRequest, err := t.createRequest(t.ctx, "POST", server.String(), url, bodyBuffer)
+	httpRequest, err := t.createRequest(t.ctx, "POST", addr.Addr().String(), url, bodyBuffer)
 	if err != nil {
 		return err
 	}
@@ -376,7 +364,7 @@ func (t *transportES) performBulkRequest(id int, request *bulkRequest) error {
 	httpRequest.Header.Add("Content-Type", "application/x-ndjson")
 	httpRequest.Header.Add("Content-Encoding", "gzip")
 
-	httpResponse, err := t.getClient(host).Do(httpRequest)
+	httpResponse, err := t.getClient(addr.Addr().String()).Do(httpRequest)
 	if err != nil {
 		return err
 	}
