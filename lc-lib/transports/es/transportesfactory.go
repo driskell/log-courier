@@ -65,7 +65,6 @@ type TransportESFactory struct {
 	Username         string        `config:"username"`
 	TemplateFile     string        `config:"template file"`
 	TemplatePatterns []string      `config:"template patterns"`
-	SSLCA            string        `config:"ssl ca"`
 
 	// Internal
 	template []byte
