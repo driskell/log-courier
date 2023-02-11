@@ -55,7 +55,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ruby/logstash
-        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/setup-logstash.sh') }}
+        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/setup_logstash.sh') }}
     - name: Bootstrap Logstash for development
       if: steps.cache-logstash.outputs.cache-hit != 'true'
       run: |
@@ -88,7 +88,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ruby/logstash
-        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/setup-logstash.sh') }}
+        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/setup_logstash.sh') }}
     - name: Bootstrap Logstash for development
       if: steps.cache-logstash.outputs.cache-hit != 'true'
       run: |
