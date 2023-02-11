@@ -15,15 +15,17 @@ jobs:
   test_log_courier:
     strategy:
       matrix:
-        # Logstash 7.7.0 is our earliest supported version, which uses JRuby 9.2.11.1, compatible with Ruby 2.5.x
-        # Test also against 9.3.1.0 which is latest version and comaptible with Ruby 2.6.x
-        ruby: ['ruby-2.5.9', 'jruby-9.2.11.1', 'ruby-2.6.8', 'jruby-9.3.1.0']
+        # Logstash 8.0.0 is our earliest supported version, which uses JRuby 9.2.20.1, compatible with Ruby 2.5.x
+        # Test also against 9.3.10.0 which is latest version and comaptible with Ruby 2.6.x
+        # Test also against 9.4.1.0 which is latest version and comaptible with Ruby 3.1.x
+        ruby: ['ruby-2.5.9', 'jruby-9.2.20.1', 'ruby-2.6.10', 'jruby-9.3.10.0', 'ruby-3.1.3', 'jruby-9.4.1.0']
     name: Test Log Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ matrix.ruby }}
+        bundler-cache: true
     - name: Checkout
       uses: actions/checkout@v2
     - name: Test
@@ -35,43 +37,65 @@ jobs:
   test_logstash_input_courier:
     strategy:
       matrix:
-        # Logstash 7.7.0 is our earliest supported version, which uses JRuby 9.2.11.1, compatible with Ruby 2.5.x
-        # Test also against 9.3.1.0 which is latest version and comaptible with Ruby 2.6.x
-        # (Only against JRuby though, as Logstash requires JRuby)
-        ruby: ['jruby-9.2.11.1', 'jruby-9.3.1.0']
+        # Logstash 8.0.0 is our earliest supported version, which uses JRuby 9.2.20.1, compatible with Ruby 2.5.x
+        # Test also against 9.3.10.0 which is latest version and comaptible with Ruby 2.6.x
+        # Test also against 9.4.1.0 which is latest version and comaptible with Ruby 3.1.x
+        ruby: ['jruby-9.2.20.1', 'jruby-9.3.10.0', 'jruby-9.4.1.0']
     name: Test Logstash Input Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ matrix.ruby }}
+        bundler-cache: true
     - name: Checkout
       uses: actions/checkout@v2
+    - name: Load cached Logstash
+      id: cache-logstash
+      uses: actions/cache@v3
+      with:
+        path: ruby/logstash-input-courier/logstash
+        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/logstash-input-courier/setup-logstash.sh') }}
+    - name: Bootstrap Logstash for development
+      if: steps.cache-logstash.outputs.cache-hit != 'true'
+      run: |
+        cd ruby/logstash-input-courier
+        ./setup_logstash.sh
     - name: Test
       run: |
         cd ruby/logstash-input-courier
-        ./download_logstash.sh
         bundle install
         bundle exec rake
 
   test_logstash_output_courier:
     strategy:
       matrix:
-        # Logstash 7.7.0 is our earliest supported version, which uses JRuby 9.2.11.1, compatible with Ruby 2.5.x
-        # Test also against 9.3.1.0 which is latest version and comaptible with Ruby 2.6.x
-        # (Only against JRuby though, as Logstash requires JRuby)
-        ruby: ['jruby-9.2.11.1', 'jruby-9.3.1.0']
+        # Logstash 8.0.0 is our earliest supported version, which uses JRuby 9.2.20.1, compatible with Ruby 2.5.x
+        # Test also against 9.3.10.0 which is latest version and comaptible with Ruby 2.6.x
+        # Test also against 9.4.1.0 which is latest version and comaptible with Ruby 3.1.x
+        ruby: ['jruby-9.2.20.1', 'jruby-9.3.10.0', 'jruby-9.4.1.0']
     name: Test Logstash Output Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ matrix.ruby }}
+        bundler-cache: true
     - name: Checkout
       uses: actions/checkout@v2
+    - name: Load cached Logstash
+      id: cache-logstash
+      uses: actions/cache@v3
+      with:
+        path: ruby/logstash-input-courier/logstash
+        key: logstash-${{ runner.os }}-${{ hashFiles('ruby/logstash-input-courier/setup-logstash.sh') }}
+    - name: Bootstrap Logstash for development
+      if: steps.cache-logstash.outputs.cache-hit != 'true'
+      run: |
+        cd ruby/logstash-input-courier
+        ./setup_logstash.sh
     - name: Test
       run: |
         cd ruby/logstash-output-courier
-        ./download_logstash.sh
         bundle install
         bundle exec rake

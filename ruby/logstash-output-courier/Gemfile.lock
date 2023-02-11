@@ -6,21 +6,13 @@ PATH
       multi_json (~> 1.10)
 
 PATH
-  remote: .
-  specs:
-    logstash-output-courier (2.9.1-java)
-      log-courier (= 2.9.1)
-      logstash-codec-plain
-      logstash-core-plugin-api (>= 1.60, <= 2.99)
-
-PATH
-  remote: logstash/logstash-core-plugin-api
+  remote: ../logstash/logstash-core-plugin-api
   specs:
     logstash-core-plugin-api (2.1.16-java)
       logstash-core (= 8.6.1)
 
 PATH
-  remote: logstash/logstash-core
+  remote: ../logstash/logstash-core
   specs:
     logstash-core (8.6.1-java)
       clamp (~> 1)
@@ -44,6 +36,14 @@ PATH
       thread_safe (~> 0.3.6)
       treetop (~> 1)
       tzinfo-data
+
+PATH
+  remote: .
+  specs:
+    logstash-output-courier (2.9.1-java)
+      log-courier (= 2.9.1)
+      logstash-codec-plain
+      logstash-core-plugin-api (>= 1.60, <= 2.99)
 
 GEM
   remote: https://rubygems.org/
