@@ -3,6 +3,7 @@ module github.com/driskell/log-courier
 go 1.18
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.6.0
 	github.com/gizak/termui/v3 v3.1.0
 	github.com/google/cel-go v0.13.0
 	github.com/hashicorp/golang-lru v0.5.4

@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/harvester"
 )
@@ -142,8 +143,16 @@ func validateFileConfigs(p *config.Parser) (err error) {
 	c := p.Config().Section("files").(Config)
 	for k := range c {
 		if len(c[k].Paths) == 0 {
-			err = fmt.Errorf("No paths specified for /files[%d]/", k)
+			err = fmt.Errorf("no paths specified for /files[%d]/", k)
 			return
+		}
+
+		// Validate patterns
+		for l, path := range c[k].Paths {
+			if !doublestar.ValidatePattern(path) {
+				err = fmt.Errorf("pattern at /files[%d]/paths[%d] is invalid: %s", k, l, path)
+				return
+			}
 		}
 
 		// Init the harvester config

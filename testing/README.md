@@ -22,6 +22,9 @@
       done
       exec 3>&-
     done
+    cp -f singleline-generated.log glob/1/1/
+    cp -f singleline-generated.log glob/2/1/
+    cp -f singleline-generated.log glob/2/2/
 
 ## Starting Log Carver
 

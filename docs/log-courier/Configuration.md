@@ -77,7 +77,7 @@ error.
 
 ## Location
 
-The service configuration for Log Courier in the packages versions (using the service wrappers from the [`contrib`](contrib) folder) will load the configuration from `/etc/log-courier/log-courier.yaml`. When running Log Courier manually a configuration file can be specified using the [`-config`](CommandLineArguments.md#-configpath) argument.
+The service configuration for Log Courier in the packaged versions (using the service wrappers from the [`contrib`](contrib) folder) will load the configuration from `/etc/log-courier/log-courier.yaml`. When running Log Courier manually a configuration file can be specified using the [`-config`](CommandLineArguments.md#-configpath) argument.
 
 ## JSON Comments
 
@@ -149,7 +149,7 @@ Several more configuration examples are available for perusal in the
 An example [JSON configuration](examples/example-json.conf) is also available
 that follows a single log file.
 
-The configuration is documented in full below.
+The configuration format is documented in full below.
 
 ## Field Types
 
@@ -192,10 +192,13 @@ character-range:
     lo '-' hi   matches character c for lo <= c <= hi
 ```
 
+In addition to the above, Log Courier also supports `/**/` to match arbitrary number of folders, through use of the [doublestar package](https://pkg.go.dev/github.com/bmatcuk/doublestar). Note that matched such as `/path**/` are not valid and will be instead interpreted as `/path*/`.
+
 - `/var/log/*.log`
 - `/var/log/program/log_????.log`
 - `/var/log/httpd/access.log`
 - `/var/log/httpd/access.log.[0-9]`
+- `/var/log/nginx/**/*.log`
 
 ## `admin`
 
@@ -261,6 +264,11 @@ Array of Fileglobs. Required
 
 At least one Fileglob must be specified and all matching files for all provided
 globs will be monitored.
+
+If IO errors are encountered whilst scanning for files, the first IO error will be logged
+as a warning by Log Courier and then subsequent scans will ignore IO errors to ensure that
+the logs are not flooded. Each time the configuration is reloaded, IO error detection will
+be reset, logging only the first IO error again.
 
 If the log file is rotated, Log Courier will detect this and automatically start
 harvesting the new file. It will also keep the old file open to catch any

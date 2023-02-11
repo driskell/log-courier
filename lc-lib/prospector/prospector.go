@@ -21,10 +21,10 @@ package prospector
 
 import (
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
@@ -50,6 +50,7 @@ type Prospector struct {
 	shutdownChan    <-chan struct{}
 	configChan      <-chan *config.Config
 	output          chan<- []*event.Event
+	didWarnIoError  bool
 }
 
 // NewProspector creates a new path crawler with the given configuration
@@ -198,6 +199,8 @@ DelayLoop:
 		case cfg := <-p.configChan:
 			p.genConfig = cfg.GeneralPart("prospector").(*General)
 			p.fileConfigs = cfg.Section("files").(Config)
+			// Reset flag to warn on IO errors again
+			p.didWarnIoError = false
 		}
 
 		now = time.Now()
@@ -212,7 +215,18 @@ DelayLoop:
 // scan crawls a path for file movements
 func (p *Prospector) scan(path string, cfg *FileConfig) {
 	// Evaluate the path as a wildcards/shell glob
-	matches, err := filepath.Glob(path)
+	var matches []string
+	var err error
+	if !p.didWarnIoError {
+		matches, err = doublestar.FilepathGlob(path, doublestar.WithFailOnIOErrors(), doublestar.WithFilesOnly())
+		if err != nil && err != doublestar.ErrBadPattern {
+			p.didWarnIoError = true
+			log.Warningf("WARNING: glob(%s) failed due to IO errors, further IO errors will be suppressed until reload: %s", path, err)
+			matches, err = doublestar.FilepathGlob(path, doublestar.WithFilesOnly())
+		}
+	} else {
+		matches, err = doublestar.FilepathGlob(path, doublestar.WithFilesOnly())
+	}
 	if err != nil {
 		log.Errorf("glob(%s) failed: %v", path, err)
 		return
