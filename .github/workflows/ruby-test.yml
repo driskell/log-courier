@@ -1,4 +1,4 @@
-name: Ruby Tests
+name: Ruby
 
 on:
   workflow_dispatch:

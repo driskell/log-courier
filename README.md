@@ -1,8 +1,8 @@
 # Log Courier Suite
 
-[![Binary Tests](https://github.com/driskell/log-courier/actions/workflows/go.yml/badge.svg)](https://github.com/driskell/log-courier/actions/workflows/go.yml)
-[![Plugin Tests](https://github.com/driskell/log-courier/actions/workflows/ruby-test.yml/badge.svg)](https://github.com/driskell/log-courier/actions/workflows/ruby-test.yml)
-[![Latest](https://img.shields.io/github/release/driskell/log-courier.svg)](https://github.com/driskell/log-courier/releases/latest)
+[![Golang](https://github.com/driskell/log-courier/actions/workflows/go.yml/badge.svg)](https://github.com/driskell/log-courier/actions/workflows/go.yml)
+[![Ruby](https://github.com/driskell/log-courier/actions/workflows/ruby-test.yml/badge.svg)](https://github.com/driskell/log-courier/actions/workflows/ruby-test.yml)
+[![Release](https://img.shields.io/github/release/driskell/log-courier.svg)](https://github.com/driskell/log-courier/releases/latest)
 
 The Log Courier Suite is a set of lightweight tools created to ship and process
 log files speedily and securely, with low resource usage, to Elasticsearch or
