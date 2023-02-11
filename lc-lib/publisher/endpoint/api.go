@@ -31,7 +31,7 @@ type apiEndpoint struct {
 // Update the status information for an endpoint
 func (a *apiEndpoint) Update() error {
 	a.e.mutex.RLock()
-	a.SetEntry("server", api.String(a.e.server))
+	a.SetEntry("server", api.String(a.e.poolEntry.Desc))
 	a.SetEntry("status", api.String(a.e.status.String()))
 	if a.e.lastErr != nil {
 		a.SetEntry("last_error", api.String(a.e.lastErr.Error()))

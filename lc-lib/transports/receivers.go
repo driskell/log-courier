@@ -19,7 +19,6 @@ package transports
 import (
 	"context"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
@@ -39,7 +38,7 @@ type Receiver interface {
 // NewReceiver is called, return an instance of the receiver that obeys that
 // configuration
 type ReceiverFactory interface {
-	NewReceiver(context.Context, *addresspool.Pool, chan<- Event) Receiver
+	NewReceiver(context.Context, string, chan<- Event) Receiver
 	ShouldRestart(ReceiverFactory) bool
 }
 

@@ -62,8 +62,8 @@ func NewTransportFactory(p *config.Parser, configPath string, unUsed map[string]
 
 // NewTransport returns a new Transport interface using the settings from the
 // TransportFactory.
-func (f *TransportFactory) NewTransport(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Transport {
-	return f.TransportFactory.NewTransportWithProtocol(ctx, pool, eventChan, &protocolFactory{isClient: true})
+func (f *TransportFactory) NewTransport(ctx context.Context, poolEntry *addresspool.PoolEntry, eventChan chan<- transports.Event) transports.Transport {
+	return f.TransportFactory.NewTransportWithProtocol(ctx, poolEntry, eventChan, &protocolFactory{isClient: true})
 }
 
 // Register the transports

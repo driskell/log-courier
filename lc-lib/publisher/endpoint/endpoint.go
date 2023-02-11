@@ -57,8 +57,7 @@ type Endpoint struct {
 	orderedElement internallist.Element
 
 	sink            *Sink
-	server          string
-	addressPool     *addresspool.Pool
+	poolEntry       *addresspool.PoolEntry
 	transport       transports.Transport
 	pendingPayloads map[string]*payload.Payload
 	numPayloads     int
@@ -80,7 +79,7 @@ func (e *Endpoint) Init() {
 	e.ctx = context.WithValue(context.Background(), ContextSelf, e)
 
 	e.warming = true
-	backoffName := fmt.Sprintf("[E %s] Failure", e.server)
+	backoffName := fmt.Sprintf("[E %s] Failure", e.poolEntry.Desc)
 	e.backoff = core.NewExpBackoff(backoffName, e.sink.config.Backoff, e.sink.config.BackoffMax)
 
 	e.readyElement.Value = e
@@ -89,7 +88,7 @@ func (e *Endpoint) Init() {
 
 	e.resetPayloads()
 
-	e.transport = e.sink.config.Factory.NewTransport(e.ctx, e.Pool(), e.EventChan())
+	e.transport = e.sink.config.Factory.NewTransport(e.ctx, e.PoolEntry(), e.EventChan())
 }
 
 // Context returns the endpoint's context
@@ -129,10 +128,9 @@ func (e *Endpoint) shutdownTransport() {
 	e.mutex.Unlock()
 }
 
-// Server returns the server string from the configuration file that this
-// endpoint is associated with
+// Server returns the server entry this endpoint belongs to
 func (e *Endpoint) Server() string {
-	return e.server
+	return e.poolEntry.Server
 }
 
 // queuePayload registers a payload with the endpoint and sends it to the
@@ -354,8 +352,8 @@ func (e *Endpoint) resetPayloads() {
 
 // Pool returns the associated address pool
 // This implements part of the transports.Proxy interface for callbacks
-func (e *Endpoint) Pool() *addresspool.Pool {
-	return e.addressPool
+func (e *Endpoint) PoolEntry() *addresspool.PoolEntry {
+	return e.poolEntry
 }
 
 // EventChan returns the event channel transports should send events through

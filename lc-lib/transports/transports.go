@@ -43,7 +43,7 @@ type Transport interface {
 // NewTransport is called, return an instance of the transport that obeys that
 // configuration
 type TransportFactory interface {
-	NewTransport(context.Context, *addresspool.Pool, chan<- Event) Transport
+	NewTransport(context.Context, *addresspool.PoolEntry, chan<- Event) Transport
 	ShouldRestart(TransportFactory) bool
 }
 

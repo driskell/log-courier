@@ -19,7 +19,6 @@ package endpoint
 import (
 	"fmt"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -65,20 +64,12 @@ func (s *Sink) processStatusChange(status *transports.StatusEvent, endpoint *End
 		// Mark as active
 		s.markActive(endpoint)
 	case transports.Finished:
-		server := endpoint.Server()
-		s.removeEndpoint(server)
+		poolEntry := endpoint.PoolEntry()
+		s.removeEndpoint(endpoint)
 
-		// Is it still in the config?
-		for _, item := range s.config.Servers {
-			if item != server {
-				continue
-			}
-
-			// Still in the config, ask the OnFinish handler if we should re-add it
-			if s.OnFinish(endpoint) {
-				s.AddEndpoint(server, addresspool.NewPool(server))
-			}
-			break
+		// Ask the balancer if we should re-add it
+		if s.OnFinish(endpoint) {
+			s.AddEndpoint(poolEntry)
 		}
 	default:
 		panic("Invalid transport status code received")

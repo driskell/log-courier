@@ -17,6 +17,8 @@
 package publisher
 
 import (
+	"time"
+
 	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/publisher/endpoint"
 	"github.com/driskell/log-courier/lc-lib/transports"
@@ -49,14 +51,19 @@ func (m *methodFailover) onFail(endpoint *endpoint.Endpoint) {
 	}
 
 	// Current endpoint failed, are all failed? We'd have to ignore
-	if m.sink.Count() == len(m.netConfig.Servers) {
+	// Do a fresh lookup first
+	entries, err := addresspool.GeneratePool(m.netConfig.Servers, m.netConfig.Rfc2782Srv, m.netConfig.Rfc2782Service, time.Second*60)
+	if err != nil {
+		log.Warning("[P Failover] Server lookup failure: %s", err)
+	}
+	if m.sink.Count() == len(entries) {
 		log.Warning("[P Failover] All endpoints have failed, awaiting recovery")
 		return
 	}
 
 	// Add on extra endpoints
 	m.failoverPosition++
-	newServer := m.netConfig.Servers[m.failoverPosition]
+	newServer := entries[m.failoverPosition]
 	log.Warning("[P Failover] Initiating failover to: %s", newServer)
 
 	// Check it's not already there (it may be still shutting down from a previous
@@ -68,10 +75,7 @@ func (m *methodFailover) onFail(endpoint *endpoint.Endpoint) {
 		m.sink.MoveEndpointAfter(endpoint, m.currentEndpoint)
 		m.currentEndpoint = endpoint
 	} else {
-		m.currentEndpoint = m.sink.AddEndpoint(
-			newServer,
-			m.netConfig.AddressPools[m.failoverPosition],
-		)
+		m.currentEndpoint = m.sink.AddEndpoint(newServer)
 	}
 }
 
@@ -105,7 +109,7 @@ func (m *methodFailover) onStarted(endpoint *endpoint.Endpoint) {
 	log.Info("[P Failover] A higher priority endpoint has recovered: %s", endpoint.Server())
 
 	for next := endpoint.Next(); next != nil; next = next.Next() {
-		m.sink.ShutdownEndpoint(next.Server())
+		m.sink.ShutdownEndpoint(next)
 		m.failoverPosition--
 	}
 }
@@ -116,21 +120,26 @@ func (m *methodFailover) reloadConfig(netConfig *transports.Config) {
 	// Verify server ordering and if any better current server now available
 	// We also use reloadConfig on first load of this method to cleanup what any
 	// other method may have left behind
+	entries, err := addresspool.GeneratePool(m.netConfig.Servers, m.netConfig.Rfc2782Srv, m.netConfig.Rfc2782Service, time.Second*60)
+	if err != nil {
+		log.Warning("[P Failover] Server lookup failure: %s", err)
+	}
+
 	var last, foundEndpoint *endpoint.Endpoint
 	foundCurrent := false
-	for _, server := range m.netConfig.Servers {
-		if m.currentEndpoint != nil && m.currentEndpoint.Server() == server {
+	for _, poolEntry := range entries {
+		if m.currentEndpoint != nil && m.currentEndpoint.PoolEntry().Desc == poolEntry.Desc {
 			foundCurrent = true
 		}
 
-		if foundEndpoint = m.sink.FindEndpoint(server); foundEndpoint == nil {
+		if foundEndpoint = m.sink.FindEndpoint(poolEntry); foundEndpoint == nil {
 			// If we've not found the current endpoint yet we should add this new
 			// endpoint as it's better than the current!
 			if foundCurrent {
 				continue
 			}
 
-			last = m.sink.AddEndpointAfter(server, addresspool.NewPool(server), last)
+			last = m.sink.AddEndpointAfter(poolEntry, last)
 
 			// If there was no current, we're initialising, use this one
 			if m.currentEndpoint == nil {
@@ -139,11 +148,13 @@ func (m *methodFailover) reloadConfig(netConfig *transports.Config) {
 				foundCurrent = true
 			}
 			continue
+		} else if m.currentEndpoint != nil && m.currentEndpoint == foundEndpoint {
+			foundCurrent = true
 		} else if foundCurrent {
 			// Anything after the current is guaranteed to be shutting down so we
 			// ignore them, but in case we took over from another method, call its
 			// shutdown so we can be sure
-			m.sink.ShutdownEndpoint(server)
+			m.sink.ShutdownEndpoint(foundEndpoint)
 			continue
 		}
 

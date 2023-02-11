@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -35,7 +34,7 @@ type receiverTCP struct {
 	ctx          context.Context
 	shutdownFunc context.CancelFunc
 	config       *ReceiverFactory
-	pool         *addresspool.Pool
+	bind         string
 	eventChan    chan<- transports.Event
 	connections  map[*connection]*connection
 	backoff      *core.ExpBackoff
@@ -71,7 +70,7 @@ func (t *receiverTCP) controllerRoutine() {
 			break
 		}
 
-		log.Errorf("[R %s] Receiver error, resetting: %s", t.pool.Server(), err)
+		log.Errorf("[R %s] Receiver error, resetting: %s", t.listen, err)
 
 		if t.retryWait() {
 			break
@@ -79,7 +78,7 @@ func (t *receiverTCP) controllerRoutine() {
 	}
 
 	// Request all connections to stop receiving and wait for them to finally close once the final ack is sent and nil message sent
-	log.Infof("[R %s] Receiver shutting down and waiting for final acknowledgements to be sent", t.pool.Server())
+	log.Infof("[R %s] Receiver shutting down and waiting for final acknowledgements to be sent", t.listen)
 	t.connMutex.Lock()
 	for _, conn := range t.connections {
 		t.ShutdownConnectionRead(conn.ctx, fmt.Errorf("exiting"))
@@ -90,7 +89,7 @@ func (t *receiverTCP) controllerRoutine() {
 	// Ensure resources are cleaned up for the context
 	t.shutdownFunc()
 
-	log.Infof("[R %s] Receiver exiting", t.pool.Server())
+	log.Infof("[R %s] Receiver exiting", t.listen)
 }
 
 // retryWait waits the backoff timeout before attempting to listen again
@@ -111,21 +110,21 @@ func (t *receiverTCP) retryWait() bool {
 
 // listen configures and begins the accept loop routine
 func (t *receiverTCP) listen() error {
-	addr, err := t.pool.Next()
+	addr, err := net.ResolveTCPAddr("tcp", t.bind)
 	if err != nil {
 		return fmt.Errorf("failed to select next address: %s", err)
 	}
 
-	log.Infof("[R %s] Attempting to listen", addr.Desc())
+	log.Infof("[R %s] Attempting to listen", t.bind)
 
-	tcplistener, err := net.ListenTCP("tcp", addr.Addr())
+	tcplistener, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %s", addr.Desc(), err)
+		return fmt.Errorf("failed to listen on %s: %s", t.bind, err)
 	}
 
-	log.Noticef("[R %s] Listening", addr.Desc())
+	log.Noticef("[R %s] Listening", t.bind)
 
-	return t.acceptLoop(addr.Desc(), tcplistener)
+	return t.acceptLoop(t.bind, tcplistener)
 }
 
 // acceptLoop creates new connections and pushes them to the controller to
@@ -222,7 +221,7 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 
 	var connectionSocket connectionSocket
 	if t.config.EnableTls {
-		connectionSocket = newConnectionSocketTLS(socket, t.getTLSConfig(), true, t.pool.Server())
+		connectionSocket = newConnectionSocketTLS(socket, t.getTLSConfig(), true, t.bind)
 	} else {
 		connectionSocket = newConnectionSocketTCP(socket)
 	}

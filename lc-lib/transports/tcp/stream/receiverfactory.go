@@ -20,7 +20,6 @@ import (
 	"context"
 	"regexp"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/transports"
 	"github.com/driskell/log-courier/lc-lib/transports/tcp"
@@ -58,8 +57,8 @@ func NewReceiverFactory(p *config.Parser, configPath string, unUsed map[string]i
 }
 
 // NewReceiver returns a new Receiver interface using the settings from the ReceiverFactory
-func (f *ReceiverFactory) NewReceiver(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Receiver {
-	return f.ReceiverFactory.NewReceiverWithProtocol(ctx, pool, eventChan, &protocolFactory{})
+func (f *ReceiverFactory) NewReceiver(ctx context.Context, bind string, eventChan chan<- transports.Event) transports.Receiver {
+	return f.ReceiverFactory.NewReceiverWithProtocol(ctx, bind, eventChan, &protocolFactory{})
 }
 
 // Register the transports

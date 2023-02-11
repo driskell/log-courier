@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
@@ -362,8 +361,7 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 					}
 				}
 				// Create new receiver
-				pool := addresspool.NewPool(listen)
-				newReceiversByListen[listen] = cfgEntry.Factory.NewReceiver(context.Background(), pool, r.eventChan)
+				newReceiversByListen[listen] = cfgEntry.Factory.NewReceiver(context.Background(), listen, r.eventChan)
 				newReceivers[newReceiversByListen[listen]] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
 				receiverApi := &api.KeyValue{}
 				receiverApi.SetEntry("listen", api.String(listen))

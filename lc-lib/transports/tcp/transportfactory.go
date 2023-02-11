@@ -58,21 +58,21 @@ func NewTransportFactory(p *config.Parser, configPath string, unUsed map[string]
 }
 
 // NewTransport for this factory base is null and just so we can cast down
-func (f *TransportFactory) NewTransport(context.Context, *addresspool.Pool, chan<- transports.Event) transports.Transport {
+func (f *TransportFactory) NewTransport(context.Context, *addresspool.PoolEntry, chan<- transports.Event) transports.Transport {
 	panic("Not implemented")
 }
 
 // NewTransportWithProtocol creates a new transport with the given protocol
-func (f *TransportFactory) NewTransportWithProtocol(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Transport {
+func (f *TransportFactory) NewTransportWithProtocol(ctx context.Context, poolEntry *addresspool.PoolEntry, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Transport {
 	cancelCtx, shutdownFunc := context.WithCancel(ctx)
 
-	backoffName := fmt.Sprintf("[T %s] Reconnect", pool.Server())
+	backoffName := fmt.Sprintf("[T %s] Reconnect", poolEntry.Server)
 	ret := &transportTCP{
 		ctx:             cancelCtx,
 		shutdownFunc:    shutdownFunc,
 		config:          f,
 		netConfig:       transports.FetchConfig(f.config),
-		pool:            pool,
+		poolEntry:       poolEntry,
 		eventChan:       eventChan,
 		backoff:         core.NewExpBackoff(backoffName, f.Reconnect, f.ReconnectMax),
 		protocolFactory: protocolFactory,

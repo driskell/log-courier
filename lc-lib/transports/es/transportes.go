@@ -56,7 +56,7 @@ type transportES struct {
 	shutdownFunc context.CancelFunc
 	config       *TransportESFactory
 	netConfig    *transports.Config
-	pool         *addresspool.Pool
+	poolEntry    *addresspool.PoolEntry
 	clients      map[string]*http.Client
 	eventChan    chan<- transports.Event
 
@@ -116,11 +116,11 @@ func (t *transportES) controllerRoutine() {
 
 // setupAssociation gathers cluster information and installs templates
 func (t *transportES) setupAssociation() bool {
-	backoffName := fmt.Sprintf("[T %s] Setup Retry", t.pool.Server())
+	backoffName := fmt.Sprintf("[T %s] Setup Retry", t.poolEntry.Server)
 	backoff := core.NewExpBackoff(backoffName, t.config.Retry, t.config.RetryMax)
 
 	for {
-		addr, err := t.pool.Next()
+		addr, err := t.poolEntry.Next()
 		if err != nil {
 			log.Errorf("[T %s] Failed to resolve Elasticsearch node address: %s", addr.Desc(), err)
 		} else if err := t.populateNodeInfo(addr); err != nil {
@@ -273,7 +273,7 @@ func (t *transportES) httpRoutine(id int) {
 		t.wait.Done()
 	}()
 
-	backoffName := fmt.Sprintf("%s:%d Retry", t.pool.Server(), id)
+	backoffName := fmt.Sprintf("%s:%d Retry", t.poolEntry.Server, id)
 	backoff := core.NewExpBackoff(backoffName, t.config.Retry, t.config.RetryMax)
 
 	for {
@@ -284,7 +284,7 @@ func (t *transportES) httpRoutine(id int) {
 		case payload := <-t.payloadChan:
 			if payload == nil {
 				// Graceful shutdown
-				log.Infof("[T %s]{%d} Elasticsearch routine stopped gracefully", t.pool.Server(), id)
+				log.Infof("[T %s]{%d} Elasticsearch routine stopped gracefully", t.poolEntry.Server, id)
 				return
 			}
 
@@ -294,7 +294,7 @@ func (t *transportES) httpRoutine(id int) {
 			for {
 				// Pool Next() is not race-safe
 				t.poolMutex.Lock()
-				addr, err := t.pool.Next()
+				addr, err := t.poolEntry.Next()
 				t.poolMutex.Unlock()
 				if err == nil {
 					err = t.performBulkRequest(addr, id, request)
@@ -425,7 +425,7 @@ func (t *transportES) SendEvents(nonce string, events []*event.Event) error {
 // Immediately respond with a pong
 func (t *transportES) Ping() error {
 	go func() {
-		log.Debugf("[T %s] Responding with pong", t.pool.Server())
+		log.Debugf("[T %s] Responding with pong", t.poolEntry.Server)
 		select {
 		case <-t.ctx.Done():
 			// Forced failure

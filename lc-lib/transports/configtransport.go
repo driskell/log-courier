@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
@@ -37,8 +36,7 @@ const (
 
 // Config holds network related configuration
 type Config struct {
-	Factory      TransportFactory
-	AddressPools []*addresspool.Pool
+	Factory TransportFactory
 
 	Backoff            time.Duration `config:"failure backoff"`
 	BackoffMax         time.Duration `config:"failure backoff max"`
@@ -81,14 +79,12 @@ func (nc *Config) Validate(p *config.Parser, path string) (err error) {
 	}
 
 	servers := make(map[string]bool)
-	nc.AddressPools = make([]*addresspool.Pool, len(nc.Servers))
-	for n, server := range nc.Servers {
+	for _, server := range nc.Servers {
 		if _, exists := servers[server]; exists {
 			err = fmt.Errorf("%sservers must be unique: %s appears multiple times", path, server)
 			return
 		}
 		servers[server] = true
-		nc.AddressPools[n] = addresspool.NewPool(server)
 	}
 
 	return

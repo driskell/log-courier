@@ -60,7 +60,7 @@ func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodR
 		} else if endpoint.IsFailed() || foundAcceptable {
 			// Failed endpoint or we've already found an acceptable one, get rid of
 			// it
-			sink.ShutdownEndpoint(endpoint.Server())
+			sink.ShutdownEndpoint(endpoint)
 			continue
 		}
 
@@ -83,7 +83,7 @@ func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodR
 		// at the very least placed them into a closing status
 		if !foundAcceptable {
 			log.Warning("[P Random] Method reload discovered inconsistent Endpoint status: %s", endpoint.Server())
-			sink.ShutdownEndpoint(endpoint.Server())
+			sink.ShutdownEndpoint(endpoint)
 		}
 	}
 
@@ -91,37 +91,38 @@ func newMethodRandom(sink *endpoint.Sink, netConfig *transports.Config) *methodR
 }
 
 func (m *methodRandom) connectRandom() {
-	var server string
-	var addressPool *addresspool.Pool
-	if len(m.netConfig.Servers) == 1 {
+	entries, err := addresspool.GeneratePool(m.netConfig.Servers, m.netConfig.Rfc2782Srv, m.netConfig.Rfc2782Service, time.Second*60)
+	if err != nil {
+		log.Warning("[P Random] Server lookup failure: %s", err)
+	}
+
+	var poolEntry *addresspool.PoolEntry
+	if len(entries) == 1 {
 		// Only one entry
-		server = m.netConfig.Servers[0]
-		addressPool = m.netConfig.AddressPools[0]
+		poolEntry = entries[0]
 		m.activeServer = 0
-	} else if len(m.netConfig.Servers) == 2 && m.activeServer != -1 {
+	} else if len(entries) == 2 && m.activeServer != -1 {
 		// Alternate between two endpoints
 		m.activeServer = (m.activeServer + 1) % 2
-		server = m.netConfig.Servers[m.activeServer]
-		addressPool = m.netConfig.AddressPools[m.activeServer]
+		poolEntry = entries[m.activeServer]
 	} else {
 		// Random selection that avoids the same endpoint twice in a row
 		for {
-			selected := m.generator.Intn(len(m.netConfig.Servers))
+			selected := m.generator.Intn(len(entries))
 			if selected == m.activeServer {
-				// Same server, try again
+				// Same poolEntry, try again
 				continue
 			}
 
 			m.activeServer = selected
-			server = m.netConfig.Servers[selected]
-			addressPool = m.netConfig.AddressPools[selected]
+			poolEntry = entries[selected]
 			break
 		}
 	}
 
-	log.Info("[P Random] Randomly selected new endpoint: %s", server)
+	log.Info("[P Random] Randomly selected new endpoint: %s", poolEntry.Desc)
 
-	m.sink.AddEndpoint(server, addressPool)
+	m.sink.AddEndpoint(poolEntry)
 }
 
 func (m *methodRandom) onFail(endpoint *endpoint.Endpoint) {
@@ -129,7 +130,7 @@ func (m *methodRandom) onFail(endpoint *endpoint.Endpoint) {
 	// This way we still have an endpoint with a last error in monitor
 	m.sink.Scheduler.SetCallback(m, m.backoff.Trigger(), func() {
 		log.Warning("[P Random] Giving up on failed endpoint: %s", endpoint.Server())
-		m.sink.ShutdownEndpoint(endpoint.Server())
+		m.sink.ShutdownEndpoint(endpoint)
 	})
 }
 

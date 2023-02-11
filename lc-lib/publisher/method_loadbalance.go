@@ -17,6 +17,9 @@
 package publisher
 
 import (
+	"time"
+
+	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/publisher/endpoint"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -33,6 +36,11 @@ func newMethodLoadbalance(sink *endpoint.Sink, netConfig *transports.Config) *me
 
 	// Reload configuration to ensure all servers are present in the sink
 	ret.reloadConfig(netConfig)
+
+	// Schedule refresh of the available servers - we will do fresh DNS lookups
+	sink.Scheduler.SetCallback(ret, 60*time.Second, func() {
+		ret.refresh(false)
+	})
 
 	return ret
 }
@@ -52,27 +60,41 @@ func (m *methodLoadbalance) onStarted(endpoint *endpoint.Endpoint) {
 
 func (m *methodLoadbalance) reloadConfig(netConfig *transports.Config) {
 	m.netConfig = netConfig
+	m.refresh(true)
+}
 
+func (m *methodLoadbalance) refresh(reloadConfig bool) {
 	// Verify all servers are present and reload them
+	entries, err := addresspool.GeneratePool(m.netConfig.Servers, m.netConfig.Rfc2782Srv, m.netConfig.Rfc2782Service, time.Second*60)
+	if err != nil {
+		log.Warning("[P Loadbalance] Server lookup failure: %s", err)
+	}
+
 	var last, foundEndpoint *endpoint.Endpoint
-	for n, server := range m.netConfig.Servers {
-		if foundEndpoint = m.sink.FindEndpoint(server); foundEndpoint == nil {
+	for _, poolEntry := range entries {
+		if foundEndpoint = m.sink.FindEndpoint(poolEntry); foundEndpoint == nil {
 			// Add a new endpoint
 			last = m.sink.AddEndpointAfter(
-				server,
-				m.netConfig.AddressPools[n],
+				poolEntry,
 				last,
 			)
-			log.Info("[P Loadbalance] Initialised new endpoint: %s", last.Server())
+			log.Info("[P Loadbalance] Initialised new endpoint: %s", last.PoolEntry().Desc)
 			continue
 		}
 
 		// Ensure ordering
 		m.sink.MoveEndpointAfter(foundEndpoint, last)
-		foundEndpoint.ReloadConfig(netConfig)
+		if reloadConfig {
+			foundEndpoint.ReloadConfig(m.netConfig)
+		}
 		last = foundEndpoint
 	}
+
+	m.sink.Scheduler.SetCallback(m, 60*time.Second, func() {
+		m.refresh(false)
+	})
 }
 
 func (m *methodLoadbalance) destroy() {
+	m.sink.Scheduler.Remove(m)
 }

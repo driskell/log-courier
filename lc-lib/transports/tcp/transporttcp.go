@@ -42,7 +42,7 @@ type transportTCP struct {
 	shutdownFunc context.CancelFunc
 	config       *TransportFactory
 	netConfig    *transports.Config
-	pool         *addresspool.Pool
+	poolEntry    *addresspool.PoolEntry
 	eventChan    chan<- transports.Event
 	backoff      *core.ExpBackoff
 
@@ -91,12 +91,12 @@ MainLoop:
 
 		if err != nil {
 			if err == ErrHardCloseRequested {
-				log.Noticef("[T %s] Transport forcefully disconnected", t.pool.Server())
+				log.Noticef("[T %s] Transport forcefully disconnected", t.poolEntry.Server)
 			} else {
-				log.Errorf("[T %s] Transport error, disconnected: %s", t.pool.Server(), err)
+				log.Errorf("[T %s] Transport error, disconnected: %s", t.poolEntry.Server, err)
 			}
 		} else {
-			log.Noticef("[T %s] Transport disconnected gracefully", t.pool.Server())
+			log.Noticef("[T %s] Transport disconnected gracefully", t.poolEntry.Server)
 			break MainLoop
 		}
 
@@ -159,7 +159,7 @@ func (t *transportTCP) getTLSConfig(servername string) (tlsConfig *tls.Config) {
 func (t *transportTCP) connect() (*connection, error) {
 	t.checkClientCertificates()
 
-	addr, err := t.pool.Next()
+	addr, err := t.poolEntry.Next()
 	if err != nil {
 		return nil, fmt.Errorf("failed to select next address: %s", err)
 	}
@@ -174,7 +174,7 @@ func (t *transportTCP) connect() (*connection, error) {
 	// Now wrap in TLS if this is the TLS transport
 	var connectionSocket connectionSocket
 	if t.config.EnableTls {
-		connectionSocket = newConnectionSocketTLS(socket.(*net.TCPConn), t.getTLSConfig(addr.Host()), false, t.pool.Server())
+		connectionSocket = newConnectionSocketTLS(socket.(*net.TCPConn), t.getTLSConfig(addr.Host()), false, t.poolEntry.Server)
 	} else {
 		connectionSocket = newConnectionSocketTCP(socket.(*net.TCPConn))
 	}

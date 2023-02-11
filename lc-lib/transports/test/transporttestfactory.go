@@ -60,12 +60,12 @@ func NewTransportTestFactory(p *config.Parser, configPath string, unUsed map[str
 
 // NewTransport returns a new Transport interface using the settings from the
 // TransportTCPFactory.
-func (f *TransportTestFactory) NewTransport(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event) transports.Transport {
+func (f *TransportTestFactory) NewTransport(ctx context.Context, poolEntry *addresspool.PoolEntry, eventChan chan<- transports.Event) transports.Transport {
 	ret := &transportTest{
 		ctx:       ctx,
 		config:    f,
 		eventChan: eventChan,
-		server:    pool.Server(),
+		server:    poolEntry.Server,
 	}
 	eventChan <- transports.NewStatusEvent(ctx, transports.Started, nil)
 	return ret

@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/addresspool"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
@@ -50,16 +49,16 @@ func NewReceiverFactory(p *config.Parser, configPath string, unUsed map[string]i
 }
 
 // NewTransport for this factory base is null and just so we can cast down
-func (f *ReceiverFactory) NewReceiver(context.Context, *addresspool.Pool, chan<- transports.Event) transports.Receiver {
+func (f *ReceiverFactory) NewReceiver(context.Context, string, chan<- transports.Event) transports.Receiver {
 	panic("Not implemented")
 }
 
 // NewReceiverWithProtocol creates a new receiver with the given protocol
-func (f *ReceiverFactory) NewReceiverWithProtocol(ctx context.Context, pool *addresspool.Pool, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Receiver {
-	backoffName := fmt.Sprintf("[R %s] Receiver Reset", pool.Server())
+func (f *ReceiverFactory) NewReceiverWithProtocol(ctx context.Context, bind string, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Receiver {
+	backoffName := fmt.Sprintf("[R %s] Receiver Reset", bind)
 	ret := &receiverTCP{
 		config:       f,
-		pool:         pool,
+		bind:         bind,
 		eventChan:    eventChan,
 		connections:  make(map[*connection]*connection),
 		shutdownChan: make(chan struct{}),

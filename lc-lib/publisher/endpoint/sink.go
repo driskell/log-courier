@@ -18,7 +18,6 @@ package endpoint
 
 import (
 	"sync"
-	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/internallist"
@@ -32,10 +31,9 @@ import (
 type Sink struct {
 	mutex sync.RWMutex
 
-	endpoints    map[string]*Endpoint
-	config       *transports.Config
-	eventChan    chan transports.Event
-	timeoutTimer *time.Timer
+	endpoints map[string]*Endpoint
+	config    *transports.Config
+	eventChan chan transports.Event
 
 	api *api.Array
 
@@ -66,10 +64,9 @@ type Sink struct {
 func NewSink(config *transports.Config) *Sink {
 	// TODO: Make channel sizes configurable?
 	ret := &Sink{
-		endpoints:    make(map[string]*Endpoint),
-		config:       config,
-		eventChan:    make(chan transports.Event, 10),
-		timeoutTimer: time.NewTimer(0),
+		endpoints: make(map[string]*Endpoint),
+		config:    config,
+		eventChan: make(chan transports.Event, 10),
 
 		Scheduler: scheduler.NewScheduler(),
 		OnAck:     func(*Endpoint, *payload.Payload, bool, int) {},
@@ -99,14 +96,14 @@ EndpointLoop:
 		}
 
 		// Not present in server list anymore, shut down
-		s.ShutdownEndpoint(server)
+		s.ShutdownEndpoint(endpoint)
 	}
 }
 
 // Shutdown signals all associated endpoints to begin shutting down
 func (s *Sink) Shutdown() {
-	for server := range s.endpoints {
-		s.ShutdownEndpoint(server)
+	for _, endpoint := range s.endpoints {
+		s.ShutdownEndpoint(endpoint)
 	}
 }
 

@@ -32,7 +32,7 @@ func (s *Sink) Front() *Endpoint {
 }
 
 // addEndpoint initialises a new endpoint
-func (s *Sink) addEndpoint(server string, addressPool *addresspool.Pool) *Endpoint {
+func (s *Sink) addEndpoint(poolEntry *addresspool.PoolEntry) *Endpoint {
 	var initialLatency float64
 
 	if s.readyList.Len() == 0 {
@@ -48,26 +48,25 @@ func (s *Sink) addEndpoint(server string, addressPool *addresspool.Pool) *Endpoi
 
 	endpoint := &Endpoint{
 		sink:           s,
-		server:         server,
-		addressPool:    addressPool,
+		poolEntry:      poolEntry,
 		averageLatency: initialLatency,
 	}
 
 	endpoint.Init()
 
-	s.endpoints[server] = endpoint
+	s.endpoints[poolEntry.Desc] = endpoint
 	return endpoint
 }
 
 // AddEndpoint initialises a new endpoint for a given server entry and adds it
 // to the back of the list of endpoints
-func (s *Sink) AddEndpoint(server string, addressPool *addresspool.Pool) *Endpoint {
-	endpoint := s.addEndpoint(server, addressPool)
+func (s *Sink) AddEndpoint(server *addresspool.PoolEntry) *Endpoint {
+	endpoint := s.addEndpoint(server)
 
 	s.mutex.Lock()
 	s.orderedList.PushBack(&endpoint.orderedElement)
 	if s.api != nil {
-		s.api.AddEntry(server, endpoint.apiEntry())
+		s.api.AddEntry(server.Desc, endpoint.apiEntry())
 	}
 	s.mutex.Unlock()
 	return endpoint
@@ -76,8 +75,8 @@ func (s *Sink) AddEndpoint(server string, addressPool *addresspool.Pool) *Endpoi
 // AddEndpointAfter initialises a new endpoint for a given server entry and adds
 // it in the list to the position after the given endpoint. If the given
 // endpoint is nil it is added at the front
-func (s *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, after *Endpoint) *Endpoint {
-	endpoint := s.addEndpoint(server, addressPool)
+func (s *Sink) AddEndpointAfter(server *addresspool.PoolEntry, after *Endpoint) *Endpoint {
+	endpoint := s.addEndpoint(server)
 
 	s.mutex.Lock()
 	if after == nil {
@@ -86,7 +85,7 @@ func (s *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, af
 		s.orderedList.InsertAfter(&endpoint.orderedElement, &after.orderedElement)
 	}
 	if s.api != nil {
-		s.api.AddEntry(server, endpoint.apiEntry())
+		s.api.AddEntry(server.Desc, endpoint.apiEntry())
 	}
 	s.mutex.Unlock()
 	return endpoint
@@ -94,8 +93,8 @@ func (s *Sink) AddEndpointAfter(server string, addressPool *addresspool.Pool, af
 
 // FindEndpoint returns the endpoint associated with the given server entry, or
 // nil if no endpoint is associated
-func (s *Sink) FindEndpoint(server string) *Endpoint {
-	endpoint, ok := s.endpoints[server]
+func (s *Sink) FindEndpoint(server *addresspool.PoolEntry) *Endpoint {
+	endpoint, ok := s.endpoints[server.Desc]
 	if !ok {
 		return nil
 	}
@@ -117,15 +116,9 @@ func (s *Sink) MoveEndpointAfter(endpoint *Endpoint, after *Endpoint) {
 	s.mutex.Unlock()
 }
 
-// RemoveEndpoint requests the endpoint associated with the given server to be
-// removed from the sink
-func (s *Sink) removeEndpoint(server string) {
-	endpoint, ok := s.endpoints[server]
-	if !ok {
-		return
-	}
-
-	log.Debugf("[E %s] Endpoint has finished", server)
+// RemoveEndpoint requests the endpoint be removed from the sink
+func (s *Sink) removeEndpoint(endpoint *Endpoint) {
+	log.Debugf("[E %s] Endpoint has finished", endpoint.poolEntry.Desc)
 
 	// Ensure we are correctly removed from all lists
 	if endpoint.IsActive() {
@@ -139,17 +132,16 @@ func (s *Sink) removeEndpoint(server string) {
 	s.mutex.Lock()
 	s.orderedList.Remove(&endpoint.orderedElement)
 	if s.api != nil {
-		s.api.RemoveEntry(server)
+		s.api.RemoveEntry(endpoint.poolEntry.Desc)
 	}
 	s.mutex.Unlock()
 
-	delete(s.endpoints, server)
+	delete(s.endpoints, endpoint.poolEntry.Desc)
 }
 
 // ShutdownEndpoint requests the endpoint associated with the given server
 // entry to shutdown, returning false if the endpoint could not be shutdown
-func (s *Sink) ShutdownEndpoint(server string) bool {
-	endpoint := s.FindEndpoint(server)
+func (s *Sink) ShutdownEndpoint(endpoint *Endpoint) bool {
 	if endpoint == nil || endpoint.IsClosing() {
 		return false
 	}
