@@ -100,6 +100,11 @@ func (p *Publisher) StartUpdate() {
 		p.updateChan <- err
 		return
 	}
+
+	sort.SliceStable(resp.Endpoints, func(i int, j int) bool {
+		return strings.Compare(resp.Endpoints[i].Server, resp.Endpoints[j].Server) < 0
+	})
+
 	p.updateChan <- &resp
 }
 

@@ -98,6 +98,14 @@ func (p *Receiver) StartUpdate() {
 		p.updateChan <- err
 		return
 	}
+
+	sort.SliceStable(resp.Connections, func(i int, j int) bool {
+		return strings.Compare(resp.Connections[i].Remote, resp.Connections[j].Remote) < 0
+	})
+	sort.SliceStable(resp.Listeners, func(i int, j int) bool {
+		return strings.Compare(resp.Listeners[i].Listen, resp.Listeners[j].Listen) < 0
+	})
+
 	p.updateChan <- &resp
 }
 
