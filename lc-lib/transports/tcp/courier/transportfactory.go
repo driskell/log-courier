@@ -63,7 +63,11 @@ func NewTransportFactory(p *config.Parser, configPath string, unUsed map[string]
 // NewTransport returns a new Transport interface using the settings from the
 // TransportFactory.
 func (f *TransportFactory) NewTransport(ctx context.Context, poolEntry *addresspool.PoolEntry, eventChan chan<- transports.Event) transports.Transport {
-	return f.TransportFactory.NewTransportWithProtocol(ctx, poolEntry, eventChan, &protocolFactory{isClient: true})
+	return f.TransportFactory.NewTransportWithProtocol(ctx, f, poolEntry, eventChan, &protocolFactory{isClient: true})
+}
+
+func (f *TransportFactory) ShouldRestart(newFactory transports.TransportFactory) bool {
+	return f.TransportFactory.ShouldRestart(newFactory.(*TransportFactory).TransportFactory)
 }
 
 // Register the transports

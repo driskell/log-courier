@@ -57,13 +57,17 @@ func NewTransportFactory(p *config.Parser, configPath string, unUsed map[string]
 	return ret, nil
 }
 
-// NewTransport for this factory base is null and just so we can cast down
-func (f *TransportFactory) NewTransport(context.Context, *addresspool.PoolEntry, chan<- transports.Event) transports.Transport {
-	panic("Not implemented")
+func (f *TransportFactory) Defaults() {
+	f.Reconnect = defaultReconnect
+	f.ReconnectMax = defaultReconnectMax
+}
+
+func (f *TransportFactory) Validate(p *config.Parser, configPath string) (err error) {
+	return f.ClientTlsConfiguration.TlsValidate(f.EnableTls, p, configPath)
 }
 
 // NewTransportWithProtocol creates a new transport with the given protocol
-func (f *TransportFactory) NewTransportWithProtocol(ctx context.Context, poolEntry *addresspool.PoolEntry, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Transport {
+func (f *TransportFactory) NewTransportWithProtocol(ctx context.Context, factory transports.TransportFactory, poolEntry *addresspool.PoolEntry, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Transport {
 	cancelCtx, shutdownFunc := context.WithCancel(ctx)
 
 	backoffName := fmt.Sprintf("[T %s] Reconnect", poolEntry.Server)
@@ -71,6 +75,7 @@ func (f *TransportFactory) NewTransportWithProtocol(ctx context.Context, poolEnt
 		ctx:             cancelCtx,
 		shutdownFunc:    shutdownFunc,
 		config:          f,
+		factory:         factory,
 		netConfig:       transports.FetchConfig(f.config),
 		poolEntry:       poolEntry,
 		eventChan:       eventChan,
@@ -82,25 +87,14 @@ func (f *TransportFactory) NewTransportWithProtocol(ctx context.Context, poolEnt
 	return ret
 }
 
-// Defaults sets the default configuration values
-func (f *TransportFactory) Defaults() {
-	f.Reconnect = defaultReconnect
-	f.ReconnectMax = defaultReconnectMax
-}
-
-func (f *TransportFactory) Validate(p *config.Parser, configPath string) (err error) {
-	return f.ClientTlsConfiguration.TlsValidate(f.EnableTls, p, configPath)
-}
-
-func (f *TransportFactory) ShouldRestart(newFactory transports.TransportFactory) bool {
-	newFactoryImpl := newFactory.(*TransportFactory)
-	if newFactoryImpl.Reconnect != f.Reconnect {
+func (f *TransportFactory) ShouldRestart(newFactory *TransportFactory) bool {
+	if newFactory.Reconnect != f.Reconnect {
 		return true
 	}
-	if newFactoryImpl.ReconnectMax != f.ReconnectMax {
+	if newFactory.ReconnectMax != f.ReconnectMax {
 		return true
 	}
-	if f.ClientTlsConfiguration.HasChanged(newFactoryImpl.ClientTlsConfiguration) {
+	if f.ClientTlsConfiguration.HasChanged(newFactory.ClientTlsConfiguration) {
 		return true
 	}
 	return false

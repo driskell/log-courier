@@ -41,6 +41,7 @@ type transportTCP struct {
 	ctx          context.Context
 	shutdownFunc context.CancelFunc
 	config       *TransportFactory
+	factory      transports.TransportFactory
 	netConfig    *transports.Config
 	poolEntry    *addresspool.PoolEntry
 	eventChan    chan<- transports.Event
@@ -55,7 +56,7 @@ type transportTCP struct {
 
 // Factory returns the associated factory
 func (t *transportTCP) Factory() transports.TransportFactory {
-	return t.config
+	return t.factory
 }
 
 // startController starts the controller
