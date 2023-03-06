@@ -89,7 +89,7 @@ func (e *Event) Data() map[string]interface{} {
 			e.data = make(map[string]interface{})
 			e.data["message"] = err.Error()
 			e.data["@timestamp"] = Timestamp(time.Now())
-			e.data["@metadata"] = map[string]interface{}{}
+			e.data["@metadata"] = Metadata{}
 			e.data["tags"] = Tags{"_unmarshal_failure"}
 		} else {
 			e.convertData()
@@ -166,25 +166,26 @@ func (e *Event) MustResolve(path string, set interface{}) interface{} {
 
 // Resolve will return (and optionally set) the value at the given path (field), using a[b][c] syntax
 //
-// It will return an error if the path is invalid, and return nil if the path does not exist
+// # It will return an error if the path is invalid, and return nil if the path does not exist
 //
 // If you specify non-nil in the set parameter - the path will be set to that value and
 // the old value will be returned - and any non-map parts of the path will be converted to empty maps
 //
-// Remember ClearCache is required to flush any cached representations if you set or unset a value
+// # Remember ClearCache is required to flush any cached representations if you set or unset a value
 //
 // The following paths are guaranteed to exist and be of a specific type:
-//     @timestamp: time.Time
-//         If no value currently exists, it is created with the current time.
-//         If the existing value is invalid, the _timestamp_parse_failure tag is added
-//         and the error is stored inside the timestamp_parse_error field
-//     @metadata: map[string]interface{}
-//         Always empty, and overrides any value that came in over the wire.
-//         It is purely for processing metadata and is removed prior to any sending
-//     tags: Tags (Empty Tags instance)
-//         If no value currently exists, it is created empty with no tags.
-//         If the existing value is invalid, the _tags_parse_failure tag is added
-//         and the error is stored inside the tags_parse_error field
+//
+//	@timestamp: time.Time
+//	    If no value currently exists, it is created with the current time.
+//	    If the existing value is invalid, the _timestamp_parse_failure tag is added
+//	    and the error is stored inside the timestamp_parse_error field
+//	@metadata: Metadata (Empty Metadata instance)
+//	    Always empty, and overrides any value that came in over the wire.
+//	    It is purely for processing metadata and is removed prior to any sending
+//	tags: Tags (Empty Tags instance)
+//	    If no value currently exists, it is created empty with no tags.
+//	    If the existing value is invalid, the _tags_parse_failure tag is added
+//	    and the error is stored inside the tags_parse_error field
 //
 // If any error occured during unmarshaling of an event received over the network
 // then a new event with only a message key (and the above defaults) will be created
@@ -329,12 +330,15 @@ func (e *Event) ClearCache() {
 func (e *Event) Bytes() []byte {
 	if e.encoded == nil {
 		var err error
-		metadata := e.data["@metadata"]
-		delete(e.data, "@metadata")
-		e.encoded, err = json.Marshal(e.data)
-		e.data["@metadata"] = metadata
-		if err != nil {
-			e.encoded = make([]byte, 0)
+		prunedData := make(map[string]interface{})
+		for key, value := range e.data {
+			if key == "@metadata" {
+				continue
+			}
+			prunedData[key] = value
+		}
+		if e.encoded, err = json.Marshal(prunedData); err != nil {
+			e.encoded = []byte("{\"tags\":[\"_encode_failure\"]}")
 		}
 	}
 	return e.encoded
