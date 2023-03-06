@@ -49,6 +49,11 @@ type payload struct {
 	events []*event.Event
 }
 
+type clientCache struct {
+	client  *http.Client
+	expires time.Time
+}
+
 // transportES implements a transport that sends over the ES HTTP protocol
 type transportES struct {
 	// Constructor
@@ -57,7 +62,7 @@ type transportES struct {
 	config       *TransportESFactory
 	netConfig    *transports.Config
 	poolEntry    *addresspool.PoolEntry
-	clients      map[string]*http.Client
+	clients      map[*addresspool.Address]*clientCache
 	eventChan    chan<- transports.Event
 
 	// Internal
@@ -142,12 +147,12 @@ func (t *transportES) setupAssociation() bool {
 
 // populateNodeInfo populates the nodeInfo structure
 func (t *transportES) populateNodeInfo(addr *addresspool.Address) error {
-	httpRequest, err := t.createRequest(t.ctx, "GET", addr.Addr().String(), "/_nodes/http", nil)
+	httpRequest, err := t.createRequest(t.ctx, "GET", addr, "/_nodes/http", nil)
 	if err != nil {
 		return err
 	}
 
-	httpResponse, err := t.getClient(addr.Addr().String()).Do(httpRequest)
+	httpResponse, err := t.getClient(addr).Do(httpRequest)
 	if err != nil {
 		return err
 	}
@@ -215,7 +220,7 @@ func (t *transportES) installTemplate(addr *addresspool.Address) error {
 		return nil
 	}
 
-	httpRequest, err := t.createRequest(t.ctx, "PUT", addr.Addr().String(), fmt.Sprintf("/_template/%s", name), templateReader)
+	httpRequest, err := t.createRequest(t.ctx, "PUT", addr, fmt.Sprintf("/_template/%s", name), templateReader)
 	if err != nil {
 		return err
 	}
@@ -223,7 +228,7 @@ func (t *transportES) installTemplate(addr *addresspool.Address) error {
 	httpRequest.Header.Add("Content-Type", "application/json")
 	httpRequest.Header.Add("Content-Length", fmt.Sprintf("%d", templateLen))
 
-	httpResponse, err := t.getClient(addr.Addr().String()).Do(httpRequest)
+	httpResponse, err := t.getClient(addr).Do(httpRequest)
 	if err != nil {
 		return err
 	}
@@ -243,12 +248,12 @@ func (t *transportES) installTemplate(addr *addresspool.Address) error {
 
 // checkTemplate checks if template is already installed at the given server
 func (t *transportES) checkTemplate(addr *addresspool.Address, name string) (bool, error) {
-	httpRequest, err := t.createRequest(t.ctx, "HEAD", addr.Addr().String(), fmt.Sprintf("/_template/%s", name), nil)
+	httpRequest, err := t.createRequest(t.ctx, "HEAD", addr, fmt.Sprintf("/_template/%s", name), nil)
 	if err != nil {
 		return false, err
 	}
 
-	httpResponse, err := t.getClient(addr.Addr().String()).Do(httpRequest)
+	httpResponse, err := t.getClient(addr).Do(httpRequest)
 	if err != nil {
 		return false, err
 	}
@@ -355,7 +360,7 @@ func (t *transportES) performBulkRequest(addr *addresspool.Address, id int, requ
 		return err
 	}
 
-	httpRequest, err := t.createRequest(t.ctx, "POST", addr.Addr().String(), url, bodyBuffer)
+	httpRequest, err := t.createRequest(t.ctx, "POST", addr, url, bodyBuffer)
 	if err != nil {
 		return err
 	}
@@ -364,7 +369,7 @@ func (t *transportES) performBulkRequest(addr *addresspool.Address, id int, requ
 	httpRequest.Header.Add("Content-Type", "application/x-ndjson")
 	httpRequest.Header.Add("Content-Encoding", "gzip")
 
-	httpResponse, err := t.getClient(addr.Addr().String()).Do(httpRequest)
+	httpResponse, err := t.getClient(addr).Do(httpRequest)
 	if err != nil {
 		return err
 	}
@@ -455,7 +460,7 @@ func (t *transportES) Shutdown() {
 }
 
 // createRequest creates a new http.Request and adds default headers
-func (t *transportES) createRequest(ctx context.Context, method string, host string, url string, body io.Reader) (*http.Request, error) {
+func (t *transportES) createRequest(ctx context.Context, method string, addr *addresspool.Address, url string, body io.Reader) (*http.Request, error) {
 	var scheme string
 	if t.config.transport == TransportESHTTPS {
 		scheme = "https"
@@ -463,7 +468,7 @@ func (t *transportES) createRequest(ctx context.Context, method string, host str
 		scheme = "http"
 	}
 
-	request, err := http.NewRequestWithContext(ctx, method, fmt.Sprintf("%s://%s%s", scheme, host, url), body)
+	request, err := http.NewRequestWithContext(ctx, method, fmt.Sprintf("%s://%s%s", scheme, addr.Addr().String(), url), body)
 	if err != nil {
 		return nil, err
 	}
@@ -476,9 +481,22 @@ func (t *transportES) createRequest(ctx context.Context, method string, host str
 }
 
 // getClient returns a http.Client for the given server
-func (t *transportES) getClient(server string) *http.Client {
-	if client, ok := t.clients[server]; ok {
-		return client
+func (t *transportES) getClient(addr *addresspool.Address) *http.Client {
+	t.poolMutex.Lock()
+	defer t.poolMutex.Unlock()
+
+	now := time.Now()
+	cacheItem, ok := t.clients[addr]
+	if ok {
+		if cacheItem.expires.After(now) {
+			return cacheItem.client
+		}
+		delete(t.clients, addr)
+		for key, cacheItem := range t.clients {
+			if cacheItem.expires.Before(now) {
+				delete(t.clients, key)
+			}
+		}
 	}
 
 	certPool := x509.NewCertPool()
@@ -491,14 +509,14 @@ func (t *transportES) getClient(server string) *http.Client {
 			TLSHandshakeTimeout: t.netConfig.Timeout,
 			TLSClientConfig: &tls.Config{
 				RootCAs:    certPool,
-				ServerName: server,
+				ServerName: addr.Host(),
 				MinVersion: t.config.MinTLSVersion,
 				MaxVersion: t.config.MaxTLSVersion,
 			},
 		},
 		Timeout: t.netConfig.Timeout,
 	}
-
-	t.clients[server] = client
+	expires := time.Now().Add(time.Second * 300)
+	t.clients[addr] = &clientCache{client, expires}
 	return client
 }

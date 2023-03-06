@@ -11,6 +11,7 @@ network:
   - 127.0.0.1:12345
   - 127.0.0.1:12346
   transport: tcp
+  method: loadbalance
 files:
 - paths:
   - multiline-generated.log
