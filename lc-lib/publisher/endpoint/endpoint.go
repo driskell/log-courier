@@ -163,9 +163,8 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 
 	e.mutex.Lock()
 	e.numPayloads++
-	e.mutex.Unlock()
-
 	e.updateEstDelTime()
+	e.mutex.Unlock()
 
 	if e.numPayloads == 1 {
 		e.transmissionStart = time.Now()
@@ -233,7 +232,7 @@ func (e *Endpoint) ReduceLatency() {
 func (e *Endpoint) updateEstDelTime() {
 	e.estDelTime = time.Now()
 	for _, payload := range e.pendingPayloads {
-		e.estDelTime.Add(time.Duration(e.averageLatency) * time.Duration(payload.Size()))
+		e.estDelTime = e.estDelTime.Add(time.Duration(e.averageLatency) * time.Duration(payload.Size()))
 	}
 }
 
