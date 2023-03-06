@@ -49,7 +49,7 @@ type payload struct {
 	events []*event.Event
 }
 
-type clientCache struct {
+type clientCacheItem struct {
 	client  *http.Client
 	expires time.Time
 }
@@ -62,7 +62,7 @@ type transportES struct {
 	config       *TransportESFactory
 	netConfig    *transports.Config
 	poolEntry    *addresspool.PoolEntry
-	clients      map[*addresspool.Address]*clientCache
+	clientCache  map[*addresspool.Address]*clientCacheItem
 	eventChan    chan<- transports.Event
 
 	// Internal
@@ -88,8 +88,11 @@ func (t *transportES) startController() {
 // controllerRoutine is the master routine which handles submission
 func (t *transportES) controllerRoutine() {
 	defer func() {
-		// Wait for all routines to close
+		// Wait for all routines to close and close all connections
 		t.wait.Wait()
+		for _, cacheItem := range t.clientCache {
+			cacheItem.client.CloseIdleConnections()
+		}
 		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished, nil)
 	}()
 
@@ -486,16 +489,17 @@ func (t *transportES) getClient(addr *addresspool.Address) *http.Client {
 	defer t.poolMutex.Unlock()
 
 	now := time.Now()
-	cacheItem, ok := t.clients[addr]
+	expires := time.Now().Add(time.Second * 300)
+	cacheItem, ok := t.clientCache[addr]
 	if ok {
-		if cacheItem.expires.After(now) {
-			return cacheItem.client
-		}
-		delete(t.clients, addr)
-		for key, cacheItem := range t.clients {
-			if cacheItem.expires.Before(now) {
-				delete(t.clients, key)
-			}
+		cacheItem.expires = expires
+		return cacheItem.client
+	}
+
+	for key, cacheItem := range t.clientCache {
+		if cacheItem.expires.Before(now) {
+			cacheItem.client.CloseIdleConnections()
+			delete(t.clientCache, key)
 		}
 	}
 
@@ -516,7 +520,7 @@ func (t *transportES) getClient(addr *addresspool.Address) *http.Client {
 		},
 		Timeout: t.netConfig.Timeout,
 	}
-	expires := time.Now().Add(time.Second * 300)
-	t.clients[addr] = &clientCache{client, expires}
+
+	t.clientCache[addr] = &clientCacheItem{client, expires}
 	return client
 }
