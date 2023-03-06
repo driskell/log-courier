@@ -61,7 +61,10 @@ func TestPoolEntryHost(t *testing.T) {
 	secondAddr, err := poolEntry.Next()
 	if err != nil {
 		t.Fatalf("Address pool did not parse IP correctly: %s", err)
+	} else if secondAddr == nil {
+		t.Fatal("Address pool returned nil addr")
 	}
+
 	if addr.Addr().String() != "8.8.8.8:555" {
 		tmp := addr
 		addr = secondAddr
@@ -73,7 +76,7 @@ func TestPoolEntryHost(t *testing.T) {
 	} else if addr.Addr().String() != "8.8.8.8:555" {
 		t.Errorf("Address pool did not return correct addr: %s", addr.Addr().String())
 	}
-	if secondAddr.Desc() != "2001:4860:4860::8888:555 - desc" {
+	if secondAddr.Desc() != "[2001:4860:4860::8888]:555 - desc" {
 		t.Errorf("Address pool did not return correct desc: %s", secondAddr.Desc())
 	} else if secondAddr.Addr().String() != "[2001:4860:4860::8888]:555" {
 		t.Errorf("Address pool did not return correct addr: %s", secondAddr.Addr().String())
@@ -219,21 +222,33 @@ func TestHostLoopingRefresh(t *testing.T) {
 	} else if addr.Desc() != "8.8.8.8:1234 - desc" {
 		t.Errorf("Address pool returned incorrect desc: %s", addr.Desc())
 	}
+
 	time.Sleep(1100 * time.Millisecond)
+
 	addr, err = poolEntry.Next()
 	if err != nil {
 		t.Fatalf("Address pool did not parse IP correctly: %s", err)
 	} else if addr == nil {
 		t.Fatal("Address pool returned nil addr")
-	} else if addr.Desc() != "8.8.8.8:1234 - desc" {
+	}
+
+	secondAddr, err := poolEntry.Next()
+	if err != nil {
+		t.Fatalf("Address pool did not parse IP correctly: %s", err)
+	} else if secondAddr == nil {
+		t.Fatal("Address pool returned nil addr")
+	}
+
+	if addr.Addr().String() != "8.8.8.8:555" {
+		tmp := addr
+		addr = secondAddr
+		secondAddr = tmp
+	}
+
+	if addr.Desc() != "8.8.8.8:1234 - desc" {
 		t.Errorf("Address pool returned incorrect desc: %s", addr.Desc())
 	}
-	addr, err = poolEntry.Next()
-	if err != nil {
-		t.Fatalf("Address pool did not parse IP correctly: %s", err)
-	} else if addr == nil {
-		t.Fatal("Address pool returned nil addr")
-	} else if addr.Desc() != "[2001:4860:4860::8888]:1234 - desc" {
+	if secondAddr.Desc() != "[2001:4860:4860::8888]:1234 - desc" {
 		t.Errorf("Address pool returned incorrect desc: %s", addr.Desc())
 	}
 }
