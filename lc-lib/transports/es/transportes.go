@@ -62,7 +62,7 @@ type transportES struct {
 	config       *TransportESFactory
 	netConfig    *transports.Config
 	poolEntry    *addresspool.PoolEntry
-	clientCache  map[*addresspool.Address]*clientCacheItem
+	clientCache  map[string]*clientCacheItem
 	eventChan    chan<- transports.Event
 
 	// Internal
@@ -490,7 +490,7 @@ func (t *transportES) getClient(addr *addresspool.Address) *http.Client {
 
 	now := time.Now()
 	expires := time.Now().Add(time.Second * 300)
-	cacheItem, ok := t.clientCache[addr]
+	cacheItem, ok := t.clientCache[addr.Host()]
 	if ok {
 		cacheItem.expires = expires
 		return cacheItem.client
@@ -521,6 +521,6 @@ func (t *transportES) getClient(addr *addresspool.Address) *http.Client {
 		Timeout: t.netConfig.Timeout,
 	}
 
-	t.clientCache[addr] = &clientCacheItem{client, expires}
+	t.clientCache[addr.Host()] = &clientCacheItem{client, expires}
 	return client
 }

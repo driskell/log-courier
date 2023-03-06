@@ -153,7 +153,7 @@ func (f *TransportESFactory) NewTransport(ctx context.Context, poolEntry *addres
 		netConfig:    transports.FetchConfig(f.config),
 		poolEntry:    poolEntry,
 		eventChan:    eventChan,
-		clientCache:  make(map[*addresspool.Address]*clientCacheItem),
+		clientCache:  make(map[string]*clientCacheItem),
 	}
 
 	ret.startController()
