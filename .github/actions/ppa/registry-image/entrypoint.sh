@@ -6,6 +6,8 @@ VERSION=${VERSION#refs/tags/}
 RELEASE=1
 DRELEASE=${DRELEASE}
 
+git config --global safe.directory /github/workspace
+
 echo "::group::Checking $NAME exists in $REF"
 if [ "${NAME}" != "log-courier" ] && [ ! -d "${NAME}" ]; then
 	exit 0
