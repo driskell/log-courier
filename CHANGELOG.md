@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.10.0](https://github.com/driskell/log-courier/compare/v2.9.1...v2.10.0) (2023-03-20)
+
+
+### Features
+
+* As of 2.10.0 SHA1 signed certificates will be no longer supported, but can be temporarily enabled by setting the GODEBUG environment variable to x509sha1=1 ([d7659a3](https://github.com/driskell/log-courier/commit/d7659a35899abd303f4f00c9d949b43f2ba4a874))
+* Implement support for /**/ matching in file paths, and report IO errors on first scan ([95daa0d](https://github.com/driskell/log-courier/commit/95daa0d137a87cee060b25b0440d0d0190a7a28d)), closes [#327](https://github.com/driskell/log-courier/issues/327) [#285](https://github.com/driskell/log-courier/issues/285)
+* Implement TCP streaming receiver ([b3a3720](https://github.com/driskell/log-courier/commit/b3a37204249c48d96a2dc09750b930a0c0804b86))
+* Improved failover of connections when using SRV records ([05fcd48](https://github.com/driskell/log-courier/commit/05fcd4892e20121b9ba2f9a43c8f624fa565d8df))
+* Improved log output for transports to display more meaningful connection details in some instances ([1a14888](https://github.com/driskell/log-courier/commit/1a14888a9482a2704a2540d45d8b634d1b96c718))
+* lc-admin file list is now sorted to prevent display jumps on highly active instances ([17e9014](https://github.com/driskell/log-courier/commit/17e9014052f8637ef8ca6889264581ef15649907)), closes [#396](https://github.com/driskell/log-courier/issues/396)
+* Sort receivers and transports within lc-admin ([74775cc](https://github.com/driskell/log-courier/commit/74775cc189a80ef58b047adb5dcafe2a07f1d268))
+* SRV record servers now expand after lookup as if the looked up hosts were listed servers, enabling failover and load balancing support ([3a2fecf](https://github.com/driskell/log-courier/commit/3a2fecfc6803f08f8c75e3a16e9545c28037b749)), closes [#354](https://github.com/driskell/log-courier/issues/354)
+
+
+### Bug Fixes
+
+* Fix :127.0.0.1:1234 not working as specified in documentation for admin connect string ([ef11492](https://github.com/driskell/log-courier/commit/ef11492d42f6e2ba482dea1b5f59cad733406e9c)), closes [#395](https://github.com/driskell/log-courier/issues/395)
+* Fix es-https transport reporting ssl ca required when it was ([1741ba7](https://github.com/driskell/log-courier/commit/1741ba730369d9647bea9eaa6d49685d3318712c))
+* Fix for cache of ES transport clients that can result in too many open files ([bf45f4e](https://github.com/driskell/log-courier/commit/bf45f4e0379c3ab7940d208ab12a8a926744b5d2))
+* Fix loadbalance not balancing effectively when under pressure and queueing more payloads than it should on single endpoints ([54aef03](https://github.com/driskell/log-courier/commit/54aef03ef4d18e5fa04f1fd82f94e13631eaeebc))
+* Fix logstash-input-courier not shutting down with Logstash pipeline ([ea7a63c](https://github.com/driskell/log-courier/commit/ea7a63cc94a11152e9bf1d0f20656ed23bfad88c)), closes [#397](https://github.com/driskell/log-courier/issues/397)
+* Fix rare crash due to concurrent encoding activity in transport by preventing encoding making writes to the event ([ab6e5f7](https://github.com/driskell/log-courier/commit/ab6e5f7b9ac5ff1afd3d6d8e712a62fbce5f1b36))
+* Fix tls not working correctly for es-https, imporve tls config management, fix verify peers, make cert/key required for carver receiver ([c840355](https://github.com/driskell/log-courier/commit/c840355e8f314822dbf630d9b912d1abc9415c4a))
+
 ## [2.9.1](https://github.com/driskell/log-courier/compare/v2.9.0...v2.9.1) (2022-10-15)
 
 

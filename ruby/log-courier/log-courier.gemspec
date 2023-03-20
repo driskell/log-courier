@@ -1,6 +1,6 @@
 Gem::Specification.new do |gem|
   gem.name              = 'log-courier'
-  gem.version           = '2.9.1'
+  gem.version           = '2.10.0'
   gem.description       = 'Log Courier library'
   gem.summary           = 'Ruby implementation of the Courier protocol'
   gem.homepage          = 'https://github.com/driskell/log-courier'
