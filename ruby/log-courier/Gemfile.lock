@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    log-courier (2.9.1)
+    log-courier (2.10.0)
       cabin (~> 0.6)
       multi_json (~> 1.10)
 
@@ -55,6 +55,7 @@ GEM
 
 PLATFORMS
   java
+  universal-java-1.8
   universal-java-14
   x86_64-darwin-21
 
@@ -70,4 +71,4 @@ DEPENDENCIES
   ruby-prof (~> 1.4.3)
 
 BUNDLED WITH
-   2.3.7
+   2.4.8

@@ -1,7 +1,7 @@
 PATH
   remote: ../log-courier
   specs:
-    log-courier (2.9.1)
+    log-courier (2.10.0)
       cabin (~> 0.6)
       multi_json (~> 1.10)
 
@@ -40,8 +40,8 @@ PATH
 PATH
   remote: .
   specs:
-    logstash-input-courier (2.9.1-java)
-      log-courier (= 2.9.1)
+    logstash-input-courier (2.10.0-java)
+      log-courier (= 2.10.0)
       logstash-codec-plain
       logstash-core-plugin-api (>= 1.60, <= 2.99)
 
@@ -198,7 +198,9 @@ GEM
 
 PLATFORMS
   java
+  universal-java-1.8
   universal-java-14
+  universal-java-19
 
 DEPENDENCIES
   log-courier!
