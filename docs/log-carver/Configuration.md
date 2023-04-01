@@ -571,8 +571,7 @@ How multiple endpoints are managed is defined by the `method` configuration.
 
 ### `ssl ca`
 
-Filepath. Required  
-Available when `transport` is one of: `tls`, `es-https`
+Filepath. Required when `transport` is one of: `tls`, `es-https`
 
 Path to a PEM encoded certificate file to use to verify the connected endpoint.
 
@@ -581,14 +580,14 @@ Path to a PEM encoded certificate file to use to verify the connected endpoint.
 Filepath. Optional  
 Available when `transport` is `tls`
 
-Path to a PEM encoded certificate file to use as the client certificate.
+Path to a PEM encoded certificate file to use as the client certificate. If specified, [`ssl key`](#ssl-key) is also required.
 
 ### `ssl key`
 
-Filepath. Required with `ssl certificate`  
+Filepath. Optional
 Available when `transport` is `tls`
 
-Path to a PEM encoded private key to use with the client certificate.
+Path to a PEM encoded private key to use with the client certificate. If specified, [`ssl certificate`](#ssl-certificate) is also required.
 
 ### `template file`
 
@@ -739,7 +738,7 @@ Log Courier client.*
 
 String. Optional. Default: ""
 Available values: 1.0, 1.1, 1.2, 1.3
-Available when `transport` is `tls`
+Available when `transport` is `tls` or `streamtls`
 
 If specified, limits the TLS version to the given value. When not specified, the TLS version is only limited by the versions supported by Golang at build time. At the time of writing, this was 1.3.
 
@@ -747,14 +746,13 @@ If specified, limits the TLS version to the given value. When not specified, the
 
 String. Optional. Default: 1.2
 Available values: 1.0, 1.1, 1.2, 1.3
-Available when `transport` is `tls`
+Available when `transport` is `tls` or `streamtls`
 
 Sets the minimum TLS version allowed for connections on this transport. The TLS handshake will fail for any connection that is unable to negotiate a minimum of this version of TLS.
 
 ### `ssl certificate` (receiver)
 
-Filepath. Required
-Available when `transport` is `tls`
+Filepath. Required when `transport` is `tls` or `streamtls`
 
 Path to a PEM encoded certificate file to use as the server certificate.
 
@@ -767,7 +765,7 @@ will temporarily enable support, but users should update their certificates.
 ### `ssl client ca` (receiver)
 
 Array of Filepaths. Optional
-Available when `transport` is `tls`
+Available when `transport` is `tls` or `streamtls`
 
 A list of paths to PEM encoded client certificate authorities that can be used to verify client certificates. This is the counterpart to Log Courier's [`ssl certificate`](../log-courier/Configuration.md#ssl-certificate).
 
@@ -777,28 +775,29 @@ will temporarily enable support, but users should update their certificates.
 
 ### `ssl key` (receiver)
 
-Filepath. Required with `ssl certificate`  
-Available when `transport` is `tls`
+Filepath. Required when `transport` is `tls` or `streamtls`
 
 Path to a PEM encoded private key to use with the server certificate.
 
 ### `transport` (receiver)
 
 String. Optional. Default: "tls"  
-Available values: "tcp", "tls"
+Available values: "tls", "tcp", "streamtls", "stream"
 
 *Depending on how log-carver was built, some transports may not be available. Run `log-carver -list-supported` to see the list of transports available in a specific build of log-carver.*
 
 Sets the transport to use when receiving logs from the endpoint.
 
-"tcp" is an **insecure** equivalent to "tls" that does not encrypt traffic or
-authenticate the identity of endpoints. This should only be used on trusted
-internal networks. If in doubt, use the secure authenticating transport "tls".
+"tls" listens for TLS encrypted connections using the Courier protocol. For example, it will receive connections from Log Courier and also from the `logstash-output-courier` Logstash plugin. The `ssl certificate` and `ssl key` options are required for this transport. You can enable client certificate authentication by specifying the certificate authority for the client certificates to trust in `ssl client ca`.
+
+"streamtls" listens for TLS encrypted connections that are lined based. For example, it can receive connections from Monolog's [SocketHandler](https://github.com/Seldaek/monolog/blob/main/src/Monolog/Handler/SocketHandler.php) and generate basic events for each line of data received on the connection. The `ssl certificate` and `ssl key` options are required for this transport. If your client supports client certificate authentication (Monolog's SocketHandler does not), this can be enabled by specifying the certificate authority for the client certificates to trust in `ssl client ca`.
+
+"tcp" and "stream" are **insecure** equivalents to "tls" and "streamtls" that do not encrypt traffic or authenticate the identity of endpoints. These should only be used on trusted internal networks. If in doubt, use the secure authenticating transports "tls" and "streamtls". They have no required options.
 
 ### `verify peers` (receiver)
 
 Boolean. Optional. Default: true
-Available when `transport` is `tls`
+Available when `transport` is `tls` or `streamtls`
 
 When `ssl client ca` entries are configured for client certificate verification, the default is to require all connections to provide a client certificate and to be verified. If this is set to false, clients will be able to connect without providing a client certificate or with any client certificate.
 

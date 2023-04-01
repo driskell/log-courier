@@ -568,8 +568,7 @@ How multiple endpoints are managed is defined by the `method` configuration.
 
 ### `ssl ca`
 
-Filepath. Required  
-Available when `transport` is `tls`
+Filepath. Required when `transport` is `tls`
 
 Path to a PEM encoded certificate file to use to verify the connected endpoint.
 
@@ -582,7 +581,7 @@ will temporarily enable support, but users should update their certificates.
 Filepath. Optional  
 Available when `transport` is `tls`
 
-Path to a PEM encoded certificate file to use as the client certificate.
+Path to a PEM encoded certificate file to use as the client certificate. If specified, [`ssl key`](#ssl-key) is also required.
 
 NOTE: SHA1 signed certificates will be no longer supported for security reasons
 from version 2.10.0. Setting the environment variable `GODEBUG` to `x509sha1=1`
@@ -590,10 +589,10 @@ will temporarily enable support, but users should update their certificates.
 
 ### `ssl key`
 
-Filepath. Required with `ssl certificate`  
+Filepath. Optional  
 Available when `transport` is `tls`
 
-Path to a PEM encoded private key to use with the client certificate.
+Path to a PEM encoded private key to use with the client certificate. If specified, [`ssl certificate`](#ssl-certificate) is also required.
 
 ### `timeout`
 
@@ -612,8 +611,9 @@ Available values: "tcp", "tls"
 
 Sets the transport to use when sending logs to the endpoints. "tls" is recommended for most users.
 
-"tls" sends events to a host using the Courier protocol, such as Log Carver. "tcp" is the equivalent but
-without TLS encryption and peer verification and should only be used on internal networks.
+"tls" sends events to a host using the Courier protocol, such as Log Carver, or a Logstash instance with the `logstash-input-courier` plugin. The [`ssl ca`](#ssl-ca) option is required. You can also specify a client certificate if the remote side requires client certificate authentication by specifying [`ssl certificate`](#ssl-certificate) and [`ssl key`](#ssl-key)
+
+"tcp" is the **insecure** equivalent of "tls" but without encryption and peer verification and should only be used on internal networks. It has no required options.
 
 ## `stdin`
 
