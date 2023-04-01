@@ -328,7 +328,7 @@ func (t *connection) Flush() error {
 	return t.rwBuffer.Flush()
 }
 
-// LocalAddr returns the remote endpoint
+// LocalAddr returns the local endpoint
 func (t *connection) LocalAddr() net.Addr {
 	return t.socket.LocalAddr()
 }
