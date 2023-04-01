@@ -34,6 +34,7 @@ type receiverTCP struct {
 	ctx          context.Context
 	shutdownFunc context.CancelFunc
 	config       *ReceiverFactory
+	factory      transports.ReceiverFactory
 	bind         string
 	eventChan    chan<- transports.Event
 	connections  map[*connection]*connection
@@ -49,7 +50,7 @@ type receiverTCP struct {
 
 // Factory returns the associated factory
 func (t *receiverTCP) Factory() transports.ReceiverFactory {
-	return t.config
+	return t.factory
 }
 
 // startController starts the controller

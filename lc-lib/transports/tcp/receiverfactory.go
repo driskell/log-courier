@@ -54,10 +54,11 @@ func (f *ReceiverFactory) NewReceiver(context.Context, string, chan<- transports
 }
 
 // NewReceiverWithProtocol creates a new receiver with the given protocol
-func (f *ReceiverFactory) NewReceiverWithProtocol(ctx context.Context, bind string, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Receiver {
+func (f *ReceiverFactory) NewReceiverWithProtocol(ctx context.Context, factory transports.ReceiverFactory, bind string, eventChan chan<- transports.Event, protocolFactory ProtocolFactory) transports.Receiver {
 	backoffName := fmt.Sprintf("[R %s] Receiver Reset", bind)
 	ret := &receiverTCP{
 		config:       f,
+		factory:      factory,
 		bind:         bind,
 		eventChan:    eventChan,
 		connections:  make(map[*connection]*connection),
@@ -80,7 +81,6 @@ func (f *ReceiverFactory) Validate(p *config.Parser, configPath string) (err err
 	return f.ServerTlsConfiguration.TlsValidate(f.EnableTls, p, configPath)
 }
 
-func (f *ReceiverFactory) ShouldRestart(newFactory transports.ReceiverFactory) bool {
-	newFactoryImpl := newFactory.(*ReceiverFactory)
-	return f.ServerTlsConfiguration.HasChanged(newFactoryImpl.ServerTlsConfiguration)
+func (f *ReceiverFactory) ShouldRestart(newFactory *ReceiverFactory) bool {
+	return f.ServerTlsConfiguration.HasChanged(newFactory.ServerTlsConfiguration)
 }

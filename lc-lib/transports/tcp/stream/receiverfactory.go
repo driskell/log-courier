@@ -58,7 +58,11 @@ func NewReceiverFactory(p *config.Parser, configPath string, unUsed map[string]i
 
 // NewReceiver returns a new Receiver interface using the settings from the ReceiverFactory
 func (f *ReceiverFactory) NewReceiver(ctx context.Context, bind string, eventChan chan<- transports.Event) transports.Receiver {
-	return f.ReceiverFactory.NewReceiverWithProtocol(ctx, bind, eventChan, &protocolFactory{})
+	return f.ReceiverFactory.NewReceiverWithProtocol(ctx, f, bind, eventChan, &protocolFactory{})
+}
+
+func (f *ReceiverFactory) ShouldRestart(newFactory transports.ReceiverFactory) bool {
+	return f.ReceiverFactory.ShouldRestart(newFactory.(*ReceiverFactory).ReceiverFactory)
 }
 
 // Register the transports
