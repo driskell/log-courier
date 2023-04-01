@@ -181,17 +181,20 @@ ReceiverLoop:
 				r.connectionLock.Lock()
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
+				connectionStatus := r.connectionStatus[connection]
 				// Schedule partial ack if this is first set of events
-				if len(r.connectionStatus[connection].progress) == 0 {
+				if len(connectionStatus.progress) == 0 {
 					r.scheduler.Set(connection, 5*time.Second)
 				}
-				r.connectionStatus[connection].progress = append(r.connectionStatus[connection].progress, &poolEventProgress{event: eventImpl, sequence: 0})
+				connectionStatus.progress = append(connectionStatus.progress, &poolEventProgress{event: eventImpl, sequence: 0})
 				r.connectionLock.Unlock()
 				// Build the events with our acknowledger and submit the bundle
 				var events = make([]*event.Event, len(eventImpl.Events()))
 				for idx, item := range eventImpl.Events() {
 					ctx := context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{nonce: eventImpl.Nonce(), sequence: uint32(idx + 1)})
-					events[idx] = event.NewEvent(ctx, r, item)
+					item := event.NewEvent(ctx, r, item)
+					r.addEventSource(item, connectionStatus)
+					events[idx] = item
 				}
 				spool = append(spool, events)
 				spoolChan = r.output
@@ -394,4 +397,14 @@ func (r *Pool) shutdown() {
 	for _, receiver := range r.receiversByListen {
 		receiver.Shutdown()
 	}
+}
+
+func (r *Pool) addEventSource(item *event.Event, connectionStatus *poolConnectionStatus) {
+	source, ok := item.MustResolve("agent[source]", nil).([]string)
+	if !ok {
+		// Overwrite invalid / missing map
+		source = make([]string, 0, 1)
+	}
+	source = append(source, connectionStatus.label)
+	item.MustResolve("agent[source]", source)
 }

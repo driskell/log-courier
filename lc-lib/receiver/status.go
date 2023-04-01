@@ -17,6 +17,8 @@
 package receiver
 
 import (
+	"fmt"
+
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
@@ -36,6 +38,7 @@ type poolConnectionStatus struct {
 	listener string
 	remote   string
 	desc     string
+	label    string
 	progress []*poolEventProgress
 	lines    int64
 
@@ -48,6 +51,7 @@ func newPoolConnectionStatus(p *Pool, listener string, remote string, desc strin
 		listener: listener,
 		remote:   remote,
 		desc:     desc,
+		label:    fmt.Sprintf("%s [%s]", remote, desc),
 		progress: make([]*poolEventProgress, 0),
 	}
 }
