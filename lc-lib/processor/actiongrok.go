@@ -81,6 +81,7 @@ func (g *grokAction) Process(evnt *event.Event) *event.Event {
 				continue
 			}
 			evnt.AddError("grok", fmt.Sprintf("Grok failure: %s", err))
+			return evnt
 		}
 		if g.Remove {
 			_, err := evnt.Resolve(g.Field, event.ResolveParamUnset)
