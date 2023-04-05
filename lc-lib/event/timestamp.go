@@ -35,8 +35,14 @@ func (e Timestamp) VerifySet(set interface{}) (interface{}, error) {
 	switch value := set.(type) {
 	case time.Time:
 		return Timestamp(value), nil
+	case string:
+		newTime, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			return nil, fmt.Errorf("cannot set builtin @timestamp to given value: %w", err)
+		}
+		return Timestamp(newTime), nil
 	}
-	return nil, fmt.Errorf("Cannot set builtin @timestamp key to non time value")
+	return nil, fmt.Errorf("cannot set builtin @timestamp key to non time value")
 }
 
 // Format the timestamp
