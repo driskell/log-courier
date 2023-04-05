@@ -33,6 +33,7 @@ type ReceiverConfig []*ReceiverConfigEntry
 type ReceiverConfigEntry struct {
 	Factory ReceiverFactory
 
+	Name               string   `config:"name"`
 	Enabled            bool     `config:"enabled"`
 	Transport          string   `config:"transport"`
 	Listen             []string `config:"listen"`

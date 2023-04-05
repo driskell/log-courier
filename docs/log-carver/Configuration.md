@@ -63,6 +63,7 @@
     - [`max pending payloads` (receiver)](#max-pending-payloads-receiver)
     - [`max tls version` (receiver)](#max-tls-version-receiver)
     - [`min tls version` (receiver)](#min-tls-version-receiver)
+    - [`name` (receiver)](#name-receiver)
     - [`ssl certificate` (receiver)](#ssl-certificate-receiver)
     - [`ssl client ca` (receiver)](#ssl-client-ca-receiver)
     - [`ssl key` (receiver)](#ssl-key-receiver)
@@ -698,6 +699,13 @@ Array of Receivers. Optional.
 
 The receivers configuration specifies which transports Log Carver should listen on to receive events from.
 
+Events received from a receiver will have a `@metadata[receiver]` entry in them containing several values describing the source of the event:
+
+- `@metadata[receiver][name]`: The [`name`](#name-receiver) of the receiver in configuration
+- `@metadata[receiver][listener]`: The listen address of the receiver
+- `@metadata[receiver][remote]`: The remote address of the connection
+- `@metadata[receiver][desc]`: The description of the connection, usually `-` for TCP connections and the certificate common name or `No Client Certificate` for TLS connections
+
 Each entry has the following properties.
 
 ### `enabled` (receiver)
@@ -749,6 +757,12 @@ Available values: 1.0, 1.1, 1.2, 1.3
 Available when `transport` is `tls` or `streamtls`
 
 Sets the minimum TLS version allowed for connections on this transport. The TLS handshake will fail for any connection that is unable to negotiate a minimum of this version of TLS.
+
+### `name` (receiver)
+
+String. Optional. Default: Empty string
+
+Sets a name for the receiver that will be added to all events under `@metadata[receiver][name]`.
 
 ### `ssl certificate` (receiver)
 

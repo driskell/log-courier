@@ -10,9 +10,11 @@ receivers:
 - listen:
   - 127.0.0.1:12345
   transport: stream
+  name: First
 - listen:
   - 127.0.0.1:12346
   transport: stream
+  name: Second
 pipelines:
 - if: >-
     has(event.type) && event.type == "nginx"
@@ -28,6 +30,8 @@ pipelines:
 - else:
   - name: add_tag
     tag: unknown_event
+  - name: json
+    field: message
 network:
   transport: test
   servers:

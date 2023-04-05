@@ -174,7 +174,7 @@ ReceiverLoop:
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				r.startIdleTimeout(eventImpl.Context(), receiver, connection)
 				r.connectionLock.Lock()
-				r.connectionStatus[connection] = newPoolConnectionStatus(r, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc())
+				r.connectionStatus[connection] = newPoolConnectionStatus(r, r.receivers[receiver].config.Name, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc())
 				r.apiConnections.AddEntry(eventImpl.Remote(), r.connectionStatus[connection])
 				r.connectionLock.Unlock()
 			case transports.EventsEvent:
@@ -193,7 +193,7 @@ ReceiverLoop:
 				for idx, item := range eventImpl.Events() {
 					ctx := context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{nonce: eventImpl.Nonce(), sequence: uint32(idx + 1)})
 					item := event.NewEvent(ctx, r, item)
-					r.addEventSource(item, connectionStatus)
+					item.MustResolve("@metadata[receiver]", connectionStatus.metadataReceiver)
 					events[idx] = item
 				}
 				spool = append(spool, events)
@@ -397,14 +397,4 @@ func (r *Pool) shutdown() {
 	for _, receiver := range r.receiversByListen {
 		receiver.Shutdown()
 	}
-}
-
-func (r *Pool) addEventSource(item *event.Event, connectionStatus *poolConnectionStatus) {
-	source, ok := item.MustResolve("agent[source]", nil).([]string)
-	if !ok {
-		// Overwrite invalid / missing map
-		source = make([]string, 0, 1)
-	}
-	source = append(source, connectionStatus.label)
-	item.MustResolve("agent[source]", source)
 }
