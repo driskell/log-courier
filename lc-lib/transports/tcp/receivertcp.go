@@ -71,7 +71,7 @@ func (t *receiverTCP) controllerRoutine() {
 			break
 		}
 
-		log.Errorf("[R %s] Receiver error, resetting: %s", t.listen, err)
+		log.Errorf("[R %s] Receiver error, resetting: %s", t.bind, err)
 
 		if t.retryWait() {
 			break
@@ -79,7 +79,7 @@ func (t *receiverTCP) controllerRoutine() {
 	}
 
 	// Request all connections to stop receiving and wait for them to finally close once the final ack is sent and nil message sent
-	log.Infof("[R %s] Receiver shutting down and waiting for final acknowledgements to be sent", t.listen)
+	log.Infof("[R %s] Receiver shutting down and waiting for final acknowledgements to be sent", t.bind)
 	t.connMutex.Lock()
 	for _, conn := range t.connections {
 		t.ShutdownConnectionRead(conn.ctx, fmt.Errorf("exiting"))
@@ -90,7 +90,7 @@ func (t *receiverTCP) controllerRoutine() {
 	// Ensure resources are cleaned up for the context
 	t.shutdownFunc()
 
-	log.Infof("[R %s] Receiver exiting", t.listen)
+	log.Infof("[R %s] Receiver exiting", t.bind)
 }
 
 // retryWait waits the backoff timeout before attempting to listen again
