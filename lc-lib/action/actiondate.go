@@ -14,37 +14,50 @@
  * limitations under the License.
  */
 
-package processor
+package action
 
 import (
 	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
 
-type dateAction struct {
-	Field   string   `config:"field"`
-	Remove  bool     `config:"remove"`
-	Formats []string `config:"formats"`
+type dateActionNode struct {
 }
 
-func newDateAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
-	var err error
-	action := &dateAction{}
-	if err = p.Populate(action, unused, configPath, true); err != nil {
-		return nil, err
+var _ ast.ProcessArgumentsNode = &dateActionNode{}
+
+func newDateActionNode() (ast.ProcessArgumentsNode, error) {
+	return &dateActionNode{}, nil
+}
+
+func (n *dateActionNode) Arguments() []ast.Argument {
+	return []ast.Argument{
+		ast.NewArgumentString("field", ast.ArgumentRequired),
+		ast.NewArgumentListString("formats", ast.ArgumentRequired),
+		ast.NewArgumentBool("remove", ast.ArgumentOptional),
 	}
-	return action, nil
 }
 
-func (d *dateAction) Process(evnt *event.Event) *event.Event {
-	entry, err := evnt.Resolve(d.Field, nil)
+func (n *dateActionNode) Init([]any) error {
+	return nil
+}
+
+func (n *dateActionNode) ProcessWithArguments(subject *event.Event, arguments []any) *event.Event {
+	field := arguments[0].(string)
+	formats := arguments[1].([]string)
+	remove := false
+	if arguments[2] != nil {
+		remove = arguments[2].(bool)
+	}
+
+	entry, err := subject.Resolve(field, nil)
 	if err != nil {
-		evnt.AddError("date", fmt.Sprintf("Field '%s' could not be resolved: %s", d.Field, err))
-		return evnt
+		subject.AddError("date", fmt.Sprintf("Field '%s' could not be resolved: %s", field, err))
+		return subject
 	}
 
 	var (
@@ -53,11 +66,11 @@ func (d *dateAction) Process(evnt *event.Event) *event.Event {
 	)
 	value, ok = entry.(string)
 	if !ok {
-		evnt.AddError("date", fmt.Sprintf("Field '%s' is not present or not a string", d.Field))
-		return evnt
+		subject.AddError("date", fmt.Sprintf("Field '%s' is not present or not a string", field))
+		return subject
 	}
 
-	for _, layout := range d.Formats {
+	for _, layout := range formats {
 		var (
 			result time.Time
 			err    error
@@ -84,21 +97,21 @@ func (d *dateAction) Process(evnt *event.Event) *event.Event {
 			result = time.Date(time.Now().Year(), result.Month(), result.Day(), result.Hour(), result.Minute(), result.Second(), result.Nanosecond(), result.Location())
 		}
 
-		evnt.MustResolve("@timestamp", result)
-		if d.Remove {
-			_, err := evnt.Resolve(d.Field, event.ResolveParamUnset)
+		subject.MustResolve("@timestamp", result)
+		if remove {
+			_, err := subject.Resolve(field, event.ResolveParamUnset)
 			if err != nil {
-				evnt.AddError("date", fmt.Sprintf("Failed to remove field '%s': %s", d.Field, err))
+				subject.AddError("date", fmt.Sprintf("Failed to remove field '%s': %s", field, err))
 			}
 		}
-		return evnt
+		return subject
 	}
 
-	evnt.AddError("date", fmt.Sprintf("Field '%s' could not be parsed with any of the given formats", d.Field))
-	return evnt
+	subject.AddError("date", fmt.Sprintf("Field '%s' could not be parsed with any of the given formats", field))
+	return subject
 }
 
 // init will register the action
 func init() {
-	RegisterAction("date", newDateAction)
+	ast.RegisterAction("date", newDateActionNode)
 }

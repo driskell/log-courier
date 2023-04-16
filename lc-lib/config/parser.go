@@ -261,6 +261,21 @@ FieldLoop:
 				}
 				vField.Set(retSlice)
 				continue FieldLoop
+			case "embed_string":
+				// Embed string allows us to take a string into a specific field of a struct
+				// This allows extra metadata to be built around the slice
+				if vField.Kind() != reflect.String {
+					panic(fmt.Sprintf("Embedded string configuration field is not a string at %s (%s): %s", configPath, tField.Name, vField.Kind().String()))
+				}
+
+				// Populate the string - trim the forward slash from the config path end too
+				var retString reflect.Value
+				retString, err = p.populateEntry(vField, vRawConfig, configPath[:len(configPath)-1], "", reportUnused)
+				if err != nil {
+					return
+				}
+				vField.Set(retString)
+				continue FieldLoop
 			}
 		}
 
