@@ -1,34 +1,25 @@
-package processor
+package action
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
-func TestDateFromConfig(t *testing.T) {
-	entry, err := newDateAction(config.NewParser(nil), "/date/", map[string]interface{}{"field": "epoch", "remove": true, "formats": []interface{}{"UNIX"}}, "date")
-	if err != nil {
-		t.Fatalf("Parsing failed unexpectedly: %s", err)
-	}
-
-	action := entry.(*dateAction)
-	if action.Field != "epoch" || !action.Remove || len(action.Formats) != 1 || action.Formats[0] != "UNIX" {
-		t.Errorf("Unexpected action from config: %#v", action)
-	}
+func TestDateAcceptsAllArguments(t *testing.T) {
+	mustNewTestNode(t, "date", map[string]interface{}{"field": "epoch", "remove": true, "formats": []string{"UNIX"}})
 }
 
 func TestDateConfigRejectsUnknownKey(t *testing.T) {
-	if _, err := newDateAction(config.NewParser(nil), "/date/", map[string]interface{}{"field": "epoch", "unknown": true}, "date"); err == nil {
+	if _, err := newTestNode("date", map[string]interface{}{"field": "epoch", "formats": []string{"UNIX"}, "unknown": true}); err == nil {
 		t.Error("Unknown key was not rejected")
 	}
 }
 
-func processDateTestEvent(action *dateAction, data map[string]interface{}) *event.Event {
-	return action.Process(event.NewEvent(context.Background(), nil, data))
+func processDateTestEvent(t *testing.T, arguments map[string]interface{}, data map[string]interface{}) *event.Event {
+	t.Helper()
+	return processTestEvent(t, "date", arguments, data)
 }
 
 func dateTestTimestamp(t *testing.T, evnt *event.Event) time.Time {
@@ -48,7 +39,7 @@ func assertDateTestError(t *testing.T, evnt *event.Event, expected string) {
 }
 
 func TestDateUnixKeepsFraction(t *testing.T) {
-	evnt := processDateTestEvent(&dateAction{Field: "epoch", Formats: []string{"UNIX"}}, map[string]interface{}{"epoch": "1792914775.574"})
+	evnt := processDateTestEvent(t, map[string]interface{}{"field": "epoch", "formats": []string{"UNIX"}}, map[string]interface{}{"epoch": "1792914775.574"})
 
 	expected := time.Unix(1792914775, 574*int64(time.Millisecond))
 	if timestamp := dateTestTimestamp(t, evnt); !timestamp.Equal(expected) {
@@ -57,7 +48,7 @@ func TestDateUnixKeepsFraction(t *testing.T) {
 }
 
 func TestDateFallsBackToNextFormat(t *testing.T) {
-	evnt := processDateTestEvent(&dateAction{Field: "when", Formats: []string{"UNIX", time.RFC3339}}, map[string]interface{}{"when": "2026-10-25T07:52:55Z"})
+	evnt := processDateTestEvent(t, map[string]interface{}{"field": "when", "formats": []string{"UNIX", time.RFC3339}}, map[string]interface{}{"when": "2026-10-25T07:52:55Z"})
 
 	expected := time.Date(2026, 10, 25, 7, 52, 55, 0, time.UTC)
 	if timestamp := dateTestTimestamp(t, evnt); !timestamp.Equal(expected) {
@@ -66,7 +57,7 @@ func TestDateFallsBackToNextFormat(t *testing.T) {
 }
 
 func TestDateWithoutYearUsesCurrentYear(t *testing.T) {
-	evnt := processDateTestEvent(&dateAction{Field: "when", Formats: []string{time.Stamp}}, map[string]interface{}{"when": "Oct 25 07:52:55"})
+	evnt := processDateTestEvent(t, map[string]interface{}{"field": "when", "formats": []string{time.Stamp}}, map[string]interface{}{"when": "Oct 25 07:52:55"})
 
 	expected := time.Date(time.Now().Year(), 10, 25, 7, 52, 55, 0, time.UTC)
 	if timestamp := dateTestTimestamp(t, evnt); !timestamp.Equal(expected) {
@@ -75,7 +66,7 @@ func TestDateWithoutYearUsesCurrentYear(t *testing.T) {
 }
 
 func TestDateRemovesField(t *testing.T) {
-	evnt := processDateTestEvent(&dateAction{Field: "epoch", Remove: true, Formats: []string{"UNIX"}}, map[string]interface{}{"epoch": "1792914775"})
+	evnt := processDateTestEvent(t, map[string]interface{}{"field": "epoch", "remove": true, "formats": []string{"UNIX"}}, map[string]interface{}{"epoch": "1792914775"})
 
 	if _, ok := evnt.Data()["epoch"]; ok {
 		t.Error("Field was not removed after parsing")
@@ -83,19 +74,19 @@ func TestDateRemovesField(t *testing.T) {
 }
 
 func TestDateNoFormatMatches(t *testing.T) {
-	evnt := processDateTestEvent(&dateAction{Field: "when", Formats: []string{"UNIX", time.RFC3339}}, map[string]interface{}{"when": "not a date"})
+	evnt := processDateTestEvent(t, map[string]interface{}{"field": "when", "formats": []string{"UNIX", time.RFC3339}}, map[string]interface{}{"when": "not a date"})
 
 	assertDateTestError(t, evnt, "Field 'when' could not be parsed with any of the given formats")
 }
 
 func TestDateFieldNotString(t *testing.T) {
-	evnt := processDateTestEvent(&dateAction{Field: "when", Formats: []string{"UNIX"}}, map[string]interface{}{"when": 1792914775})
+	evnt := processDateTestEvent(t, map[string]interface{}{"field": "when", "formats": []string{"UNIX"}}, map[string]interface{}{"when": 1792914775})
 
 	assertDateTestError(t, evnt, "Field 'when' is not present or not a string")
 }
 
 func TestDateFieldUnresolvable(t *testing.T) {
-	evnt := processDateTestEvent(&dateAction{Field: "when]", Formats: []string{"UNIX"}}, map[string]interface{}{})
+	evnt := processDateTestEvent(t, map[string]interface{}{"field": "when]", "formats": []string{"UNIX"}}, map[string]interface{}{})
 
 	assertDateTestError(t, evnt, "Field 'when]' could not be resolved: Invalid field: when]")
 }

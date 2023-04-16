@@ -37,7 +37,7 @@ type Config struct {
 	Timeout            time.Duration `config:"timeout"`
 	Transport          string        `config:"transport"`
 
-	Unused map[string]interface{} `json:",omitempty"`
+	Unused map[string]interface{} `config:",collect_unused" json:",omitempty"`
 }
 
 // Init the transport configuration based on which was chosen

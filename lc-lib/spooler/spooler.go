@@ -20,11 +20,13 @@
 package spooler
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/harvester"
 )
 
 const (
@@ -78,6 +80,10 @@ func (s *Spooler) SetConfigChan(configChan <-chan *config.Config) {
 
 // Init does nothing as nothing to initialise
 func (s *Spooler) Init(cfg *config.Config) error {
+	// Max line bytes can not be larger than spool max bytes
+	if s.genConfig.SpoolMaxBytes < cfg.GeneralPart("harvester").(*harvester.General).MaxLineBytes {
+		return fmt.Errorf("general/max line bytes can not be greater than general/spool max bytes")
+	}
 	return nil
 }
 

@@ -142,3 +142,29 @@ func escapeControlMap(entries map[string]interface{}) bool {
 	}
 	return found
 }
+
+const controlCharsTag = "_control_chars"
+
+// EscapeControlChars escapes control characters throughout the event, tagging each top-level field that had any
+func (e *Event) EscapeControlChars() {
+	data := e.Data()
+	for key, value := range data {
+		escapedKey, keyFound := EscapeControl(key)
+		escaped, valueFound := EscapeControlValue(value)
+		if !keyFound && !valueFound {
+			continue
+		}
+		if keyFound {
+			delete(data, key)
+		}
+		data[escapedKey] = escaped
+		e.TagControlChars(escapedKey)
+	}
+}
+
+// TagControlChars tags the event as having had control characters escaped within the given field
+func (e *Event) TagControlChars(field string) {
+	fieldTag, _ := EscapeControl(field)
+	e.AddTag(controlCharsTag)
+	e.AddTag(controlCharsTag + "_" + fieldTag)
+}

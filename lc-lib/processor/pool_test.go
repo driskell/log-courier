@@ -1,11 +1,28 @@
 package processor
 
 import (
+	"context"
+	"reflect"
 	"testing"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
+
+func newControlTestEvent(data map[string]interface{}) *event.Event {
+	return event.NewEvent(context.Background(), nil, data)
+}
+
+func assertControlTestTags(t *testing.T, evnt *event.Event, expected ...string) {
+	t.Helper()
+	if expected == nil {
+		expected = []string{}
+	}
+	if tags := evnt.Data()["tags"].(event.Tags); !reflect.DeepEqual([]string(tags), expected) {
+		t.Errorf("Unexpected tags: got %q, expected %q", tags, expected)
+	}
+}
 
 type recordingTestEntry struct {
 	message interface{}
@@ -16,9 +33,19 @@ func (r *recordingTestEntry) Process(evnt *event.Event) *event.Event {
 	return evnt
 }
 
+type settingTestEntry struct {
+	field string
+	value string
+}
+
+func (s *settingTestEntry) Process(evnt *event.Event) *event.Event {
+	evnt.MustResolve(s.field, s.value)
+	return evnt
+}
+
 func TestPoolEscapesControlCharactersAfterPipeline(t *testing.T) {
 	recorder := &recordingTestEntry{}
-	pool := &Pool{pipelines: &Config{AST: []ASTEntry{recorder}}, guard: &timestampGuard{}, escapeControl: true}
+	pool := &Pool{ast: []ast.ProcessNode{recorder}, guard: &timestampGuard{}, escapeControl: true}
 
 	evnt := pool.processEvent(newControlTestEvent(map[string]interface{}{"message": "a\x1Db\x1b"}))
 
@@ -31,14 +58,14 @@ func TestPoolEscapesControlCharactersAfterPipeline(t *testing.T) {
 	assertControlTestTags(t, evnt, "_control_chars", "_control_chars_message")
 }
 
-func TestPoolEscapesKVResultsAfterSplittingOnControlSeparators(t *testing.T) {
-	kv := newKVTestAction(t, map[string]interface{}{"field": "message", "prefix": "audit_", "separators": " \x1D", "unquoted hex": []interface{}{"proctitle"}})
-	pool := &Pool{pipelines: &Config{AST: []ASTEntry{kv}}, guard: &timestampGuard{}, escapeControl: true}
+func TestPoolEscapesFieldsSetByPipeline(t *testing.T) {
+	setter := &settingTestEntry{field: "audit_proctitle", value: "\x1b[2Jls"}
+	pool := &Pool{ast: []ast.ProcessNode{setter}, guard: &timestampGuard{}, escapeControl: true}
 
 	evnt := pool.processEvent(newControlTestEvent(map[string]interface{}{"message": "proctitle=1B5B324A6C73\x1DUID=\"root\""}))
 
-	if evnt.Data()["audit_proctitle"] != `\x1B[2Jls` || evnt.Data()["audit_UID"] != "root" {
-		t.Errorf("Unexpected parsed fields: %#v", evnt.Data())
+	if evnt.Data()["audit_proctitle"] != `\x1B[2Jls` {
+		t.Errorf("Unexpected set field: %#v", evnt.Data())
 	}
 	if evnt.Data()["message"] != `proctitle=1B5B324A6C73\x1DUID="root"` {
 		t.Errorf("Message was not escaped after the pipeline: %q", evnt.Data()["message"])
@@ -47,7 +74,7 @@ func TestPoolEscapesKVResultsAfterSplittingOnControlSeparators(t *testing.T) {
 }
 
 func TestPoolKeepsControlCharactersWhenDisabled(t *testing.T) {
-	pool := &Pool{pipelines: &Config{}, guard: &timestampGuard{}}
+	pool := &Pool{guard: &timestampGuard{}}
 
 	evnt := pool.processEvent(newControlTestEvent(map[string]interface{}{"message": "a\x1b"}))
 

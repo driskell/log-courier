@@ -18,6 +18,7 @@ package processor
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
@@ -25,6 +26,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
 
 // Pool manages routines that perform sequences of mutations on events
@@ -34,14 +36,16 @@ type Pool struct {
 	shutdownChan <-chan struct{}
 	configChan   <-chan *config.Config
 
-	cfg           *config.Config
-	pipelines     *Config
-	debugEvents   bool
-	escapeControl bool
-	sequencer     *event.Sequencer
-	fanout        chan *event.Bundle
-	collector     chan *event.Bundle
-	guard         *timestampGuard
+	cfg             *config.Config
+	pipelines       *LegacyConfig
+	processorScript *Config
+	ast             []ast.ProcessNode
+	debugEvents     bool
+	escapeControl   bool
+	sequencer       *event.Sequencer
+	fanout          chan *event.Bundle
+	collector       chan *event.Bundle
+	guard           *timestampGuard
 
 	apiConfig *admin.Config
 }
@@ -86,6 +90,23 @@ func (p *Pool) Init(cfg *config.Config) error {
 		p.apiConfig.SetEntry("processor", processorAPI)
 	}
 
+	if p.processorScript.Source != "" && p.pipelines.Pipeline != nil {
+		return errors.New("processor pipeline script and legacy pipeline configuration can not both be specified")
+	}
+
+	if p.pipelines.Pipeline != nil {
+		parser := config.NewParser(cfg)
+		if err := compileLegacyConfig(parser, p.pipelines); err != nil {
+			return err
+		}
+		p.ast = p.pipelines.ast
+		return nil
+	}
+
+	var err error
+	if p.ast, err = compileScript(cfg, p.processorScript.Source); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -226,12 +247,12 @@ func (p *Pool) processorRoutine(id int) {
 
 // processEvent processes a single event
 func (p *Pool) processEvent(evnt *event.Event) *event.Event {
-	for _, entry := range p.pipelines.AST {
+	for _, entry := range p.ast {
 		evnt = entry.Process(evnt)
 	}
 	// Escape after the pipeline so actions can still parse data separated by control characters
 	if p.escapeControl {
-		evnt = escapeControlEvent(evnt)
+		evnt.EscapeControlChars()
 	}
 	if p.guard.Check(evnt, time.Now()) {
 		log.Debugf("Dropping event with out of range timestamp: %v", evnt.MustResolve("@timestamp", nil))
@@ -247,7 +268,8 @@ func (p *Pool) processEvent(evnt *event.Event) *event.Event {
 // applyConfig applies the given configuration
 func (p *Pool) applyConfig(cfg *config.Config) {
 	p.cfg = cfg
-	p.pipelines = FetchConfig(cfg)
+	p.pipelines = FetchLegacyConfig(cfg)
+	p.processorScript = FetchConfig(cfg)
 	general := cfg.GeneralPart("processor").(*General)
 	p.debugEvents = general.DebugEvents
 	p.escapeControl = general.EscapeControlCharacters

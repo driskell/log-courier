@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/harvester"
 )
 
 const (
@@ -42,12 +41,6 @@ func (gc *General) Validate(p *config.Parser, path string) (err error) {
 	// Enforce maximum of 2 GB since event transmit length is uint32
 	if gc.SpoolMaxBytes > 2*1024*1024*1024 {
 		err = fmt.Errorf("%s/spool max bytes can not be greater than 2 GiB", path)
-		return
-	}
-
-	// Max line bytes can not be larger than spool max bytes
-	if gc.SpoolMaxBytes < p.Config().GeneralPart("harvester").(*harvester.General).MaxLineBytes {
-		err = fmt.Errorf("%s/max line bytes can not be greater than %s/spool max bytes", path, path)
 		return
 	}
 

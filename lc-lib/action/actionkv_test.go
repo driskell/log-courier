@@ -1,30 +1,45 @@
-package processor
+package action
 
 import (
-	"context"
 	"reflect"
 	"testing"
 
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 )
 
-func newKVTestAction(t *testing.T, options map[string]interface{}) *kvAction {
+func processKVTestEvent(t *testing.T, arguments map[string]interface{}, data map[string]interface{}) *event.Event {
 	t.Helper()
-	entry, err := newKVAction(config.NewParser(nil), "/kv/", options, "kv")
-	if err != nil {
-		t.Fatalf("Parsing failed unexpectedly: %s", err)
-	}
-	action := entry.(*kvAction)
-	if err := action.Validate(config.NewParser(nil), "/kv/"); err != nil {
-		t.Fatalf("Validation failed unexpectedly: %s", err)
-	}
-	return action
+	return processTestEvent(t, "kv", arguments, data)
 }
 
-func processKVTestEvent(t *testing.T, options map[string]interface{}, data map[string]interface{}) *event.Event {
-	t.Helper()
-	return newKVTestAction(t, options).Process(event.NewEvent(context.Background(), nil, data))
+func TestKVAcceptsAllArguments(t *testing.T) {
+	mustNewTestNode(t, "kv", map[string]interface{}{
+		"field":        "message",
+		"prefix":       "kv_",
+		"separators":   " \x1D",
+		"nested":       []string{"msg"},
+		"unquoted_hex": []string{"proctitle", "cmd"},
+	})
+}
+
+func TestKVSeparatorsDefaultToSpace(t *testing.T) {
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message"}, map[string]interface{}{"message": "a=1,b=2 c=3"})
+
+	assertKVTestData(t, evnt, map[string]interface{}{"message": "a=1,b=2 c=3", "a": "1,b=2", "c": "3"})
+}
+
+func TestKVConfigRejectsUnknownKey(t *testing.T) {
+	if _, err := newTestNode("kv", map[string]interface{}{"field": "message", "unknown": true}); err == nil {
+		t.Error("Unknown key was not rejected")
+	}
+}
+
+func TestKVConfigRejectsInvalidSeparators(t *testing.T) {
+	for _, separators := range []string{"", "=", " \"", "'", "\\"} {
+		if _, err := newTestNode("kv", map[string]interface{}{"field": "message", "separators": separators}); err == nil {
+			t.Errorf("Separators %#v were not rejected", separators)
+		}
+	}
 }
 
 func assertKVTestData(t *testing.T, evnt *event.Event, expected map[string]interface{}) {
@@ -44,43 +59,6 @@ func assertKVTestError(t *testing.T, evnt *event.Event, expected string) {
 	t.Helper()
 	if message := evnt.Data()["_kv_error"]; message != expected {
 		t.Errorf("Unexpected _kv_error: got %#v, expected %#v", message, expected)
-	}
-}
-
-func TestKVFromConfig(t *testing.T) {
-	action := newKVTestAction(t, map[string]interface{}{
-		"field":        "message",
-		"prefix":       "kv_",
-		"separators":   " \x1D",
-		"nested":       []interface{}{"msg"},
-		"unquoted hex": []interface{}{"proctitle", "cmd"},
-	})
-
-	if action.Field != "message" || action.Prefix != "kv_" || action.Separators != " \x1D" ||
-		!reflect.DeepEqual(action.Nested, []string{"msg"}) || !reflect.DeepEqual(action.UnquotedHex, []string{"proctitle", "cmd"}) {
-		t.Errorf("Unexpected action from config: %#v", action)
-	}
-}
-
-func TestKVSeparatorsDefaultToSpace(t *testing.T) {
-	action := newKVTestAction(t, map[string]interface{}{"field": "message"})
-	if action.Separators != " " {
-		t.Errorf("Unexpected default separators: %#v", action.Separators)
-	}
-}
-
-func TestKVConfigRejectsUnknownKey(t *testing.T) {
-	if _, err := newKVAction(config.NewParser(nil), "/kv/", map[string]interface{}{"field": "message", "unknown": true}, "kv"); err == nil {
-		t.Error("Unknown key was not rejected")
-	}
-}
-
-func TestKVConfigRejectsInvalidSeparators(t *testing.T) {
-	for _, separators := range []string{"", "=", " \"", "'", "\\"} {
-		action := &kvAction{Field: "message", Separators: separators}
-		if err := action.Validate(config.NewParser(nil), "/kv/"); err == nil {
-			t.Errorf("Separators %#v were not rejected", separators)
-		}
 	}
 }
 
@@ -186,7 +164,7 @@ func TestKVOnlySplitsOnConfiguredSeparators(t *testing.T) {
 }
 
 func TestKVParsesNestedValuesWithNamePrefix(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "prefix": "p_", "nested": []interface{}{"msg"}}, map[string]interface{}{
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "prefix": "p_", "nested": []string{"msg"}}, map[string]interface{}{
 		"message": `pid=1 msg='pid=2 exe="/usr/bin/sudo"' res=ok`,
 	})
 
@@ -200,19 +178,19 @@ func TestKVParsesNestedValuesWithNamePrefix(t *testing.T) {
 }
 
 func TestKVParsesUnquotedNestedValues(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "nested": []interface{}{"inner"}}, map[string]interface{}{"message": "inner=a=1"})
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "nested": []string{"inner"}}, map[string]interface{}{"message": "inner=a=1"})
 
 	assertKVTestData(t, evnt, map[string]interface{}{"message": "inner=a=1", "inner_a": "1"})
 }
 
 func TestKVNestedNamesKeepBrackets(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "nested": []interface{}{"m[s]g"}}, map[string]interface{}{"message": "m[s]g='a=1'"})
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "nested": []string{"m[s]g"}}, map[string]interface{}{"message": "m[s]g='a=1'"})
 
 	assertKVTestData(t, evnt, map[string]interface{}{"message": "m[s]g='a=1'", "m[s]g_a": "1"})
 }
 
 func TestKVDecodesListedUnquotedHex(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted hex": []interface{}{"proctitle"}}, map[string]interface{}{
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted_hex": []string{"proctitle"}}, map[string]interface{}{
 		"message": "proctitle=2F7573722F7362696E2F63726F6E64002D6E",
 	})
 
@@ -220,7 +198,7 @@ func TestKVDecodesListedUnquotedHex(t *testing.T) {
 }
 
 func TestKVKeepsQuotedValuesOfHexFields(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted hex": []interface{}{"proctitle", "comm"}}, map[string]interface{}{
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted_hex": []string{"proctitle", "comm"}}, map[string]interface{}{
 		"message": `proctitle="(systemd)" comm="ABCD"`,
 	})
 
@@ -228,13 +206,13 @@ func TestKVKeepsQuotedValuesOfHexFields(t *testing.T) {
 }
 
 func TestKVKeepsUnlistedHexLikeValues(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted hex": []interface{}{"proctitle"}}, map[string]interface{}{"message": "pid=3363 arch=C000003E"})
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted_hex": []string{"proctitle"}}, map[string]interface{}{"message": "pid=3363 arch=C000003E"})
 
 	assertKVTestData(t, evnt, map[string]interface{}{"message": "pid=3363 arch=C000003E", "pid": "3363", "arch": "C000003E"})
 }
 
 func TestKVKeepsHexFieldsThatAreNotUppercaseHex(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted hex": []interface{}{"a", "b", "c", "d"}}, map[string]interface{}{
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted_hex": []string{"a", "b", "c", "d"}}, map[string]interface{}{
 		"message": "a=2f7573 b=2F757 c=(null) d=FF",
 	})
 
@@ -242,7 +220,7 @@ func TestKVKeepsHexFieldsThatAreNotUppercaseHex(t *testing.T) {
 }
 
 func TestKVDecodesEmptyHexFieldAsEmpty(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted hex": []interface{}{"cmd"}}, map[string]interface{}{"message": "cmd= a=1"})
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted_hex": []string{"cmd"}}, map[string]interface{}{"message": "cmd= a=1"})
 
 	assertKVTestData(t, evnt, map[string]interface{}{"message": "cmd= a=1", "cmd": "", "a": "1"})
 }
@@ -252,8 +230,8 @@ func TestKVDecodesHexInsideNestedValues(t *testing.T) {
 		"field":        "message",
 		"prefix":       "audit_%{audit_type}_",
 		"separators":   " \x1D",
-		"nested":       []interface{}{"msg"},
-		"unquoted hex": []interface{}{"cmd", "proctitle"},
+		"nested":       []string{"msg"},
+		"unquoted_hex": []string{"cmd", "proctitle"},
 	}, map[string]interface{}{
 		"audit_type": "USER_CMD",
 		"message":    "pid=3363 uid=0 auid=0 ses=15 msg='cwd=\"/root\" cmd=2D62617368202D2D6C6F67696E exe=\"/usr/bin/sudo\" terminal=? res=success'\x1DUID=\"root\" AUID=\"root\"",
@@ -348,7 +326,7 @@ func TestKVReportsUnexpectedEnd(t *testing.T) {
 }
 
 func TestKVNestedFailureStopsOuterParsing(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "nested": []interface{}{"msg"}}, map[string]interface{}{"message": "msg='=1' b=2"})
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "nested": []string{"msg"}}, map[string]interface{}{"message": "msg='=1' b=2"})
 
 	assertKVTestError(t, evnt, "Parsing interrupted, encountered key with no name")
 	if _, ok := evnt.Data()["b"]; ok {
@@ -357,13 +335,13 @@ func TestKVNestedFailureStopsOuterParsing(t *testing.T) {
 }
 
 func TestKVNestedFailureAtEndOfField(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "nested": []interface{}{"msg"}}, map[string]interface{}{"message": "msg=flag"})
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "nested": []string{"msg"}}, map[string]interface{}{"message": "msg=flag"})
 
 	assertKVTestError(t, evnt, "Parsing interrupted, unexpected end of field")
 }
 
 func TestKVInvalidUTF8HexIsKept(t *testing.T) {
-	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted hex": []interface{}{"name"}}, map[string]interface{}{"message": "name=C328"})
+	evnt := processKVTestEvent(t, map[string]interface{}{"field": "message", "unquoted_hex": []string{"name"}}, map[string]interface{}{"message": "name=C328"})
 
 	assertKVTestData(t, evnt, map[string]interface{}{"message": "name=C328", "name": "C328"})
 }

@@ -39,7 +39,7 @@ type ReceiverConfigEntry struct {
 	Listen             []string `config:"listen"`
 	MaxPendingPayloads int64    `config:"max pending payloads"`
 
-	Unused map[string]interface{} `json:",omitempty"`
+	Unused map[string]interface{} `config:",collect_unused" json:",omitempty"`
 }
 
 // Defaults sets default receiver configuration

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package processor
+package action
 
 import (
 	"encoding/hex"
@@ -24,6 +24,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
 
 const (
@@ -42,41 +43,47 @@ const (
 	kvStateValueQuotedEnd
 )
 
-type kvAction struct {
-	Field       string   `config:"field"`
-	Prefix      string   `config:"prefix"`
-	Separators  string   `config:"separators"`
-	Nested      []string `config:"nested"`
-	UnquotedHex []string `config:"unquoted hex"`
-
+type kvNode struct {
+	prefix        string
 	prefixPattern event.Pattern
+	separators    string
 	nested        map[string]struct{}
 	unquotedHex   map[string]struct{}
 }
 
-func newKVAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
-	var err error
-	action := &kvAction{}
-	if err = p.Populate(action, unused, configPath, true); err != nil {
-		return nil, err
-	}
-	return action, nil
+var _ ast.ProcessArgumentsNode = &kvNode{}
+
+func newKVNode(*config.Config) (ast.ProcessArgumentsNode, error) {
+	return &kvNode{}, nil
 }
 
-func (k *kvAction) Defaults() {
-	k.Separators = defaultKVActionSeparators
+func (n *kvNode) Arguments() []ast.Argument {
+	return []ast.Argument{
+		ast.NewArgumentString("prefix", ast.ArgumentExprDisallowed),
+		ast.NewArgumentString("field", ast.ArgumentRequired),
+		ast.NewArgumentString("separators", ast.ArgumentExprDisallowed),
+		ast.NewArgumentListString("nested", ast.ArgumentExprDisallowed),
+		ast.NewArgumentListString("unquoted_hex", ast.ArgumentExprDisallowed),
+	}
 }
 
-func (k *kvAction) Validate(p *config.Parser, configPath string) error {
-	if k.Separators == "" {
-		return fmt.Errorf("Separators for kv at %s must not be empty", configPath)
+func (n *kvNode) Init(arguments []any) error {
+	n.prefix, _ = arguments[0].(string)
+	n.prefixPattern = event.NewPatternFromString(n.prefix)
+	n.separators = defaultKVActionSeparators
+	if arguments[2] != nil {
+		n.separators = arguments[2].(string)
 	}
-	if strings.ContainsAny(k.Separators, "=\"'\\") {
-		return fmt.Errorf("Separators for kv at %s must not contain '=', quotes or backslash", configPath)
+	if n.separators == "" {
+		return fmt.Errorf("separators for kv must not be empty")
 	}
-	k.prefixPattern = event.NewPatternFromString(k.Prefix)
-	k.nested = kvNameSet(k.Nested)
-	k.unquotedHex = kvNameSet(k.UnquotedHex)
+	if strings.ContainsAny(n.separators, "=\"'\\") {
+		return fmt.Errorf("separators for kv must not contain '=', quotes or backslash")
+	}
+	nested, _ := arguments[3].([]string)
+	n.nested = kvNameSet(nested)
+	unquotedHex, _ := arguments[4].([]string)
+	n.unquotedHex = kvNameSet(unquotedHex)
 	return nil
 }
 
@@ -88,11 +95,13 @@ func kvNameSet(names []string) map[string]struct{} {
 	return set
 }
 
-func (k *kvAction) Process(event *event.Event) *event.Event {
-	entry, err := event.Resolve(k.Field, nil)
+func (n *kvNode) ProcessWithArguments(subject *event.Event, arguments []any) *event.Event {
+	field := arguments[1].(string)
+
+	entry, err := subject.Resolve(field, nil)
 	if err != nil {
-		event.AddError("kv", fmt.Sprintf("Field '%s' could not be resolved: %s", k.Field, err))
-		return event
+		subject.AddError("kv", fmt.Sprintf("Field '%s' could not be resolved: %s", field, err))
+		return subject
 	}
 
 	var (
@@ -101,38 +110,38 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 	)
 	stringValue, ok = entry.(string)
 	if !ok {
-		event.AddError("kv", fmt.Sprintf("Field '%s' is not present or not a string", k.Field))
-		return event
+		subject.AddError("kv", fmt.Sprintf("Field '%s' is not present or not a string", field))
+		return subject
 	}
 
-	prefix, err := k.prefixPattern.Format(event)
+	prefix, err := n.prefixPattern.Format(subject)
 	if err != nil {
-		event.AddError("kv", fmt.Sprintf("Failed to format prefix from event: %s", k.Prefix))
-		return event
+		subject.AddError("kv", fmt.Sprintf("Failed to format prefix from event: %s", n.prefix))
+		return subject
 	}
 
-	k.parse(event, stringValue, prefix)
-	return event
+	n.parse(subject, stringValue, prefix)
+	return subject
 }
 
-func (k *kvAction) isSeparator(char rune) bool {
-	return strings.ContainsRune(k.Separators, char)
+func (n *kvNode) isSeparator(char rune) bool {
+	return strings.ContainsRune(n.separators, char)
 }
 
 // parse stores each pair from input with the given prefix, returning false if parsing was interrupted
-func (k *kvAction) parse(evnt *event.Event, input string, prefix string) bool {
+func (n *kvNode) parse(subject *event.Event, input string, prefix string) bool {
 	state := kvStateName
 	storeValue := func(name string, value string, quoted bool) bool {
-		if _, ok := k.nested[name]; ok {
-			return k.parse(evnt, value, prefix+event.EscapeKey(name)+"_")
+		if _, ok := n.nested[name]; ok {
+			return n.parse(subject, value, prefix+event.EscapeKey(name)+"_")
 		}
-		if _, ok := k.unquotedHex[name]; ok && !quoted {
+		if _, ok := n.unquotedHex[name]; ok && !quoted {
 			value = decodeKVHex(value)
 		}
 		field := prefix + event.EscapeKey(name)
-		_, err := evnt.Resolve(field, value)
+		_, err := subject.Resolve(field, value)
 		if err != nil {
-			evnt.AddError("kv", fmt.Sprintf("Failed to set field '%s': %s", field, err))
+			subject.AddError("kv", fmt.Sprintf("Failed to set field '%s': %s", field, err))
 			return false
 		}
 		return true
@@ -148,11 +157,11 @@ func (k *kvAction) parse(evnt *event.Event, input string, prefix string) bool {
 	for idx := 0; idx < len(value); idx++ {
 		switch state {
 		case kvStateName:
-			if k.isSeparator(value[idx]) {
+			if n.isSeparator(value[idx]) {
 				continue
 			}
 			if value[idx] == '=' {
-				evnt.AddError("kv", "Parsing interrupted, encountered key with no name")
+				subject.AddError("kv", "Parsing interrupted, encountered key with no name")
 				return false
 			}
 			state = kvStateNameRaw
@@ -167,7 +176,7 @@ func (k *kvAction) parse(evnt *event.Event, input string, prefix string) bool {
 				state = kvStateValueQuoted
 				valueStart = idx + 1
 				quoteStyle = value[idx]
-			} else if k.isSeparator(value[idx]) {
+			} else if n.isSeparator(value[idx]) {
 				if !storeValue(name, "", false) {
 					return false
 				}
@@ -177,7 +186,7 @@ func (k *kvAction) parse(evnt *event.Event, input string, prefix string) bool {
 				valueStart = idx
 			}
 		case kvStateValueRaw:
-			if k.isSeparator(value[idx]) {
+			if n.isSeparator(value[idx]) {
 				if !storeValue(name, string(value[valueStart:idx]), false) {
 					return false
 				}
@@ -195,8 +204,8 @@ func (k *kvAction) parse(evnt *event.Event, input string, prefix string) bool {
 		case kvStateValueQuotedEsc:
 			state = kvStateValueQuoted
 		case kvStateValueQuotedEnd:
-			if !k.isSeparator(value[idx]) {
-				evnt.AddError("kv", "Parsing interrupted, unexpected text after end of quoted value")
+			if !n.isSeparator(value[idx]) {
+				subject.AddError("kv", "Parsing interrupted, unexpected text after end of quoted value")
 				return false
 			}
 			state = kvStateName
@@ -210,7 +219,7 @@ func (k *kvAction) parse(evnt *event.Event, input string, prefix string) bool {
 	case kvStateValueQuotedEnd:
 	case kvStateName:
 	default:
-		evnt.AddError("kv", "Parsing interrupted, unexpected end of field")
+		subject.AddError("kv", "Parsing interrupted, unexpected end of field")
 		return false
 	}
 
@@ -231,5 +240,5 @@ func decodeKVHex(value string) string {
 
 // init will register the action
 func init() {
-	RegisterAction("kv", newKVAction)
+	ast.RegisterAction("kv", newKVNode)
 }

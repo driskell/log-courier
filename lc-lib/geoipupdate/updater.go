@@ -11,12 +11,18 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/maxmind/geoipupdate/v4/pkg/geoipupdate"
 	"github.com/maxmind/geoipupdate/v4/pkg/geoipupdate/database"
+	"github.com/oschwald/geoip2-golang"
 )
 
 var (
 	editionIDs = []string{
 		"GeoLite2-City",
 	}
+
+	hasSharedReader bool
+	databaseLock    sync.Mutex
+	databaseReload  bool
+	sharedReader    *geoip2.Reader
 )
 
 // General contains general configuration values
@@ -28,6 +34,37 @@ type General struct {
 // GetDatabasePath returns the path to the GeoIP database file
 func GetDatabasePath(config *config.Config) string {
 	return filepath.Join(config.General().PersistDir, "GeoLite2-City.mmdb")
+}
+
+// GetSharedDatabaseReader returns a shared GeoIP database reader instance
+func GetSharedDatabaseReader(config *config.Config) (*geoip2.Reader, error) {
+	databaseLock.Lock()
+	defer databaseLock.Unlock()
+	if !hasSharedReader {
+		return nil, fmt.Errorf("shared GeoIP database reader not initialised")
+	} else if databaseReload {
+		sharedReader = nil
+	} else if sharedReader != nil {
+		return sharedReader, nil
+	}
+
+	sharedReader, err := geoip2.Open(GetDatabasePath(config))
+	if err != nil {
+		sharedReader = nil
+		return nil, fmt.Errorf("failed to open GeoIP database: %s", err)
+	}
+
+	return sharedReader, nil
+}
+
+// CloseSharedDatabaseReader closes the shared GeoIP database reader instance
+func CloseSharedDatabaseReader() {
+	databaseLock.Lock()
+	if sharedReader != nil {
+		sharedReader.Close()
+		sharedReader = nil
+	}
+	databaseLock.Unlock()
 }
 
 // StartUpdater starts the GeoIP database updater routine
@@ -54,6 +91,7 @@ func StartUpdater(config *config.Config) (chan<- struct{}, *sync.WaitGroup) {
 	waitGroup.Add(1)
 	go updaterRoutine(updateConfig, shutdown, waitGroup)
 
+	hasSharedReader = true
 	return shutdown, waitGroup
 }
 
@@ -116,6 +154,10 @@ func checkAndUpdate(config *geoipupdate.Config) error {
 	}
 
 	log.Infof("GeoIP database update check complete")
+
+	databaseLock.Lock()
+	databaseReload = true
+	databaseLock.Unlock()
 
 	return nil
 }

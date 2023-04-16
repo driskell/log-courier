@@ -114,8 +114,11 @@ func (c *Config) SetSection(name string, value interface{}) {
 }
 
 // parseConfiguration is a bootstrap around Parser
-func parseConfiguration(cfg *Config, rawConfig interface{}, reportUnused bool) error {
+func parseConfiguration(cfg *Config, rawConfig map[string]interface{}, reportUnused bool) error {
 	p := NewParser(cfg)
+	if err := p.FixMapKeys("/", rawConfig); err != nil {
+		return err
+	}
 	if err := p.Populate(cfg, rawConfig, "/", reportUnused); err != nil {
 		return err
 	}
@@ -156,21 +159,21 @@ func LoadFile(filePath string, rawConfig interface{}) error {
 // called. The structure returned can implement several methods to aid in
 // configuration building and validation:
 //
-//   Init(p *Parser, path string)
-//     This is called during configuration population and can be used to
-//     population dynamic sub-structures. This is used for network transports
-//     so that the options available can be changed depending on what the
-//     transport field is set to. As long as you have a field called Unused of
-//     type map[string]interface{} any not yet parsed options are kept there.
-//     This can then be passed to p.Populate() to populate another structure.
-//   Validate(p *Parser, path string)
-//     This is called after the entire configuration is populated. It can be
-//     used to compare values between different sections for validity. Call
-//     p.Config() to get the full completed configuration.
-//   Defaults()
-//     Called before the structure is populated so it can set up defaults.
-//     This is helpful for child structures within a section. The defaults
-//     for a section itself can be set by the section creator.
+//	Init(p *Parser, path string)
+//	  This is called during configuration population and can be used to
+//	  population dynamic sub-structures. This is used for network transports
+//	  so that the options available can be changed depending on what the
+//	  transport field is set to. As long as you have a field called Unused of
+//	  type map[string]interface{} any not yet parsed options are kept there.
+//	  This can then be passed to p.Populate() to populate another structure.
+//	Validate(p *Parser, path string)
+//	  This is called after the entire configuration is populated. It can be
+//	  used to compare values between different sections for validity. Call
+//	  p.Config() to get the full completed configuration.
+//	Defaults()
+//	  Called before the structure is populated so it can set up defaults.
+//	  This is helpful for child structures within a section. The defaults
+//	  for a section itself can be set by the section creator.
 func RegisterSection(name string, creator SectionCreator) {
 	registeredSectionCreators[name] = creator
 }

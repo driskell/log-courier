@@ -17,6 +17,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"sync"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
@@ -26,6 +28,8 @@ import (
 	"github.com/driskell/log-courier/lc-lib/publisher"
 	"github.com/driskell/log-courier/lc-lib/receiver"
 	"github.com/driskell/log-courier/lc-lib/spooler"
+
+	_ "github.com/driskell/log-courier/lc-lib/action"
 
 	_ "github.com/driskell/log-courier/lc-lib/codecs/filter"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
@@ -39,17 +43,30 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile config.DefaultGeneralPersistDir admin.DefaultAdminBind processor.DefaultGeoIPActionDatabase
+//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile config.DefaultGeneralPersistDir admin.DefaultAdminBind action.DefaultGeoIPNodeDatabase
 
 var (
 	app *core.App
+
+	upgradePipeline bool
 )
 
 func main() {
 	courier.SetClientName("LCVR")
 
 	app = core.NewApp("Log Carver", core.LogCourierVersion)
+	flag.BoolVar(&upgradePipeline, "upgrade-pipeline", false, "Upgrade processor pipeline scripts to the latest format")
 	app.StartUp()
+
+	if upgradePipeline {
+		script, err := processor.LegacyUpgradeScript(app.Config(), processor.FetchLegacyConfig(app.Config()))
+		if err != nil {
+			fmt.Printf("Error upgrading pipeline: %v\n", err)
+			return
+		}
+		fmt.Print(script)
+		return
+	}
 
 	var shutdown chan<- struct{}
 	var waitGroup *sync.WaitGroup
@@ -80,5 +97,6 @@ func main() {
 	if shutdown != nil {
 		close(shutdown)
 		waitGroup.Wait()
+		geoipupdate.CloseSharedDatabaseReader()
 	}
 }

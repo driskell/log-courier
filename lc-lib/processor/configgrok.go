@@ -62,6 +62,4 @@ func init() {
 	config.RegisterSection("grok", func() interface{} {
 		return &GrokConfig{}
 	})
-
-	RegisterAction("grok", newGrokAction)
 }
