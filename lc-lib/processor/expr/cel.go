@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package processor
+package expr
 
 import (
 	"github.com/google/cel-go/cel"

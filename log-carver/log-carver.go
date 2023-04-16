@@ -24,6 +24,8 @@ import (
 	"github.com/driskell/log-courier/lc-lib/receiver"
 	"github.com/driskell/log-courier/lc-lib/spooler"
 
+	_ "github.com/driskell/log-courier/lc-lib/action"
+
 	_ "github.com/driskell/log-courier/lc-lib/codecs/filter"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/multiline"
 	_ "github.com/driskell/log-courier/lc-lib/codecs/plain"
@@ -35,7 +37,7 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile admin.DefaultAdminBind processor.DefaultGeoIPActionDatabase
+//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile admin.DefaultAdminBind action.DefaultGeoIPNodeDatabase
 
 var (
 	app *core.App

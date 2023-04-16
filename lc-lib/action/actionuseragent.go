@@ -14,41 +14,53 @@
  * limitations under the License.
  */
 
-package processor
+package action
 
 import (
 	"fmt"
 
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/processor/ast"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/ua-parser/uap-go/uaparser"
 )
 
-type userAgentAction struct {
-	Field  string `config:"field"`
-	Remove bool   `config:"remove"`
-
+type userAgentNode struct {
 	lru    *lru.Cache
 	parser *uaparser.Parser
 }
 
-func newUserAgentAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
+var _ ast.ProcessArgumentsNode = &userAgentNode{}
+
+func newUserAgentNode() (ast.ProcessArgumentsNode, error) {
 	var err error
-	action := &userAgentAction{}
-	if err = p.Populate(action, unused, configPath, true); err != nil {
-		return nil, err
-	}
-	action.lru, err = lru.New(1000)
+	node := &userAgentNode{}
+	node.lru, err = lru.New(1000)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to initialise LRU cache for user_agent at %s: %s", configPath, err)
+		return nil, fmt.Errorf("Failed to initialise LRU cache for user_agent: %s", err)
 	}
-	action.parser = uaparser.NewFromSaved()
-	return action, nil
+	node.parser = uaparser.NewFromSaved()
+	return node, nil
+}
+func (n *userAgentNode) Arguments() []ast.Argument {
+	return []ast.Argument{
+		ast.NewArgumentString("field", ast.ArgumentRequired),
+		ast.NewArgumentBool("remove", ast.ArgumentOptional),
+	}
 }
 
-func (g *userAgentAction) Process(subject *event.Event) *event.Event {
-	entry, err := subject.Resolve(g.Field, nil)
+func (n *userAgentNode) Init([]any) error {
+	return nil
+}
+
+func (n *userAgentNode) ProcessWithArguments(subject *event.Event, arguments []any) *event.Event {
+	field := arguments[0].(string)
+	remove := false
+	if arguments[1] != nil {
+		remove = arguments[1].(bool)
+	}
+
+	entry, err := subject.Resolve(field, nil)
 	if err != nil {
 		subject.AddError("user_agent", fmt.Sprintf("Field lookup failed: %s", err))
 		return subject
@@ -59,16 +71,16 @@ func (g *userAgentAction) Process(subject *event.Event) *event.Event {
 		ok    bool
 	)
 	if value, ok = entry.(string); !ok {
-		subject.AddError("user_agent", fmt.Sprintf("Field '%s' is not present", g.Field))
+		subject.AddError("user_agent", fmt.Sprintf("Field '%s' is not present", field))
 		return subject
 	}
 
 	var client *uaparser.Client
-	if cachedClient, ok := g.lru.Get(value); ok {
+	if cachedClient, ok := n.lru.Get(value); ok {
 		client = cachedClient.(*uaparser.Client)
 	} else {
-		client = g.parser.Parse(value)
-		g.lru.Add(value, client)
+		client = n.parser.Parse(value)
+		n.lru.Add(value, client)
 	}
 
 	subject.MustResolve("user_agent[original]", value)
@@ -103,10 +115,10 @@ func (g *userAgentAction) Process(subject *event.Event) *event.Event {
 	if client.Os.PatchMinor != "" {
 		subject.MustResolve("user_agent[os][version]", client.Os.PatchMinor)
 	}
-	if g.Remove {
-		_, err := subject.Resolve(g.Field, event.ResolveParamUnset)
+	if remove {
+		_, err := subject.Resolve(field, event.ResolveParamUnset)
 		if err != nil {
-			subject.AddError("user_agent", fmt.Sprintf("Failed to remove field '%s': %s", g.Field, err))
+			subject.AddError("user_agent", fmt.Sprintf("Failed to remove field '%s': %s", field, err))
 		}
 	}
 	return subject
@@ -114,5 +126,5 @@ func (g *userAgentAction) Process(subject *event.Event) *event.Event {
 
 // init will register the action
 func init() {
-	RegisterAction("user_agent", newUserAgentAction)
+	ast.RegisterAction("user_agent", newUserAgentNode)
 }

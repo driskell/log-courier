@@ -21,6 +21,8 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/processor/ast"
+	"github.com/driskell/log-courier/lc-lib/processor/expr"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 )
@@ -42,8 +44,8 @@ type ASTEntry interface {
 
 // astLogic processes an event through a conditional branch
 type astLogic struct {
-	IfExpr         string  `config:"if"` // should match astTokenIf
-	Then           *Config `config:"then"`
+	IfExpr         string        `config:"if"` // should match astTokenIf
+	Then           *LegacyConfig `config:"then"`
 	ElseIfBranches []*logicBranchElseIf
 	ElseBranch     *logicBranchElse
 
@@ -52,7 +54,7 @@ type astLogic struct {
 
 // Init the branch
 func (l *astLogic) Init(p *config.Parser, path string) (err error) {
-	if l.ifProgram, err = ParseExpression(l.IfExpr); err != nil {
+	if l.ifProgram, err = expr.ParseExpression(l.IfExpr); err != nil {
 		return fmt.Errorf("Condition failed to parse at %s: [%s] -> %s", path, l.IfExpr, err)
 	}
 	return nil
@@ -60,7 +62,7 @@ func (l *astLogic) Init(p *config.Parser, path string) (err error) {
 
 // Process handles logic for the event
 func (l *astLogic) Process(subject *event.Event) *event.Event {
-	var next []ASTEntry
+	var next []ast.ProcessNode
 	if evalLogicBranchProgram(l.ifProgram, l.IfExpr, subject) {
 		next = l.Then.AST
 	} else {
@@ -88,15 +90,15 @@ func (l *astLogic) Process(subject *event.Event) *event.Event {
 
 // logicBranchElseIf branch
 type logicBranchElseIf struct {
-	ElseIfExpr string  `config:"else if"` // should match astTokenElseIf
-	Then       *Config `config:"then"`
+	ElseIfExpr string        `config:"else if"` // should match astTokenElseIf
+	Then       *LegacyConfig `config:"then"`
 
 	elseIfProgram cel.Program
 }
 
 // Init the branch
 func (l *logicBranchElseIf) Init(p *config.Parser, path string) (err error) {
-	if l.elseIfProgram, err = ParseExpression(l.ElseIfExpr); err != nil {
+	if l.elseIfProgram, err = expr.ParseExpression(l.ElseIfExpr); err != nil {
 		return fmt.Errorf("Condition failed to parse at %s: [%s] -> %s", path, l.ElseIfExpr, err)
 	}
 	return nil
@@ -104,7 +106,7 @@ func (l *logicBranchElseIf) Init(p *config.Parser, path string) (err error) {
 
 // logicBranchElse branch
 type logicBranchElse struct {
-	Else *Config `config:"else"`
+	Else *LegacyConfig `config:"else"`
 }
 
 // evalLogicBranchProgram runs the condition program and returns true or false
