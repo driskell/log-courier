@@ -520,19 +520,44 @@ func TestResolveOverwriteTimestamp(t *testing.T) {
 	}
 }
 
-func TestResolveSetStringTimestamp(t *testing.T) {
+func TestResolveSetIntTimestamp(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
-	_, err := event.Resolve("@timestamp", "2020-03-15T00:00:00Z")
+	_, err := event.Resolve("@timestamp", 5)
 	if err == nil {
-		t.Fatal("Unexpectedly set builtin @timestamp to string")
+		t.Fatal("Unexpectedly set builtin @timestamp to integer")
+	}
+}
+
+func TestResolveSetStringTimestamp(t *testing.T) {
+	subject := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	toTimeString := "2020-03-15T00:00:00Z"
+	toTime, _ := time.Parse(time.RFC3339Nano, toTimeString)
+	_, err := subject.Resolve("@timestamp", toTimeString)
+	if err != nil {
+		t.Fatalf("Failed to set @timestamp using a string: %s", err.Error())
+	}
+	timestamp, err := subject.Resolve("@timestamp", nil)
+	if err != nil {
+		t.Fatalf("Failed to retrieve timestamp after setting to a string: %s", err.Error())
+	}
+	if !time.Time(timestamp.(Timestamp)).Equal(toTime) {
+		t.Fatalf("Setting time did not set expected time: %v != %v", time.Time(timestamp.(Timestamp)), toTime)
 	}
 }
 
 func TestResolveSetTimeTimestamp(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
-	_, err := event.Resolve("@timestamp", time.Now())
+	toTime := time.Now()
+	_, err := event.Resolve("@timestamp", toTime)
 	if err != nil {
 		t.Fatalf("Unexpected error setting time to @timestamp: %s", err)
+	}
+	timestamp, err := event.Resolve("@timestamp", nil)
+	if err != nil {
+		t.Fatalf("Failed to retrieve timestamp after setting: %s", err.Error())
+	}
+	if !time.Time(timestamp.(Timestamp)).Equal(toTime) {
+		t.Fatalf("Setting time did not set expected time: %v != %v", time.Time(timestamp.(Timestamp)), toTime)
 	}
 }
 
