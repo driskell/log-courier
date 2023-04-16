@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package processor
+package action
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
 
 type kvState int
@@ -36,32 +36,35 @@ const (
 	kvStateValueQuotedEnd
 )
 
-type kvAction struct {
-	Field  string `config:"field"`
-	Prefix string `config:"prefix"`
-
+type kvNode struct {
 	prefixPattern event.Pattern
 }
 
-func newKVAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
-	var err error
-	action := &kvAction{}
-	if err = p.Populate(action, unused, configPath, true); err != nil {
-		return nil, err
-	}
-	return action, nil
+var _ ast.ProcessArgumentsNode = &kvNode{}
+
+func newKVNode() (ast.ProcessArgumentsNode, error) {
+	return &kvNode{}, nil
 }
 
-func (k *kvAction) Validate(p *config.Parser, configPath string) error {
-	k.prefixPattern = event.NewPatternFromString(k.Prefix)
+func (n *kvNode) Arguments() []ast.Argument {
+	return []ast.Argument{
+		ast.NewArgumentString("prefix", ast.ArgumentRequired&ast.ArgumentExprDisallowed),
+		ast.NewArgumentString("field", ast.ArgumentRequired),
+	}
+}
+
+func (n *kvNode) Init(arguments []any) error {
+	n.prefixPattern = event.NewPatternFromString(arguments[0].(string))
 	return nil
 }
 
-func (k *kvAction) Process(event *event.Event) *event.Event {
-	entry, err := event.Resolve(k.Field, nil)
+func (n *kvNode) ProcessWithArguments(subject *event.Event, arguments []any) *event.Event {
+	field := arguments[1].(string)
+
+	entry, err := subject.Resolve(field, nil)
 	if err != nil {
-		event.AddError("kv", fmt.Sprintf("Field '%s' could not be resolved: %s", k.Field, err))
-		return event
+		subject.AddError("kv", fmt.Sprintf("Field '%s' could not be resolved: %s", field, err))
+		return subject
 	}
 
 	var (
@@ -70,22 +73,22 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 	)
 	stringValue, ok = entry.(string)
 	if !ok {
-		event.AddError("kv", fmt.Sprintf("Field '%s' is not present or not a string", k.Field))
-		return event
+		subject.AddError("kv", fmt.Sprintf("Field '%s' is not present or not a string", field))
+		return subject
 	}
 
-	prefix, err := k.prefixPattern.Format(event)
+	prefix, err := n.prefixPattern.Format(subject)
 	if err != nil {
-		event.AddError("kv", fmt.Sprintf("Failed to format prefix from event: %s", k.Prefix))
-		return event
+		subject.AddError("kv", fmt.Sprintf("Failed to format prefix from event: %s", prefix))
+		return subject
 	}
 
 	state := kvStateName
 	storeValue := func(name string, value string) bool {
 		field := prefix + strings.ReplaceAll(strings.ReplaceAll(name, "[", ""), "]", "")
-		_, err := event.Resolve(field, value)
+		_, err := subject.Resolve(field, value)
 		if err != nil {
-			event.AddError("kv", fmt.Sprintf("Failed to set field '%s': %s", field, err))
+			subject.AddError("kv", fmt.Sprintf("Failed to set field '%s': %s", field, err))
 			return false
 		}
 		return true
@@ -102,8 +105,8 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 		switch state {
 		case kvStateName:
 			if value[idx] == '=' {
-				event.AddError("kv", "Parsing interrupted, encountered key with no name")
-				return event
+				subject.AddError("kv", "Parsing interrupted, encountered key with no name")
+				return subject
 			}
 			state = kvStateNameRaw
 			nameStart = idx
@@ -124,14 +127,14 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 		case kvStateValueRaw:
 			if value[idx] == ' ' {
 				if !storeValue(name, string(value[valueStart:idx])) {
-					return event
+					return subject
 				}
 				state = kvStateName
 			}
 		case kvStateValueQuoted:
 			if value[idx] == quoteStyle {
 				if !storeValue(name, string(value[valueStart:idx])) {
-					return event
+					return subject
 				}
 				state = kvStateValueQuotedEnd
 			} else if value[idx] == '\\' {
@@ -141,8 +144,8 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 			state = kvStateValueQuoted
 		case kvStateValueQuotedEnd:
 			if value[idx] != ' ' {
-				event.AddError("kv", "Parsing interrupted, unexpected text after end of quoted value")
-				return event
+				subject.AddError("kv", "Parsing interrupted, unexpected text after end of quoted value")
+				return subject
 			}
 			state = kvStateName
 		}
@@ -150,19 +153,19 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 	switch state {
 	case kvStateValueRaw:
 		if !storeValue(name, string(value[valueStart:])) {
-			return event
+			return subject
 		}
 	case kvStateValueQuotedEnd:
 	case kvStateName:
 	default:
-		event.AddError("kv", "Parsing interrupted, unexpected end of field")
-		return event
+		subject.AddError("kv", "Parsing interrupted, unexpected end of field")
+		return subject
 	}
 
-	return event
+	return subject
 }
 
 // init will register the action
 func init() {
-	RegisterAction("kv", newKVAction)
+	ast.RegisterAction("kv", newKVNode)
 }

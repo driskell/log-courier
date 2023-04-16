@@ -1,0 +1,32 @@
+general:
+  log syslog: false
+  log stdout: true
+  log level: debug
+  debug events: true
+admin:
+  enabled: true
+  listen address: tcp:127.0.0.1:12341
+receivers:
+- listen:
+  - 127.0.0.1:12345
+  transport: stream
+  name: First
+- listen:
+  - 127.0.0.1:12346
+  transport: stream
+  name: Second
+pipeline: |
+  if (event.message.startsWith("{")) {
+    set type="json";
+    json field="message", remove=true;
+  } else if (event.message.startsWith("grok")) {
+    set type = "grok";
+    add_tag tag = "grok";
+    grok field="message", patterns=["(?P<name>[A-Z]+)(?P<value>[0-9]+)", "(?P<value>[0-9]+)(?P<name>[A-Z]+)"], remove=true;
+  }
+  set processed = true;
+network:
+  transport: test
+  servers:
+  - 127.0.0.1
+  max delay: 0
