@@ -82,7 +82,7 @@ func newConnection(ctx context.Context, socket connectionSocket, protocolFactory
 
 // Run starts the connection and all its routines
 func (t *connection) run(startedCallback func()) error {
-	defer func () {
+	defer func() {
 		// Cleanup
 		t.socket.Close()
 
@@ -122,18 +122,20 @@ func (t *connection) run(startedCallback func()) error {
 		t.shutdownFunc()
 	}
 
-	// EOF is not an error to be returned
-	if err == io.EOF {
-		err = nil
-	}
-
 	// Wait for sender to complete due to Teardown or nil sent
 	t.wait.Wait()
 
 	// If we had no receiver error, did sender save one when it shutdown?
 	if err == nil {
-		return t.senderErr
+		err = t.senderErr
 	}
+
+	// EOF is not an error to be returned
+	// We check it here, after checking sender error, because with TLS an EOF can come from a send too
+	if err == io.EOF {
+		err = nil
+	}
+
 	return err
 }
 
