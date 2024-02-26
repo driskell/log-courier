@@ -239,6 +239,7 @@ ReceiverLoop:
 					if shutdownChan == nil && len(r.receivers) == 0 && len(r.connectionStatus) == 0 {
 						break ReceiverLoop
 					}
+					log.Info("Receiver pool waiting on %d connections to close", len(r.connectionStatus))
 				}
 			case *transports.PingEvent:
 				// Immediately send a pong back - ignore failure - remote will time itself out

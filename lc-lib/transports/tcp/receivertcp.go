@@ -243,7 +243,7 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 
 	didStart := false
 	if err := conn.run(func() {
-		conn.sendEvent(transports.NewConnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc()))
+		t.eventChan <- transports.NewConnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc())
 		didStart = true
 	}); err != nil {
 		if err == ErrHardCloseRequested {
@@ -256,7 +256,7 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	}
 
 	if didStart {
-		conn.sendEvent(transports.NewDisconnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc()))
+		t.eventChan <- transports.NewDisconnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc())
 	}
 
 	t.connMutex.Lock()
