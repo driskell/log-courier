@@ -82,6 +82,14 @@ func newConnection(ctx context.Context, socket connectionSocket, protocolFactory
 
 // Run starts the connection and all its routines
 func (t *connection) run(startedCallback func()) error {
+	defer func () {
+		// Cleanup
+		t.socket.Close()
+
+		// Ensure context resources are cleaned up
+		t.shutdownFunc()
+	}()
+
 	t.rwBuffer.Reader = bufio.NewReader(t.socket)
 	t.rwBuffer.Writer = bufio.NewWriter(t.socket)
 
@@ -121,12 +129,6 @@ func (t *connection) run(startedCallback func()) error {
 
 	// Wait for sender to complete due to Teardown or nil sent
 	t.wait.Wait()
-
-	// Cleanup
-	t.socket.Close()
-
-	// Ensure context resources are cleaned up
-	t.shutdownFunc()
 
 	// If we had no receiver error, did sender save one when it shutdown?
 	if err == nil {
