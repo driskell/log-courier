@@ -253,6 +253,8 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 		log.Noticef("[R %s - %s] Client closed", socket.LocalAddr().String(), socket.RemoteAddr().String())
 	}
 
+	conn.sendEvent(transports.NewDisconnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc()))
+
 	t.connMutex.Lock()
 	delete(t.connections, conn)
 	t.connMutex.Unlock()

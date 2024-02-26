@@ -211,13 +211,18 @@ ReceiverLoop:
 					receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 					receiver.ShutdownConnection(eventImpl.Context())
 					// Receive side is closed, and we're just sending, so it'll close automatically once flushed, so clear all scheduled timeouts
-					r.apiConnections.RemoveEntry(r.connectionStatus[connection].remote)
-					delete(r.connectionStatus, connection)
 					r.scheduler.Remove(connection)
 				} else {
 					// Add to the scheduler a nil progress to signal that when we finish ack everything - this connection can close
 					r.connectionStatus[connection].progress = append(r.connectionStatus[connection].progress, nil)
 				}
+				r.connectionLock.Unlock()
+			case *transports.DisconnectEvent:
+				// Connection disconnected
+				r.connectionLock.Lock()
+				connection := eventImpl.Context().Value(transports.ContextConnection)
+				r.apiConnections.RemoveEntry(r.connectionStatus[connection].remote)
+				delete(r.connectionStatus, connection)
 				r.connectionLock.Unlock()
 			case *transports.StatusEvent:
 				if eventImpl.StatusChange() == transports.Finished {
@@ -230,7 +235,7 @@ ReceiverLoop:
 					if status.active {
 						delete(r.receiversByListen, status.listen)
 					}
-					// If shutting down, have all acknowledgemente been handled, and all receivers closed?
+					// If shutting down, have all acknowledgements been handled, and all receivers closed?
 					if shutdownChan == nil && len(r.receivers) == 0 && len(r.connectionStatus) == 0 {
 						break ReceiverLoop
 					}

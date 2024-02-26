@@ -112,7 +112,7 @@ func (e *StatusEvent) Err() error {
 	return e.err
 }
 
-// ConnectEvent marks the start of a new connection on a reciver
+// ConnectEvent marks the start of a new connection on a receiver
 type ConnectEvent struct {
 	context context.Context
 	remote  string
@@ -142,6 +142,39 @@ func (e *ConnectEvent) Remote() string {
 
 // Desc returns a description for the remote
 func (e *ConnectEvent) Desc() string {
+	return e.desc
+}
+
+// DisconnectEvent marks the end of a connection on a receiver
+type DisconnectEvent struct {
+	context context.Context
+	remote  string
+	desc    string
+}
+
+var _ Event = (*DisconnectEvent)(nil)
+
+// NewDisconnectEvent generates a new DisconnectEvent for the given Endpoint
+func NewDisconnectEvent(context context.Context, remote string, desc string) *DisconnectEvent {
+	return &DisconnectEvent{
+		context: context,
+		remote:  remote,
+		desc:    desc,
+	}
+}
+
+// Context returns the endpoint associated with this event
+func (e *DisconnectEvent) Context() context.Context {
+	return e.context
+}
+
+// Remote returns the identity of the remote side
+func (e *DisconnectEvent) Remote() string {
+	return e.remote
+}
+
+// Desc returns a description for the remote
+func (e *DisconnectEvent) Desc() string {
 	return e.desc
 }
 
