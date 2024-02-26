@@ -23,7 +23,7 @@ const (
 	// Elasticsearch 8.x
 	esTemplate8 = `{
 	"index_patterns": $INDEXPATTERNS$,
-	"version": 80001,
+	"version": 80002,
 	"settings": {
 		"index.refresh_interval": "5s",
 		"number_of_shards": 1
@@ -46,7 +46,7 @@ const (
 					"type": "text",
 					"norms": false,
 					"fields": {
-						"keyword": { "type": "keyword", "ignore_above": 256 }
+						"keyword": { "type": "keyword", "ignore_above": 8191 }
 					}
 				}
 			}
@@ -91,7 +91,7 @@ const (
 	// Elasticsearch 6.x
 	esTemplate6 = `{
 	"index_patterns": $INDEXPATTERNS$,
-	"version": 60001,
+	"version": 60002,
 	"settings": {
 		"index.refresh_interval": "5s"
 	},
@@ -114,7 +114,7 @@ const (
 						"type": "text",
 						"norms": false,
 						"fields": {
-							"keyword": { "type": "keyword", "ignore_above": 256 }
+							"keyword": { "type": "keyword", "ignore_above": 8191 }
 						}
 					}
 				}
@@ -156,7 +156,7 @@ const (
 	// Elasticsearch 5.x
 	esTemplate5 = `{
 	"template": $INDEXPATTERNSINGLE$,
-	"version": 50001,
+	"version": 50002,
 	"settings": {
 		"index.refresh_interval": "5s"
 	},
@@ -180,7 +180,7 @@ const (
 						"type": "text",
 						"norms": false,
 						"fields": {
-							"keyword": { "type": "keyword", "ignore_above": 256 }
+							"keyword": { "type": "keyword", "ignore_above": 8191 }
 						}
 					}
 				}
