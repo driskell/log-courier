@@ -154,9 +154,20 @@ func (lr *LineReader) fill() error {
 		lr.end -= lr.start
 		lr.start = 0
 	}
+	if lr.err != nil {
+		// Return existing error - we will have errored with received data and
+		// returned a few times without error from that buffer, but now we need
+		// to propogate that error
+		return lr.err
+	}
 
 	n, err := lr.rd.Read(lr.buf[lr.end:])
 	lr.end += n
+	if err != nil {
+		// Remember last error - so we can continue processing current buffer and once
+		// we hit the end of it we return the existing error
+		lr.err = err
+	}
 
 	return err
 }
