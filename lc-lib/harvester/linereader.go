@@ -158,6 +158,9 @@ func (lr *LineReader) fill() error {
 		// Return existing error - we will have errored with received data and
 		// returned a few times without error from that buffer, but now we need
 		// to propogate that error
+		// Clear the error though - so we can attempt another read if needed
+		// (for example if it was EWOULDBLOCK)
+		lr.err = nil
 		return lr.err
 	}
 
