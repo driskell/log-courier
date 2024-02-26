@@ -477,6 +477,10 @@ func (p *Publisher) sendPayload(pendingPayload *payload.Payload) (*endpoint.Endp
 		p.forceEndpointFailure(endpoint, err)
 		return nil, false
 	}
+	if endpoint == nil {
+		// No endpoints available
+		return nil, false
+	}
 
 	// If this is the first payload, start the network timeout
 	if endpoint.NumPending() == 1 {
