@@ -315,8 +315,6 @@ func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce
 	} else if lastAck && closeConnection {
 		// Either it's the last ack for a connection on a shutting down receiver, or the connection read closed, so shutdown the connection
 		receiver.ShutdownConnection(ctx)
-		r.apiConnections.RemoveEntry(status.remote)
-		delete(r.connectionStatus, connection)
 	} else if lastAck {
 		r.startIdleTimeout(ctx, receiver, connection)
 	}
