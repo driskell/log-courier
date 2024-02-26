@@ -241,8 +241,10 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	defer t.connWait.Done()
 
+	didStart := false
 	if err := conn.run(func() {
 		conn.sendEvent(transports.NewConnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc()))
+		didStart = true
 	}); err != nil {
 		if err == ErrHardCloseRequested {
 			log.Noticef("[R %s - %s] Client forcefully disconnected", socket.LocalAddr().String(), socket.RemoteAddr().String())
@@ -253,7 +255,9 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 		log.Noticef("[R %s - %s] Client closed", socket.LocalAddr().String(), socket.RemoteAddr().String())
 	}
 
-	conn.sendEvent(transports.NewDisconnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc()))
+	if didStart {
+		conn.sendEvent(transports.NewDisconnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc()))
+	}
 
 	t.connMutex.Lock()
 	delete(t.connections, conn)
