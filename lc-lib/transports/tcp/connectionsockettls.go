@@ -62,7 +62,7 @@ func (t *connectionSocketTLS) Setup(ctx context.Context) error {
 
 	err := t.Handshake()
 	if err != nil {
-		log.Warning("[%s %s - %s] TLS handshake failed: %w", side, t.LocalAddr().String(), t.RemoteAddr().String(), err)
+		log.Warning("[%s %s - %s] TLS handshake failed: %s", side, t.LocalAddr().String(), t.RemoteAddr().String(), err.Error())
 		return err
 	}
 
