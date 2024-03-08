@@ -16,7 +16,11 @@
 
 package grok
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/driskell/log-courier/lc-lib/event"
+)
 
 func TestParseType(t *testing.T) {
 	if typeHint, err := parseType(string(TypeHintString)); err != nil || typeHint != TypeHintString {
@@ -69,43 +73,43 @@ func TestIntType(t *testing.T) {
 
 func TestFloatType(t *testing.T) {
 	result := convertToType("value", TypeHintFloat)
-	if result != 0. {
+	if result != event.FloatValue64(0.) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 	result = convertToType("0123tr", TypeHintFloat)
-	if result != 0. {
+	if result != event.FloatValue64(0.) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 	result = convertToType("0123", TypeHintFloat)
-	if result != 123. {
+	if result != event.FloatValue64(123.) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 	result = convertToType("prefix0123", TypeHintFloat)
-	if result != 0. {
+	if result != event.FloatValue64(0.) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 	result = convertToType("45666666", TypeHintFloat)
-	if result != 45666666. {
+	if result != event.FloatValue64(45666666.) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 	result = convertToType("4566.6666", TypeHintFloat)
-	if result != 4566.6666 {
+	if result != event.FloatValue64(4566.6666) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 	result = convertToType("tr1.4", TypeHintFloat)
-	if result != 0. {
+	if result != event.FloatValue64(0.) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 	result = convertToType("1.4oth", TypeHintFloat)
-	if result != 0. {
+	if result != event.FloatValue64(0.) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 	result = convertToType("1.4e4", TypeHintFloat)
-	if result != 14000. {
+	if result != event.FloatValue64(14000.) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 	result = convertToType("1.4e4e", TypeHintFloat)
-	if result != 0. {
+	if result != event.FloatValue64(0.) {
 		t.Fatalf("Unexpected conversion: %s", result)
 	}
 }

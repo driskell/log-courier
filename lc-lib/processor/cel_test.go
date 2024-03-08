@@ -18,6 +18,8 @@ package processor
 
 import (
 	"testing"
+
+	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 func TestCELFieldAccess(t *testing.T) {
@@ -87,5 +89,50 @@ func TestCELMacroHasNotDeep(t *testing.T) {
 	}
 	if val.Value().(bool) {
 		t.Fatalf("Unexpected value: %v (error %s)", val, err)
+	}
+}
+
+func TestCELFieldTypeNormalizeString(t *testing.T) {
+	program, err := ParseExpression("event.test")
+	if err != nil {
+		t.Fatalf("Unexpected parse error: %s", err)
+	}
+	val, _, err := program.Eval(map[string]interface{}{"event": map[string]interface{}{"test": "test"}})
+	if err != nil {
+		t.Fatalf("Unexpected eval error: %s", err)
+	}
+	normalized := normalizeType(val.Value())
+	if _, ok := normalized.(string); !ok {
+		t.Fatalf("Unexpected normalized type: %t", val)
+	}
+}
+
+func TestCELFieldTypeNormalizeInt(t *testing.T) {
+	program, err := ParseExpression("event.test")
+	if err != nil {
+		t.Fatalf("Unexpected parse error: %s", err)
+	}
+	val, _, err := program.Eval(map[string]interface{}{"event": map[string]interface{}{"test": 123}})
+	if err != nil {
+		t.Fatalf("Unexpected eval error: %s", err)
+	}
+	normalized := normalizeType(val.Value())
+	if _, ok := normalized.(int64); !ok {
+		t.Fatalf("Unexpected normalized type: %t", val)
+	}
+}
+
+func TestCELFieldTypeNormalizeFloat(t *testing.T) {
+	program, err := ParseExpression("event.test")
+	if err != nil {
+		t.Fatalf("Unexpected parse error: %s", err)
+	}
+	val, _, err := program.Eval(map[string]interface{}{"event": map[string]interface{}{"test": 123.0}})
+	if err != nil {
+		t.Fatalf("Unexpected eval error: %s", err)
+	}
+	normalized := normalizeType(val.Value())
+	if _, ok := normalized.(event.FloatValue64); !ok {
+		t.Fatalf("Unexpected normalized type: %t", normalized)
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/google/cel-go/checker/decls"
 	celext "github.com/google/cel-go/ext"
 
+	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/processor/ext"
 )
 
@@ -41,6 +42,16 @@ func cachedCelEnv() (*cel.Env, error) {
 		celext.Encoders(),
 		ext.JsonEncoder(),
 	)
+}
+
+func normalizeType(value interface{}) interface{} {
+	if nativeValue, ok := value.(float64); ok {
+		return event.FloatValue64(nativeValue)
+	}
+	if nativeValue, ok := value.(float32); ok {
+		return event.FloatValue32(nativeValue)
+	}
+	return value
 }
 
 // ParseExpression parses an expression using cel-go and returns the evaluatable program

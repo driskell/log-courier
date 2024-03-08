@@ -19,6 +19,8 @@ package grok
 import (
 	"fmt"
 	"strconv"
+
+	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 // TypeHint is a type hint specified in a grok pattern
@@ -43,7 +45,7 @@ func parseType(typeHint string) (TypeHint, error) {
 	case string(TypeHintFloat):
 		return TypeHintFloat, nil
 	}
-	return "", fmt.Errorf("Invalid type hint: %s", typeHint)
+	return "", fmt.Errorf("invalid type hint: %s", typeHint)
 }
 
 // convertToType converts the value to the given type
@@ -58,7 +60,7 @@ func convertToType(value string, typeHint TypeHint) interface{} {
 		return result
 	case TypeHintFloat:
 		result, _ := strconv.ParseFloat(value, 64)
-		return result
+		return event.FloatValue64(result)
 	}
 	return nil
 }
