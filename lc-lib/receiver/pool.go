@@ -223,6 +223,7 @@ ReceiverLoop:
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				r.apiConnections.RemoveEntry(r.connectionStatus[connection].remote)
 				delete(r.connectionStatus, connection)
+				r.scheduler.Remove(connection)
 				r.connectionLock.Unlock()
 			case *transports.StatusEvent:
 				if eventImpl.StatusChange() == transports.Finished {
