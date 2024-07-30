@@ -280,7 +280,11 @@ func (r *Pool) Acknowledge(events []*event.Event) {
 // ackEventsEvent processes the acknowledgement, updating any pending partial acknowledgement schedules
 func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce *string, sequence uint32) {
 	status, ok := r.connectionStatus[connection]
-	if !ok || len(status.progress) == 0 {
+	if !ok {
+		// Connection was lost and this was a late acknowledgement, abandon
+		return
+	}
+	if len(status.progress) == 0 {
 		panic(fmt.Sprintf("Out of order acknowledgement: Nonce=%x; Sequence=%d; ExpectedNonce=<none>; ExpectedSequenceMin=<none>; ExpectedSequenceMax=<none>", *nonce, sequence))
 	}
 
