@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.11.0](https://github.com/driskell/log-courier/compare/v2.10.0...v2.11.0) (2024-07-30)
+
+
+### Features
+
+* Added "json" action to decode field and copy resulting fields into root of event ([fba6388](https://github.com/driskell/log-courier/commit/fba6388e82e5be69ae524682a9df3e6c3d5cd4f1))
+* Combine similiar event index failures, reporting only first message and total count ([4a148b3](https://github.com/driskell/log-courier/commit/4a148b353835a4b51ad04b888f7a353db2a51a0a))
+* Grok action will now only remove the field if grok parsing was successful ([676225e](https://github.com/driskell/log-courier/commit/676225e02a5aac58dfe24b1a1683e87d51b529b4))
+* Implement [@metadata](https://github.com/metadata)[receiver][name] and others against all events to allow processors to process based on connection details (this replaced agent[source] which is removed) ([9ba6ba7](https://github.com/driskell/log-courier/commit/9ba6ba79429393d7b2b26d4da86d4f3f916e4761))
+* Log Carver now appends direct source of a received event to agent[source] ([68b88c7](https://github.com/driskell/log-courier/commit/68b88c774ec02431df0ea34389737a6812a6f74b))
+* The [@timestamp](https://github.com/timestamp) field can now be set from grok and json actions if in the correct format expected (RFC3339 with optional nanoseconds: 2006-01-02T15:04:05.999Z) ([36bc467](https://github.com/driskell/log-courier/commit/36bc4674f5181f8f0e550a77756badfa8e461b73))
+* TLS handshake errors are now prefixed to show they originate from a handshake ([1d8a57f](https://github.com/driskell/log-courier/commit/1d8a57f3f15224b251a5162ffa123c52cfb8baf3))
+
+
+### Bug Fixes
+
+* Fix a rare race in publisher for immediately failing reconnections that can cause high CPU and pipeline freeze ([e3aacc8](https://github.com/driskell/log-courier/commit/e3aacc8c2c3cd99f351331df0660bc7669a3bcfd))
+* Fix crash if reconnection reusing port occurs ([d5c1cc2](https://github.com/driskell/log-courier/commit/d5c1cc29c20392688b6d50a4022a0ed82501635e))
+* Fix potential log-carver deadlock when using lc-admin -carver and a new connection appears during the status poll ([d702ce1](https://github.com/driskell/log-courier/commit/d702ce1710fd7677e21c0cde9012ab8319b1e31d))
+* Fix potential panic in receiver if a connection is lost ([3615aa3](https://github.com/driskell/log-courier/commit/3615aa39693af2b705e9c988cfb04d16df7ce643))
+* Fix receiver pool not cleaning up connections in some instances and preventing shutdown, and add additional logs ([f072865](https://github.com/driskell/log-courier/commit/f072865b1e0a6fd7ac5d643b28ceb73f8732f638))
+* Fix receiver shutting down and reset messages displaying incorrectly ([4d7c873](https://github.com/driskell/log-courier/commit/4d7c873413f4ca91159975275e17d8ef24a03f5f))
+* Fix scheduling issues that can cause unexpected timeouts on new connections ([b0980cc](https://github.com/driskell/log-courier/commit/b0980ccd3515f2c096add5b7bf89457118000d6c))
+* Fix send congestion or send errors not causing connection shutdown and leaking connections ([02c8ede](https://github.com/driskell/log-courier/commit/02c8ede634e847a4ec1ba2c501ebb674ae56c8a2))
+* Fix successful ES bulk request failing with cluster block message due to cluster block handling fix ([20e5751](https://github.com/driskell/log-courier/commit/20e57516d8ed67606cac653a8d1f580c016ed89f))
+* Fix timeout on courier displaying two error messages, one for unexpected end ([e453486](https://github.com/driskell/log-courier/commit/e453486ec0edd551eeb0617eb6729ca6e102e5cd))
+* Float grok values and conversion to float expressions now serialize correctly to float in the Elasticsearch output ([bb0f4a9](https://github.com/driskell/log-courier/commit/bb0f4a9a2251f5cb24ed38cc689faf4288e25940))
+* Receiver can cause panic during reload in Log Carver ([c43f935](https://github.com/driskell/log-courier/commit/c43f93514dd913174cdd0d6ba686af1e3821e5ea)), closes [#400](https://github.com/driskell/log-courier/issues/400)
+* Receiver pool can sometimes crash when a disconnect occurs unexpectedly ([3553db5](https://github.com/driskell/log-courier/commit/3553db5e5e684cc4595d5efb2aba916e70ec6c60))
+* Resolve a formatting issue in Handshake failure output ([2f6d77d](https://github.com/driskell/log-courier/commit/2f6d77d558546f47e66c08712a28b3677543550a))
+* Resolve connection leakage that can cause too many open files, especially with stream input ([39f87a9](https://github.com/driskell/log-courier/commit/39f87a9c500ef2297ff3b72b4aa94cfdf6ca4d60))
+* Resolve crash introduced with cleanup code for force failed connections ([a17595b](https://github.com/driskell/log-courier/commit/a17595b1733ef0f06a0e8da6110b13cc31dfefb1))
+* Resolve ES template not indexing terms for messages longer than 256 characters ([99bf67f](https://github.com/driskell/log-courier/commit/99bf67f6d69309fa3bba30eb0caf6d98906776ac))
+* Resolve force closed connections on receiver not being cleaned up fully, preventing shutdown ([b6689de](https://github.com/driskell/log-courier/commit/b6689de004e840d933cd259f9bc2d9516b30eaeb))
+* Resolve linereader hanging on streams due to recent fix on missing lines ([bdc463c](https://github.com/driskell/log-courier/commit/bdc463c95082532f405e6319190dc8a245814748))
+* Resolve missing lines at end of streams due to harvester early failure ([710fc3c](https://github.com/driskell/log-courier/commit/710fc3c915f1338351f8b049f9cd18a011e6d1e8))
+* Resolve potential crash in receiver cleanup if shutdown of a connection occurs whilst draining ([fcd54d6](https://github.com/driskell/log-courier/commit/fcd54d62d4ac84978e44f48fa18514e8ce755294))
+* Resolve potential crash when no endpoints are available to publish to ([463ed63](https://github.com/driskell/log-courier/commit/463ed6354fb1efa95e1d3f1df68ee2879627d589))
+* Workaround some EOF errors on connections that closed gracefully ([7d20247](https://github.com/driskell/log-courier/commit/7d202474a0051e0916bf2fbef4b09b39f9d647e5))
+
 ## [2.10.0](https://github.com/driskell/log-courier/compare/v2.9.1...v2.10.0) (2023-03-20)
 
 
