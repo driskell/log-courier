@@ -40,7 +40,7 @@ func (s *Sink) ProcessEvent(event transports.Event) (endpoint *Endpoint, err err
 	case *transports.PongEvent:
 		endpoint.processPong(s.OnPong)
 	case *transports.EndEvent:
-		if endpoint.status != endpointStatusClosed {
+		if endpoint.status != endpointStatusFailed && endpoint.status != endpointStatusClosed {
 			err = fmt.Errorf("unexpected end of connection")
 		}
 	default:
