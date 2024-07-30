@@ -418,14 +418,10 @@ func (p *Publisher) eventsHeld() bool {
 
 // tryQueueHeld attempts to queue held payloads
 func (p *Publisher) tryQueueHeld() bool {
-	if !p.eventsHeld() || !p.endpointSink.CanQueue() {
-		return false
-	}
-
 	if p.resendList.Len() > 0 {
 		didSend := false
 
-		for p.resendList.Len() > 0 {
+		for p.resendList.Len() > 0 && p.endpointSink.CanQueue() {
 			pendingPayload := p.resendList.Front().Value.(*payload.Payload)
 
 			// We have a payload to resend, send it now
