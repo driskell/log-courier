@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type bulkResponseError struct {
@@ -30,15 +31,19 @@ type bulkResponseError struct {
 	EventData map[string]interface{} `json:"-"`
 }
 
+func (e *bulkResponseError) SameAs(other *bulkResponseError) bool {
+	return e.Type == other.Type && e.Reason == other.Reason
+}
+
 func (e *bulkResponseError) Error() string {
 	data, err := json.Marshal(e.EventData)
 	if err != nil {
 		data = []byte(err.Error())
 	}
 	if e.CausedBy != nil {
-		return fmt.Sprintf("[%s] %s; Caused by %s; Event: %s", e.Type, e.Reason, e.CausedBy.Error(), data)
+		return fmt.Sprintf("[%s] %s; Caused by %s; Event: %s", e.Type, strings.TrimRight(e.Reason, ";"), e.CausedBy.Error(), data)
 	}
-	return fmt.Sprintf("[%s] %s; Event: %s", e.Type, e.Reason, data)
+	return fmt.Sprintf("[%s] %s; Event: %s", e.Type, strings.TrimRight(e.Reason, ";"), data)
 }
 
 type bulkResponse struct {

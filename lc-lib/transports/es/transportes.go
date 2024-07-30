@@ -387,10 +387,33 @@ func (t *transportES) performBulkRequest(addr *addresspool.Address, id int, requ
 		return fmt.Errorf("response failed to parse: %s [Body: %s]", err, body)
 	}
 
+	clusterBlocked := 0
+	var lastError *bulkResponseError
+	lastCount := 0
 	if len(response.Errors) != 0 {
 		for _, errorValue := range response.Errors {
-			log.Warningf("[T %s]{%d} Failed to index event: %s", addr.Desc(), id, errorValue.Error())
+			if errorValue.Type == "cluster_block_exception" {
+				clusterBlocked += 1
+			}
+			if lastError == nil {
+				lastError = errorValue
+				lastCount = 1
+			} else if errorValue.SameAs(lastError) {
+				lastCount += 1
+			} else {
+				logEventErrors(addr.Desc(), id, lastError, lastCount)
+				lastError = errorValue
+				lastCount = 1
+			}
 		}
+	}
+	if lastError != nil {
+		logEventErrors(addr.Desc(), id, lastError, lastCount)
+	}
+
+	// If cluster is blocked on all messages, allow a retry to occur by throwing an error
+	if clusterBlocked == len(response.Errors) {
+		return fmt.Errorf("cluster is blocked")
 	}
 
 	if request.Remaining() == 0 {
@@ -399,6 +422,15 @@ func (t *transportES) performBulkRequest(addr *addresspool.Address, id int, requ
 		log.Warningf("[T %s]{%d} Elasticsearch request partially complete (took %dms; created %d; errors %d; retrying %d)", addr.Desc(), id, response.Took, request.Created()-created, len(response.Errors), request.Remaining())
 	}
 	return nil
+}
+
+// logEventErrors logs errors from events
+func logEventErrors(desc string, id int, lastError *bulkResponseError, lastCount int) {
+	if lastCount > 1 {
+		log.Warningf("[T %s]{%d} Failed to index event: %s [Repeated for %d more events]", desc, id, lastError.Error(), lastCount)
+	} else {
+		log.Warningf("[T %s]{%d} Failed to index event: %s", desc, id, lastError.Error())
+	}
 }
 
 // retryWait waits the backoff timeout before attempting to retry
