@@ -68,6 +68,8 @@ func (s *Scheduler) Remove(v interface{}) {
 		heap.Remove(s.tq, item.index)
 		delete(s.index, v)
 	}
+
+	// No need to update timer, just let it fire and handle the next item, or reschedule
 }
 
 // Next returns the next item that is due, or nil if none are due

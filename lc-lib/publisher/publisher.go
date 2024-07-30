@@ -206,9 +206,7 @@ func (p *Publisher) runOnce() bool {
 		} else if p.resendList.Len() != 0 {
 			log.Debug("Holding %d new events until the resend queue is flushed", len(spool))
 		} else if p.endpointSink.CanQueue() {
-			_, ok := p.sendEvents(spool)
-			p.endpointSink.Scheduler.Reschedule()
-			if ok {
+			if _, ok := p.sendEvents(spool); ok {
 				break
 			}
 
