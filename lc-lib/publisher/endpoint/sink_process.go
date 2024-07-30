@@ -47,6 +47,7 @@ func (s *Sink) ProcessEvent(event transports.Event) (endpoint *Endpoint, err err
 		err = fmt.Errorf("unexpected %T message received", event)
 	}
 
+	s.Scheduler.Reschedule()
 	return
 }
 

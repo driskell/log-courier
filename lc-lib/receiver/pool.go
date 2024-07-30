@@ -187,6 +187,7 @@ ReceiverLoop:
 				// Schedule partial ack if this is first set of events
 				if len(connectionStatus.progress) == 0 {
 					r.scheduler.Set(connection, 5*time.Second)
+					r.scheduler.Reschedule()
 				}
 				connectionStatus.progress = append(connectionStatus.progress, &poolEventProgress{event: eventImpl, sequence: 0})
 				r.connectionLock.Unlock()
