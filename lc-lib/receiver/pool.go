@@ -137,7 +137,9 @@ ReceiverLoop:
 				expectedAck := r.connectionStatus[connection].progress[0]
 				expectedEvent := expectedAck.event
 				receiver := expectedEvent.Context().Value(transports.ContextReceiver).(transports.Receiver)
-				receiver.Acknowledge(expectedEvent.Context(), expectedEvent.Nonce(), expectedAck.sequence)
+				if err := receiver.Acknowledge(expectedEvent.Context(), expectedEvent.Nonce(), expectedAck.sequence); err != nil {
+					r.failConnection(expectedEvent.Context(), receiver, connection, err)
+				}
 				r.scheduler.Set(connection, time.Second*5)
 				r.connectionLock.Unlock()
 			}

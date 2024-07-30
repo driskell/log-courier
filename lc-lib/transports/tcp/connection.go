@@ -146,6 +146,10 @@ func (t *connection) senderRoutine() {
 	}()
 
 	t.senderErr = t.sender()
+	if t.senderErr != nil {
+		// Sender issue, close connections
+		t.shutdownFunc()
+	}
 }
 
 // sender handles socket writes
