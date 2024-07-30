@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Need git 2.x for shallow clones by golang
-# Do before enabling errors as it doesn't support set -e and will cause an immediate exit
-source scl_source enable rh-git218
-
 set -eo pipefail
 
 VERSION=${VERSION#refs/tags/}
+
+echo "::group::Marking workspace as safe"
+git config --global --add safe.directory /github/workspace
+echo '::endgroup::'
 
 echo "::group::Checking $NAME exists in $REF"
 if [ "${NAME}" != "log-courier" ] && [ ! -d "${NAME}" ]; then
@@ -49,7 +49,7 @@ cat >>~/.config/copr <<<"$COPR_CLI"
 echo '::endgroup::'
 
 echo '::group::Building SRPM'
-yum-builddep -y ~/"rpmbuild/SPECS/${NAME}.spec"
+dnf builddep -y ~/"rpmbuild/SPECS/${NAME}.spec"
 rpmbuild -bs ~/"rpmbuild/SPECS/${NAME}.spec"
 mkdir -p "$GITHUB_WORKSPACE"/artifacts
 cp -rf ~/rpmbuild/SRPMS/*.src.rpm "$GITHUB_WORKSPACE"/artifacts/

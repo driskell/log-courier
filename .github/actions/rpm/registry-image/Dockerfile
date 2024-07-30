@@ -1,5 +1,5 @@
-FROM centos:7
-RUN yum -y install rpm-sign rpm-build epel-release ca-certificates centos-release-scl
-RUN yum -y install copr-cli golang rh-git218
+FROM almalinux:9
+RUN dnf -y install rpm-sign rpm-build epel-release ca-certificates
+RUN dnf -y install copr-cli golang git
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
