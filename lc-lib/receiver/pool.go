@@ -174,9 +174,11 @@ ReceiverLoop:
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				r.startIdleTimeout(eventImpl.Context(), receiver, connection)
 				r.connectionLock.Lock()
-				r.connectionStatus[connection] = newPoolConnectionStatus(r, r.receivers[receiver].config.Name, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc())
-				r.apiConnections.AddEntry(eventImpl.Remote(), r.connectionStatus[connection])
+				connectionStatus := newPoolConnectionStatus(r, r.receivers[receiver].config.Name, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc())
+				r.connectionStatus[connection] = connectionStatus
 				r.connectionLock.Unlock()
+				// AddEntry outside of connection lock, as entry updates that hold the entry lock will take the connection lock
+				r.apiConnections.AddEntry(eventImpl.Remote(), connectionStatus)
 			case transports.EventsEvent:
 				r.connectionLock.Lock()
 				connection := eventImpl.Context().Value(transports.ContextConnection)
@@ -221,10 +223,12 @@ ReceiverLoop:
 				// Connection disconnected
 				r.connectionLock.Lock()
 				connection := eventImpl.Context().Value(transports.ContextConnection)
-				r.apiConnections.RemoveEntry(r.connectionStatus[connection].remote)
+				connectionStatus := r.connectionStatus[connection]
 				delete(r.connectionStatus, connection)
 				r.scheduler.Remove(connection)
 				r.connectionLock.Unlock()
+				// RemoveEntry outside of connection lock, as entry updates that hold the entry lock will take the connection lock
+				r.apiConnections.RemoveEntry(connectionStatus.remote)
 			case *transports.StatusEvent:
 				if eventImpl.StatusChange() == transports.Finished {
 					// Remove the receiver from our list and exit if all receivers are finished
