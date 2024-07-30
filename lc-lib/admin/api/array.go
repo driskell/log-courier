@@ -49,25 +49,29 @@ func (a *Array) AddEntry(key string, entry Navigatable) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	if a.entryMap == nil {
-		a.entryMap = make(map[string]*apiArrayEntry)
-	} else {
+	if a.entryMap != nil {
 		if _, ok := a.entryMap[key]; ok {
 			panic("Key already exists")
 		}
 	}
 
-	arrayEntry := &apiArrayEntry{
-		row:   len(a.entries),
-		entry: entry,
+	a.addEntry(key, entry)
+}
+
+// ReplaceEntry replaces an array entry, adding it if it does not exist
+func (a *Array) ReplaceEntry(key string, entry Navigatable) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	if existingEntry, ok := a.entryMap[key]; ok {
+		a.removeEntry(key, existingEntry)
 	}
 
-	a.entryMap[key] = arrayEntry
-
-	a.entries = append(a.entries, arrayEntry)
+	a.addEntry(key, entry)
 }
 
 // RemoveEntry removes an array entry
+// Pass in non-nil entry to only remove if matches the given value
 func (a *Array) RemoveEntry(key string) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
@@ -81,6 +85,51 @@ func (a *Array) RemoveEntry(key string) {
 		panic("Entry not found")
 	}
 
+	a.removeEntry(key, entry)
+}
+
+// RemoveEntry removes an array entry
+// Pass in non-nil entry to only remove if matches the given value
+func (a *Array) RemoveEntryIfValue(key string, ifValue Navigatable) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	if a.entryMap == nil {
+		panic("Array has no entries")
+	}
+
+	entry, ok := a.entryMap[key]
+	if !ok {
+		panic("Entry not found")
+	}
+
+	if ifValue != nil && entry.entry != ifValue {
+		return
+	}
+
+	a.removeEntry(key, entry)
+}
+
+// addEntry adds an entry
+// This is internal and performs no checks
+func (a *Array) addEntry(key string, entry Navigatable) {
+	arrayEntry := &apiArrayEntry{
+		row:   len(a.entries),
+		entry: entry,
+	}
+
+	if a.entryMap == nil {
+		a.entryMap = make(map[string]*apiArrayEntry)
+	}
+
+	a.entryMap[key] = arrayEntry
+
+	a.entries = append(a.entries, arrayEntry)
+}
+
+// removeEntry removes an entry
+// This is internal and performs no checks
+func (a *Array) removeEntry(key string, entry *apiArrayEntry) {
 	delete(a.entryMap, key)
 	for i := entry.row; i+1 < len(a.entries); i++ {
 		a.entries[i] = a.entries[i+1]

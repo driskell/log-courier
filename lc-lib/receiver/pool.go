@@ -177,8 +177,9 @@ ReceiverLoop:
 				connectionStatus := newPoolConnectionStatus(r, r.receivers[receiver].config.Name, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc())
 				r.connectionStatus[connection] = connectionStatus
 				r.connectionLock.Unlock()
-				// AddEntry outside of connection lock, as entry updates that hold the entry lock will take the connection lock
-				r.apiConnections.AddEntry(eventImpl.Remote(), connectionStatus)
+				// ReplaceEntry outside of connection lock, as entry updates that hold the entry lock will take the connection lock
+				// We replace because a reconnect on the same port could occur before we get around to handling the disconnection, and we're keyed by port
+				r.apiConnections.ReplaceEntry(eventImpl.Remote(), connectionStatus)
 			case transports.EventsEvent:
 				r.connectionLock.Lock()
 				connection := eventImpl.Context().Value(transports.ContextConnection)
@@ -228,8 +229,9 @@ ReceiverLoop:
 				delete(r.connectionStatus, connection)
 				r.scheduler.Remove(connection)
 				r.connectionLock.Unlock()
-				// RemoveEntry outside of connection lock, as entry updates that hold the entry lock will take the connection lock
-				r.apiConnections.RemoveEntry(connectionStatus.remote)
+				// RemoveEntryIfValue outside of connection lock, as entry updates that hold the entry lock will take the connection lock
+				// We only remove if value matches, in case a reconnection occurred on same port before we handled disconnect that replaced it
+				r.apiConnections.RemoveEntryIfValue(connectionStatus.remote, connectionStatus)
 			case *transports.StatusEvent:
 				if eventImpl.StatusChange() == transports.Finished {
 					// Remove the receiver from our list and exit if all receivers are finished
