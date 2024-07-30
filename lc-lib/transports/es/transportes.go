@@ -412,7 +412,7 @@ func (t *transportES) performBulkRequest(addr *addresspool.Address, id int, requ
 	}
 
 	// If cluster is blocked on all messages, allow a retry to occur by throwing an error
-	if clusterBlocked == len(response.Errors) {
+	if len(response.Errors) > 0 && clusterBlocked == len(response.Errors) {
 		return fmt.Errorf("cluster is blocked")
 	}
 
