@@ -14,6 +14,7 @@ StandardError=syslog
 User=log-courier
 Group=log-courier
 RuntimeDirectory=log-courier
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
