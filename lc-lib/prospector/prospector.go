@@ -386,8 +386,12 @@ func (p *Prospector) processFile(file string, cfg *FileConfig) {
 				log.Info("Resuming harvester on a previously harvested file: %s", file)
 			}
 		} else if info.status == statusFailed {
-			// Last attempt we failed to start, try again
-			log.Info("Attempting to restart failed harvester: %s", file)
+			if info.canRestartFailed() {
+				// Last attempt we failed to start, try again
+				log.Info("Attempting to restart failed harvester: %s", file)
+			} else {
+				resume = false
+			}
 		} else if info.identity.Stat().ModTime() != fileinfo.ModTime() {
 			// Resume harvesting of an old file we've stopped harvesting from
 			log.Info("Resuming harvester on an old file that was just modified: %s", file)

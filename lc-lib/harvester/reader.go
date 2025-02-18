@@ -20,13 +20,21 @@ import (
 	"errors"
 )
 
+type PermanentError struct {
+	error
+}
+
+func NewPermanentError(err error) *PermanentError {
+	return &PermanentError{err}
+}
+
 var (
 	// ErrMaxDataSizeTruncation is returned when the read data was longer than the
 	// maximum allowed size and had to be truncated
 	ErrMaxDataSizeTruncation = errors.New("data exceeded \"max line bytes\" and was truncated")
 
 	// ErrMaxLineBytesExceeded is reported when max line bytes is exceeded in an unrecoverable way
-	ErrMaxDataSizeExceeded = errors.New("data exceeds \"max line bytes\" and prevents the file from being processed")
+	ErrMaxDataSizeExceeded = NewPermanentError(errors.New("data exceeds \"max line bytes\" and prevents the file from being processed"))
 )
 
 // Reader is implemented by the various harvester readers and reads events from

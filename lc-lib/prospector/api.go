@@ -18,6 +18,7 @@ package prospector
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 )
@@ -105,7 +106,11 @@ func (a *apiFiles) processEntry(info *prospectorInfo) {
 		status = "resuming"
 		errString = api.Null
 	case statusFailed:
-		status = "failed"
+		if info.failedUntil.IsZero() {
+			status = "failed (permanent)"
+		} else {
+			status = api.String(fmt.Sprintf("failed (retry at %s)", info.failedUntil.Format(time.RFC3339)))
+		}
 		errString = api.String(info.err.Error())
 	case statusInvalid:
 		if _, ok := info.err.(*prospectorSkipError); ok {

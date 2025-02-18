@@ -19,8 +19,10 @@ package prospector
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/harvester"
 	"github.com/driskell/log-courier/lc-lib/registrar"
 )
@@ -49,6 +51,8 @@ type prospectorInfo struct {
 	finishOffset int64
 	harvester    *harvester.Harvester
 	err          error
+	backoff      *core.ExpBackoff
+	failedUntil  time.Time
 }
 
 func newProspectorInfoFromFileState(file string, filestate *registrar.FileState) *prospectorInfo {
@@ -57,6 +61,8 @@ func newProspectorInfoFromFileState(file string, filestate *registrar.FileState)
 		identity:     filestate,
 		status:       statusResume,
 		finishOffset: filestate.Offset,
+		// TODO: Make configurable
+		backoff: core.NewExpBackoff(file, 0, 300),
 	}
 	info.ctx = context.WithValue(context.Background(), registrar.ContextEntry, registrar.Entry(info))
 	return info
@@ -66,6 +72,8 @@ func newProspectorInfoFromFileInfo(file string, fileinfo os.FileInfo) *prospecto
 	info := &prospectorInfo{
 		file:     file,
 		identity: registrar.NewFileInfo(fileinfo), // fileinfo is nil for stdin
+		// TODO: Make configurable
+		backoff: core.NewExpBackoff(file, 0, 300),
 	}
 	info.ctx = context.WithValue(context.Background(), registrar.ContextEntry, registrar.Entry(info))
 	return info
@@ -76,6 +84,8 @@ func newProspectorInfoInvalid(file string, err error) *prospectorInfo {
 		file:   file,
 		err:    err,
 		status: statusInvalid,
+		// TODO: Make configurable
+		backoff: core.NewExpBackoff(file, 0, 300),
 	}
 	info.ctx = context.WithValue(context.Background(), registrar.ContextEntry, registrar.Entry(info))
 	return info
@@ -122,6 +132,9 @@ func (pi *prospectorInfo) setHarvesterStopped(status *harvester.FinishStatus) {
 	if status.Error != nil {
 		pi.status = statusFailed
 		pi.err = status.Error
+		if _, ok := pi.err.(*harvester.PermanentError); !ok {
+			pi.failedUntil = time.Now().Add(pi.backoff.Trigger())
+		}
 	}
 	if status.LastStat != nil {
 		// Keep the last stat the harvester ran so we compare timestamps for potential resume
@@ -141,6 +154,17 @@ func (pi *prospectorInfo) update(fileinfo os.FileInfo, iteration uint32) {
 
 func (pi *prospectorInfo) seenInIteration(iteration uint32) bool {
 	return pi.lastSeen == iteration
+}
+
+func (pi *prospectorInfo) canRestartFailed() bool {
+	if pi.status != statusFailed {
+		return true
+	}
+	if pi.failedUntil.IsZero() {
+		// Permanent error if still zero
+		return false
+	}
+	return time.Now().After(pi.failedUntil)
 }
 
 func (pi *prospectorInfo) maybeOrphaned() {
