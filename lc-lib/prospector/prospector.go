@@ -201,6 +201,12 @@ DelayLoop:
 			p.fileConfigs = cfg.Section("files").(Config)
 			// Reset flag to warn on IO errors again
 			p.didWarnIoError = false
+			// Reset failed entries to allow immediate retry on reload
+			for _, info := range p.prospectors {
+				if info.status == statusFailed {
+					info.failedUntil = time.Now()
+				}
+			}
 		}
 
 		now = time.Now()
