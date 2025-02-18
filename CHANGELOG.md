@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.12.0](https://github.com/driskell/log-courier/compare/v2.11.0...v2.12.0) (2025-02-18)
+
+
+### Features
+
+* Allow immediate retry of failed files on reload ([25ec0cf](https://github.com/driskell/log-courier/commit/25ec0cfe2d476d68778a4d97a72f8b62a745ff8b))
+
+
+### Bug Fixes
+
+* Prevent permanent failures in harvester such as max line bytes exceeded from causing errors every prospector scan loop ([3f3ea20](https://github.com/driskell/log-courier/commit/3f3ea209ea9456247cc5c37c1e9584db4ecdcec3))
+
 ## [2.11.0](https://github.com/driskell/log-courier/compare/v2.10.0...v2.11.0) (2024-07-30)
 
 
