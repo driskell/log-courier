@@ -36,7 +36,7 @@ jobs:
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2
     - name: Upload SRPM
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
         name: log-courier
@@ -65,7 +65,7 @@ jobs:
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2
     - name: Upload SRPM
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
         name: log-carver
@@ -94,7 +94,7 @@ jobs:
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2
     - name: Upload SRPM
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
         name: lc-admin
@@ -123,7 +123,7 @@ jobs:
         GNU_PG: ${{ secrets.GNU_PG }}
         TARGET_REPO: log-courier2
     - name: Upload SRPM
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
         name: lc-tlscert
