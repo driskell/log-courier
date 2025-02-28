@@ -72,7 +72,7 @@ jobs:
       uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
-        name: log-courier
+        name: log-carver
         path: artifacts/*
 
   release-lc-admin:
