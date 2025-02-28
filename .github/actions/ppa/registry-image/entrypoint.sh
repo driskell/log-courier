@@ -62,7 +62,7 @@ fi
 echo '::group::Installing secrets'
 base64 -id <<<"$GNU_PG" | gpg --batch --import
 gpg --import-ownertrust <<EOF
-CF713BECBB9DA51E892E8AD0117FF0FC7420BA3F:6:
+D6AB748910B1CF77C9A0A5BD3B83B8DE48FE9B1E:6:
 EOF
 echo '::endgroup::'
 

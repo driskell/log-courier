@@ -32,12 +32,14 @@ jobs:
     strategy:
       matrix:
         # Red Hat we compile inside COPR using the version of Golang for the target OS.
-        # - EPEL8 / Stream8 = 1.19
-        # - EPEL7 = 1.18
-        # Ubuntu we pre-compile in GitHub Action using Jammy before providing to PPA, because the older OS do not have >=1.5 we need for Go modules.
-        # - Jammy uses 1.18.
-        # Also test on latest 1.20.
-        go: ['1.18', '1.19', '1.20']
+        # - RHEL9 = 1.22 (Appstream as of 2025-02-28)
+        # Ubuntu we use the longsleep PPA which has 1.24 available as of 2025-02-28 for the following supported OS.
+        # - Bionic
+        # - Focal
+        # - Jammy
+        # - Noble
+        # - Oracular
+        go: ['1.22', '1.24']
     name: Build Go ${{ matrix.go }}
     # Use latest Ubuntu to try work around https://github.com/golang/go/issues/37362
     runs-on: ubuntu-20.04
