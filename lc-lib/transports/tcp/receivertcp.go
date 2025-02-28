@@ -53,6 +53,10 @@ func (t *receiverTCP) Factory() transports.ReceiverFactory {
 	return t.factory
 }
 
+func (t *receiverTCP) SupportsAck() bool {
+	return t.protocolFactory.SupportsAck()
+}
+
 // startController starts the controller
 func (t *receiverTCP) startController() {
 	go t.controllerRoutine()

@@ -57,16 +57,13 @@ func (p *protocol) Pong() error {
 // Returns nil event if shutdown, with an optional error
 func (p *protocol) Read() (transports.Event, error) {
 	var event map[string]interface{}
+	var length int
 	var err error
 
 	for {
-		event, _, err = p.lineReader.ReadItem()
+		event, length, err = p.lineReader.ReadItem()
 		if err == nil || err == harvester.ErrMaxDataSizeTruncation {
 			break
-		}
-
-		if err == tcp.ErrIOWouldBlock {
-			continue
 		}
 
 		return nil, err
@@ -75,7 +72,7 @@ func (p *protocol) Read() (transports.Event, error) {
 	log.Debugf("Received event: %v", event)
 
 	// TODO: Read multiple before generating event
-	return transports.NewEventsEvent(p.conn.Context(), &transports.NilNonce, []map[string]interface{}{event}), nil
+	return transports.NewEventsEvent(p.conn.Context(), &transports.NilNonce, []map[string]interface{}{event}, length), nil
 }
 
 // NonBlocking returns trues because a stream does not have well defined event boundaries so we have to check periodically

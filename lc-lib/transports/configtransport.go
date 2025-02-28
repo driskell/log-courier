@@ -23,17 +23,6 @@ import (
 	"github.com/driskell/log-courier/lc-lib/config"
 )
 
-const (
-	defaultNetworkBackoff            time.Duration = 5 * time.Second
-	defaultNetworkBackoffMax         time.Duration = 300 * time.Second
-	defaultNetworkMaxPendingPayloads int64         = 10
-	defaultNetworkMethod             string        = "random"
-	defaultNetworkRfc2782Service     string        = "courier"
-	defaultNetworkRfc2782Srv         bool          = true
-	defaultNetworkTimeout            time.Duration = 15 * time.Second
-	defaultNetworkTransport          string        = "tls"
-)
-
 // Config holds network related configuration
 type Config struct {
 	Factory TransportFactory

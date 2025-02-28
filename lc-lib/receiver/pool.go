@@ -38,6 +38,11 @@ const (
 	poolContextEventPosition poolContext = "eventpos"
 )
 
+type spoolEntry struct {
+	events []*event.Event
+	size   int
+}
+
 // Pool manages a list of receivers
 type Pool struct {
 	// Pipeline
@@ -53,6 +58,8 @@ type Pool struct {
 	scheduler         *scheduler.Scheduler
 	connectionLock    sync.RWMutex
 	connectionStatus  map[interface{}]*poolConnectionStatus
+	spool             []*spoolEntry
+	spoolSize         int64
 
 	apiConfig      *admin.Config
 	apiConnections api.Array
@@ -104,16 +111,15 @@ func (r *Pool) Init(cfg *config.Config) error {
 
 // Run starts listening
 func (r *Pool) Run() {
-	var spool [][]*event.Event
 	var spoolChan chan<- []*event.Event
 	eventChan := r.eventChan
 	shutdownChan := r.shutdownChan
 
 ReceiverLoop:
 	for {
-		var nextSpool []*event.Event = nil
-		if len(spool) != 0 {
-			nextSpool = spool[0]
+		var nextSpool *spoolEntry = nil
+		if len(r.spool) != 0 {
+			nextSpool = r.spool[0]
 		}
 
 		select {
@@ -182,30 +188,52 @@ ReceiverLoop:
 				// We replace because a reconnect on the same port could occur before we get around to handling the disconnection, and we're keyed by port
 				r.apiConnections.ReplaceEntry(eventImpl.Remote(), connectionStatus)
 			case transports.EventsEvent:
+				size := calcSize(eventImpl)
 				r.connectionLock.Lock()
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				connectionStatus := r.connectionStatus[connection]
-				// Schedule partial ack if this is first set of events
-				if len(connectionStatus.progress) == 0 {
-					r.scheduler.Set(connection, 5*time.Second)
+				if r.spoolSize+int64(size) > r.receivers[receiver].config.MaxQueueSize {
+					receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max queue size exceeded"))
+					r.connectionLock.Unlock()
+					break
 				}
-				connectionStatus.progress = append(connectionStatus.progress, &poolEventProgress{event: eventImpl, sequence: 0})
+				var acker event.Acknowledger
+				if receiver.SupportsAck() {
+					if len(r.connectionStatus[connection].progress)+1 > int(r.receivers[receiver].config.MaxPendingPayloads) {
+						receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max pending payloads exceeded"))
+						r.connectionLock.Unlock()
+						break
+					}
+					// Schedule partial ack if this is first set of events
+					if len(connectionStatus.progress) == 0 {
+						r.scheduler.Set(connection, 5*time.Second)
+					}
+					connectionStatus.progress = append(connectionStatus.progress, &poolEventProgress{event: eventImpl, sequence: 0})
+					acker = r
+				} else {
+					// Reset idle timeout
+					r.startIdleTimeout(eventImpl.Context(), receiver, connection)
+				}
+				connectionStatus.bytes += eventImpl.Size()
 				r.connectionLock.Unlock()
 				// Build the events with our acknowledger and submit the bundle
 				var events = make([]*event.Event, len(eventImpl.Events()))
+				var ctx context.Context
 				for idx, item := range eventImpl.Events() {
-					ctx := context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{nonce: eventImpl.Nonce(), sequence: uint32(idx + 1)})
-					item := event.NewEvent(ctx, r, item)
+					if acker == nil {
+						ctx = eventImpl.Context()
+					} else {
+						ctx = context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{nonce: eventImpl.Nonce(), sequence: uint32(idx + 1)})
+					}
+					item := event.NewEvent(ctx, acker, item)
 					item.MustResolve("@metadata[receiver]", connectionStatus.metadataReceiver)
 					events[idx] = item
 				}
-				spool = append(spool, events)
+				spoolEntry := &spoolEntry{events, size}
+				r.spool = append(r.spool, spoolEntry)
+				r.spoolSize += int64(spoolEntry.size)
 				spoolChan = r.output
-				// Stop reading events if this client breached our limit
-				if len(r.connectionStatus[connection].progress) > int(r.receivers[receiver].config.MaxPendingPayloads) {
-					receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max pending payloads exceeded"))
-				}
 			case *transports.EndEvent:
 				// Connection EOF
 				r.connectionLock.Lock()
@@ -263,10 +291,11 @@ ReceiverLoop:
 					r.startIdleTimeout(eventImpl.Context(), receiver, connection)
 				}
 			}
-		case spoolChan <- nextSpool:
-			copy(spool, spool[1:])
-			spool = spool[:len(spool)-1]
-			if len(spool) == 0 {
+		case spoolChan <- nextSpool.events:
+			copy(r.spool, r.spool[1:])
+			r.spool = r.spool[:len(r.spool)-1]
+			r.spoolSize -= int64(nextSpool.size)
+			if len(r.spool) == 0 {
 				spoolChan = nil
 			}
 		}
@@ -385,6 +414,7 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 				receiverApi := &api.KeyValue{}
 				receiverApi.SetEntry("listen", api.String(listen))
 				receiverApi.SetEntry("maxPendingPayloads", api.Number(cfgEntry.MaxPendingPayloads))
+				receiverApi.SetEntry("maxQueueSize", api.Number(cfgEntry.MaxQueueSize))
 				r.apiListeners.AddEntry(listen, receiverApi)
 			}
 		}
@@ -413,4 +443,8 @@ func (r *Pool) shutdown() {
 	for _, receiver := range r.receiversByListen {
 		receiver.Shutdown()
 	}
+}
+
+func calcSize(eventImpl transports.EventsEvent) int {
+	return eventImpl.Size()
 }

@@ -44,7 +44,7 @@ func (s *Sink) QueuePayload(payload *payload.Payload) (*Endpoint, error) {
 		return nil, nil
 	}
 
-	events := time.Duration(payload.Size())
+	events := time.Duration(payload.Len())
 	bestEndpoint := entry.Value.(*Endpoint)
 	bestEDT := bestEndpoint.EstDelTime().Add(bestEndpoint.AverageLatency() * events)
 

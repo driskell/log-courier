@@ -33,3 +33,7 @@ func (p *protocolFactory) NewProtocol(conn tcp.Connection) tcp.Protocol {
 		isClient: p.isClient,
 	}
 }
+
+func (p *protocolFactory) SupportsAck() bool {
+	return true
+}

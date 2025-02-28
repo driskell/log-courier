@@ -29,3 +29,7 @@ func (p *protocolFactory) NewProtocol(conn tcp.Connection) tcp.Protocol {
 		lineReader: harvester.NewLineReader(conn, 4096, 1048576),
 	}
 }
+
+func (p *protocolFactory) SupportsAck() bool {
+	return false
+}

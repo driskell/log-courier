@@ -62,6 +62,7 @@ type Protocol interface {
 
 type ProtocolFactory interface {
 	NewProtocol(Connection) Protocol
+	SupportsAck() bool
 }
 
 type ProtocolMessage interface {

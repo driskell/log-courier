@@ -24,8 +24,21 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
+)
+
+const (
+	defaultNetworkBackoff            time.Duration = 5 * time.Second
+	defaultNetworkBackoffMax         time.Duration = 300 * time.Second
+	defaultNetworkMaxPendingPayloads int64         = 10
+	defaultNetworkMaxQueueSize       int64         = 128 * 1024 * 1024 // 128 MiB
+	defaultNetworkMethod             string        = "random"
+	defaultNetworkRfc2782Service     string        = "courier"
+	defaultNetworkRfc2782Srv         bool          = true
+	defaultNetworkTimeout            time.Duration = 15 * time.Second
+	defaultNetworkTransport          string        = "tls"
 )
 
 var (
@@ -77,6 +90,7 @@ type EventsEvent interface {
 	Events() []map[string]interface{}
 	Nonce() *string
 	Count() uint32
+	Size() int
 }
 
 // StatusEvent contains information about a status change for a transport
@@ -273,16 +287,18 @@ type eventsEvent struct {
 	context context.Context
 	nonce   *string
 	events  []map[string]interface{}
+	size    int
 }
 
 var _ EventsEvent = (*eventsEvent)(nil)
 
 // NewEventsEvent generates a new EventsEvent for the given bundle of events
-func NewEventsEvent(context context.Context, nonce *string, events []map[string]interface{}) EventsEvent {
+func NewEventsEvent(context context.Context, nonce *string, events []map[string]interface{}, size int) EventsEvent {
 	return &eventsEvent{
 		context: context,
 		nonce:   nonce,
 		events:  events,
+		size:    size,
 	}
 }
 
@@ -304,6 +320,10 @@ func (e *eventsEvent) Events() []map[string]interface{} {
 // Count returns the number of events in the payload
 func (e *eventsEvent) Count() uint32 {
 	return uint32(len(e.events))
+}
+
+func (e *eventsEvent) Size() int {
+	return e.size
 }
 
 // ParseTLSVersion parses a TLS version string into the tls library value for min/max config

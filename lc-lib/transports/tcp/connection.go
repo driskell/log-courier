@@ -213,9 +213,12 @@ func (t *connection) receiver() (err error) {
 
 // Read will receive data from the connection and implements io.Reader
 // Used by protocol structures to fetch message data
-// It should be noted that Read here will never return an incomplete read, and as such
-// the int return will always be the length of the message, unless an error occurs, in
-// which case it will be 0.
+// It should be noted that when the protocol is blocking, Read here will never return an
+// incomplete read, and will either return a full read or an error. As such, it could run
+// forever until the connection is aborted or an error occurs.
+// For non-blocking protocols (those where there is no well-defined boundary of a message),
+// then ErrIOWouldBlock is returned after the socketIntervalSeconds timeout even if the
+// data is incomplete, and the int return value will be the number of bytes read so far.
 func (t *connection) Read(data []byte) (int, error) {
 	var err error
 	received := 0

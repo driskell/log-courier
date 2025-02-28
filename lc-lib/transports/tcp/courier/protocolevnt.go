@@ -33,6 +33,7 @@ type protocolEVNT struct {
 	ctx    context.Context
 	nonce  *string
 	events [][]byte
+	size   int
 }
 
 var _ transports.EventsEvent = (*protocolEVNT)(nil)
@@ -57,25 +58,28 @@ func newProtocolEVNT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessag
 
 	events := make([][]byte, 0, 100)
 
+	size := 0
 	for {
-		var size uint32
-		if err := binary.Read(decompressor, binary.BigEndian, &size); err != nil {
+		var eventSize uint32
+		if err := binary.Read(decompressor, binary.BigEndian, &eventSize); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return nil, err
 		}
 
-		if size > 10485760 {
+		if eventSize > 10485760 {
 			return nil, tcp.ErrEventTooLarge
 		}
 
-		data := make([]byte, size)
+		size += int(eventSize)
+
+		data := make([]byte, eventSize)
 		read := 0
 		for {
 			n, err := decompressor.Read(data[read:])
 			read += n
-			if read >= int(size) {
+			if read >= int(eventSize) {
 				break
 			}
 			if err != nil {
@@ -89,7 +93,7 @@ func newProtocolEVNT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessag
 		events = append(events, data)
 	}
 
-	return &protocolEVNT{ctx: conn.Context(), nonce: &nonce, events: events}, nil
+	return &protocolEVNT{ctx: conn.Context(), nonce: &nonce, events: events, size: size}, nil
 }
 
 // Type returns a human-readable name for the message type
@@ -163,4 +167,9 @@ func (p *protocolEVNT) Events() []map[string]interface{} {
 // Count returns the number of events
 func (p *protocolEVNT) Count() uint32 {
 	return uint32(len(p.events))
+}
+
+// Size returns the size of the payload
+func (p *protocolEVNT) Size() int {
+	return p.size
 }

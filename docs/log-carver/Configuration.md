@@ -61,6 +61,7 @@
     - [`enabled` (receiver)](#enabled-receiver)
     - [`listen`](#listen)
     - [`max pending payloads` (receiver)](#max-pending-payloads-receiver)
+    - [`max queue size` (receiver)](#max-queue-size-receiver)
     - [`max tls version` (receiver)](#max-tls-version-receiver)
     - [`min tls version` (receiver)](#min-tls-version-receiver)
     - [`name` (receiver)](#name-receiver)
@@ -728,7 +729,10 @@ required)
 ### `max pending payloads` (receiver)
 
 Number. Optional. Default: 10
-Since **alpha** (not yet released)
+Since 2.7.0
+
+Only applicable to protocol-based transports such as "tls" and "tcp" that
+support acknowledgements.
 
 The maximum number of spools that can be in process from a connection at any
 one time. Each spool will be kept in memory until it is fully processed and
@@ -741,6 +745,27 @@ to retry.
 
 *You should only change this value if you changed the equivilant value on a
 Log Courier client.*
+
+### `max queue size` (receiver)
+
+Number. Optional. Default: 134217728 (128 MiB)
+Since 2.13.0
+
+Maximum number of bytes that can be received and queued from clients at any
+one moment in time.
+
+If too many events are being received than can be processed then this queue
+can build in size. When this queue is full, when data is received from a
+connection that cannot be added to the queue, the data is discarded and the
+connection closed.
+
+Warnings will be logged when this happened no more frequently than 1 per
+minute to note that events are discarded.
+
+For protocol-based transports that support acknowledgement, no data loss
+occurs as the client will know to resubmit the data again on a retried
+connection attempt which in the Log Courier case will backoff longer on
+each connection attempt to allow Log Carver to catchup.
 
 ### `max tls version` (receiver)
 

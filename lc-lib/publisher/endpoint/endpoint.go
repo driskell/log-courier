@@ -171,9 +171,9 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 	}
 
 	if payload.Resending {
-		log.Debugf("[E %s] Resending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
+		log.Debugf("[E %s] Resending payload %x with %d events", e.Server(), payload.Nonce, payload.Len())
 	} else {
-		log.Debugf("[E %s] Sending payload %x with %d events", e.Server(), payload.Nonce, payload.Size())
+		log.Debugf("[E %s] Sending payload %x with %d events", e.Server(), payload.Nonce, payload.Len())
 	}
 
 	if err := e.transport.SendEvents(payload.Nonce, payload.Events()); err != nil {
@@ -232,7 +232,7 @@ func (e *Endpoint) ReduceLatency() {
 func (e *Endpoint) updateEstDelTime() {
 	e.estDelTime = time.Now()
 	for _, payload := range e.pendingPayloads {
-		e.estDelTime = e.estDelTime.Add(time.Duration(e.averageLatency) * time.Duration(payload.Size()))
+		e.estDelTime = e.estDelTime.Add(time.Duration(e.averageLatency) * time.Duration(payload.Len()))
 	}
 }
 
@@ -274,7 +274,7 @@ func (e *Endpoint) processAck(ack transports.AckEvent, onAck func(*Endpoint, *pa
 			1,
 			5,
 			e.averageLatency,
-			float64(time.Since(e.transmissionStart))/float64(payload.Size()),
+			float64(time.Since(e.transmissionStart))/float64(payload.Len()),
 		)
 
 		e.updateEstDelTime()

@@ -57,8 +57,8 @@ func (pp *Payload) Init() {
 	pp.ResendElement.Value = pp
 }
 
-// Size returns the original size of this payload
-func (pp *Payload) Size() int {
+// Len returns the original size of this payload
+func (pp *Payload) Len() int {
 	return pp.sequenceLen
 }
 

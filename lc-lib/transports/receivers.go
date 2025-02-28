@@ -31,6 +31,7 @@ type Receiver interface {
 	ShutdownConnectionRead(context.Context, error)
 	Shutdown()
 	Factory() ReceiverFactory
+	SupportsAck() bool
 }
 
 // ReceiverFactory is the interface that all receiver factories implement. The

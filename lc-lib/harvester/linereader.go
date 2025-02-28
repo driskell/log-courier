@@ -19,6 +19,8 @@ package harvester
 import (
 	"bytes"
 	"io"
+
+	"github.com/driskell/log-courier/lc-lib/transports/tcp"
 )
 
 // LineReader is a read interface that tails and returns lines
@@ -164,7 +166,21 @@ func (lr *LineReader) fill() error {
 		return lr.err
 	}
 
-	n, err := lr.rd.Read(lr.buf[lr.end:])
+	// Loop until we receive data or an error occurs
+	// Avoids the outer loop in ReadItem which would otherwise do unnecessary checks
+	var n int
+	var err error
+	for {
+		n, err = lr.rd.Read(lr.buf[lr.end:])
+		if err == tcp.ErrIOWouldBlock {
+			// Ignore incomplete reads - we will try again
+			err = nil
+		}
+		if n > 0 || err != nil {
+			break
+		}
+	}
+
 	lr.end += n
 	if err != nil {
 		// Remember last error - so we can continue processing current buffer and once

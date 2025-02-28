@@ -40,6 +40,7 @@ type poolConnectionStatus struct {
 	metadataReceiver MetadataReceiver
 	progress         []*poolEventProgress
 	lines            int64
+	bytes            int
 
 	api.KeyValue
 }
@@ -69,6 +70,7 @@ func (p *poolConnectionStatus) Update() error {
 	p.SetEntry("listener", api.String(p.listener))
 	p.SetEntry("description", api.String(p.desc))
 	p.SetEntry("completedLines", api.Number(p.lines))
+	p.SetEntry("completedBytes", api.Bytes(p.bytes))
 	p.SetEntry("pendingPayloads", api.Number(len(p.progress)))
 	return nil
 }

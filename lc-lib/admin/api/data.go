@@ -44,12 +44,41 @@ func (n Number) HumanReadable(string) ([]byte, error) {
 	return []byte(strconv.FormatInt(int64(n), 10)), nil
 }
 
+// Number represents an integer number in the API
+type Bytes int64
+
+// HumanReadable returns the Bytes as a string with a human readable suffix such as KB, MB, GB, TB
+func (n Bytes) HumanReadable(string) ([]byte, error) {
+	var suffix string
+	var size float64
+
+	switch {
+	case n < 1024:
+		suffix = " B"
+		size = float64(n)
+	case n < 1024*1024:
+		suffix = " KiB"
+		size = float64(n) / 1024
+	case n < 1024*1024*1024:
+		suffix = " MiB"
+		size = float64(n) / 1024 / 1024
+	case n < 1024*1024*1024*1024:
+		suffix = " GiB"
+		size = float64(n) / 1024 / 1024 / 1024
+	default:
+		suffix = " TiB"
+		size = float64(n) / 1024 / 1024 / 1024 / 1024
+	}
+
+	return []byte(strconv.FormatFloat(size, 'g', 2, 64) + suffix), nil
+}
+
 // Float represents a floating point number in the API
 type Float float64
 
 // HumanReadable returns the Float as a string
 func (f Float) HumanReadable(string) ([]byte, error) {
-	return []byte(strconv.FormatFloat(float64(f), 'g', -1, 64)), nil
+	return []byte(strconv.FormatFloat(float64(f), 'g', 2, 64)), nil
 }
 
 // String represents a string in the API
