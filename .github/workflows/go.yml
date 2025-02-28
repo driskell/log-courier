@@ -33,12 +33,7 @@ jobs:
       matrix:
         # Red Hat we compile inside COPR using the version of Golang for the target OS.
         # - RHEL9 = 1.22 (Appstream as of 2025-02-28)
-        # Ubuntu we use the longsleep PPA which has 1.24 available as of 2025-02-28 for the following supported OS.
-        # - Bionic
-        # - Focal
-        # - Jammy
-        # - Noble
-        # - Oracular
+        # Ubuntu we cross-compile in our builder image using Golang 1.24 (latest stable as of 2025-02-28).
         go: ['1.22', '1.24']
     name: Build Go ${{ matrix.go }}
     # Use latest Ubuntu to try work around https://github.com/golang/go/issues/37362

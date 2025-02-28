@@ -8,6 +8,8 @@ DRELEASE=${DRELEASE}
 
 git config --global safe.directory /github/workspace
 
+export PATH="/usr/local/go/bin:$PATH"
+
 echo "::group::Checking $NAME exists in $REF"
 if [ "${NAME}" != "log-courier" ] && [ ! -d "${NAME}" ]; then
 	exit 0
@@ -46,9 +48,10 @@ else
 		LC_DEFAULT_CARVER_ADMIN_BIND=unix:/var/run/log-carver/admin.socket \
 		go generate -mod=vendor ./lc-admin
 
-	mkdir "$(pwd)/bin-i386" "$(pwd)/bin-amd64"
+	mkdir "$(pwd)/bin-i386" "$(pwd)/bin-amd64" "$(pwd)/bin-arm64"
 	GOARCH=386 go build -mod=vendor -o "$(pwd)/bin-i386" . ./lc-admin ./log-carver ./lc-tlscert
 	GOARCH=amd64 go build -mod=vendor -o "$(pwd)/bin-amd64" . ./lc-admin ./log-carver ./lc-tlscert
+	GOARCH=arm64 go build -mod=vendor -o "$(pwd)/bin-arm64" . ./lc-admin ./log-carver ./lc-tlscert
 	cd -
 	echo '::endgroup::'
 	echo '::group::Updating sources'
@@ -66,7 +69,7 @@ D6AB748910B1CF77C9A0A5BD3B83B8DE48FE9B1E:6:
 EOF
 echo '::endgroup::'
 
-for DIST in trusty xenial bionic focal jammy; do
+for DIST in trusty xenial bionic focal jammy noble oracular; do
 	echo "::group::Preparing debian package for $DIST"
 	rm -rf ~/"${NAME}"
 	cd ~
@@ -98,6 +101,10 @@ for DIST in trusty xenial bionic focal jammy; do
 	echo "::group::Testing DEB"
 	debuild -d -b
 	echo '::endgroup::'
+
+	if [ -n "${SKIP_SUBMIT}" ]; then
+		continue
+	fi
 
 	echo "::group::Submitting package"
 	dput ppa:devel-k/log-courier2 "../${NAME}_${VERSION#v}-${RELEASE}~${DIST}${DRELEASE}_source.changes"

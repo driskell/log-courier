@@ -1,3 +1,3 @@
 #!/bin/bash
-docker build -t driskell/log-courier:ppa registry-image
+docker build --platform linux/amd64 -t driskell/log-courier:ppa registry-image
 docker push driskell/log-courier:ppa

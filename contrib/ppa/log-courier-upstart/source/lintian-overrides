@@ -1,0 +1,2 @@
+# We don't package sources
+log-courier source: source-is-missing

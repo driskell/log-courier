@@ -2,18 +2,19 @@ Source: log-carver
 Section: contrib/admin
 Priority: optional
 Standards-Version: 3.9.5
-Maintainer: Jason Woods (Driskell) <devel@jasonwoods.me.uk>
+Maintainer: Jason Woods <packages@jasonwoods.me.uk>
 # Highest compat level supported is as follows:
-#  xenial = 10
+#  xenial = 9
 #  bionic = 11
 #  focal = 12
 #  jammy = 13
 #  noble = 13
 #  oracular = 13
+# dpkg-dev is 1.18 in xenial
 Build-Depends:
  debhelper (>= 10),
  dh-systemd,
- dpkg-dev
+ dpkg-dev (>= 1.18)
 
 Package: log-carver
 Architecture: any
