@@ -4,17 +4,15 @@ Priority: optional
 Standards-Version: 3.9.5
 Maintainer: Jason Woods (Driskell) <devel@jasonwoods.me.uk>
 # Highest compat level supported is as follows:
-#  trusty = 9
 #  xenial = 10
 #  bionic = 11
 #  focal = 12
 #  jammy = 13
 #  noble = 13
 #  oracular = 13
-# debhelper contains dh-systemd since 9.20160709 (see https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=822670)
 Build-Depends:
- debhelper (>= 9),
- debhelper (>= 9.20160709) | dh-systemd,
+ debhelper (>= 10),
+ dh-systemd,
  dpkg-dev
 
 Package: log-carver
