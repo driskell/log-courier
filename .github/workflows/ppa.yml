@@ -101,7 +101,7 @@ jobs:
       uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
-        name: log-courier
+        name: lc-admin
         path: artifacts/*
 
   release-lc-tlscert:
