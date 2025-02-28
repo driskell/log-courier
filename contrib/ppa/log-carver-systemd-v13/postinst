@@ -1,0 +1,13 @@
+#!/bin/bash
+
+adduser --quiet --system --home /var/lib/log-carver --no-create-home --group log-carver
+mkdir -p /var/run/log-carver
+chown log-carver: /var/lib/log-carver /var/run/log-carver
+
+if [ -f /var/run/log-carver.pid ]; then
+	mv /var/run/log-carver.pid /var/run/log-carver/log-carver.pid
+fi
+
+#DEBHELPER#
+
+exit 0

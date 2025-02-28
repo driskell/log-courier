@@ -1,0 +1,51 @@
+#!/usr/bin/make -f
+include /usr/share/dpkg/pkg-info.mk
+
+%:
+	dh $@ --with=systemd
+
+override_dh_auto_clean:
+	# Nothing to do
+
+override_dh_auto_build:
+	# We pre-compiled through cross-compilation already in the source, so just switch to the correct pre-compiled bin
+	# This is so we could use latest Go to compile
+	# Although we can get 1.15 on focal we cannot get anything near it on trusty (oldest supported release)
+	# Thus, until that is EOL (or someone reports this as broken), this is the best way to compile
+	mv "bin-${DEB_HOST_ARCH}" bin
+
+override_dh_auto_test:
+	VERSION=$$(bin/log-courier --version); \
+	VERSION=$${VERSION#Log Courier version }; \
+	echo "$$VERSION"; \
+	if [ ! -f .skip-version-check ] && [ "$$VERSION" != "${DEB_VERSION_UPSTREAM}" ]; then \
+		exit 1; \
+	fi
+
+override_dh_auto_install:
+	# Install binaries
+	mkdir -p debian/log-courier/usr/sbin
+	install -m 0755 bin/log-courier debian/log-courier/usr/sbin/log-courier
+	mkdir -p debian/log-courier/usr/bin
+	install -m 0755 bin/lc-admin debian/log-courier/usr/bin/lc-admin
+	install -m 0755 bin/lc-tlscert debian/log-courier/usr/bin/lc-tlscert
+
+	# Install upstart and systemd scripts
+	mkdir -p debian/log-courier/etc/init.d debian/log-courier/lib/systemd/system
+	install -m 0755 contrib/initscripts/debian-upstart.init debian/log-courier/etc/init.d/log-courier
+	install -m 0644 contrib/initscripts/debian-systemd.service debian/log-courier/lib/systemd/system/log-courier.service
+	mkdir -p debian/log-courier/etc/default
+	install -m 0644 contrib/initscripts/log-courier-systemd.env debian/log-courier/etc/default/log-courier
+
+	# Make the state dir
+	mkdir -p debian/log-courier/var/lib/log-courier
+
+	# Install copyright and docs
+	mkdir -p debian/log-courier/usr/share/doc/log-courier
+	install -m 0644 debian/copyright debian/log-courier/usr/share/doc/log-courier/copyright
+	cp -av docs/log-courier/*.md debian/log-courier/usr/share/doc/log-courier/
+	mkdir -p debian/log-courier/usr/share/doc/log-courier/codecs
+	cp -av docs/log-courier/codecs/*.md debian/log-courier/usr/share/doc/log-courier/codecs/
+	mkdir -p debian/log-courier/usr/share/doc/log-courier/examples
+	cp -av docs/log-courier/examples/*.conf debian/log-courier/usr/share/doc/log-courier/examples/
+	cp -av docs/log-courier/examples/*.yaml debian/log-courier/usr/share/doc/log-courier/examples/

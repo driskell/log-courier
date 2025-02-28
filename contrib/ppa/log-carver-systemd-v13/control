@@ -4,14 +4,11 @@ Priority: optional
 Standards-Version: 3.9.5
 Maintainer: Jason Woods <packages@jasonwoods.me.uk>
 # Highest compat level supported is as follows:
-#  xenial = 9
-#  bionic = 11
-#  focal = 12
-# dpkg-dev is 1.18 in xenial
-Build-Depends:
- debhelper (>= 9),
- dh-systemd,
- dpkg-dev (>= 1.18)
+#  jammy = 13
+#  noble = 13
+#  oracular = 13
+# dpkg-dev is 1.21 in jammy
+Build-Depends: debhelper (>= 13), dpkg-dev (>= 1.21)
 
 Package: log-carver
 Architecture: any

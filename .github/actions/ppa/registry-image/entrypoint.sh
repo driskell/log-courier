@@ -80,8 +80,10 @@ for DIST in trusty xenial bionic focal jammy noble oracular; do
 		cp -rf "/github/workspace/.main/contrib/ppa/${NAME}" debian
 	elif [ "$DIST" == "trusty" ]; then
 		cp -rf "/github/workspace/.main/contrib/ppa/${NAME}-upstart" debian
-	else
+	elif [ "$DIST" == "xenial" ] || [ "$DIST" == "bionic" ] || [ "$DIST" == "focal" ]; then
 		cp -rf "/github/workspace/.main/contrib/ppa/${NAME}-systemd" debian
+	else
+		cp -rf "/github/workspace/.main/contrib/ppa/${NAME}-systemd-v13" debian
 	fi
 	debchange \
 		--create \

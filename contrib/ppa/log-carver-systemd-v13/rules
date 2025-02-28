@@ -1,0 +1,47 @@
+#!/usr/bin/make -f
+include /usr/share/dpkg/pkg-info.mk
+
+%:
+	dh $@ --with=systemd
+
+override_dh_auto_clean:
+	# Nothing to do
+
+override_dh_auto_build:
+	# We pre-compiled through cross-compilation already in the source, so just switch to the correct pre-compiled bin
+	# This is so we could use latest Go to compile
+	# Although we can get 1.15 on focal we cannot get anything near it on trusty (oldest supported release)
+	# Thus, until that is EOL (or someone reports this as broken), this is the best way to compile
+	mv "bin-${DEB_HOST_ARCH}" bin
+
+override_dh_auto_test:
+	VERSION=$$(bin/log-carver --version); \
+	VERSION=$${VERSION#Log Carver version }; \
+	echo "$$VERSION"; \
+	if [ ! -f .skip-version-check ] && [ "$$VERSION" != "${DEB_VERSION_UPSTREAM}" ]; then \
+		exit 1; \
+	fi
+
+override_dh_auto_install:
+	# Install binaries
+	mkdir -p debian/log-carver/usr/sbin
+	install -m 0755 bin/log-carver debian/log-carver/usr/sbin/log-carver
+
+	# Install upstart and systemd scripts
+	mkdir -p debian/log-carver/etc/init.d debian/log-carver/lib/systemd/system
+	install -m 0755 contrib/initscripts/debian-upstart.init debian/log-carver/etc/init.d/log-carver
+	install -m 0644 contrib/initscripts/debian-systemd.service debian/log-carver/lib/systemd/system/log-carver.service
+	mkdir -p debian/log-carver/etc/default
+	install -m 0644 contrib/initscripts/log-carver-systemd.env debian/log-carver/etc/default/log-carver
+
+	# Make the state dir
+	mkdir -p debian/log-carver/var/lib/log-carver
+
+	# Install copyright and docs
+	mkdir -p debian/log-carver/usr/share/doc/log-carver
+	install -m 0644 debian/copyright debian/log-carver/usr/share/doc/log-carver/copyright
+	cp -av docs/log-carver/*.md debian/log-carver/usr/share/doc/log-carver/
+	mkdir -p debian/log-carver/usr/share/doc/log-carver/actions
+	cp -av docs/log-carver/actions/*.md debian/log-carver/usr/share/doc/log-carver/actions/
+	mkdir -p debian/log-carver/usr/share/doc/log-carver/examples
+	cp -av docs/log-carver/examples/*.yaml debian/log-carver/usr/share/doc/log-carver/examples/
