@@ -6,8 +6,6 @@
 FROM ubuntu:bionic
 RUN apt -qy update
 RUN DEBIAN_FRONTEND=noninteractive apt-get -qy install git devscripts debhelper sbuild ubuntu-dev-tools ca-certificates
-RUN wget -q https://go.dev/dl/go1.24.0.linux-amd64.tar.gz -O /tmp/go.tar.gz
-RUN tar -C /usr/local -xzf /tmp/go.tar.gz
-RUN rm -f /tmp/go.tar.gz
+RUN wget -q https://go.dev/dl/go1.24.0.linux-amd64.tar.gz -O /tmp/go.tar.gz && tar -C /usr/local -xzf /tmp/go.tar.gz && rm -f /tmp/go.tar.gz
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
