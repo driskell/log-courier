@@ -39,9 +39,7 @@ module LogCourier
       @num_enqueue_waiting = 0
 
       @que = []
-      @que.taint # enable tainted communication
       @num_waiting = 0
-      taint
       @mutex = Mutex.new
       @cond = ConditionVariable.new
     end
