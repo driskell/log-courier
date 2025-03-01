@@ -30,10 +30,11 @@ import (
 var registeredGeneralCreators = make(map[string]SectionCreator)
 
 const (
-	defaultGeneralHost      string        = "localhost.localdomain"
-	defaultGeneralLogLevel  logging.Level = logging.INFO
-	defaultGeneralLogStdout bool          = true
-	defaultGeneralLogSyslog bool          = false
+	defaultGeneralHost         string        = "localhost.localdomain"
+	defaultGeneralLogLevel     logging.Level = logging.INFO
+	defaultGeneralLogStdout    bool          = true
+	defaultGeneralLogSyslog    bool          = false
+	defaultGeneralMaxQueueSize int64         = 128 * 1024 * 1024 // 128 MiB
 )
 
 // General holds the general configuration
@@ -44,6 +45,7 @@ type General struct {
 	LogLevel     logging.Level          `config:"log level"`
 	LogStdout    bool                   `config:"log stdout"`
 	LogSyslog    bool                   `config:"log syslog"`
+	MaxQueueSize int64                  `config:"max queue size"`
 
 	Custom map[string]interface{} `config:",embed_dynamic"`
 }
@@ -95,10 +97,11 @@ func RegisterGeneral(name string, creator SectionCreator) {
 func init() {
 	RegisterSection("general", func() interface{} {
 		c := &General{
-			LogLevel:  defaultGeneralLogLevel,
-			LogStdout: defaultGeneralLogStdout,
-			LogSyslog: defaultGeneralLogSyslog,
-			Custom:    make(map[string]interface{}),
+			LogLevel:     defaultGeneralLogLevel,
+			LogStdout:    defaultGeneralLogStdout,
+			LogSyslog:    defaultGeneralLogSyslog,
+			MaxQueueSize: defaultGeneralMaxQueueSize,
+			Custom:       make(map[string]interface{}),
 		}
 
 		for k, creator := range registeredGeneralCreators {

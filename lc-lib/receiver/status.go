@@ -41,11 +41,12 @@ type poolConnectionStatus struct {
 	progress         []*poolEventProgress
 	lines            int64
 	bytes            int
+	supportsAck      bool
 
 	api.KeyValue
 }
 
-func newPoolConnectionStatus(p *Pool, name string, listener string, remote string, desc string) *poolConnectionStatus {
+func newPoolConnectionStatus(p *Pool, name string, listener string, remote string, desc string, supportsAck bool) *poolConnectionStatus {
 	return &poolConnectionStatus{
 		p:        p,
 		name:     name,
@@ -58,7 +59,8 @@ func newPoolConnectionStatus(p *Pool, name string, listener string, remote strin
 			"remote":   remote,
 			"desc":     desc,
 		},
-		progress: make([]*poolEventProgress, 0),
+		progress:    make([]*poolEventProgress, 0),
+		supportsAck: supportsAck,
 	}
 }
 

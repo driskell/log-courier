@@ -33,7 +33,6 @@ const (
 	defaultNetworkBackoff            time.Duration = 5 * time.Second
 	defaultNetworkBackoffMax         time.Duration = 300 * time.Second
 	defaultNetworkMaxPendingPayloads int64         = 10
-	defaultNetworkMaxQueueSize       int64         = 128 * 1024 * 1024 // 128 MiB
 	defaultNetworkMethod             string        = "random"
 	defaultNetworkRfc2782Service     string        = "courier"
 	defaultNetworkRfc2782Srv         bool          = true

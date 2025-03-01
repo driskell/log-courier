@@ -61,6 +61,7 @@ type Pool struct {
 	spool             []*spoolEntry
 	spoolSize         int64
 
+	generalConfig  *config.General
 	apiConfig      *admin.Config
 	apiConnections api.Array
 	apiListeners   api.Array
@@ -72,6 +73,7 @@ type Pool struct {
 func NewPool(app *core.App) *Pool {
 	return &Pool{
 		apiConfig:        admin.FetchConfig(app.Config()),
+		generalConfig:    app.Config().General(),
 		ackChan:          make(chan []*event.Event),
 		eventChan:        make(chan transports.Event),
 		scheduler:        scheduler.NewScheduler(),
@@ -184,7 +186,7 @@ ReceiverLoop:
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				r.startIdleTimeout(eventImpl.Context(), receiver, connection)
 				r.connectionLock.Lock()
-				connectionStatus := newPoolConnectionStatus(r, r.receivers[receiver].config.Name, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc())
+				connectionStatus := newPoolConnectionStatus(r, r.receivers[receiver].config.Name, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc(), receiver.SupportsAck())
 				r.connectionStatus[connection] = connectionStatus
 				r.connectionLock.Unlock()
 				// ReplaceEntry outside of connection lock, as entry updates that hold the entry lock will take the connection lock
@@ -196,7 +198,7 @@ ReceiverLoop:
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				connectionStatus := r.connectionStatus[connection]
-				if r.spoolSize+int64(size) > r.receivers[receiver].config.MaxQueueSize {
+				if r.spoolSize+int64(size) > r.generalConfig.MaxQueueSize {
 					receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max queue size exceeded"))
 					r.connectionLock.Unlock()
 					break
@@ -418,8 +420,10 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 				newReceivers[newReceiversByListen[listen]] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
 				receiverApi := &api.KeyValue{}
 				receiverApi.SetEntry("listen", api.String(listen))
-				receiverApi.SetEntry("maxPendingPayloads", api.Number(cfgEntry.MaxPendingPayloads))
-				receiverApi.SetEntry("maxQueueSize", api.Number(cfgEntry.MaxQueueSize))
+				if newReceiversByListen[listen].SupportsAck() {
+					// Only applies if supports ack
+					receiverApi.SetEntry("maxPendingPayloads", api.Number(cfgEntry.MaxPendingPayloads))
+				}
 				r.apiListeners.AddEntry(listen, receiverApi)
 			}
 		}

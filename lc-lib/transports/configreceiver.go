@@ -38,7 +38,6 @@ type ReceiverConfigEntry struct {
 	Transport          string   `config:"transport"`
 	Listen             []string `config:"listen"`
 	MaxPendingPayloads int64    `config:"max pending payloads"`
-	MaxQueueSize       int64    `config:"max queue size"`
 
 	Unused map[string]interface{} `json:",omitempty"`
 }
@@ -48,7 +47,6 @@ func (c *ReceiverConfigEntry) Defaults() {
 	c.Enabled = true
 	c.Transport = defaultReceiverTransport
 	c.MaxPendingPayloads = defaultNetworkMaxPendingPayloads
-	c.MaxQueueSize = defaultNetworkMaxQueueSize
 }
 
 // Init the receiver configuration
