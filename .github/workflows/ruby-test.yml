@@ -15,10 +15,9 @@ jobs:
   test_log_courier:
     strategy:
       matrix:
-        # Logstash 8.0.0 is our earliest supported version, which uses JRuby 9.2.20.1, compatible with Ruby 2.5.x
-        # Test also against 9.3.10.0 which is latest version and comaptible with Ruby 2.6.x
-        # NOTE: Logstash seems to fail on 9.4.1.0 which is latest version and comaptible with Ruby 3.1.x (latest 3.1.3 at time of writing)
-        ruby: ['ruby-2.5.9', 'jruby-9.2.20.1', 'ruby-2.6.10', 'jruby-9.3.10.0']
+        # Test against 9.4.12.0 (latest as of 01-03-2025)
+        # Also test on Ruby 3.2, 3.3 and 3.4 (latest as of 01-03-2025)
+        ruby: ['jruby-9.4.12.0', 'ruby-3.2.7', 'ruby-3.3.7', 'ruby-3.4.2']
     name: Test Log Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:
@@ -37,10 +36,8 @@ jobs:
   test_logstash_input_courier:
     strategy:
       matrix:
-        # Logstash 8.0.0 is our earliest supported version, which uses JRuby 9.2.20.1, compatible with Ruby 2.5.x
-        # Test also against 9.3.10.0 which is latest version and comaptible with Ruby 2.6.x
-        # NOTE: Logstash seems to fail on 9.4.1.0 which is latest version and comaptible with Ruby 3.1.x (latest 3.1.3 at time of writing)
-        ruby: ['jruby-9.2.20.1', 'jruby-9.3.10.0']
+        # Test against 9.4.12.0 (latest as of 01-03-2025)
+        ruby: ['jruby-9.4.12.0']
     name: Test Logstash Input Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:
@@ -70,10 +67,8 @@ jobs:
   test_logstash_output_courier:
     strategy:
       matrix:
-        # Logstash 8.0.0 is our earliest supported version, which uses JRuby 9.2.20.1, compatible with Ruby 2.5.x
-        # Test also against 9.3.10.0 which is latest version and comaptible with Ruby 2.6.x
-        # NOTE: Logstash seems to fail on 9.4.1.0 which is latest version and comaptible with Ruby 3.1.x (latest 3.1.3 at time of writing)
-        ruby: ['jruby-9.2.20.1', 'jruby-9.3.10.0']
+        # Test against 9.4.12.0 (latest as of 01-03-2025)
+        ruby: ['jruby-9.4.12.0']
     name: Test Logstash Output Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:

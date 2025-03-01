@@ -14,8 +14,7 @@ jobs:
     steps:
     - uses: ruby/setup-ruby@v1
       with:
-        # Build only for our minimum supported version
-        ruby-version: 'jruby-9.2.11.1'
+        ruby-version: 'jruby-9.3.15.0'
     - name: Checkout
       uses: actions/checkout@v3
     - name: Package
@@ -25,7 +24,7 @@ jobs:
         gem install rake
         rake package
     - name: Upload Gem
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
         name: log-courier
@@ -37,8 +36,7 @@ jobs:
     steps:
     - uses: ruby/setup-ruby@v1
       with:
-        # Build only for our minimum supported version
-        ruby-version: 'jruby-9.2.11.1'
+        ruby-version: 'jruby-9.3.15.0'
     - name: Checkout
       uses: actions/checkout@v3
     - name: Package
@@ -48,7 +46,7 @@ jobs:
         gem install rake
         rake package
     - name: Upload Gem
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
         name: logstash-input-courier
@@ -60,8 +58,7 @@ jobs:
     steps:
     - uses: ruby/setup-ruby@v1
       with:
-        # Build only for our minimum supported version
-        ruby-version: 'jruby-9.2.11.1'
+        ruby-version: 'jruby-9.3.15.0'
     - name: Checkout
       uses: actions/checkout@v3
     - name: Package
@@ -71,7 +68,7 @@ jobs:
         gem install rake
         rake package
     - name: Upload Gem
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       if: ${{ always() }}
       with:
         name: logstash-output-courier
