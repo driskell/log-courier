@@ -33,6 +33,7 @@ func (a *apiStatus) Update() error {
 	a.SetEntry("activeConnections", api.Number(len(a.r.connectionStatus)))
 	a.SetEntry("queuePayloads", api.Number(len(a.r.spool)))
 	a.SetEntry("queueSize", api.Number(a.r.spoolSize))
+	a.SetEntry("maxQueueSize", api.Number(a.r.generalConfig.MaxQueueSize))
 	a.r.connectionLock.RUnlock()
 
 	return nil

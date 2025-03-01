@@ -420,6 +420,8 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 				newReceivers[newReceiversByListen[listen]] = &poolReceiverStatus{config: cfgEntry, listen: listen, active: true}
 				receiverApi := &api.KeyValue{}
 				receiverApi.SetEntry("listen", api.String(listen))
+				receiverApi.SetEntry("transport", api.String(cfgEntry.Transport))
+				receiverApi.SetEntry("name", api.String(cfgEntry.Name))
 				if newReceiversByListen[listen].SupportsAck() {
 					// Only applies if supports ack
 					receiverApi.SetEntry("maxPendingPayloads", api.Number(cfgEntry.MaxPendingPayloads))
