@@ -118,8 +118,11 @@ func (r *Pool) Run() {
 ReceiverLoop:
 	for {
 		var nextSpool *spoolEntry = nil
+		var nextSpoolEvents []*event.Event = nil
+
 		if len(r.spool) != 0 {
 			nextSpool = r.spool[0]
+			nextSpoolEvents = nextSpool.events
 		}
 
 		select {
@@ -214,6 +217,8 @@ ReceiverLoop:
 				} else {
 					// Reset idle timeout
 					r.startIdleTimeout(eventImpl.Context(), receiver, connection)
+					// Count lines here as there is no ACK to do it
+					connectionStatus.lines += int64(eventImpl.Count())
 				}
 				connectionStatus.bytes += eventImpl.Size()
 				r.connectionLock.Unlock()
@@ -291,7 +296,7 @@ ReceiverLoop:
 					r.startIdleTimeout(eventImpl.Context(), receiver, connection)
 				}
 			}
-		case spoolChan <- nextSpool.events:
+		case spoolChan <- nextSpoolEvents:
 			copy(r.spool, r.spool[1:])
 			r.spool = r.spool[:len(r.spool)-1]
 			r.spoolSize -= int64(nextSpool.size)

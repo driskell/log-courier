@@ -79,7 +79,7 @@ func (e *Endpoint) Init() {
 	e.ctx = context.WithValue(context.Background(), ContextSelf, e)
 
 	e.warming = true
-	backoffName := fmt.Sprintf("[E %s] Failure", e.poolEntry.Desc)
+	backoffName := fmt.Sprintf("[E %s] Recovery", e.poolEntry.Desc)
 	e.backoff = core.NewExpBackoff(backoffName, e.sink.config.Backoff, e.sink.config.BackoffMax)
 
 	e.readyElement.Value = e

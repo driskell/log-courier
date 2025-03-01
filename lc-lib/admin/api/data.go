@@ -70,7 +70,7 @@ func (n Bytes) HumanReadable(string) ([]byte, error) {
 		size = float64(n) / 1024 / 1024 / 1024 / 1024
 	}
 
-	return []byte(strconv.FormatFloat(size, 'g', 2, 64) + suffix), nil
+	return []byte(strconv.FormatFloat(size, 'f', 2, 64) + suffix), nil
 }
 
 // Float represents a floating point number in the API
