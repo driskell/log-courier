@@ -73,7 +73,9 @@ func (p *poolConnectionStatus) Update() error {
 	p.SetEntry("description", api.String(p.desc))
 	p.SetEntry("completedLines", api.Number(p.lines))
 	p.SetEntry("receivedBytes", api.Bytes(p.bytes))
-	p.SetEntry("pendingPayloads", api.Number(len(p.progress)))
+	if p.supportsAck {
+		p.SetEntry("pendingPayloads", api.Number(len(p.progress)))
+	}
 	return nil
 }
 
