@@ -28,13 +28,8 @@ import (
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 )
 
-var (
-	// callMap is a list of commands known to be Call only, and the Client uses
-	// this to automatically translate Request calls into Call calls to simplify
-	// logic in clients
-	callMap = map[string]interface{}{
-		"reload": nil,
-	}
+const (
+	headerXLogCourierCall = "X-Log-Courier-Call"
 )
 
 // Client provides an interface for accessing the REST API with pretty responses
@@ -143,11 +138,6 @@ func (c *Client) rawRequestJSON(path string, target interface{}, opts map[string
 }
 
 func (c *Client) rawRequest(path string, opts map[string]string) (string, error) {
-	// Is this a Call request?
-	if _, ok := callMap[path]; ok {
-		return c.Call(path, url.Values{})
-	}
-
 	requestUrl := url.URL{}
 	requestUrl.Scheme = "http"
 	requestUrl.Host = c.fakeHost
@@ -163,20 +153,25 @@ func (c *Client) rawRequest(path string, opts map[string]string) (string, error)
 		return "", err
 	}
 
-	return c.handleResponse(resp)
+	return c.handleResponse(path, resp)
 }
 
 // Call performs a remote action and returns the result
 func (c *Client) Call(path string, values url.Values) (string, error) {
-	resp, err := c.client.PostForm("http://"+c.fakeHost+"/"+path+"?w=pretty", values)
+	requestUrl := url.URL{}
+	requestUrl.Scheme = "http"
+	requestUrl.Host = c.fakeHost
+	requestUrl.Path = path
+	values.Set("w", "pretty")
+	resp, err := c.client.PostForm(requestUrl.String(), values)
 	if err != nil {
 		return "", err
 	}
 
-	return c.handleResponse(resp)
+	return c.handleResponse(path, resp)
 }
 
-func (c *Client) handleResponse(resp *http.Response) (string, error) {
+func (c *Client) handleResponse(path string, resp *http.Response) (string, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -185,6 +180,10 @@ func (c *Client) handleResponse(resp *http.Response) (string, error) {
 	// Ensure we close body so we don't leave hanging connections open
 	if err := resp.Body.Close(); err != nil {
 		return "", err
+	}
+
+	if resp.StatusCode == http.StatusMethodNotAllowed && resp.Request.Method != http.MethodPost && resp.Header.Get(headerXLogCourierCall) == "true" {
+		return c.Call(path, url.Values{})
 	}
 
 	if resp.StatusCode != http.StatusOK {

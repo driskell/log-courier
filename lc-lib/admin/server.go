@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"runtime"
 	"strings"
 	"time"
@@ -183,7 +184,7 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 		l.handlePanic(w, r, recover())
 	}()
 
-	if r.Method != "GET" && r.Method != "POST" && r.Method != "PUT" {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		l.accessLog(r, http.StatusMethodNotAllowed)
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
@@ -200,7 +201,11 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if len(parts) == 1 && parts[0] == "" {
 		parts = parts[:0]
 	}
-	for _, part := range parts {
+	for idx, part := range parts {
+		urlDecodedPart, err := url.PathUnescape(part)
+		if err == nil {
+			part = urlDecodedPart
+		}
 		newRoot, err := root.Get(part)
 		if err != nil {
 			panic(err)
@@ -208,12 +213,27 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 		if newRoot == nil {
 			panic(api.ErrNotFound)
 		}
-
-		root = newRoot
+		if r.Method != http.MethodPost {
+			if _, ok := newRoot.(*api.CallbackEntry); ok {
+				// Callbacks are only allowed on POST
+				l.accessLog(r, http.StatusMethodNotAllowed)
+				w.Header().Add(headerXLogCourierCall, "true")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+		}
+		if navigatableRoot, ok := newRoot.(api.Navigatable); ok {
+			root = navigatableRoot
+		} else if idx != len(parts)-1 {
+			panic(api.ErrNotFound)
+		} else {
+			l.handleRequest(w, r, newRoot)
+			return
+		}
 	}
 
 	// Call?
-	if r.Method != "GET" {
+	if r.Method == http.MethodPost {
 		l.handleCall(w, r, root)
 		return
 	}
@@ -226,7 +246,7 @@ func (l *Server) handle(w http.ResponseWriter, r *http.Request) {
 	l.handleRequest(w, r, root)
 }
 
-func (l *Server) handleRequest(w http.ResponseWriter, r *http.Request, root api.Navigatable) {
+func (l *Server) handleRequest(w http.ResponseWriter, r *http.Request, root api.Encodable) {
 	var err error
 	var contentType string
 	var response []byte

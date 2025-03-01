@@ -46,7 +46,7 @@ type apiFiles struct {
 	p *Prospector
 }
 
-func (a *apiFiles) Get(path string) (api.Navigatable, error) {
+func (a *apiFiles) Get(path string) (api.Encodable, error) {
 	if err := a.Update(); err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ type apiNode struct {
 }
 
 // Get processes a prospector API path
-func (a *apiNode) Get(path string) (api.Navigatable, error) {
+func (a *apiNode) Get(path string) (api.Encodable, error) {
 	if path == "files" {
 		// Return a new apiFiles with empty array
 		return &apiFiles{p: a.p}, nil

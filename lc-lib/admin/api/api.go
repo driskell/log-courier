@@ -65,7 +65,7 @@ type Navigatable interface {
 
 	// Get returns the child entry with the requested name, or nil there are no
 	// children
-	Get(name string) (Navigatable, error)
+	Get(name string) (Encodable, error)
 
 	// Call happens in response to a POST request
 	Call(params url.Values) (string, error)
@@ -106,13 +106,17 @@ func (n *Node) RemoveEntry(path string) {
 }
 
 // Get the child entry with the specified name
-func (n *Node) Get(path string) (Navigatable, error) {
+func (n *Node) Get(path string) (Encodable, error) {
 	n.mutex.RLock()
 	defer n.mutex.RUnlock()
 
 	entry, ok := n.children[path]
 	if !ok {
 		return nil, nil
+	}
+	err := entry.Update()
+	if err != nil {
+		return nil, err
 	}
 	return entry, nil
 }
@@ -226,7 +230,7 @@ func (d *DataEntry) HumanReadable(indent string) ([]byte, error) {
 }
 
 // Get always returns nil for an DataEntry
-func (d *DataEntry) Get(path string) (Navigatable, error) {
+func (d *DataEntry) Get(path string) (Encodable, error) {
 	return nil, nil
 }
 
@@ -264,7 +268,7 @@ func (c *CallbackEntry) HumanReadable(indent string) ([]byte, error) {
 }
 
 // Get always returns nil for an CallbackEntry
-func (c *CallbackEntry) Get(path string) (Navigatable, error) {
+func (c *CallbackEntry) Get(path string) (Encodable, error) {
 	return nil, nil
 }
 

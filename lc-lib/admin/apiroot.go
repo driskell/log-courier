@@ -28,7 +28,7 @@ type apiRoot struct {
 	debug api.Navigatable
 }
 
-func (r *apiRoot) Get(path string) (api.Navigatable, error) {
+func (r *apiRoot) Get(path string) (api.Encodable, error) {
 	// Debug is only available via direct request
 	if path == "debug" {
 		return r.debug, nil

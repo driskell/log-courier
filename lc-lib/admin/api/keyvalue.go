@@ -28,8 +28,11 @@ type KeyValue struct {
 	entryMap map[string]Encodable
 }
 
-// Get always returns nil for an KeyValue as it is not navigatable
-func (d *KeyValue) Get(string) (Navigatable, error) {
+// Get returns a value from the KeyValue
+func (d *KeyValue) Get(key string) (Encodable, error) {
+	if value, ok := d.entryMap[key]; ok {
+		return value, nil
+	}
 	return nil, nil
 }
 

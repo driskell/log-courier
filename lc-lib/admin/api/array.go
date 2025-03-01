@@ -139,7 +139,7 @@ func (a *Array) removeEntry(key string, entry *apiArrayEntry) {
 }
 
 // Get returns an entry using it's primary key name or row number
-func (a *Array) Get(path string) (Navigatable, error) {
+func (a *Array) Get(path string) (Encodable, error) {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
 
@@ -147,7 +147,12 @@ func (a *Array) Get(path string) (Navigatable, error) {
 		return nil, nil
 	}
 
+	var err error
 	if entry, ok := a.entryMap[path]; ok {
+		err = entry.entry.Update()
+		if err != nil {
+			return nil, err
+		}
 		return entry.entry, nil
 	}
 
@@ -161,6 +166,10 @@ func (a *Array) Get(path string) (Navigatable, error) {
 		return nil, nil
 	}
 
+	err = a.entries[entryNum].entry.Update()
+	if err != nil {
+		return nil, err
+	}
 	return a.entries[entryNum].entry, nil
 }
 
