@@ -119,6 +119,9 @@ func (c *LegacyConfig) initAction(p *config.Parser, entry *LegacyConfigASTEntry)
 	// validate them and return a resolver node
 	values := make(map[string]ast.ValueNode)
 	for key, value := range entry.Unused {
+		if key == "name" {
+			continue
+		}
 		values[key] = ast.LegacyLiteral(value)
 	}
 

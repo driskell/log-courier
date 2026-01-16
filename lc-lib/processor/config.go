@@ -98,7 +98,7 @@ func init() {
 	})
 
 	// New script format
-	config.RegisterSection("pipeline", func() interface{} {
+	config.RegisterSection("processor script", func() interface{} {
 		return &Config{}
 	})
 }

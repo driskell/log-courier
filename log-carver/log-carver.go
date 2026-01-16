@@ -17,9 +17,13 @@
 package main
 
 import (
+	"flag"
+	"fmt"
+
 	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/processor"
+	"github.com/driskell/log-courier/lc-lib/processor/ast"
 	"github.com/driskell/log-courier/lc-lib/publisher"
 	"github.com/driskell/log-courier/lc-lib/receiver"
 	"github.com/driskell/log-courier/lc-lib/spooler"
@@ -41,13 +45,21 @@ import (
 
 var (
 	app *core.App
+
+	upgradePipeline bool
 )
 
 func main() {
 	courier.SetClientName("LCVR")
 
 	app = core.NewApp("Log Carver", core.LogCourierVersion)
+	flag.BoolVar(&upgradePipeline, "upgrade-pipeline", false, "Upgrade processor pipeline scripts to the latest format")
 	app.StartUp()
+
+	if upgradePipeline {
+		fmt.Print(ast.UpgradeScript(app.Config().Section("pipelines").(*processor.LegacyConfig).AST))
+		return
+	}
 
 	if app.Config().Section("admin").(*admin.Config).Enabled {
 		app.Pipeline().AddService(admin.NewServer(app))

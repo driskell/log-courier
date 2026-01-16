@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/google/cel-go/common/types/ref"
 )
@@ -23,7 +24,7 @@ type ProcessArgumentsNode interface {
 	// All arguments required for initialisation should be set to not allow
 	// expressions, and it will be within the arguments slice given. Any
 	// expressions will be in the slice as nil values
-	Init([]any) error
+	Init(*config.Config, []any) error
 }
 
 // ValueNode is a node in the syntax tree that returns a value

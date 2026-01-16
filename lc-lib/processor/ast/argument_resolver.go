@@ -38,6 +38,8 @@ func newArgumentResolverNode(processNode ProcessArgumentsNode, valueNodes map[st
 				return nil, fmt.Errorf("argument %s is invalid: %w", argument.Name(), err)
 			}
 			values[index] = result
+		case *unknownNode:
+			return nil, fmt.Errorf("argument %s is invalid: %v", argument.Name(), typedValue.actualType)
 		default:
 			if argument.IsExprDisallowed() {
 				return nil, fmt.Errorf("argument %s must be a literal and cannot be dynamic", argument.Name())
