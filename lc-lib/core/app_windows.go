@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 /*
@@ -29,7 +30,7 @@ import (
 // channel and reload signals with the reload channel
 func (a *App) registerSignals() {
 	// Windows only supports os.Interrupt
-	signal.Notify(a.shutdownChan, os.Interrupt)
+	signal.Notify(a.signalChan, os.Interrupt)
 
 	// No reload signal for Windows - implementation will have to wait
 }

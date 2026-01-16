@@ -19,6 +19,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -391,6 +392,14 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 	}
 
 	if vMapIndex.Type().AssignableTo(vField.Type()) {
+		// If a string, check for %ENV(VAR)% and replace with environment variable
+		if vMapIndex.Kind() == reflect.String {
+			vMapIndexStr := vMapIndex.String()
+			if strings.Contains(vMapIndexStr, "%ENV(") {
+				vMapIndex = reflect.ValueOf(p.replaceEnvVars(vMapIndexStr))
+			}
+		}
+
 		log.Debugf("populateEntry value: %v (%s%s)", vMapIndex.String(), configPath, tag)
 		retValue = vMapIndex
 		return
@@ -532,6 +541,41 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 	}
 
 	panic(fmt.Sprintf("Unrecognised configuration structure encountered: %s (Kind: %s)", vField.Type().Name(), vField.Kind().String()))
+}
+
+// replaceEnvVars replaces any %ENV(VAR)% entries in the given string with
+// the value of the environment variable VAR
+func (p *Parser) replaceEnvVars(input string) string {
+	output := ""
+
+	for {
+		startIdx := strings.Index(input, "%ENV(")
+		if startIdx == -1 {
+			// No more to process
+			output += input
+			break
+		}
+		endIdx := strings.Index(input[startIdx:], ")%")
+		if endIdx == -1 {
+			// No more to process
+			output += input
+			break
+		}
+		endIdx += startIdx
+
+		envVarName := input[startIdx+5 : endIdx]
+
+		// Get the environment variable value
+		envVarValue, exists := os.LookupEnv(envVarName)
+		if !exists {
+			envVarValue = ""
+		}
+
+		output += input[:startIdx] + envVarValue
+		input = input[endIdx+2:]
+	}
+
+	return output
 }
 
 // populateSlice is used to populate an array of configuration structures using

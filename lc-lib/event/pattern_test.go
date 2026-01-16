@@ -164,3 +164,33 @@ func TestFormatDateTimestamp(t *testing.T) {
 		t.Fatalf("Unexpected result: [%s]", result)
 	}
 }
+
+func TestIsStaticWithStaticPattern(t *testing.T) {
+	pattern := NewPatternFromString("I say words")
+	if !pattern.IsStatic() {
+		t.Fatalf("Expected static pattern to return true for IsStatic()")
+	}
+}
+
+func TestIsStaticWithVariablePattern(t *testing.T) {
+	pattern := NewPatternFromString("%{message}")
+	if pattern.IsStatic() {
+		t.Fatalf("Expected variable pattern to return false for IsStatic()")
+	}
+}
+
+func TestStringStaticPattern(t *testing.T) {
+	patternStr := "I say words"
+	pattern := NewPatternFromString(patternStr)
+	if pattern.String() != patternStr {
+		t.Fatalf("Expected String() to return %q, got %q", patternStr, pattern.String())
+	}
+}
+
+func TestStringVariablePattern(t *testing.T) {
+	patternStr := "Hello %{message}"
+	pattern := NewPatternFromString(patternStr)
+	if pattern.String() != patternStr {
+		t.Fatalf("Expected String() to return %q, got %q", patternStr, pattern.String())
+	}
+}

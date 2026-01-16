@@ -75,7 +75,7 @@ func (e *PoolEntry) populateAddresses() error {
 		}
 		e.addresses = append(e.addresses, &Address{
 			host: host,
-			desc: fmt.Sprintf("%s - %s", addr.String(), e.Desc),
+			desc: fmt.Sprintf("%s (%s)", addr.String(), e.Desc),
 			addr: addr,
 		})
 	}

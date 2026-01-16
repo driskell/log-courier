@@ -1,6 +1,6 @@
 module github.com/driskell/log-courier
 
-go 1.18
+go 1.21.0
 
 require (
 	github.com/bmatcuk/doublestar/v4 v4.6.0
@@ -16,7 +16,9 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr v1.4.10 // indirect
+	github.com/go-sql-driver/mysql v1.9.3 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/nsf/termbox-go v1.1.1 // indirect

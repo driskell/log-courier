@@ -77,7 +77,7 @@ func processSrv(poolEntries []*PoolEntry, server string, rfc2782 bool, rfc2782Se
 		poolEntries = append(poolEntries, &PoolEntry{
 			Expire:   expire,
 			Server:   server,
-			Desc:     fmt.Sprintf("%s:%d - %s", target, srv.Port, server),
+			Desc:     server,
 			HostPort: fmt.Sprintf("%s:%d", target, srv.Port),
 		})
 	}

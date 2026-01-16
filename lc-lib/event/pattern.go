@@ -33,6 +33,12 @@ type Pattern interface {
 	// Supports %{name} syntax for referencing entries in the event
 	// Also supports %{+Mon 2 Jan 2006} time formatting//
 	Format(event *Event) (string, error)
+
+	// String returns the original pattern string
+	String() string
+
+	// IsStatic returns true if the pattern contains no variables
+	IsStatic() bool
 }
 
 // A pattern string
@@ -100,6 +106,11 @@ func (p variablePattern) String() string {
 	return string(p)
 }
 
+// IsStatic returns false for variable patterns
+func (p variablePattern) IsStatic() bool {
+	return false
+}
+
 // Format implementation for static strings, just returning itself
 func (p staticPattern) Format(event *Event) (string, error) {
 	return string(p), nil
@@ -108,4 +119,9 @@ func (p staticPattern) Format(event *Event) (string, error) {
 // String implementation
 func (p staticPattern) String() string {
 	return string(p)
+}
+
+// IsStatic returns true for static patterns
+func (p staticPattern) IsStatic() bool {
+	return true
 }

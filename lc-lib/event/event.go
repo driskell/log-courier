@@ -199,6 +199,9 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 		if strings.IndexRune(path, ']') != -1 {
 			return nil, fmt.Errorf("Invalid field: %s", path)
 		}
+		if set != nil && e.isSameMap(currentMap, set) {
+			return nil, fmt.Errorf("Cannot set '%s': would create circular reference", path)
+		}
 		output, err = e.simpleResolve(e.data, path, set)
 		return
 	}
@@ -239,12 +242,25 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 				// Doesn't exist so there's no value but keep validating
 				currentMap = nil
 			}
+			if set != nil && currentMap != nil && e.isSameMap(currentMap, set) {
+				return nil, fmt.Errorf("Cannot set '%s': would create circular reference", path)
+			}
 		}
 	}
 	if lastIndex != len(path) {
 		return nil, fmt.Errorf("Invalid field: %s", path)
 	}
 	return
+}
+
+// isSameMap checks if the given value is the same map as the host map to prevent circular references
+func (e *Event) isSameMap(host map[string]interface{}, value interface{}) bool {
+	if valueMap, ok := value.(map[string]interface{}); ok {
+		if fmt.Sprintf("%p", valueMap) == fmt.Sprintf("%p", host) {
+			return true
+		}
+	}
+	return false
 }
 
 // simpleResolve is used by Resolve for the last leg (or the only leg if a simple top-level lookup)

@@ -427,11 +427,52 @@ Duration. Optional. Default: 300s
 The maximum time to wait before using a failed endpoint again. This prevents the
 exponential increase of `failure backoff` from becoming too high.
 
+### `additional columns`
+
+Array of Strings. Optional. Default: []  
+Available when `transport` is one of: `doris`, `doris-https`
+
+Additional columns to create beyond the default set. The default columns are: `@timestamp` (DATETIME), `message` (STRING), `host` (STRING), `path` (STRING), `type` (STRING), `tags` (ARRAY<STRING>), and the rest JSON column.
+
+Each entry can be either `name` (defaults to STRING type) or `name:type` to specify a type. Valid types: STRING, INT, BIGINT, DOUBLE, FLOAT, BOOLEAN, DATE, DATETIME, JSON.
+
+Examples: `["clientip", "response:INT", "bytes:BIGINT"]`
+
+If the table doesn't exist, it will be created. If it exists but is missing columns, they will be added automatically. If column types don't match, an error will be raised requiring manual schema fix.
+
+### `database`
+
+String. Optional. Default: "default"  
+Available when `transport` is one of: `doris`, `doris-https`
+
+The name of the Doris database to use for storing events.
+
 ### `index pattern`
 
 Pattern String. Optional. Default: logstash-%{+2006-01-02}
 
 Specifies the indices to bulk index events into. This is a [Pattern String](#pattern-string) so can contain references to fields within the event being indexed, so that different events can be indexed into different indices. Most commonly this would include the date for automatically rolling over of indices, as in the default of `logstash-%{+2006-01-02}`.
+
+### `load properties`
+
+Map of Strings. Optional. Default: {}  
+Available when `transport` is one of: `doris`, `doris-https`
+
+Additional properties to send as HTTP headers during Doris stream load operations. These are passed directly to the Doris stream load API. For example, `{"max_filter_ratio": "0.1"}` would set the maximum ratio of filtered rows allowed.
+
+### `partition days`
+
+Number. Optional. Default: 1  
+Available when `transport` is one of: `doris`, `doris-https`
+
+The number of days per partition. Default is 1 for daily partitions.
+
+### `partition retention days`
+
+Number. Optional. Default: 90  
+Available when `transport` is one of: `doris`, `doris-https`
+
+The number of days to retain partitions. Old partitions beyond this retention period will be automatically dropped. Default is 90 days.
 
 ### `max pending payloads`
 
@@ -454,7 +495,7 @@ cause excessive memory usage.*
 
 String. Optional. Default: ""
 Available values: 1.0, 1.1, 1.2, 1.3
-Available when `transport` is one of: `tls`, `es-https`
+Available when `transport` is one of: `tls`, `es-https`, `doris-https`
 
 If specified, limits the TLS version to the given value. When not specified, the TLS version is only limited by the versions supported by Golang at build time. At the time of writing, this was 1.3.
 
@@ -487,14 +528,14 @@ available endpoints.
 
 String. Optional. Default: 1.2
 Available values: 1.0, 1.1, 1.2, 1.3
-Available when `transport` is one of: `tls`, `es-https`
+Available when `transport` is one of: `tls`, `es-https`, `doris-https`
 
 Sets the minimum TLS version allowed for connections on this transport. The TLS handshake will fail for any connection that is unable to negotiate a minimum of this version of TLS.
 
 ### `password`
 
 String. Optional. Default none
-Available when `transport` is one of: `es`, `es-https`
+Available when `transport` is one of: `es`, `es-https`, `doris`, `doris-https`
 
 Enables Basic authentication for the transport, using this password. Use in conjunction with [`username`](#username).
 
@@ -519,19 +560,26 @@ Available when `transport` is one of: `tcp`, `tls`
 The maximum time to wait between reconnect attempts. This prevents the
 exponential increase of `reconnect backoff` from becoming too high.
 
+### `rest json column`
+
+String. Optional. Default: "rest"  
+Available when `transport` is one of: `doris`, `doris-https`
+
+The name of the JSON column that will store all event fields not mapped to explicit columns. This allows flexibility in the event schema - important fields can have dedicated columns for efficient querying, while less important or variable fields are stored as JSON.
+
 ### `retry backoff`
 
 Duration. Optional. Default: 0  
-Available when `transport` is one of: `es`, `es-https`
+Available when `transport` is one of: `es`, `es-https`, `doris`, `doris-https`
 
-Pause this long before retrying a bulk operation on Elasticsearch. If the remote endpoint is overwhelmed, this slows down the rate of bulk indexing attempts. On each consecutive failure, the pause is exponentially increased.
+Pause this long before retrying a bulk operation on Elasticsearch or stream load on Doris. If the remote endpoint is overwhelmed, this slows down the rate of bulk indexing attempts. On each consecutive failure, the pause is exponentially increased.
 
 When set to 0, the initial retry attempt is made immediately. The second attempt then pauses for 1 second and begins to exponentially increase on each consecutive failure.
 
 ### `retry backoff max`
 
 Duration. Optional. Default: 300s  
-Available when `transport` is one of: `es`, `es-https`
+Available when `transport` is one of: `es`, `es-https`, `doris`, `doris-https`
 
 The maximum time to wait between retry attempts. This prevents the exponential increase of `retry backoff` from becoming too high.
 
@@ -553,9 +601,9 @@ use RFC 2782 style lookups of the form `_service._proto.example.com`.
 ### `routines`
 
 Number. Optional. Default: 4. Min: 1. Max: 32
-Available when `transport` is one of: `es`, `es-https`
+Available when `transport` is one of: `es`, `es-https`, `doris`, `doris-https`
 
-The number of bulk requests to perform at any one moment in time. Increasing this will make more simultaneous requests to Elasticsearch, increasing resource usage on that side, whilst increasing the speed of indexing.
+The number of bulk requests or stream load operations to perform at any one moment in time. Increasing this will make more simultaneous requests to Elasticsearch or Doris, increasing resource usage on that side, whilst increasing the speed of indexing.
 
 ### `servers`
 
@@ -573,7 +621,7 @@ How multiple endpoints are managed is defined by the `method` configuration.
 
 ### `ssl ca`
 
-Filepath. Required when `transport` is one of: `tls`, `es-https`
+Filepath. Required when `transport` is one of: `tls`, `es-https`, `doris-https`
 
 Path to a PEM encoded certificate file to use to verify the connected endpoint.
 
@@ -618,7 +666,7 @@ time period the connection will be closed and reset.
 ### `transport`
 
 String. Optional. Default: "tls"  
-Available values: "tcp", "tls", "es", "es-https"
+Available values: "tcp", "tls", "es", "es-https", "doris", "doris-https"
 
 *Depending on how log-carver was built, some transports may not be available. Run `log-carver -list-supported` to see the list of transports available in a specific build of log-carver.*
 
@@ -627,13 +675,23 @@ Sets the transport to use when sending logs to the endpoints. "es-https" is reco
 "es-https" sends events to an Elasticsearch cluster using HTTPS. "es" sends events using HTTP only.
 It will also install a template called `logstash` if one does not exist. If you are migrating from Logstash this template will already exist. It should be compatible if you haven't used the Log Courier `enable ecs` configuration.
 
+"doris-https" sends events to an Apache Doris cluster using HTTPS via the stream load API. "doris" sends events using HTTP only. 
+Events are mapped to configured table columns with unmapped fields collected in a JSON column. The table will be created automatically if it doesn't exist.
+
 "tls" sends events to a host using the Courier protocol, such as Log Carver. "tcp" is the equivalent but
 without TLS encryption and peer verification and should only be used on internal networks.
+
+### `table`
+
+String. Required  
+Available when `transport` is one of: `doris`, `doris-https`
+
+The name of the Doris table to use for storing events. If the table doesn't exist, it will be created automatically based on the configured [`columns`](#columns).
 
 ### `username`
 
 String. Optional. Default none
-Available when `transport` is one of: `es`, `es-https`
+Available when `transport` is one of: `es`, `es-https`, `doris`, `doris-https`
 
 Enables Basic authentication for the transport, using this username. Use in conjunction with [`password`](#password).
 

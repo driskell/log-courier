@@ -158,6 +158,7 @@ SignalLoop:
 				// Pipeline start failed
 				badExit = true
 			}
+			log.Notice("Gracefully shutting down due to signal, send again to force immediate shutdown (data loss may occur)")
 			break SignalLoop
 		}
 
@@ -165,7 +166,25 @@ SignalLoop:
 	}
 
 	a.pipeline.Shutdown()
-	a.pipeline.Wait()
+
+	finishedWaitChan := make(chan struct{})
+	go func() {
+		a.pipeline.Wait()
+		close(finishedWaitChan)
+	}()
+SignalLoopFinal:
+	for {
+		select {
+		case <-finishedWaitChan:
+			break SignalLoopFinal
+		case signal := <-a.signalChan:
+			if signal == nil || isShutdownSignal(signal) {
+				log.Warning("Forcing immediate shutdown (data loss may occur)")
+				badExit = true
+				break SignalLoopFinal
+			}
+		}
+	}
 
 	log.Notice("Exiting")
 

@@ -561,6 +561,52 @@ func TestResolveSetTimeTimestamp(t *testing.T) {
 	}
 }
 
+func TestResolveCircularReferenceRoot(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	data := event.Data()
+
+	// Try to set the root data map to a field within itself - should fail
+	_, err := event.Resolve("circular", data)
+	if err == nil {
+		t.Fatal("Expected error when setting circular reference at root, got nil")
+	}
+	if err.Error() != "Cannot set 'circular': would create circular reference" {
+		t.Fatalf("Unexpected error message: %s", err.Error())
+	}
+}
+
+func TestResolveCircularReferenceNested(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"sub": map[string]interface{}{
+			"message": "Hello",
+		},
+	})
+
+	// Get a reference to the nested map
+	subMap, err := event.Resolve("sub", nil)
+	if err != nil {
+		t.Fatalf("Unexpected error getting sub: %s", err)
+	}
+
+	// Try to set that nested map to a field within itself - should fail
+	_, err = event.Resolve("sub[circular]", subMap)
+	if err == nil {
+		t.Fatal("Expected error when setting circular reference in nested map, got nil")
+	}
+	if err.Error() != "Cannot set 'sub[circular]': would create circular reference" {
+		t.Fatalf("Unexpected error message: %s", err.Error())
+	}
+
+	// Also try setting it at a deeper level
+	_, err = event.Resolve("sub[deep][circular]", subMap)
+	if err == nil {
+		t.Fatal("Expected error when setting circular reference at deeper level, got nil")
+	}
+	if err.Error() != "Cannot set 'sub[deep][circular]': would create circular reference" {
+		t.Fatalf("Unexpected error message: %s", err.Error())
+	}
+}
+
 type TestAckknowledger struct {
 	events []*Event
 }

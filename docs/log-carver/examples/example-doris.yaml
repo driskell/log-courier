@@ -1,0 +1,54 @@
+general:
+  log syslog: false
+  log stdout: true
+receivers:
+- listen:
+  - 0.0.0.0:12345
+pipelines:
+- if: event.type == "nginx"
+  then:
+  - name: grok
+    field: message
+    remove: true
+    patterns:
+    - '^(?P<clientip>%{IPV4}|%{IPV6}) (?P<identd>[^ ]+) (?P<auth>[^ ]+) \[%{HTTPDATE:timestamp}\] \"(?:(?P<verb>[^ ]+) (?P<request>([^ \"\\]+|\\.)+)(?: HTTP/%{NUMBER:httpversion:float})?|(?P<rawrequest>([^\"]|\\.)*))\" %{NUMBER:response:int} (?:%{NUMBER:bytes:int}|-) \"(?P<referrer>(?:[A-Za-z][A-Za-z+\-.]*://(?P<referrer_host>(?:[^\"\\/]+|\\[^/])*)(?:[^\"\\]+|\\.)*|(?:[^\"\\]+|\\.)*))\" \"(?P<useragent>(?:[^\"\\]+|\\.)*)\" \"(?P<forwardedfor>(?:[^\"\\]+|\\.)*)\"'
+  - name: add_tag
+    tag: access_logs
+  - name: date
+    field: timestamp
+    remove: true
+    formats:
+    - '02/Jan/2006:15:04:05 -0700'
+  - name: geoip
+    field: clientip
+  - name: user_agent
+    field: useragent
+    remove: true
+- else:
+  - name: add_tag
+    tag: unknown_event
+network:
+  transport: doris-https
+  database: logs
+  table: access_logs
+  # Additional columns beyond defaults (@timestamp, message, host, path, type, tags, rest)
+  # Default columns are automatically created with appropriate types
+  additional columns:
+  - clientip           # defaults to STRING
+  - verb              # defaults to STRING
+  - request           # defaults to STRING
+  - response:INT      # explicit INT type
+  - bytes:BIGINT      # explicit BIGINT type
+  # Unmapped fields like referrer, useragent, etc. go into the rest JSON column
+  rest json column: rest
+  # Partition settings for rolling logs
+  partition days: 1              # daily partitions
+  partition retention days: 90   # keep 90 days of data
+  servers:
+  - doris-fe:8030
+  username: root
+  password: ""
+  ssl ca: /path/to/ca.crt
+  routines: 4
+  retry backoff: 1s
+  retry backoff max: 300s
