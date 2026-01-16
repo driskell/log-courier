@@ -37,11 +37,6 @@ const (
 	astTokenElse   astToken = "else"
 )
 
-// ASTEntry is an entry in the syntax tree that processes events
-type ASTEntry interface {
-	Process(*event.Event) *event.Event
-}
-
 // astLogic processes an event through a conditional branch
 type astLogic struct {
 	IfExpr         string        `config:"if"` // should match astTokenIf
@@ -51,6 +46,8 @@ type astLogic struct {
 
 	ifProgram cel.Program
 }
+
+var _ ast.ProcessNode = &astLogic{}
 
 // Init the branch
 func (l *astLogic) Init(p *config.Parser, path string) (err error) {
@@ -64,19 +61,19 @@ func (l *astLogic) Init(p *config.Parser, path string) (err error) {
 func (l *astLogic) Process(subject *event.Event) *event.Event {
 	var next []ast.ProcessNode
 	if evalLogicBranchProgram(l.ifProgram, l.IfExpr, subject) {
-		next = l.Then.AST
+		next = l.Then.ast
 	} else {
 		if len(l.ElseIfBranches) != 0 {
 			for _, elseIfBranch := range l.ElseIfBranches {
 				if evalLogicBranchProgram(elseIfBranch.elseIfProgram, elseIfBranch.ElseIfExpr, subject) {
-					next = elseIfBranch.Then.AST
+					next = elseIfBranch.Then.ast
 					break
 				}
 			}
 		}
 		if next == nil {
 			if l.ElseBranch != nil {
-				next = l.ElseBranch.Else.AST
+				next = l.ElseBranch.Else.ast
 			} else {
 				return subject
 			}

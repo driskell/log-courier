@@ -16,8 +16,7 @@ type TestParserPopulateStructSliceInStructFixture struct {
 }
 
 func TestParserPopulateStructSliceInStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := map[string]interface{}{
 		"slice": []map[string]interface{}{
@@ -132,8 +131,7 @@ type TestParserPopulateValueSliceInStructFixture struct {
 }
 
 func TestParserPopulateValueSliceInStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := map[string]interface{}{
 		"slice":   []interface{}{"100", "200"},
@@ -200,8 +198,7 @@ func TestParserPopulateValueSliceInStruct(t *testing.T) {
 type TestParserPopulateSliceStructFixture []TestParserPopulateStructFixture
 
 func TestParserPopulateSliceStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{
 		map[string]interface{}{"keyed": 100},
@@ -258,8 +255,7 @@ func TestParserPopulateSliceStruct(t *testing.T) {
 type TestParserPopulateSliceOfPointerStructFixture []*TestParserPopulateStructFixture
 
 func TestParserPopulateSliceOfPointerStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{
 		map[string]interface{}{"keyed": 100},
@@ -316,8 +312,7 @@ func TestParserPopulateSliceOfPointerStruct(t *testing.T) {
 type TestParserPopulateSliceOfPointerPointerStructFixture []**TestParserPopulateStructFixture
 
 func TestParserPopulateSliceOfPointerPointerStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{
 		map[string]interface{}{"keyed": 100},
@@ -372,8 +367,7 @@ func TestParserPopulateSliceOfPointerPointerStruct(t *testing.T) {
 }
 
 func TestParserPopulatePointerSliceStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{
 		map[string]interface{}{"keyed": 100},
@@ -429,8 +423,7 @@ func TestParserPopulatePointerSliceStruct(t *testing.T) {
 }
 
 func TestParserPopulatePointerSliceOfPointerStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{
 		map[string]interface{}{"keyed": 100},
@@ -484,8 +477,7 @@ func TestParserPopulatePointerSliceOfPointerStruct(t *testing.T) {
 type TestParserPopulateSliceFixture []string
 
 func TestParserPopulateSlice(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{"100", "200", "300"}
 	input2 := []interface{}{"400", "500", "600"}
@@ -530,8 +522,7 @@ func TestParserPopulateSlice(t *testing.T) {
 type TestParserPopulateSliceOfPointerFixture []*string
 
 func TestParserPopulateSliceOfPointer(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{"100", "200", "300"}
 	input2 := []interface{}{"400", "500", "600"}
@@ -584,8 +575,7 @@ func TestParserPopulateSliceOfPointer(t *testing.T) {
 type TestParserPopulateSliceOfPointerPointerFixture []**string
 
 func TestParserPopulateSliceOfPointerPointer(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{"100", "200", "300"}
 	input2 := []interface{}{"400", "500", "600"}
@@ -636,8 +626,7 @@ func TestParserPopulateSliceOfPointerPointer(t *testing.T) {
 }
 
 func TestParserPopulatePointerSlice(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{"100", "200", "300"}
 	input2 := []interface{}{"400", "500", "600"}
@@ -689,8 +678,7 @@ func TestParserPopulatePointerSlice(t *testing.T) {
 }
 
 func TestParserPopulatePointerSliceOfPointer(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{"100", "200", "300"}
 	input2 := []interface{}{"400", "500", "600"}
@@ -760,8 +748,7 @@ func (f TestParserPopulateSliceCallbacksFixture) Validate(p *Parser, path string
 }
 
 func TestParserPopulateSliceCallbacks(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	TestParserPopulateSliceCallbacksCalled = make([]string, 0, 0)
 
@@ -796,8 +783,7 @@ func (f TestParserPopulateSliceCallbacksInitErrorFixture) Init(p *Parser, path s
 }
 
 func TestParserPopulateSliceCallbacksInitError(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{"100", "200"}
 
@@ -816,8 +802,7 @@ func (f TestParserPopulateSliceCallbacksValidateErrorFixture) Validate(p *Parser
 }
 
 func TestParserPopulateSliceCallbacksValidateError(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := []interface{}{"100", "200"}
 

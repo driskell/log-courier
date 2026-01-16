@@ -18,12 +18,13 @@ package ast
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/google/cel-go/common/types"
 )
 
-type actionFactoryFunc func() (ProcessArgumentsNode, error)
+type actionFactoryFunc func(*config.Config) (ProcessArgumentsNode, error)
 
 var registeredActions = make(map[string]actionFactoryFunc)
 
@@ -41,20 +42,20 @@ func AvailableActions() (ret []string) {
 	return
 }
 
-func newActionNode(name string) (ProcessArgumentsNode, error) {
+func newActionNode(config *config.Config, name string) (ProcessArgumentsNode, error) {
 	factory, ok := registeredActions[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown action: %s", name)
 	}
-	return factory()
+	return factory(config)
 }
 
-func LegacyFetchAction(name string, values map[string]ValueNode) (ProcessNode, error) {
+func LegacyFetchAction(config *config.Config, name string, values map[string]ValueNode) (ProcessNode, error) {
 	factory, ok := registeredActions[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown action: %s", name)
 	}
-	node, err := factory()
+	node, err := factory(config)
 	if err != nil {
 		return nil, err
 	}
@@ -64,15 +65,28 @@ func LegacyFetchAction(name string, values map[string]ValueNode) (ProcessNode, e
 func LegacyLiteral(value interface{}) ValueNode {
 	switch typedValue := value.(type) {
 	case string:
-		return &literalNode{value: types.String(typedValue)}
+		return newLiteralNode(types.String(typedValue))
 	case []byte:
-		return &literalNode{value: types.String(typedValue)}
+		return newLiteralNode(types.String(typedValue))
 	case bool:
-		return &literalNode{value: types.Bool(typedValue)}
+		return newLiteralNode(types.Bool(typedValue))
 	case []string:
-		return &literalNode{value: types.NewStringList(types.DefaultTypeAdapter, typedValue)}
+		return newLiteralNode(types.NewStringList(types.DefaultTypeAdapter, typedValue))
+	case []interface{}:
+		if len(typedValue) != 0 {
+			// Is it a slice of strings? Use reflection
+			kind := reflect.ValueOf(typedValue[0]).Kind()
+			if kind == reflect.String {
+				strs := make([]string, 0, len(typedValue))
+				for _, v := range typedValue {
+					strs = append(strs, v.(string))
+				}
+				return newLiteralNode(types.NewStringList(types.DefaultTypeAdapter, strs))
+			}
+			return newUnknownNode(fmt.Sprintf("unknown literal slice type: %T of %v", value, kind))
+		}
 	}
-	return &literalNode{value: types.Unknown([]int64{})}
+	return newUnknownNode(fmt.Sprintf("unknown literal type: %T", value))
 }
 
 func init() {

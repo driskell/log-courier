@@ -12,8 +12,7 @@ type TestParserPopulateStructFixture struct {
 }
 
 func TestParserPopulateStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := map[string]interface{}{
 		"keyed": 678,
@@ -52,8 +51,7 @@ func TestParserPopulateStruct(t *testing.T) {
 }
 
 func TestParserPopulateReportUnused(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := map[string]interface{}{
 		"value":        "testing",
@@ -89,8 +87,7 @@ func TestParserPopulateReportUnused(t *testing.T) {
 }
 
 func TestParserPopulateStructNoPointer(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := map[string]interface{}{
 		"keyed": 678,
@@ -113,8 +110,7 @@ type TestParserPopulateEmbeddedStructFixture struct {
 }
 
 func TestParserPopulateEmbeddedStruct(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := map[string]interface{}{
 		"inner": map[string]interface{}{
@@ -168,8 +164,7 @@ func (f *TestParserPopulateStructCallbacksFixture) Validate(p *Parser, path stri
 }
 
 func TestParserPopulateStructCallbacks(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	TestParserPopulateStructCallbacksCalled = make([]string, 0, 0)
 
@@ -214,8 +209,7 @@ func (f *TestParserPopulateStructCallbacksInitErrorFixture) Init(p *Parser, path
 }
 
 func TestParserPopulateStructCallbacksInitError(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := map[string]interface{}{
 		"keyed": 678,
@@ -239,8 +233,7 @@ func (f *TestParserPopulateStructCallbacksValidateErrorFixture) Validate(p *Pars
 }
 
 func TestParserPopulateStructCallbacksValidateError(t *testing.T) {
-	config := NewConfig()
-	parser := NewParser(config)
+	parser := NewParser(nil)
 
 	input := map[string]interface{}{
 		"keyed": 678,
@@ -256,5 +249,45 @@ func TestParserPopulateStructCallbacksValidateError(t *testing.T) {
 	err = parser.validate()
 	if err == nil {
 		t.Errorf("Unexpected validation success")
+	}
+}
+
+type TestParserPopulateEmbedStringFixture struct {
+	EmbeddedString string `config:",embed_string"`
+}
+
+func TestParserPopulateEmbedString(t *testing.T) {
+	parser := NewParser(nil)
+
+	// Test with a string value
+	input := "test string value"
+
+	item := &TestParserPopulateEmbedStringFixture{}
+	err := parser.Populate(item, input, "/", false)
+	if err != nil {
+		t.Errorf("Parsing failed unexpectedly: %s", err)
+		t.FailNow()
+	}
+
+	if item.EmbeddedString != "test string value" {
+		t.Errorf("Unexpected value of EmbeddedString property: %s", item.EmbeddedString)
+	}
+}
+
+func TestParserPopulateEmbedStringEmpty(t *testing.T) {
+	parser := NewParser(nil)
+
+	// Test with an empty/nil value - this reproduces the bug
+	var input interface{} = nil
+
+	item := &TestParserPopulateEmbedStringFixture{}
+	err := parser.Populate(item, input, "/", false)
+	if err != nil {
+		t.Errorf("Parsing failed unexpectedly: %s", err)
+		t.FailNow()
+	}
+
+	if item.EmbeddedString != "" {
+		t.Errorf("Unexpected value of EmbeddedString property: %s", item.EmbeddedString)
 	}
 }

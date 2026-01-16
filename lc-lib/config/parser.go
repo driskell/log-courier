@@ -56,7 +56,7 @@ func NewParser(cfg *Config) *Parser {
 	return &Parser{cfg: cfg}
 }
 
-// Config returns the root Config currently being parsed
+// Config returns the configuration structure being parsed
 func (p *Parser) Config() *Config {
 	return p.cfg
 }
@@ -161,6 +161,7 @@ func (p *Parser) populateStructInner(vConfig reflect.Value, vRawConfig reflect.V
 	}
 
 	hasCheckedInput := false
+	var unUsed reflect.Value
 
 	// Iterate each configuration structure field we need to update, and copy the
 	// value in, checking the type and removing the value from rawConfig as we use
@@ -274,7 +275,13 @@ FieldLoop:
 				if err != nil {
 					return
 				}
-				vField.Set(retString)
+				if retString.IsValid() {
+					vField.Set(retString)
+				}
+				continue FieldLoop
+			case "collect_unused":
+				// collect_unused is where we store all unused configuration entries
+				unUsed = vField
 				continue FieldLoop
 			}
 		}
@@ -308,7 +315,7 @@ FieldLoop:
 	// called "Unused" in this structure, store them there. This allows post
 	// processing of configuration data for regions of the configuration where
 	// the available fields is dynamic (such as within a codec block)
-	if unUsed := vConfig.FieldByName("Unused"); unUsed.IsValid() {
+	if unUsed.IsValid() {
 		log.Debugf("Saving unused configuration entries: %s", configPath)
 		if unUsed.IsZero() || unUsed.IsNil() {
 			unUsed.Set(reflect.MakeMap(unUsed.Type()))
@@ -758,19 +765,11 @@ func (p *Parser) reportUnusedConfig(vRawConfig reflect.Value, configPath string)
 // concrete strings.
 func (p *Parser) FixMapKeys(path string, value map[string]interface{}) error {
 	for k, v := range value {
-		switch vt := v.(type) {
-		case map[string]interface{}:
-			if err := p.FixMapKeys(path+"/"+k, vt); err != nil {
-				return err
-			}
-		case map[interface{}]interface{}:
-			fixedValue, err := p.fixMapInterfaceKeys(path+"/"+k, vt)
-			if err != nil {
-				return err
-			}
-
-			value[k] = fixedValue
+		fixedValue, err := p.processMapValue(path+"/"+k, v)
+		if err != nil {
+			return err
 		}
+		value[k] = fixedValue
 	}
 
 	return nil
@@ -785,24 +784,49 @@ func (p *Parser) fixMapInterfaceKeys(path string, value map[interface{}]interfac
 			return nil, fmt.Errorf("Invalid non-string key at %s", path)
 		}
 
-		switch vt := v.(type) {
-		case map[string]interface{}:
-			if err := p.FixMapKeys(path+"/"+ks, vt); err != nil {
-				return nil, err
-			}
-
-			fixedMap[ks] = vt
-		case map[interface{}]interface{}:
-			fixedValue, err := p.fixMapInterfaceKeys(path+"/"+ks, vt)
-			if err != nil {
-				return nil, err
-			}
-
-			fixedMap[ks] = fixedValue
-		default:
-			fixedMap[ks] = vt
+		fixedValue, err := p.processMapValue(path+"/"+ks, v)
+		if err != nil {
+			return nil, err
 		}
+
+		fixedMap[ks] = fixedValue
 	}
 
 	return fixedMap, nil
+}
+
+func (p *Parser) fixSliceMapKeys(path string, slice []interface{}) error {
+	for i, item := range slice {
+		fixedValue, err := p.processMapValue(path+"["+strconv.Itoa(i)+"]", item)
+		if err != nil {
+			return err
+		}
+		slice[i] = fixedValue
+	}
+
+	return nil
+}
+
+// processMapValue handles type conversion for a single value, recursively processing containers
+func (p *Parser) processMapValue(path string, value interface{}) (interface{}, error) {
+	switch vt := value.(type) {
+	case map[string]interface{}:
+		if err := p.FixMapKeys(path, vt); err != nil {
+			return nil, err
+		}
+		return vt, nil
+	case map[interface{}]interface{}:
+		fixedValue, err := p.fixMapInterfaceKeys(path, vt)
+		if err != nil {
+			return nil, err
+		}
+		return fixedValue, nil
+	case []interface{}:
+		if err := p.fixSliceMapKeys(path, vt); err != nil {
+			return nil, err
+		}
+		return vt, nil
+	default:
+		return value, nil
+	}
 }

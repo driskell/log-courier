@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/processor/gen"
 	"github.com/google/cel-go/common/types"
 )
@@ -11,11 +12,13 @@ import (
 type Visitor struct {
 	gen.BaseLogCarverVisitor
 
+	config        *config.Config
 	errorListener antlr.ErrorListener
 }
 
-func NewVisitor(errorListener antlr.ErrorListener) *Visitor {
+func NewVisitor(config *config.Config, errorListener antlr.ErrorListener) *Visitor {
 	return &Visitor{
+		config:        config,
 		errorListener: errorListener,
 	}
 }
@@ -151,7 +154,7 @@ func (v *Visitor) VisitAction(ctx *gen.ActionContext) interface{} {
 		})
 		values[argumentData.name] = argumentData.node
 	}
-	node, err := newActionNode(identifier)
+	node, err := newActionNode(v.config, identifier)
 	if err != nil {
 		v.errorListener.SyntaxError(ctx.GetParser(), nil, ctx.GetStart().GetLine(), ctx.GetStart().GetColumn(), err.Error(), nil)
 		return &noopNode{}

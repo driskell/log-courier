@@ -17,6 +17,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"sync"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
@@ -45,13 +47,26 @@ import (
 
 var (
 	app *core.App
+
+	upgradePipeline bool
 )
 
 func main() {
 	courier.SetClientName("LCVR")
 
 	app = core.NewApp("Log Carver", core.LogCourierVersion)
+	flag.BoolVar(&upgradePipeline, "upgrade-pipeline", false, "Upgrade processor pipeline scripts to the latest format")
 	app.StartUp()
+
+	if upgradePipeline {
+		script, err := processor.LegacyUpgradeScript(app.Config(), processor.FetchLegacyConfig(app.Config()))
+		if err != nil {
+			fmt.Printf("Error upgrading pipeline: %v\n", err)
+			return
+		}
+		fmt.Print(script)
+		return
+	}
 
 	var shutdown chan<- struct{}
 	var waitGroup *sync.WaitGroup

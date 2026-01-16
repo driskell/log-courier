@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
@@ -29,7 +30,7 @@ type jsonNode struct {
 
 var _ ast.ProcessArgumentsNode = &jsonNode{}
 
-func newJsonNode() (ast.ProcessArgumentsNode, error) {
+func newJsonNode(*config.Config) (ast.ProcessArgumentsNode, error) {
 	return &jsonNode{}, nil
 }
 

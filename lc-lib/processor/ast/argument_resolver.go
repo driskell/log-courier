@@ -38,6 +38,8 @@ func newArgumentResolverNode(processNode ProcessArgumentsNode, valueNodes map[st
 				return nil, fmt.Errorf("argument %s is invalid: %w", argument.Name(), err)
 			}
 			values[index] = result
+		case *unknownNode:
+			return nil, fmt.Errorf("argument %s is invalid: %v", argument.Name(), typedValue.actualType)
 		default:
 			if argument.IsExprDisallowed() {
 				return nil, fmt.Errorf("argument %s must be a literal and cannot be dynamic", argument.Name())
@@ -79,6 +81,8 @@ type staticArgumentResolverNode struct {
 	values      []any
 }
 
+var _ ProcessNode = &staticArgumentResolverNode{}
+
 func (n *staticArgumentResolverNode) Process(subject *event.Event) *event.Event {
 	return n.processNode.ProcessWithArguments(subject, n.values)
 }
@@ -88,6 +92,8 @@ type argumentResolverNode struct {
 	values      []any
 	resolvers   []*argumentResolver
 }
+
+var _ ProcessNode = &argumentResolverNode{}
 
 func (n *argumentResolverNode) Process(subject *event.Event) *event.Event {
 	values := make([]any, len(n.values))

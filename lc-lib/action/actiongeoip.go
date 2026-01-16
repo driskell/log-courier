@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/geoipupdate"
 	"github.com/driskell/log-courier/lc-lib/processor/ast"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/oschwald/geoip2-golang"
@@ -38,8 +40,10 @@ const (
 
 type geoIPNode struct {
 	database string
-	lru      *lru.Cache
-	reader   *geoip2.Reader
+
+	config *config.Config
+	lru    *lru.Cache
+	reader *geoip2.Reader
 }
 
 var _ ast.ProcessArgumentsNode = &geoIPNode{}
@@ -49,9 +53,9 @@ type geoipNodeLookupResult struct {
 	err    error
 }
 
-func newGeoIPNode() (ast.ProcessArgumentsNode, error) {
+func newGeoIPNode(config *config.Config) (ast.ProcessArgumentsNode, error) {
 	var err error
-	node := &geoIPNode{database: DefaultGeoIPNodeDatabase}
+	node := &geoIPNode{config: config, database: DefaultGeoIPNodeDatabase}
 	node.lru, err = lru.New(1000)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialse LRU cache for GeoIP: %s", err)
@@ -107,7 +111,7 @@ func (n *geoIPNode) ProcessWithArguments(subject *event.Event, arguments []any) 
 			subject.AddError("geoip", fmt.Sprintf("Field '%s' is not a valid IP address", field))
 			return subject
 		}
-		reader, err := n.getDatabase()
+		reader, err := n.getDatabase(n.config)
 		if err != nil {
 			subject.AddError("geoip", fmt.Sprintf("Failed to open GeoIP2 database: %s", err))
 			return subject
@@ -160,9 +164,9 @@ func (n *geoIPNode) ProcessWithArguments(subject *event.Event, arguments []any) 
 }
 
 // openDatabase opens the GeoIP database for use or returns the shared one
-func (g *geoIPNode) getDatabase() (*geoip2.Reader, error) {
+func (g *geoIPNode) getDatabase(config *config.Config) (*geoip2.Reader, error) {
 	if g.database == "" {
-		return nil, nil //geoipupdate.GetSharedDatabaseReader(g.config)
+		return geoipupdate.GetSharedDatabaseReader(config)
 	}
 	if g.reader != nil {
 		return g.reader, nil

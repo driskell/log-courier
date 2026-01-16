@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
@@ -30,7 +31,7 @@ type dateActionNode struct {
 
 var _ ast.ProcessArgumentsNode = &dateActionNode{}
 
-func newDateActionNode() (ast.ProcessArgumentsNode, error) {
+func newDateActionNode(*config.Config) (ast.ProcessArgumentsNode, error) {
 	return &dateActionNode{}, nil
 }
 

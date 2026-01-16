@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
@@ -42,7 +43,7 @@ type kvNode struct {
 
 var _ ast.ProcessArgumentsNode = &kvNode{}
 
-func newKVNode() (ast.ProcessArgumentsNode, error) {
+func newKVNode(*config.Config) (ast.ProcessArgumentsNode, error) {
 	return &kvNode{}, nil
 }
 

@@ -18,11 +18,13 @@ package processor
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
 
 // Pool manages routines that perform sequences of mutations on events
@@ -32,12 +34,14 @@ type Pool struct {
 	shutdownChan <-chan struct{}
 	configChan   <-chan *config.Config
 
-	cfg         *config.Config
-	pipelines   *Config
-	debugEvents bool
-	sequencer   *event.Sequencer
-	fanout      chan *event.Bundle
-	collector   chan *event.Bundle
+	cfg             *config.Config
+	pipelines       *LegacyConfig
+	processorScript *Config
+	ast             []ast.ProcessNode
+	debugEvents     bool
+	sequencer       *event.Sequencer
+	fanout          chan *event.Bundle
+	collector       chan *event.Bundle
 }
 
 // NewPool creates a new processor pool
@@ -71,6 +75,24 @@ func (p *Pool) SetConfigChan(configChan <-chan *config.Config) {
 // Init initialises
 func (p *Pool) Init(cfg *config.Config) error {
 	p.applyConfig(cfg)
+
+	if p.processorScript.Source != "" && p.pipelines.Pipeline != nil {
+		return errors.New("processor pipeline script and legacy pipeline configuration can not both be specified")
+	}
+
+	if p.pipelines.Pipeline != nil {
+		parser := config.NewParser(cfg)
+		if err := compileLegacyConfig(parser, p.pipelines); err != nil {
+			return err
+		}
+		p.ast = p.pipelines.ast
+		return nil
+	}
+
+	var err error
+	if p.ast, err = compileScript(cfg, p.processorScript.Source); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -211,7 +233,7 @@ func (p *Pool) processorRoutine(id int) {
 
 // processEvent processes a single event
 func (p *Pool) processEvent(evnt *event.Event) *event.Event {
-	for _, entry := range p.pipelines.AST {
+	for _, entry := range p.ast {
 		evnt = entry.Process(evnt)
 	}
 	evnt.ClearCache()
@@ -225,6 +247,7 @@ func (p *Pool) processEvent(evnt *event.Event) *event.Event {
 // applyConfig applies the given configuration
 func (p *Pool) applyConfig(cfg *config.Config) {
 	p.cfg = cfg
-	p.pipelines = FetchConfig(cfg)
+	p.pipelines = FetchLegacyConfig(cfg)
+	p.processorScript = FetchConfig(cfg)
 	p.debugEvents = cfg.GeneralPart("processor").(*General).DebugEvents
 }

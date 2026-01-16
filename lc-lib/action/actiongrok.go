@@ -19,6 +19,7 @@ package action
 import (
 	"fmt"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/grok"
 	"github.com/driskell/log-courier/lc-lib/processor"
@@ -28,13 +29,14 @@ import (
 type grokNode struct {
 	localPatterns map[string]string
 
+	config   *config.Config
 	compiled []grok.Pattern
 }
 
 var _ ast.ProcessArgumentsNode = &grokNode{}
 
-func newGrokNode() (ast.ProcessArgumentsNode, error) {
-	return &grokNode{}, nil
+func newGrokNode(config *config.Config) (ast.ProcessArgumentsNode, error) {
+	return &grokNode{config: config}, nil
 }
 
 func (n *grokNode) Arguments() []ast.Argument {
@@ -48,8 +50,7 @@ func (n *grokNode) Arguments() []ast.Argument {
 
 func (n *grokNode) Init(arguments []any) error {
 	patterns := arguments[0].([]string)
-	// TODO: load it?
-	grokConfig := &processor.GrokConfig{}
+	grokConfig := processor.FetchGrokConfig(n.config)
 	n.compiled = make([]grok.Pattern, 0, len(patterns))
 	for _, pattern := range patterns {
 		compiled, err := grokConfig.Grok.CompilePattern(pattern, n.localPatterns)

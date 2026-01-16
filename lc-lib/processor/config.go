@@ -17,13 +17,9 @@
 package processor
 
 import (
-	"errors"
 	"fmt"
 
-	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/driskell/log-courier/lc-lib/config"
-	"github.com/driskell/log-courier/lc-lib/processor/ast"
-	"github.com/driskell/log-courier/lc-lib/processor/gen"
 )
 
 // astState holds the FSM state when parsing the processor configuration
@@ -56,31 +52,11 @@ func (gc *General) Validate(p *config.Parser, path string) (err error) {
 // Config contains processor pipeline script
 type Config struct {
 	Source string `config:",embed_string" json:",omitempty"`
-
-	AST []ast.ProcessNode
-}
-
-// Init the pipeline configuration
-func (c *Config) Init(p *config.Parser, path string) error {
-	inputStream := antlr.NewInputStream(c.Source)
-	lexer := gen.NewLogCarverLexer(inputStream)
-	tokenStream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	errorListenerImpl := &errorListener{}
-	parser := gen.NewLogCarverParser(tokenStream)
-	parser.RemoveErrorListeners()
-	parser.AddErrorListener(errorListenerImpl)
-	program := parser.Program()
-	visitor := ast.NewVisitor(errorListenerImpl)
-	c.AST = visitor.Visit(program).([]ast.ProcessNode)
-	if len(errorListenerImpl.errors) != 0 {
-		return fmt.Errorf("failed to parse processor pipeline script:\n%s", errors.Join(errorListenerImpl.errors...))
-	}
-	return nil
 }
 
 // FetchConfig returns the processor configuration from a Config structure
 func FetchConfig(cfg *config.Config) *Config {
-	return cfg.Section("pipeline").(*Config)
+	return cfg.Section("processor script").(*Config)
 }
 
 // init registers this module provider
@@ -98,7 +74,7 @@ func init() {
 	})
 
 	// New script format
-	config.RegisterSection("pipeline", func() interface{} {
+	config.RegisterSection("processor script", func() interface{} {
 		return &Config{}
 	})
 }

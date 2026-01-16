@@ -17,6 +17,7 @@
 package action
 
 import (
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/processor/ast"
 )
@@ -26,7 +27,7 @@ type addTagNode struct {
 
 var _ ast.ProcessArgumentsNode = &addTagNode{}
 
-func newAddTagNode() (ast.ProcessArgumentsNode, error) {
+func newAddTagNode(*config.Config) (ast.ProcessArgumentsNode, error) {
 	return &addTagNode{}, nil
 }
 
@@ -50,7 +51,7 @@ type removeTagNode struct {
 
 var _ ast.ProcessArgumentsNode = &removeTagNode{}
 
-func newRemoveTagNode() (ast.ProcessArgumentsNode, error) {
+func newRemoveTagNode(*config.Config) (ast.ProcessArgumentsNode, error) {
 	return &removeTagNode{}, nil
 }
 

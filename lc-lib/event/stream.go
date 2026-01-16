@@ -58,12 +58,6 @@ func (sc *StreamConfig) Defaults() {
 // root configuration so we can access global fields etc
 func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 	sc.genConfig = p.Config().General()
-
-	// Ensure all Fields are map[string]interface{}
-	if err = p.FixMapKeys(path+"/fields", sc.Fields); err != nil {
-		return
-	}
-
 	return nil
 }
 

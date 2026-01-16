@@ -19,6 +19,7 @@ package action
 import (
 	"fmt"
 
+	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/processor/ast"
 	lru "github.com/hashicorp/golang-lru"
@@ -32,7 +33,7 @@ type userAgentNode struct {
 
 var _ ast.ProcessArgumentsNode = &userAgentNode{}
 
-func newUserAgentNode() (ast.ProcessArgumentsNode, error) {
+func newUserAgentNode(*config.Config) (ast.ProcessArgumentsNode, error) {
 	var err error
 	node := &userAgentNode{}
 	node.lru, err = lru.New(1000)
@@ -42,6 +43,7 @@ func newUserAgentNode() (ast.ProcessArgumentsNode, error) {
 	node.parser = uaparser.NewFromSaved()
 	return node, nil
 }
+
 func (n *userAgentNode) Arguments() []ast.Argument {
 	return []ast.Argument{
 		ast.NewArgumentString("field", ast.ArgumentRequired),

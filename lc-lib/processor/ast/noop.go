@@ -1,6 +1,8 @@
 package ast
 
-import "github.com/driskell/log-courier/lc-lib/event"
+import (
+	"github.com/driskell/log-courier/lc-lib/event"
+)
 
 type noopNode struct {
 }
