@@ -4,9 +4,7 @@
 [![Ruby](https://github.com/driskell/log-courier/actions/workflows/ruby-test.yml/badge.svg)](https://github.com/driskell/log-courier/actions/workflows/ruby-test.yml)
 [![Release](https://img.shields.io/github/release/driskell/log-courier.svg)](https://github.com/driskell/log-courier/releases/latest)
 
-The Log Courier Suite is a set of lightweight tools created to ship and process
-log files speedily and securely, with low resource usage, to Elasticsearch or
-Logstash instances.
+The Log Courier Suite is a set of lightweight tools created to ship and process log files speedily and securely, with low resource usage, to Apache Doris, Elasticsearch or Logstash instances.
 
 - [Log Courier Suite](#log-courier-suite)
   - [Log Courier](#log-courier)
@@ -19,7 +17,7 @@ Logstash instances.
 
 ## Log Courier
 
-Log Courier is a lightweight shipper. It reads from log files and transmits events over the Courier protocol to a remote Logstash or Log Carver instance.
+Log Courier is a lightweight shipper. It reads from log files and transmits events over the Courier protocol to a remote Log Carver or Logstash instance.
 
 - Reads from [files](docs/log-courier/Configuration.md#files) or the program [input](docs/log-courier/Configuration.md#stdin), following log file rotations and movements
 - Compliments log events with [additional fields](docs/log-courier/Configuration.md#fields)
@@ -32,7 +30,7 @@ Log Courier is a lightweight shipper. It reads from log files and transmits even
 
 ## Log Carver
 
-Log Carver is a lightweight event processor and alternative to Logstash. It receives events over the Courier protocol and performs actions against them to manipulate them into the required format for storage within Elasticsearch, or further processing in Logstash. Connected clients do not receive acknowledgements until the events are acknowledged by the endpoint, whether that be Elasticsearch or another more centralised Log Carver, providing end-to-end guarantee.
+Log Carver is a lightweight event processor similar to Logstash. It receives events over the Courier protocol and performs actions against them to manipulate them into the required format for storage within Apache Doris, Elasticsearch, or further processing in Logstash. Connected clients do not receive acknowledgements until the events are acknowledged by the endpoint, whether that be Apache Doris, Elasticsearch or another more centralised Log Carver, providing end-to-end guarantees.
 
 - Receives events securely using TLS with [client verification](docs/log-carver/Configuration.md#ssl-client-ca-receiver)
 - Supports If/ElseIf/Else [conditionals](docs/log-carver/Configuration.md#conditionals) to process different events in different ways
