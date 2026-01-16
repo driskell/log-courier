@@ -309,7 +309,7 @@ func (t *transportDoris) performStreamLoad(addr *addresspool.Address, id int, ta
 		return fmt.Errorf("response failed to parse: %s [Body: %s]", err, body)
 	}
 
-	if response.Status != "Success" && response.Status != "Publish Timeout" {
+	if response.Status != "Success" {
 		return fmt.Errorf("stream load failed with status: %s [Message: %s] [Comment: %s] [FirstErrorMessage: %s] [ErrorURL: %s]", response.Status, response.Message, response.Comment, response.FirstErrorMessage, response.ErrorURL)
 	}
 
