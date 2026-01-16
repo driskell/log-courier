@@ -21,6 +21,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -391,15 +392,23 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		return
 	}
 
-	if vMapIndex.Type().AssignableTo(vField.Type()) {
-		// If a string, check for %ENV(VAR)% and replace with environment variable
-		if vMapIndex.Kind() == reflect.String {
-			vMapIndexStr := vMapIndex.String()
-			if strings.Contains(vMapIndexStr, "%ENV(") {
-				vMapIndex = reflect.ValueOf(p.replaceEnvVars(vMapIndexStr))
+	// If a string, check for %ENV(VAR)% and replace with environment variable
+	if vMapIndex.Kind() == reflect.String {
+		vMapIndexStr := vMapIndex.String()
+		if strings.HasPrefix(vMapIndexStr, "%INTENV(") && strings.HasSuffix(vMapIndexStr, ")%") {
+			value, envErr := p.intEnvVar(vMapIndexStr)
+			if envErr != nil {
+				err = fmt.Errorf("Option %s%s could not process integer environment variable: %s", configPath, tag, envErr)
+				return
 			}
+			vMapIndex = reflect.ValueOf(value)
 		}
+		if strings.Contains(vMapIndexStr, "%ENV(") {
+			vMapIndex = reflect.ValueOf(p.replaceEnvVars(vMapIndexStr))
+		}
+	}
 
+	if vMapIndex.Type().AssignableTo(vField.Type()) {
 		log.Debugf("populateEntry value: %v (%s%s)", vMapIndex.String(), configPath, tag)
 		retValue = vMapIndex
 		return
@@ -541,6 +550,22 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 	}
 
 	panic(fmt.Sprintf("Unrecognised configuration structure encountered: %s (Kind: %s)", vField.Type().Name(), vField.Kind().String()))
+}
+
+// intEnvVar processes an %INTENV(VAR)% entry and returns the integer value of the
+// environment variable VAR, or 0 if not set or not an integer
+func (p *Parser) intEnvVar(input string) (int, error) {
+	envVarValue, exists := os.LookupEnv(input[8 : len(input)-2])
+	if !exists {
+		return 0, nil
+	}
+
+	intValue, err := strconv.Atoi(envVarValue)
+	if err != nil {
+		return 0, err
+	}
+
+	return intValue, nil
 }
 
 // replaceEnvVars replaces any %ENV(VAR)% entries in the given string with
