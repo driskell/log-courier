@@ -19,6 +19,8 @@ package processor
 import (
 	"fmt"
 	"net"
+	"os"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
@@ -43,8 +45,10 @@ type geoIPAction struct {
 	Database string `config:"database"`
 	Target   string `config:"target"`
 
-	lru    *lru.Cache
-	reader *geoip2.Reader
+	config          *config.Config
+	lru             *lru.Cache
+	reader          *geoip2.Reader
+	databaseModTime time.Time
 }
 
 type geoipActionLookupResult struct {
@@ -54,7 +58,9 @@ type geoipActionLookupResult struct {
 
 func newGeoIPAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
 	var err error
-	action := &geoIPAction{}
+	action := &geoIPAction{
+		config: p.Config(),
+	}
 	if err = p.Populate(action, unused, configPath, true); err != nil {
 		return nil, err
 	}
@@ -70,13 +76,11 @@ func (g *geoIPAction) Validate(p *config.Parser, configPath string) (err error) 
 	if err != nil {
 		return fmt.Errorf("Failed to initialse GeoIP at %s: %s", configPath, err)
 	}
-	accountId := p.Config().GeneralPart("geoipupdate").(*geoipupdate.General).AccountId
-	if g.Database == "" && accountId != 0 {
-		g.Database = geoipupdate.GetDatabasePath(p.Config())
-	}
-	g.reader, err = geoip2.Open(g.Database)
-	if err != nil {
-		return fmt.Errorf("Failed to initialse GeoIP at %s: %s", configPath, err)
+	if g.Database != "" {
+		// Ensure database is accessible now
+		if err = g.openDatabase(); err != nil {
+			return fmt.Errorf("Failed to initialse GeoIP at %s: %s", configPath, err)
+		}
 	}
 	return nil
 }
@@ -101,6 +105,16 @@ func (g *geoIPAction) Process(event *event.Event) *event.Event {
 	if cachedRecord, ok := g.lru.Get(value); ok {
 		result = cachedRecord.(*geoipActionLookupResult)
 	} else {
+		if g.reader == nil {
+			err = g.openDatabase()
+			if err != nil {
+				event.AddError("geoip", fmt.Sprintf("Failed to open GeoIP2 database: %s", err))
+				return event
+			}
+		} else {
+			g.refreshDatabaseIfNeeded()
+		}
+
 		ip := net.ParseIP(value)
 		if ip == nil {
 			event.AddError("geoip", fmt.Sprintf("Field '%s' is not a valid IP address", g.Field))
@@ -151,6 +165,51 @@ func (g *geoIPAction) Process(event *event.Event) *event.Event {
 		return event
 	}
 	return event
+}
+
+// openDatabase opens (or re-opens) the GeoIP2 database
+func (g *geoIPAction) openDatabase() error {
+	database := g.Database
+	accountId := g.config.GeneralPart("geoipupdate").(*geoipupdate.General).AccountId
+	if database == "" && accountId != 0 {
+		database = geoipupdate.GetDatabasePath(g.config)
+	}
+	fileStat, err := os.Stat(database)
+	if err != nil {
+		return fmt.Errorf("GeoIP database file '%s' is not accessible: %s", database, err)
+	}
+	g.databaseModTime = fileStat.ModTime()
+	g.reader, err = geoip2.Open(database)
+	if err != nil {
+		return fmt.Errorf("Failed to initialse GeoIP: %s", err)
+	}
+	return nil
+}
+
+// refreshDatabaseIfNeeded refreshes the database reader if the database file has changed
+func (g *geoIPAction) refreshDatabaseIfNeeded() {
+	database := g.Database
+	accountId := g.config.GeneralPart("geoipupdate").(*geoipupdate.General).AccountId
+	if database == "" && accountId != 0 {
+		database = geoipupdate.GetDatabasePath(g.config)
+	}
+	fileStat, err := os.Stat(database)
+	if err != nil {
+		log.Errorf("Failed to reopen GeoIP database: %s", err)
+	}
+	if fileStat.ModTime().After(g.databaseModTime) {
+		// Database has changed, re-open
+		oldReader := g.reader
+		g.reader = nil
+		if err = g.openDatabase(); err != nil {
+			log.Errorf("Failed to reopen GeoIP database: %s", err)
+			g.reader = oldReader
+			return
+		}
+		log.Infof("Reopened updated GeoIP database '%s'", database)
+		oldReader.Close()
+		g.lru.Purge()
+	}
 }
 
 // init will register the action
