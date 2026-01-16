@@ -22,6 +22,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+	"github.com/driskell/log-courier/lc-lib/geoipupdate"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/oschwald/geoip2-golang"
 )
@@ -29,6 +30,7 @@ import (
 var (
 	// DefaultGeoIPActionDatabase is the default path to the GeoIP database to use
 	// It can be changed during init()
+	// This is legacy and a geoipupdate is now built in
 	DefaultGeoIPActionDatabase = ""
 )
 
@@ -56,20 +58,27 @@ func newGeoIPAction(p *config.Parser, configPath string, unused map[string]inter
 	if err = p.Populate(action, unused, configPath, true); err != nil {
 		return nil, err
 	}
-	action.lru, err = lru.New(1000)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to initialse GeoIP at %s: %s", configPath, err)
-	}
-	action.reader, err = geoip2.Open(action.Database)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to initialse GeoIP at %s: %s", configPath, err)
-	}
 	return action, nil
 }
 
 func (g *geoIPAction) Defaults() {
-	g.Database = DefaultGeoIPActionDatabase
 	g.Target = defaultGeoIPActionTarget
+}
+
+func (g *geoIPAction) Validate(p *config.Parser, configPath string) (err error) {
+	g.lru, err = lru.New(1000)
+	if err != nil {
+		return fmt.Errorf("Failed to initialse GeoIP at %s: %s", configPath, err)
+	}
+	accountId := p.Config().GeneralPart("geoipupdate").(*geoipupdate.General).AccountId
+	if g.Database == "" && accountId != 0 {
+		g.Database = geoipupdate.GetDatabasePath(p.Config())
+	}
+	g.reader, err = geoip2.Open(g.Database)
+	if err != nil {
+		return fmt.Errorf("Failed to initialse GeoIP at %s: %s", configPath, err)
+	}
+	return nil
 }
 
 func (g *geoIPAction) Process(event *event.Event) *event.Event {

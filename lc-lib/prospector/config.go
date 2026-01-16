@@ -29,9 +29,6 @@ import (
 var (
 	validationReady = 0
 	validationWait  = 2
-
-	// DefaultGeneralPersistDir is a path to the default directory to store
-	DefaultGeneralPersistDir = ""
 )
 
 const (
@@ -124,18 +121,7 @@ func (c Config) Validate(p *config.Parser, path string) (err error) {
 // General contains extra general section configuration values for the
 // prospector and registrar
 type General struct {
-	PersistDir       string        `config:"persist directory"`
 	ProspectInterval time.Duration `config:"prospect interval"`
-}
-
-// Validate the additional general configuration
-func (gc *General) Validate(p *config.Parser, path string) (err error) {
-	if gc.PersistDir == "" {
-		err = fmt.Errorf("%spersist directory must be specified", path)
-		return
-	}
-
-	return
 }
 
 // Validate validates all config structures and initialises streams
@@ -175,7 +161,6 @@ func init() {
 
 	config.RegisterGeneral("prospector", func() interface{} {
 		return &General{
-			PersistDir:       DefaultGeneralPersistDir,
 			ProspectInterval: defaultGeneralProspectInterval,
 		}
 	})

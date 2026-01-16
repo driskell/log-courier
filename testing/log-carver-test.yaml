@@ -3,6 +3,7 @@ general:
   log stdout: true
   log level: debug
   debug events: true
+  persist directory: ./persist/carver
 admin:
   enabled: true
   listen address: tcp:127.0.0.1:12341

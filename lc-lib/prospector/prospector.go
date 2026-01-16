@@ -61,7 +61,7 @@ func NewProspector(app *core.App, fromBeginning bool) *Prospector {
 	cfg := app.Config()
 	genConfig := cfg.GeneralPart("prospector").(*General)
 
-	registrarImpl := registrar.NewRegistrar(genConfig.PersistDir)
+	registrarImpl := registrar.NewRegistrar(cfg.General().PersistDir)
 	app.Pipeline().AddService(registrarImpl)
 
 	return &Prospector{

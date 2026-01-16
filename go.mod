@@ -19,7 +19,9 @@ require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr v1.4.10 // indirect
 	github.com/go-sql-driver/mysql v1.9.3 // indirect
+	github.com/gofrs/flock v0.8.1 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
+	github.com/maxmind/geoipupdate/v4 v4.11.1 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/nsf/termbox-go v1.1.1 // indirect
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect

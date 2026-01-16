@@ -17,8 +17,11 @@
 package main
 
 import (
+	"sync"
+
 	"github.com/driskell/log-courier/lc-lib/admin"
 	"github.com/driskell/log-courier/lc-lib/core"
+	"github.com/driskell/log-courier/lc-lib/geoipupdate"
 	"github.com/driskell/log-courier/lc-lib/processor"
 	"github.com/driskell/log-courier/lc-lib/publisher"
 	"github.com/driskell/log-courier/lc-lib/receiver"
@@ -36,7 +39,7 @@ import (
 )
 
 // Generate platform-specific default configuration values
-//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile admin.DefaultAdminBind processor.DefaultGeoIPActionDatabase
+//go:generate go run ../lc-lib/config/generate/platform.go platform main config.DefaultConfigurationFile config.DefaultGeneralPersistDir admin.DefaultAdminBind processor.DefaultGeoIPActionDatabase
 
 var (
 	app *core.App
@@ -47,6 +50,12 @@ func main() {
 
 	app = core.NewApp("Log Carver", core.LogCourierVersion)
 	app.StartUp()
+
+	var shutdown chan<- struct{}
+	var waitGroup *sync.WaitGroup
+	if app.Config().GeneralPart("geoipupdate").(*geoipupdate.General).AccountId != 0 {
+		shutdown, waitGroup = geoipupdate.StartUpdater(app.Config())
+	}
 
 	if app.Config().Section("admin").(*admin.Config).Enabled {
 		app.Pipeline().AddService(admin.NewServer(app))
@@ -66,4 +75,10 @@ func main() {
 
 	// Go!
 	app.Run()
+
+	// Shutdown GeoIP updater if running
+	if shutdown != nil {
+		close(shutdown)
+		waitGroup.Wait()
+	}
 }

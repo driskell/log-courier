@@ -20,6 +20,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/op/go-logging.v1"
@@ -37,8 +38,14 @@ const (
 	defaultGeneralMaxQueueSize int64         = 128 * 1024 * 1024 // 128 MiB
 )
 
+var (
+	// DefaultGeneralPersistDir is a path to the default directory to store
+	DefaultGeneralPersistDir = ""
+)
+
 // General holds the general configuration
 type General struct {
+	PersistDir   string                 `config:"persist directory"`
 	GlobalFields map[string]interface{} `config:"global fields"`
 	Host         string                 `config:"host"`
 	LogFile      string                 `config:"log file"`
@@ -52,6 +59,11 @@ type General struct {
 
 // Validate the configuration
 func (gc *General) Validate(p *Parser, path string) (err error) {
+	if gc.PersistDir == "" {
+		err = fmt.Errorf("%spersist directory must be specified", path)
+		return
+	}
+
 	if gc.Host == "" {
 		ret, hostErr := os.Hostname()
 		if hostErr == nil {
@@ -97,6 +109,7 @@ func RegisterGeneral(name string, creator SectionCreator) {
 func init() {
 	RegisterSection("general", func() interface{} {
 		c := &General{
+			PersistDir:   DefaultGeneralPersistDir,
 			LogLevel:     defaultGeneralLogLevel,
 			LogStdout:    defaultGeneralLogStdout,
 			LogSyslog:    defaultGeneralLogSyslog,
