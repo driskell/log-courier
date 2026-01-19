@@ -30,7 +30,7 @@ pipelines:
 network:
   transport: doris-https
   database: logs
-  table: access_logs
+  table pattern: access_logs
   # Additional columns beyond defaults (@timestamp, message, host, path, type, tags, rest)
   # Default columns are automatically created with appropriate types
   additional columns:

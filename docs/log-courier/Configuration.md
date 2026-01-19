@@ -97,6 +97,15 @@ End-of-line comments start with a pound sign outside of a string, and cause all 
 }
 ```
 
+## Environment Variables
+
+Any `String` or `Number` configuration value can be pulled from environment variables.
+
+- `%ENV(STRINGENV)%` - This would populate a string using the `STRINGENV` environment variable.
+- `%INTENV(NUMBERENV)%` - This would populate a number using the `NUMBERENV` environment variable. Environment variables that don't contain numbers would be ignored and result in a `0` value.
+
+If an environment variable is missing - it is equivilant to either an empty string (for `%ENV()%` syntax) or the number 0 (for `%INTENV()%` syntax).
+
 ## Services
 
 Packaged versions of Log Courier include a service wrapper so you can use `systemctl` or `service` to start, stop and reload the configuration. The default user is `log-courier` in these versions and can be change in the service configuration file. This file resides at either `/etc/sysconfig/log-courier` or `/etc/default/log-courier` depending on the package.

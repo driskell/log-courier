@@ -30,16 +30,23 @@
     - [`load defaults`](#load-defaults)
     - [`pattern files`](#pattern-files)
   - [`network`](#network)
+    - [`additional columns`](#additional-columns)
+    - [`database`](#database)
     - [`failure backoff`](#failure-backoff)
     - [`failure backoff max`](#failure-backoff-max)
     - [`index pattern`](#index-pattern)
+    - [`load properties`](#load-properties)
     - [`max pending payloads`](#max-pending-payloads)
     - [`max tls version`](#max-tls-version)
+    - [`metadata servers`](#metadata-servers)
     - [`method`](#method)
     - [`min tls version`](#min-tls-version)
+    - [`partition days`](#partition-days)
+    - [`partition retention days`](#partition-retention-days)
     - [`password`](#password)
     - [`reconnect backoff`](#reconnect-backoff)
     - [`reconnect backoff max`](#reconnect-backoff-max)
+    - [`rest json column`](#rest-json-column)
     - [`retry backoff`](#retry-backoff)
     - [`retry backoff max`](#retry-backoff-max)
     - [`rfc 2782 service`](#rfc-2782-service)
@@ -49,6 +56,7 @@
     - [`ssl ca`](#ssl-ca)
     - [`ssl certificate`](#ssl-certificate)
     - [`ssl key`](#ssl-key)
+    - [`table pattern`](#table-pattern)
     - [`template file`](#template-file)
     - [`template patterns`](#template-patterns)
     - [`timeout`](#timeout)
@@ -101,6 +109,15 @@ End-of-line comments start with a pound sign outside of a string, and cause all 
     ]
 }
 ```
+
+## Environment Variables
+
+Any `String` or `Number` configuration value can be pulled from environment variables.
+
+- `%ENV(STRINGENV)%` - This would populate a string using the `STRINGENV` environment variable.
+- `%INTENV(NUMBERENV)%` - This would populate a number using the `NUMBERENV` environment variable. Environment variables that don't contain numbers would be ignored and result in a `0` value.
+
+If an environment variable is missing - it is equivilant to either an empty string (for `%ENV()%` syntax) or the number 0 (for `%INTENV()%` syntax).
 
 ## Services
 
@@ -456,9 +473,9 @@ exponential increase of `failure backoff` from becoming too high.
 Array of Strings. Optional. Default: []  
 Available when `transport` is one of: `doris`, `doris-https`
 
-Additional columns to create beyond the default set. The default columns are: `@timestamp` (DATETIME), `message` (STRING), `host` (STRING), `path` (STRING), `type` (STRING), `tags` (ARRAY<STRING>), and the rest JSON column.
+Additional columns to create beyond the default set. The default columns are: `@timestamp` (`datetime`), `message` (`varchar`), `host` (`varchar`), `path` (`varchar`), `type` (`varchar`), `tags` (`array<varchar>`), and the `rest` (`JSON`) column.
 
-Each entry can be either `name` (defaults to STRING type) or `name:type` to specify a type. Valid types: STRING, INT, BIGINT, DOUBLE, FLOAT, BOOLEAN, DATE, DATETIME, JSON.
+Each entry can be either `name` (defaults to `varchar` type) or `name:type` to specify a type. Valid types: `varchar`, `int`, `bigint`, `double`, `float`, `boolean`, `date`, `datetime`, `json`.
 
 Examples: `["clientip", "response:INT", "bytes:BIGINT"]`
 
@@ -547,6 +564,19 @@ available and closing any connections to less preferred endpoints.
 Faster endpoints will receive more events than slower endpoints. The strategy
 for load balancing is dynamic based on the acknowledgement latency of the
 available endpoints.
+
+### `metadata servers`
+
+Array of Strings. Optional. Default: []  
+Available when `transport` is one of: `doris`, `doris-https`
+
+List of Doris Frontend (FE) servers to connect to for table schema management operations (creating tables, adding columns, managing partitions). These servers must be Doris FE nodes, not Backend (BE) nodes. They should point to the port used for SQL connections, usually 9030. Accepted formats for each server entry are:
+
+- `ipaddress:port`
+- `hostname:port` (A DNS lookup is performed)
+- `@hostname` (A SRV DNS lookup is performed, with further DNS lookups if required)
+
+When not specified or empty, the `servers` list is used for both metadata operations and data loading. Specifying dedicated metadata servers is useful when you want to separate metadata operations from data loading, or when using Doris FE nodes that differ from the BE nodes used for stream loads.
 
 ### `min tls version`
 
@@ -696,21 +726,27 @@ Available values: "tcp", "tls", "es", "es-https", "doris", "doris-https"
 
 Sets the transport to use when sending logs to the endpoints. "es-https" is recommended for most users.
 
-"es-https" sends events to an Elasticsearch cluster using HTTPS. "es" sends events using HTTP only.
-It will also install a template called `logstash` if one does not exist. If you are migrating from Logstash this template will already exist. It should be compatible if you haven't used the Log Courier `enable ecs` configuration.
+"es-https" sends events to an Elasticsearch cluster using HTTPS. "es" sends events using HTTP only. It will also install a template called `logstash` if one does not exist. If you are migrating from Logstash this template will already exist. It should be compatible if you haven't used the Log Courier `enable ecs` configuration.
 
-"doris-https" sends events to an Apache Doris cluster using HTTPS via the stream load API. "doris" sends events using HTTP only. 
-Events are mapped to configured table columns with unmapped fields collected in a JSON column. The table will be created automatically if it doesn't exist.
+"doris-https" sends events to an Apache Doris cluster using HTTPS via the stream load API. "doris" sends events using HTTP only. Events are mapped to configured table columns with unmapped fields collected in a JSON column. The table will be created automatically if it doesn't exist.
 
-"tls" sends events to a host using the Courier protocol, such as Log Carver. "tcp" is the equivalent but
-without TLS encryption and peer verification and should only be used on internal networks.
+"tls" sends events to a host using the Courier protocol, such as Log Carver. "tcp" is the equivalent but without TLS encryption and peer verification and should only be used on internal networks.
 
-### `table`
+### `table pattern`
 
-String. Required  
+Pattern String. Required  
 Available when `transport` is one of: `doris`, `doris-https`
 
-The name of the Doris table to use for storing events. If the table doesn't exist, it will be created automatically based on the configured [`columns`](#columns).
+Specifies the Doris table to send events to. This is a [Pattern String](#pattern-string) so can contain references to fields within the event being sent, allowing different events to be routed to different tables. Most commonly this would include the date for automatically rolling over of tables, or event types to separate different kinds of logs.
+
+If the table doesn't exist, it will be created automatically based on the configured [`additional columns`](#additional-columns). See also [`database`](#database) for specifying the database name.
+
+Examples:
+
+- `access_logs` - static table name
+- `logs_%{type}` - separate table per event type
+
+Although table rotation could be implemented by using `logs_%{+2006-01-02}`, this is not recommended as partitioning by day is already performed on the created tables.
 
 ### `username`
 

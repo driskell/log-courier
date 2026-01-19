@@ -135,16 +135,16 @@ func (f *TransportDorisFactory) Validate(p *config.Parser, configPath string) (e
 	for _, col := range f.AdditionalColumns {
 		parts := strings.Split(col, ":")
 		if len(parts) == 1 {
-			// No type specified, default to STRING
-			f.additionalColumnDefs[parts[0]] = "STRING"
+			// No type specified, default to varchar
+			f.additionalColumnDefs[parts[0]] = "varchar"
 		} else if len(parts) == 2 {
 			colName := parts[0]
 			colType := strings.ToUpper(parts[1])
 			// Validate type
 			validTypes := map[string]bool{
-				"STRING": true, "INT": true, "BIGINT": true, "DOUBLE": true,
-				"FLOAT": true, "BOOLEAN": true, "DATE": true, "DATETIME": true,
-				"JSON": true,
+				"varchar": true, "int": true, "bigint": true, "double": true,
+				"float": true, "boolean": true, "date": true, "datetime": true,
+				"json": true,
 			}
 			if !validTypes[colType] {
 				return fmt.Errorf("%sadditional columns: invalid type '%s' for column '%s'", configPath, parts[1], colName)
