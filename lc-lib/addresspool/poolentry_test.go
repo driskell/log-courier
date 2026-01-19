@@ -71,12 +71,12 @@ func TestPoolEntryHost(t *testing.T) {
 		secondAddr = tmp
 	}
 
-	if addr.Desc() != "8.8.8.8:555 - desc" {
+	if addr.Desc() != "8.8.8.8:555 (desc)" {
 		t.Errorf("Address pool did not return correct desc: %s", addr.Desc())
 	} else if addr.Addr().String() != "8.8.8.8:555" {
 		t.Errorf("Address pool did not return correct addr: %s", addr.Addr().String())
 	}
-	if secondAddr.Desc() != "[2001:4860:4860::8888]:555 - desc" {
+	if secondAddr.Desc() != "[2001:4860:4860::8888]:555 (desc)" {
 		t.Errorf("Address pool did not return correct desc: %s", secondAddr.Desc())
 	} else if secondAddr.Addr().String() != "[2001:4860:4860::8888]:555" {
 		t.Errorf("Address pool did not return correct addr: %s", secondAddr.Addr().String())
@@ -184,7 +184,7 @@ func TestHostLooping(t *testing.T) {
 		t.Fatalf("Address pool did not parse IP correctly: %s", err)
 	} else if addr == nil {
 		t.Fatal("Address pool returned nil addr")
-	} else if addr.Desc() != "8.8.8.8:1234 - desc" {
+	} else if addr.Desc() != "8.8.8.8:1234 (desc)" {
 		t.Errorf("Address pool returned incorrect desc: %s", addr.Desc())
 	}
 	addr, err = poolEntry.Next()
@@ -192,7 +192,7 @@ func TestHostLooping(t *testing.T) {
 		t.Fatalf("Address pool did not parse IP correctly: %s", err)
 	} else if addr == nil {
 		t.Fatal("Address pool returned nil addr")
-	} else if addr.Desc() != "[2001:4860:4860::8888]:1234 - desc" {
+	} else if addr.Desc() != "[2001:4860:4860::8888]:1234 (desc)" {
 		t.Errorf("Address pool returned incorrect desc: %s", addr.Desc())
 	}
 	addr, err = poolEntry.Next()
@@ -200,7 +200,7 @@ func TestHostLooping(t *testing.T) {
 		t.Fatalf("Address pool did not parse IP correctly: %s", err)
 	} else if addr == nil {
 		t.Fatal("Address pool returned nil addr")
-	} else if addr.Desc() != "8.8.8.8:1234 - desc" {
+	} else if addr.Desc() != "8.8.8.8:1234 (desc)" {
 		t.Errorf("Address pool returned incorrect desc: %s", addr.Desc())
 	}
 }
@@ -219,7 +219,7 @@ func TestHostLoopingRefresh(t *testing.T) {
 		t.Fatalf("Address pool did not parse IP correctly: %s", err)
 	} else if addr == nil {
 		t.Fatal("Address pool returned nil addr")
-	} else if addr.Desc() != "8.8.8.8:1234 - desc" {
+	} else if addr.Desc() != "8.8.8.8:1234 (desc)" {
 		t.Errorf("Address pool returned incorrect desc: %s", addr.Desc())
 	}
 
@@ -245,10 +245,10 @@ func TestHostLoopingRefresh(t *testing.T) {
 		secondAddr = tmp
 	}
 
-	if addr.Desc() != "8.8.8.8:1234 - desc" {
+	if addr.Desc() != "8.8.8.8:1234 (desc)" {
 		t.Errorf("Address pool returned incorrect desc: %s", addr.Desc())
 	}
-	if secondAddr.Desc() != "[2001:4860:4860::8888]:1234 - desc" {
+	if secondAddr.Desc() != "[2001:4860:4860::8888]:1234 (desc)" {
 		t.Errorf("Address pool returned incorrect desc: %s", addr.Desc())
 	}
 }

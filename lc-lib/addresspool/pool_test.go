@@ -33,7 +33,7 @@ func TestGeneratePoolSrv(t *testing.T) {
 		t.Fatalf("Address pool item host unexpected: %s", pool[0].HostPort)
 	} else if pool[0].Server != "@_test._tcp.test.woods.dev" {
 		t.Fatalf("Address pool item server unexpected: %s", pool[0].Server)
-	} else if pool[0].Desc != "host.test.woods.dev:1234 - @_test._tcp.test.woods.dev" {
+	} else if pool[0].Desc != "@_test._tcp.test.woods.dev" {
 		t.Fatalf("Address pool item desc unexpected: %s", pool[0].Desc)
 	}
 }
@@ -50,7 +50,7 @@ func TestPoolSrvRfc(t *testing.T) {
 		t.Fatalf("Address pool item host unexpected: %s", pool[0].HostPort)
 	} else if pool[0].Server != "@test.woods.dev" {
 		t.Fatalf("Address pool item server unexpected: %s", pool[0].Server)
-	} else if pool[0].Desc != "host.test.woods.dev:1234 - @test.woods.dev" {
+	} else if pool[0].Desc != "@test.woods.dev" {
 		t.Fatalf("Address pool item desc unexpected: %s", pool[0].Desc)
 	}
 }
@@ -67,13 +67,13 @@ func TestPoolSrvRfcMultiple(t *testing.T) {
 		t.Fatalf("Address pool item host unexpected: %s", pool[0].HostPort)
 	} else if pool[0].Server != "@multitest.woods.dev" {
 		t.Fatalf("Address pool item server unexpected: %s", pool[0].Server)
-	} else if pool[0].Desc != "host.test.woods.dev:1234 - @multitest.woods.dev" {
+	} else if pool[0].Desc != "@multitest.woods.dev" {
 		t.Fatalf("Address pool item desc unexpected: %s", pool[0].Desc)
 	} else if pool[1].HostPort != "multihost.test.woods.dev:1235" {
 		t.Fatalf("Address pool item host unexpected: %s", pool[1].HostPort)
 	} else if pool[1].Server != "@multitest.woods.dev" {
 		t.Fatalf("Address pool item server unexpected: %s", pool[1].Server)
-	} else if pool[1].Desc != "multihost.test.woods.dev:1235 - @multitest.woods.dev" {
+	} else if pool[1].Desc != "@multitest.woods.dev" {
 		t.Fatalf("Address pool item desc unexpected: %s", pool[1].Desc)
 	}
 }
