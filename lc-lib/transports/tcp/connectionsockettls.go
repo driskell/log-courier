@@ -19,6 +19,7 @@ package tcp
 import (
 	"context"
 	"crypto/tls"
+	"io"
 	"net"
 	"time"
 
@@ -62,7 +63,10 @@ func (t *connectionSocketTLS) Setup(ctx context.Context) error {
 
 	err := t.Handshake()
 	if err != nil {
-		log.Warning("[%s %s - %s] TLS handshake failed: %s", side, t.LocalAddr().String(), t.RemoteAddr().String(), err.Error())
+		// Only log if not EOF - usually means a graceful close without starting up, such as a status check on a TLS port
+		if err != io.EOF {
+			log.Warning("[%s %s - %s] TLS handshake failed: %s", side, t.LocalAddr().String(), t.RemoteAddr().String(), err.Error())
+		}
 		return err
 	}
 
