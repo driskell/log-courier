@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -222,7 +223,7 @@ func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 
 // startConnection sets up a new connection
 func (t *receiverTCP) startConnection(socket *net.TCPConn) {
-	log.Noticef("[R %s - %s] New connection", socket.LocalAddr().String(), socket.RemoteAddr().String())
+	log.Debugf("[R %s - %s] New connection", socket.LocalAddr().String(), socket.RemoteAddr().String())
 
 	var connectionSocket connectionSocket
 	if t.config.EnableTls {
@@ -252,7 +253,7 @@ func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
 	}); err != nil {
 		if err == ErrHardCloseRequested {
 			log.Noticef("[R %s - %s] Client forcefully disconnected", socket.LocalAddr().String(), socket.RemoteAddr().String())
-		} else {
+		} else if err != io.EOF { // Ignore io.EOF as it usually means a graceful close without starting up, such as a status check on a TLS port
 			log.Errorf("[R %s - %s] Client failed: %s", socket.LocalAddr().String(), socket.RemoteAddr().String(), err)
 		}
 	} else {
