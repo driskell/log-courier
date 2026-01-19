@@ -314,6 +314,20 @@ Boolean. Optional. Default: false
 
 Enables debugging of event data. Events will be output to the logs in debug level messages after processing of the event is completed, to allow inspection of pipeline results.
 
+## `geoip account id`
+
+Number. Optional
+
+When set along with a license key, will automatically download a GeoIP database from MaxMind and update it approximately every 24 hours, storing it in the directory specified by [`persist directory`](#persist-directory). This database can then be used in `geoip` actions without the need to manually specify a database path.
+
+RPM and DEB packages generally have a dependency on a `geoip` package to bring in a packaged database that can be kept up to date by operating system updates. This method is currently deprecated. The `geoip` action database value in the RPM and DEB packages will still default to the path to that package's database. However, if an Account ID and Licese Key are set, then that database will not be used and Log Carver will maintain its own default database for use. In a future version, the Account ID and License Key will be required to use Maxmind databases and the operating system package dependency will be removed.
+
+## `geoip license key`
+
+String. Optional
+
+See [`geoip account id`](#geoip-account-id)
+
 ### `log file`
 
 Filepath. Optional  
@@ -344,6 +358,16 @@ Requires restart
 Enables sending of Log Carver's internal log to syslog. May be used in conjunction with `log stdout` and `log file`.
 
 *This option is ignored by Windows builds.*
+
+### `persist directory`
+
+String. Required  
+RPM/DEB Package Default: /var/lib/log-carver
+Requires restart
+
+The directory that Log Courier should store its persistence data in.
+
+At the time of writing, the only file saved here is `GeoLite2-City.mmdb` when [`geoip account id`](#geoip-account-id) and [`geoip license key`](#geoip-license-key) are set.
 
 ### `processor routines`
 

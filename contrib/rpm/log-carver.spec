@@ -38,6 +38,7 @@ Log Carver is a lightweight tool created to process events from Log Courier spee
 # Configure platform specific defaults
 export LC_DEFAULT_CONFIGURATION_FILE=%{_sysconfdir}/log-carver/log-carver.yaml
 export LC_DEFAULT_GEO_IP_ACTION_DATABASE=/usr/share/GeoIP/GeoLite2-City.mmdb
+export LC_DEFAULT_GENERAL_PERSIST_DIR=%{_var}/lib/log-carver
 export LC_DEFAULT_ADMIN_BIND=unix:%{_var}/run/log-carver/admin.socket
 
 export GOBIN=%{_builddir}/bin
@@ -150,3 +151,4 @@ fi
 %ghost %{_var}/run/log-carver/admin.socket
 %endif
 %dir %{_var}/lib/log-carver
+%ghost %{_var}/lib/log-carver/GeoLite2-City.mmdb
