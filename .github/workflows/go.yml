@@ -36,8 +36,7 @@ jobs:
         # Ubuntu we cross-compile in our builder image using Golang 1.24 (latest stable as of 2025-02-28).
         go: ['1.22', '1.24']
     name: Build Go ${{ matrix.go }}
-    # Use latest Ubuntu to try work around https://github.com/golang/go/issues/37362
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
