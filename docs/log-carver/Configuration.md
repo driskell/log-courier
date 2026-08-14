@@ -473,7 +473,7 @@ exponential increase of `failure backoff` from becoming too high.
 Array of Strings. Optional. Default: []  
 Available when `transport` is one of: `doris`, `doris-https`
 
-Additional columns to create beyond the default set. The default columns are: `@timestamp` (`datetime`), `message` (`varchar`), `host` (`varchar`), `path` (`varchar`), `type` (`varchar`), `tags` (`array<varchar>`), and the `rest` (`JSON`) column.
+Additional columns to create beyond the default set. The default columns are: `@timestamp` (DATETIME), `message` (STRING), `host` (STRING), `path` (STRING), `type` (STRING), `tags` (ARRAY<STRING>), and [`rest`](#rest-json-column) (VARIANT).
 
 Each entry can be either `name` (defaults to `varchar` type) or `name:type` to specify a type. Valid types: `varchar`, `int`, `bigint`, `double`, `float`, `boolean`, `date`, `datetime`, `json`.
 
