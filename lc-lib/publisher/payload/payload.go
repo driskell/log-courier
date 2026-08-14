@@ -17,6 +17,8 @@
 package payload
 
 import (
+	"fmt"
+
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/internallist"
 )
@@ -47,14 +49,16 @@ func NewPayload(events []*event.Event) *Payload {
 		events: events,
 	}
 
+	sendable := 0
 	for _, evnt := range events {
 		if evnt.Dropped() {
 			ret.hasDropped = true
-			break
+			continue
 		}
+		sendable++
 	}
+	ret.sequenceLen = sendable
 
-	ret.sequenceLen = ret.sendableCount(events)
 	if ret.sequenceLen == 0 {
 		// Every event was dropped during processing, so there is nothing to
 		// transmit - treat the payload as immediately and fully acknowledged
@@ -118,6 +122,9 @@ func (pp *Payload) sendableCount(events []*event.Event) int {
 // - that they cover from the front of the currently pending window
 // Dropped events are swept along with the sendable event that immediately
 // precedes them, since they are never separately transmitted or acknowledged
+// This guarantees that whenever the pending window is non-empty, it begins
+// with a sendable event - it can never be a non-empty run of only dropped
+// events
 func (pp *Payload) mapSequence(count int) int {
 	pending := pp.events[pp.ackEvents:]
 	if !pp.hasDropped {
@@ -174,15 +181,13 @@ func (pp *Payload) Ack(sequence int) (int, bool) {
 // ID of 1
 // This should be called before resending to ensure the ACK messages returned
 // (which will use an ID of 1 for the first unacknowledged event) are understood
-// correctly
+// correctly. It will panic if the event list is empty, so always check the
+// result of Complete() first
 func (pp *Payload) ResetSequence() {
 	pp.lastSequence = 0
 	pp.sequenceLen = pp.sendableCount(pp.events[pp.ackEvents:])
 	if pp.sequenceLen == 0 {
-		// Defensive: everything remaining was dropped, so there is nothing
-		// left to transmit - treat the payload as immediately and fully
-		// acknowledged
-		pp.ackEvents = len(pp.events)
+		panic(fmt.Sprintf("ResetSequence found no sendable events among %d remaining in an incomplete payload", len(pp.events)-pp.ackEvents))
 	}
 }
 
