@@ -29,24 +29,20 @@ import (
 
 // tableManager handles Doris table creation and column management
 type tableManager struct {
-	config     *TransportDorisFactory
-	table      string
+	config *TransportDorisFactory
+	table  string
+	// columnDefs is built once at construction and never mutated, so it is safe to share with readers
 	columnDefs map[string]string
 	indexDefs  []string
 }
 
-// newTableManager creates a new table manager instance
+// newTableManager creates a new table manager instance with its column and index definitions
 func newTableManager(config *TransportDorisFactory, table string) *tableManager {
-	return &tableManager{
+	tm := &tableManager{
 		config: config,
 		table:  table,
 	}
-}
 
-// InitializeSchema initializes column definitions and ensures the table exists with necessary columns
-// Returns (connected, error) where connected indicates if SQL connection was successful
-func (tm *tableManager) InitializeSchema(poolEntry *addresspool.PoolEntry, addr *addresspool.Address) (bool, error) {
-	// Initialize column definitions with hard-coded defaults
 	tm.columnDefs = map[string]string{
 		"@timestamp":             "datetime",
 		"type":                   "varchar(255)",
@@ -69,6 +65,12 @@ func (tm *tableManager) InitializeSchema(poolEntry *addresspool.PoolEntry, addr 
 		tm.columnDefs[colName] = colType
 	}
 
+	return tm
+}
+
+// InitializeSchema ensures the table exists with necessary columns
+// Returns (connected, error) where connected indicates if SQL connection was successful
+func (tm *tableManager) InitializeSchema(poolEntry *addresspool.PoolEntry, addr *addresspool.Address) (bool, error) {
 	// Establish SQL connection
 	db, err := tm.connectSQL(poolEntry, addr)
 	if err != nil {
@@ -85,8 +87,13 @@ func (tm *tableManager) InitializeSchema(poolEntry *addresspool.PoolEntry, addr 
 	}
 	defer rows.Close()
 
+	existingCols, err := describeColumns(rows)
+	if err != nil {
+		return true, err
+	}
+
 	// Table exists - check columns
-	return true, tm.validateAndUpdateColumns(poolEntry, addr, db, rows)
+	return true, tm.validateAndUpdateColumns(poolEntry, addr, db, existingCols)
 }
 
 // ColumnDefs returns the column definitions
@@ -127,16 +134,14 @@ func (tm *tableManager) connectSQL(poolEntry *addresspool.PoolEntry, addr *addre
 	return db, nil
 }
 
-// validateAndUpdateColumns validates existing columns and adds missing ones
-func (tm *tableManager) validateAndUpdateColumns(poolEntry *addresspool.PoolEntry, addr *addresspool.Address, db *sql.DB, rows *sql.Rows) error {
-	log.Infof("[T %s]{%s} Validating existing table schema for %s.%s", poolEntry.Server, addr.Desc(), tm.config.Database, tm.table)
-	// Parse DESCRIBE result to get existing columns
+// describeColumns parses a DESCRIBE result set into a map of column name to reported type
+func describeColumns(rows *sql.Rows) (map[string]string, error) {
 	existingCols := make(map[string]string)
 
 	// Get column names from the result set
 	columns, err := rows.Columns()
 	if err != nil {
-		return fmt.Errorf("failed to get column names: %s", err)
+		return nil, fmt.Errorf("failed to get column names: %s", err)
 	}
 
 	// Create a slice to hold the row values
@@ -149,7 +154,7 @@ func (tm *tableManager) validateAndUpdateColumns(poolEntry *addresspool.PoolEntr
 	// Scan the rows
 	for rows.Next() {
 		if err := rows.Scan(valuePtrs...); err != nil {
-			return fmt.Errorf("failed to scan row: %s", err)
+			return nil, fmt.Errorf("failed to scan row: %s", err)
 		}
 
 		// First column is Field (column name), second is Type
@@ -171,26 +176,24 @@ func (tm *tableManager) validateAndUpdateColumns(poolEntry *addresspool.PoolEntr
 	}
 
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error reading rows: %s", err)
+		return nil, fmt.Errorf("error reading rows: %s", err)
 	}
 
-	// Check for columns with wrong types
-	for colName, expectedType := range tm.columnDefs {
-		if existingType, exists := existingCols[colName]; exists {
-			// Normalize type comparison
-			if !strings.EqualFold(normalizeType(existingType), normalizeType(expectedType)) {
-				return fmt.Errorf("column '%s' has type '%s' but expected '%s' - manual schema fix needed", colName, existingType, expectedType)
-			}
-		}
+	return existingCols, nil
+}
+
+// validateAndUpdateColumns validates existing columns and adds missing ones
+func (tm *tableManager) validateAndUpdateColumns(poolEntry *addresspool.PoolEntry, addr *addresspool.Address, db *sql.DB, existingCols map[string]string) error {
+	log.Infof("[T %s]{%s} Validating existing table schema for %s.%s", poolEntry.Server, addr.Desc(), tm.config.Database, tm.table)
+
+	// Columns with an unexpected type are logged but left as-is, since Doris may report an
+	// equivalent type in a spelling this comparison does not yet recognise
+	for _, mismatch := range mismatchedColumns(existingCols, tm.columnDefs) {
+		log.Warningf("[T %s]{%s} Doris table %s.%s column '%s' has type '%s' but expected '%s' - continuing, manual schema fix may be needed",
+			poolEntry.Server, addr.Desc(), tm.config.Database, tm.table, mismatch.name, mismatch.existingType, mismatch.expectedType)
 	}
 
-	// Add missing columns
-	var missingCols []string
-	for colName := range tm.columnDefs {
-		if _, exists := existingCols[colName]; !exists {
-			missingCols = append(missingCols, colName)
-		}
-	}
+	missingCols := missingColumns(existingCols, tm.columnDefs)
 
 	if len(missingCols) == 0 {
 		log.Infof("[T %s]{%s} Doris table %s.%s schema is valid", poolEntry.Server, addr.Desc(), tm.config.Database, tm.table)
@@ -247,6 +250,7 @@ func (tm *tableManager) createTable(poolEntry *addresspool.PoolEntry, addr *addr
 		`"dynamic_partition.end" = "3"`,
 		`"dynamic_partition.prefix" = "p"`,
 		`"dynamic_partition.buckets" = "10"`,
+		`"dynamic_partition.create_history_partition" = "true"`,
 	}
 
 	createSQL := fmt.Sprintf(
@@ -270,9 +274,4 @@ func (tm *tableManager) createTable(poolEntry *addresspool.PoolEntry, addr *addr
 
 	log.Infof("[T %s]{%s} Created Doris table %s.%s with %d-day retention", poolEntry.Server, addr.Desc(), tm.config.Database, tm.table, tm.config.PartitionRetentionDays)
 	return nil
-}
-
-// normalizeType normalizes a Doris type for comparison
-func normalizeType(t string) string {
-	return strings.ToUpper(strings.TrimSpace(t))
 }

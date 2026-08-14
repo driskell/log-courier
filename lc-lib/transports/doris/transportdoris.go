@@ -34,12 +34,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var (
-	// ErrInvalidState occurs when a send cannot happen because the connection has closed
-	ErrInvalidState = errors.New("invalid connection state")
-
-	tableSchemaLock sync.Mutex
-)
+// ErrInvalidState occurs when a send cannot happen because the connection has closed
+var ErrInvalidState = errors.New("invalid connection state")
 
 // payload contains nonce and events information
 type payload struct {
@@ -69,7 +65,15 @@ type transportDoris struct {
 	poolMutex    sync.Mutex
 	wait         sync.WaitGroup
 	tablePattern event.Pattern
-	tableMgr     map[string]*tableManager
+	tableMutex   sync.Mutex
+	tableSchemas map[string]*tableSchema
+}
+
+// tableSchema is the setup result for one table, published once by the routine that owns setup
+type tableSchema struct {
+	ready      chan struct{} // closed once setup has finished, successfully or not
+	columnDefs map[string]string
+	failed     bool
 }
 
 // Factory returns the associated factory
@@ -93,8 +97,8 @@ func (t *transportDoris) controllerRoutine() {
 		t.eventChan <- transports.NewStatusEvent(t.ctx, transports.Finished, nil)
 	}()
 
-	// Create single table manager instance
-	t.tableMgr = make(map[string]*tableManager)
+	// Create single table schema cache
+	t.tableSchemas = make(map[string]*tableSchema)
 
 	// Setup payload chan with max write count of pending payloads
 	t.payloadMutex.Lock()
@@ -117,17 +121,35 @@ func (t *transportDoris) controllerRoutine() {
 	t.shutdownFunc()
 }
 
-// prepareTableSchema prepares the table schema by connecting to metadata servers
-// and creating or validating the table
+// prepareTableSchema returns the column definitions for a table, running setup at most once per
+// table regardless of how many routines request it concurrently
 func (t *transportDoris) prepareTableSchema(id int, table string) (map[string]string, bool) {
-	if tableMgr, ok := t.tableMgr[table]; ok {
-		return tableMgr.ColumnDefs(), false
+	t.tableMutex.Lock()
+	schema, owned := t.tableSchemas[table]
+	if !owned {
+		schema = &tableSchema{ready: make(chan struct{})}
+		t.tableSchemas[table] = schema
 	}
-	tableMgr := newTableManager(t.config, table)
-	t.tableMgr[table] = tableMgr
+	t.tableMutex.Unlock()
 
-	defer tableSchemaLock.Unlock()
-	tableSchemaLock.Lock()
+	if owned {
+		// Another routine owns setup for this table, wait for it to publish the result
+		select {
+		case <-t.ctx.Done():
+			return nil, true
+		case <-schema.ready:
+		}
+		return schema.columnDefs, schema.failed
+	}
+
+	schema.columnDefs, schema.failed = t.setupTableSchema(id, table)
+	close(schema.ready)
+	return schema.columnDefs, schema.failed
+}
+
+// setupTableSchema connects to metadata servers and creates or validates a table's schema
+func (t *transportDoris) setupTableSchema(id int, table string) (map[string]string, bool) {
+	tableMgr := newTableManager(t.config, table)
 
 	backoffName := fmt.Sprintf("[T %s] Setup Retry", t.poolEntry.Server)
 	backoff := core.NewExpBackoff(backoffName, t.config.Retry, t.config.RetryMax)
@@ -434,6 +456,9 @@ func (t *transportDoris) getClient(addr *addresspool.Address) *http.Client {
 				MinVersion: t.config.MinTLSVersion,
 				MaxVersion: t.config.MaxTLSVersion,
 			},
+			// If a connection is reused that is idle for too long, then Doris
+			// will return a BAD REQUEST so we should limit the idle time for connections
+			IdleConnTimeout: time.Second * 5,
 		},
 		Timeout: t.netConfig.Timeout,
 	}
