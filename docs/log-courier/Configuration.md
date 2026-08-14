@@ -178,6 +178,7 @@ always be interpreted in seconds.
 - `300` = 5 minutes (which is 300 seconds)
 - `5s` = 5 seconds
 - `15m` = 15 minutes
+- `90d` = 90 days
 
 ### Fileglob
 

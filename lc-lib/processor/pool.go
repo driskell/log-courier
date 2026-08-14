@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/driskell/log-courier/lc-lib/admin"
+	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/event"
@@ -38,6 +40,9 @@ type Pool struct {
 	sequencer   *event.Sequencer
 	fanout      chan *event.Bundle
 	collector   chan *event.Bundle
+	guard       *timestampGuard
+
+	apiConfig *admin.Config
 }
 
 // NewPool creates a new processor pool
@@ -45,6 +50,8 @@ func NewPool(app *core.App) *Pool {
 	return &Pool{
 		input:     make(chan []*event.Event, 1),
 		sequencer: event.NewSequencer(),
+		guard:     &timestampGuard{},
+		apiConfig: admin.FetchConfig(app.Config()),
 	}
 }
 
@@ -71,6 +78,13 @@ func (p *Pool) SetConfigChan(configChan <-chan *config.Config) {
 // Init initialises
 func (p *Pool) Init(cfg *config.Config) error {
 	p.applyConfig(cfg)
+
+	if p.apiConfig.Enabled {
+		processorAPI := &api.Node{}
+		processorAPI.SetEntry("status", &apiStatus{p: p})
+		p.apiConfig.SetEntry("processor", processorAPI)
+	}
+
 	return nil
 }
 
@@ -214,6 +228,9 @@ func (p *Pool) processEvent(evnt *event.Event) *event.Event {
 	for _, entry := range p.pipelines.AST {
 		evnt = entry.Process(evnt)
 	}
+	if p.guard.Check(evnt, time.Now()) {
+		log.Debugf("Dropping event with out of range timestamp: %v", evnt.MustResolve("@timestamp", nil))
+	}
 	evnt.ClearCache()
 	if p.debugEvents {
 		eventJSON, _ := json.Marshal(evnt.Data())
@@ -226,5 +243,7 @@ func (p *Pool) processEvent(evnt *event.Event) *event.Event {
 func (p *Pool) applyConfig(cfg *config.Config) {
 	p.cfg = cfg
 	p.pipelines = FetchConfig(cfg)
-	p.debugEvents = cfg.GeneralPart("processor").(*General).DebugEvents
+	general := cfg.GeneralPart("processor").(*General)
+	p.debugEvents = general.DebugEvents
+	p.guard.SetLimits(general.MaximumEventAge, general.MaximumFutureEventAge)
 }

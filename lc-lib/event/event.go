@@ -50,6 +50,19 @@ type Event struct {
 	data  map[string]interface{}
 
 	encoded []byte
+
+	dropped bool
+}
+
+// Drop marks the event as dropped so that it is not transmitted to any sink
+// It is still acknowledged in order alongside the events around it
+func (e *Event) Drop() {
+	e.dropped = true
+}
+
+// Dropped returns true if the event was marked as dropped during processing
+func (e *Event) Dropped() bool {
+	return e.dropped
 }
 
 // Builtin is used around builtin keys to allow damage prevention

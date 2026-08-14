@@ -337,6 +337,34 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 		p.resendList.Remove(&pendingPayload.ResendElement)
 	}
 
+	numComplete := p.completePayloads(pendingPayload, firstAck)
+
+	p.mutex.Lock()
+	if numComplete != 0 {
+		p.numPayloads -= numComplete
+	}
+	p.lineCount += int64(lineCount)
+	p.mutex.Unlock()
+
+	if complete {
+		// Resume sending if we stopped due to excessive pending payload count
+		p.tryQueueHeld()
+
+		// If last payload confirmed, begin shutdown
+		if p.shuttingDown && !p.eventsHeld() && p.numPayloads == 0 {
+			p.endpointSink.Shutdown()
+		}
+	}
+}
+
+// completePayloads dispatches acknowledgements to the events' original
+// acknowledgers in payload order, starting from the given payload only if it
+// is at the front of the payload list, and returns the number of payloads
+// that became fully acknowledged as a result
+// It keeps track of how many out of sync acknowledgements have been made so
+// shutdown can be postponed if we've received Acks for newer events before
+// older events
+func (p *Publisher) completePayloads(pendingPayload *payload.Payload, firstAck bool) int64 {
 	numComplete := int64(0)
 
 	// We potentially receive out-of-order ACKs due to payloads distributed across servers
@@ -375,22 +403,7 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 		p.outOfSync++
 	}
 
-	p.mutex.Lock()
-	if numComplete != 0 {
-		p.numPayloads -= numComplete
-	}
-	p.lineCount += int64(lineCount)
-	p.mutex.Unlock()
-
-	if complete {
-		// Resume sending if we stopped due to excessive pending payload count
-		p.tryQueueHeld()
-
-		// If last payload confirmed, begin shutdown
-		if p.shuttingDown && !p.eventsHeld() && p.numPayloads == 0 {
-			p.endpointSink.Shutdown()
-		}
-	}
+	return numComplete
 }
 
 // OnPong handles when endpoints receive a pong message
@@ -458,6 +471,20 @@ func (p *Publisher) sendEvents(events []*event.Event) (*endpoint.Endpoint, bool)
 	p.mutex.Lock()
 	p.numPayloads++
 	p.mutex.Unlock()
+
+	if pendingPayload.Complete() {
+		// Every event was dropped during processing, so there is nothing to
+		// send - keep it in the payload list to preserve acknowledgement
+		// ordering and let the ordered dispatch acknowledge it as soon as it
+		// reaches the front, exactly as a real acknowledgement would
+		numComplete := p.completePayloads(pendingPayload, true)
+
+		p.mutex.Lock()
+		p.numPayloads -= numComplete
+		p.mutex.Unlock()
+
+		return nil, true
+	}
 
 	return p.sendPayload(pendingPayload)
 }

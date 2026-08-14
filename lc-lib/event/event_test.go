@@ -669,6 +669,27 @@ func TestDispatchAckNilOrEmpty(t *testing.T) {
 	DispatchAck([]*Event{})
 }
 
+func TestEventDrop(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Hello"})
+	if event.Dropped() {
+		t.Fatal("New event was unexpectedly dropped")
+	}
+
+	event.Drop()
+	if !event.Dropped() {
+		t.Fatal("Event was not marked as dropped")
+	}
+
+	// Drop must not affect the event's data or its cached encoding
+	event.ClearCache()
+	if _, ok := event.Data()["message"]; !ok {
+		t.Fatal("Dropped event lost its data")
+	}
+	if !event.Dropped() {
+		t.Fatal("Dropped flag was lost after ClearCache")
+	}
+}
+
 // TODO: Bytes() encoding error
 
 // TODO: Context

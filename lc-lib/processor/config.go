@@ -18,6 +18,7 @@ package processor
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 )
@@ -33,10 +34,17 @@ const (
 	defaultGeneralProcessorDebugEvents = false
 )
 
+const (
+	defaultGeneralProcessorMaximumEventAge       = 90 * 24 * time.Hour
+	defaultGeneralProcessorMaximumFutureEventAge = 24 * time.Hour
+)
+
 // General contains general configuration values
 type General struct {
-	ProcessorRoutines int  `config:"processor routines"`
-	DebugEvents       bool `config:"debug events"`
+	ProcessorRoutines     int           `config:"processor routines"`
+	DebugEvents           bool          `config:"debug events"`
+	MaximumEventAge       time.Duration `config:"maximum event age"`
+	MaximumFutureEventAge time.Duration `config:"maximum future event age"`
 }
 
 // Config contains configuration for a processor pipeline
@@ -56,6 +64,16 @@ type ConfigASTEntry struct {
 func (gc *General) Validate(p *config.Parser, path string) (err error) {
 	if gc.ProcessorRoutines > 128 {
 		err = fmt.Errorf("%sprocessor routines can not be greater than 128", path)
+		return
+	}
+
+	if gc.MaximumEventAge < 0 {
+		err = fmt.Errorf("%smaximum event age can not be negative", path)
+		return
+	}
+
+	if gc.MaximumFutureEventAge < 0 {
+		err = fmt.Errorf("%smaximum future event age can not be negative", path)
 		return
 	}
 
@@ -211,8 +229,10 @@ func FetchConfig(cfg *config.Config) *Config {
 func init() {
 	config.RegisterGeneral("processor", func() interface{} {
 		return &General{
-			ProcessorRoutines: defaultGeneralProcessorRoutines,
-			DebugEvents:       defaultGeneralProcessorDebugEvents,
+			ProcessorRoutines:     defaultGeneralProcessorRoutines,
+			DebugEvents:           defaultGeneralProcessorDebugEvents,
+			MaximumEventAge:       defaultGeneralProcessorMaximumEventAge,
+			MaximumFutureEventAge: defaultGeneralProcessorMaximumFutureEventAge,
 		}
 	})
 

@@ -7,6 +7,7 @@
     - [`status`](#status)
     - [`prospector [status | files [id]]`](#prospector-status--files-id)
     - [`publisher [status | endpoints [id]]`](#publisher-status--endpoints-id)
+    - [`processor [status]`](#processor-status)
     - [`reload`](#reload)
     - [`version`](#version)
     - [`debug`](#debug)
@@ -59,6 +60,14 @@ status of each connected endpoint and a summary of the overall shipping status.
 Narrow the information by specifying `status` or `endpoints` as a parameter.
 Information for a specific endpoint can be requested by following it by its
 name in the configuration file, or by its internal ID number.
+
+### `processor [status]`
+
+*Log Carver only.*
+
+Show the status of the event processor with the `processor` command.
+
+This reports `droppedTooOldEvents` and `droppedFutureEvents`, the number of events dropped since startup because their `@timestamp` was outside of the bounds set by the [`maximum event age`](log-carver/Configuration.md#maximum-event-age) and [`maximum future event age`](log-carver/Configuration.md#maximum-future-event-age) options, along with `maximumEventAge` and `maximumFutureEventAge`, the currently configured values of those options in seconds.
 
 ### `reload`
 

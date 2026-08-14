@@ -141,6 +141,12 @@ func (e *Endpoint) queuePayload(payload *payload.Payload) error {
 		panic(fmt.Sprintf("Endpoint is not ready (%d)", e.status))
 	}
 
+	// A payload with nothing to send should have been acknowledged by the
+	// publisher without ever reaching an endpoint
+	if len(payload.Events()) == 0 {
+		panic("Attempt to send an empty payload")
+	}
+
 	if e.pongPending {
 		e.pongPending = false
 	}

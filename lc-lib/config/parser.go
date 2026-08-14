@@ -21,12 +21,40 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"gopkg.in/op/go-logging.v1"
 )
+
+// dayUnitPattern matches a leading day count (optionally fractional) followed by
+// the remainder of a duration string, e.g. "90d", "1d12h", "2.5d"
+var dayUnitPattern = regexp.MustCompile(`^([+-]?\d+(?:\.\d+)?)d(.*)$`)
+
+// parseDuration parses a duration string, extending time.ParseDuration with a
+// "d" (day) unit, which Go's standard library does not provide
+func parseDuration(value string) (time.Duration, error) {
+	matches := dayUnitPattern.FindStringSubmatch(value)
+	if matches == nil {
+		return time.ParseDuration(value)
+	}
+
+	days, err := strconv.ParseFloat(matches[1], 64)
+	if err != nil {
+		return 0, err
+	}
+
+	remainder := time.Duration(0)
+	if matches[2] != "" {
+		if remainder, err = time.ParseDuration(matches[2]); err != nil {
+			return 0, err
+		}
+	}
+
+	return time.Duration(days*24*float64(time.Hour)) + remainder, nil
+}
 
 // Parser holds the parsing state for configuration population
 type Parser struct {
@@ -444,13 +472,13 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 
 	if vField.Type().String() == "time.Duration" {
 		if vMapIndex.Kind() == reflect.String {
-			var parseDuration time.Duration
-			if parseDuration, err = time.ParseDuration(vMapIndex.String()); err != nil {
+			var duration time.Duration
+			if duration, err = parseDuration(vMapIndex.String()); err != nil {
 				err = fmt.Errorf("Option %s%s was not understood: %s", configPath, tag, err)
 			}
 
-			log.Debugf("populateEntry value: %v (%s%s)", parseDuration, configPath, tag)
-			retValue = reflect.ValueOf(parseDuration)
+			log.Debugf("populateEntry value: %v (%s%s)", duration, configPath, tag)
+			retValue = reflect.ValueOf(duration)
 		} else {
 			var duration int64 = 0
 			switch vMapIndex.Kind() {

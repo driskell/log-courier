@@ -58,6 +58,8 @@ If an event is created which contains this as a field, such as from a JSON file,
 
 This is the timestamp of the event. When an event is created, such as from a JSON file, this field must be in the RFC3339 format, otherwise it will be replaced with the current time. Log Courier will automatically generate this field with the read time of the event.
 
+Log Carver can drop events whose final `@timestamp` is too old or too far in the future - see [`maximum event age`](log-carver/Configuration.md#maximum-event-age) and [`maximum future event age`](log-carver/Configuration.md#maximum-future-event-age).
+
 ### tags
 
 This is an array of strings attached to the event. It is most commonly used to record processing errors. For example, a [Grok](log-carver/actions/Grok.md) failure will add a `_grok_failure` tag. A maximum of 1024 tags can exist on an event - any attempt to go beyond this limit will be silently ignored.

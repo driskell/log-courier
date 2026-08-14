@@ -22,6 +22,8 @@
     - [`log level`](#log-level)
     - [`log stdout`](#log-stdout)
     - [`log syslog`](#log-syslog)
+    - [`maximum event age`](#maximum-event-age)
+    - [`maximum future event age`](#maximum-future-event-age)
     - [`processor routines`](#processor-routines)
     - [`spool max bytes`](#spool-max-bytes)
     - [`spool size`](#spool-size)
@@ -255,6 +257,7 @@ always be interpreted in seconds.
 - `300` = 5 minutes (which is 300 seconds)
 - `5s` = 5 seconds
 - `15m` = 15 minutes
+- `90d` = 90 days
 
 ### Expression
 
@@ -375,6 +378,34 @@ Requires restart
 Enables sending of Log Carver's internal log to syslog. May be used in conjunction with `log stdout` and `log file`.
 
 *This option is ignored by Windows builds.*
+
+### `maximum event age`
+
+Duration. Optional. Default: "90d"  
+Since 2.13.0
+
+The maximum age of an event's `@timestamp` field, calculated from the moment the event finishes processing. Events with a `@timestamp` older than this are dropped and are never sent to the endpoint.
+
+This protects the storage backend from events whose timestamps failed to parse or were misinterpreted, which would otherwise create indices or partitions far in the past, and prevents a misconfigured client replaying a very old backlog of logs from being stored.
+
+The check is performed after all processing has completed, so any [`date`](actions/Date.md) action has already had the opportunity to set the `@timestamp` field.
+
+Set to `0` to disable the check and accept events of any age.
+
+Dropped events are counted in the REST API at `processor/status` as `droppedTooOldEvents`. See the [Administration Utility](../AdministrationUtility.md) for details.
+
+### `maximum future event age`
+
+Duration. Optional. Default: "1d"  
+Since 2.13.0
+
+The maximum amount of time into the future an event's `@timestamp` field may be, calculated from the moment the event finishes processing. Events with a `@timestamp` further into the future than this are dropped and are never sent to the endpoint.
+
+Timestamps in the future are usually the result of clock skew on the shipping host, or of a timestamp being parsed with the wrong timezone. The default of one day tolerates timezone mistakes and minor clock drift whilst still rejecting events that would create indices or partitions far into the future.
+
+Set to `0` to disable the check and accept events with any future timestamp.
+
+Dropped events are counted in the REST API at `processor/status` as `droppedFutureEvents`. See the [Administration Utility](../AdministrationUtility.md) for details.
 
 ### `persist directory`
 
