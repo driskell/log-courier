@@ -22,25 +22,34 @@ package tcp
 import (
 	"context"
 	"fmt"
+	"net"
+	"reflect"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
+	proxyproto "github.com/pires/go-proxyproto"
 )
 
 type ReceiverFactory struct {
 	*Factory `config:",embed"`
 
-	EnableTls bool
+	EnableTls   bool
+	EnableProxy bool
+
+	TrustedProxies []string `config:"proxy protocol trusted sources"`
 
 	*transports.ServerTlsConfiguration `config:",embed"`
+
+	proxyPolicy proxyproto.PolicyFunc
 }
 
-func NewReceiverFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, enableTls bool) (*ReceiverFactory, error) {
+func NewReceiverFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, enableTls bool, enableProxy bool) (*ReceiverFactory, error) {
 	ret := &ReceiverFactory{
-		Factory:   newFactory(p.Config()),
-		EnableTls: enableTls,
+		Factory:     newFactory(p.Config()),
+		EnableTls:   enableTls,
+		EnableProxy: enableProxy,
 	}
 	if err := p.Populate(ret, unUsed, configPath, false); err != nil {
 		return nil, err
@@ -78,9 +87,75 @@ func (f *ReceiverFactory) Defaults() {
 }
 
 func (f *ReceiverFactory) Validate(p *config.Parser, configPath string) (err error) {
+	if !f.EnableProxy && len(f.TrustedProxies) > 0 {
+		return fmt.Errorf("%sproxy protocol trusted sources is not supported for non-proxy receivers", configPath)
+	}
+
+	if f.EnableProxy {
+		if f.proxyPolicy, err = newProxyPolicy(f.TrustedProxies); err != nil {
+			return fmt.Errorf("failed to parse %sproxy protocol trusted sources: %s", configPath, err)
+		}
+	}
+
 	return f.ServerTlsConfiguration.TlsValidate(f.EnableTls, p, configPath)
 }
 
 func (f *ReceiverFactory) ShouldRestart(newFactory *ReceiverFactory) bool {
+	if newFactory.EnableProxy != f.EnableProxy {
+		return true
+	}
+	if !reflect.DeepEqual(newFactory.TrustedProxies, f.TrustedProxies) {
+		return true
+	}
 	return f.ServerTlsConfiguration.HasChanged(newFactory.ServerTlsConfiguration)
+}
+
+// newProxyPolicy builds a policy that requires every connection to present a PROXY
+// header, optionally restricted to a set of trusted proxy addresses/CIDRs - a peer
+// outside that set is rejected outright rather than allowed to skip the header
+func newProxyPolicy(trustedSources []string) (proxyproto.PolicyFunc, error) {
+	if len(trustedSources) == 0 {
+		return func(net.Addr) (proxyproto.Policy, error) {
+			return proxyproto.REQUIRE, nil
+		}, nil
+	}
+
+	trustedNets := make([]*net.IPNet, len(trustedSources))
+	trustedIPs := make([]net.IP, len(trustedSources))
+	for i, source := range trustedSources {
+		if ip := net.ParseIP(source); ip != nil {
+			trustedIPs[i] = ip
+			continue
+		}
+		if _, ipNet, err := net.ParseCIDR(source); err == nil {
+			trustedNets[i] = ipNet
+			continue
+		}
+		return nil, fmt.Errorf("%q is not a valid IP address or CIDR range", source)
+	}
+
+	return func(upstream net.Addr) (proxyproto.Policy, error) {
+		host, _, err := net.SplitHostPort(upstream.String())
+		if err != nil {
+			return proxyproto.REJECT, err
+		}
+
+		ip := net.ParseIP(host)
+		if ip == nil {
+			return proxyproto.REJECT, fmt.Errorf("could not parse peer address %q", upstream.String())
+		}
+
+		for i := range trustedSources {
+			if trustedIPs[i] != nil && trustedIPs[i].Equal(ip) {
+				return proxyproto.REQUIRE, nil
+			}
+			if trustedNets[i] != nil && trustedNets[i].Contains(ip) {
+				return proxyproto.REQUIRE, nil
+			}
+		}
+
+		// Returning an error rather than REJECT closes the connection outright, rather
+		// than allowing an untrusted peer to fall back to a plain, header-less connection
+		return proxyproto.REJECT, fmt.Errorf("peer %s is not a trusted proxy protocol source", upstream.String())
+	}, nil
 }

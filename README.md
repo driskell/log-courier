@@ -33,6 +33,7 @@ Log Courier is a lightweight shipper. It reads from log files and transmits even
 Log Carver is a lightweight event processor similar to Logstash. It receives events over the Courier protocol and performs actions against them to manipulate them into the required format for storage within Apache Doris, Elasticsearch, or further processing in Logstash. Connected clients do not receive acknowledgements until the events are acknowledged by the endpoint, whether that be Apache Doris, Elasticsearch or another more centralised Log Carver, providing end-to-end guarantees.
 
 - Receives events securely using TLS with [client verification](docs/log-carver/Configuration.md#ssl-client-ca-receiver)
+- Supports [PROXY protocol](docs/ProxyProtocol.md) so receivers behind a load balancer or TCP proxy still see the real client address
 - Supports If/ElseIf/Else [conditionals](docs/log-carver/Configuration.md#conditionals) to process different events in different ways
 - Provides several powerful actions for [date processing](docs/log-carver/actions/Date.md), [grokking](docs/log-carver/actions/Grok.md), or simply [computing a new field](docs/log-carver/actions/SetField.md)
 - Support for complex [expressions](docs/log-carver/Configuration.md#expression) when setting fields or performing conditionals
@@ -65,6 +66,7 @@ Log Carver is a lightweight event processor similar to Logstash. It receives eve
 - [Event Format](docs/Events.md)
 - [Logstash Integration](docs/LogstashIntegration.md)
 - [Protocol Specification](docs/Protocol.md)
+- [PROXY Protocol Support](docs/ProxyProtocol.md)
 - [SSL Certificate Utility](docs/SSLCertificateUtility.md)
 
 ## Upgrading from 1.x to 2.x

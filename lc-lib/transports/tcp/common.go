@@ -50,6 +50,13 @@ type connectionSocket interface {
 	CloseWrite() error
 }
 
+// tcpSocket is the underlying socket a connectionSocket wraps - net.Conn plus
+// CloseWrite, which is not part of the standard interface
+type tcpSocket interface {
+	net.Conn
+	CloseWrite() error
+}
+
 type Protocol interface {
 	Negotiation() (transports.Event, error)
 	SendEvents(string, []*event.Event) error

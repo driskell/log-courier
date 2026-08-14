@@ -75,6 +75,7 @@
     - [`max tls version` (receiver)](#max-tls-version-receiver)
     - [`min tls version` (receiver)](#min-tls-version-receiver)
     - [`name` (receiver)](#name-receiver)
+    - [`proxy protocol trusted sources` (receiver)](#proxy-protocol-trusted-sources-receiver)
     - [`ssl certificate` (receiver)](#ssl-certificate-receiver)
     - [`ssl client ca` (receiver)](#ssl-client-ca-receiver)
     - [`ssl key` (receiver)](#ssl-key-receiver)
@@ -920,7 +921,7 @@ each connection attempt to allow Log Carver to catchup.
 
 String. Optional. Default: ""
 Available values: 1.0, 1.1, 1.2, 1.3
-Available when `transport` is `tls` or `streamtls`
+Available when `transport` is one of: `tls`, `tls-proxy`, `streamtls`, `streamtls-proxy`
 
 If specified, limits the TLS version to the given value. When not specified, the TLS version is only limited by the versions supported by Golang at build time. At the time of writing, this was 1.3.
 
@@ -928,7 +929,7 @@ If specified, limits the TLS version to the given value. When not specified, the
 
 String. Optional. Default: 1.2
 Available values: 1.0, 1.1, 1.2, 1.3
-Available when `transport` is `tls` or `streamtls`
+Available when `transport` is one of: `tls`, `tls-proxy`, `streamtls`, `streamtls-proxy`
 
 Sets the minimum TLS version allowed for connections on this transport. The TLS handshake will fail for any connection that is unable to negotiate a minimum of this version of TLS.
 
@@ -938,9 +939,24 @@ String. Optional. Default: Empty string
 
 Sets a name for the receiver that will be added to all events under `@metadata[receiver][name]`.
 
+### `proxy protocol trusted sources` (receiver)
+
+Array of Strings. Optional. Default: Empty array
+Available when `transport` is one of: `tcp-proxy`, `tls-proxy`, `stream-proxy`, `streamtls-proxy`
+
+A list of IP addresses and/or CIDR ranges that are trusted to send a [PROXY protocol](../ProxyProtocol.md) header. A connection from a peer not in this list is rejected outright.
+
+If left empty, a PROXY header is required from any peer able to reach the receiver. **An unrestricted `-proxy` receiver lets any peer claim any source address**, so this should always be set unless the receiver is only reachable from a trusted proxy already, for example via network-level controls.
+
+```yaml
+proxy protocol trusted sources:
+  - 10.0.2.0/24
+  - 192.168.1.5
+```
+
 ### `ssl certificate` (receiver)
 
-Filepath. Required when `transport` is `tls` or `streamtls`
+Filepath. Required when `transport` is one of: `tls`, `tls-proxy`, `streamtls`, `streamtls-proxy`
 
 Path to a PEM encoded certificate file to use as the server certificate.
 
@@ -953,7 +969,7 @@ will temporarily enable support, but users should update their certificates.
 ### `ssl client ca` (receiver)
 
 Array of Filepaths. Optional
-Available when `transport` is `tls` or `streamtls`
+Available when `transport` is one of: `tls`, `tls-proxy`, `streamtls`, `streamtls-proxy`
 
 A list of paths to PEM encoded client certificate authorities that can be used to verify client certificates. This is the counterpart to Log Courier's [`ssl certificate`](../log-courier/Configuration.md#ssl-certificate).
 
@@ -963,14 +979,14 @@ will temporarily enable support, but users should update their certificates.
 
 ### `ssl key` (receiver)
 
-Filepath. Required when `transport` is `tls` or `streamtls`
+Filepath. Required when `transport` is one of: `tls`, `tls-proxy`, `streamtls`, `streamtls-proxy`
 
 Path to a PEM encoded private key to use with the server certificate.
 
 ### `transport` (receiver)
 
 String. Optional. Default: "tls"  
-Available values: "tls", "tcp", "streamtls", "stream"
+Available values: "tls", "tcp", "streamtls", "stream", "tls-proxy", "tcp-proxy", "streamtls-proxy", "stream-proxy"
 
 *Depending on how log-carver was built, some transports may not be available. Run `log-carver -list-supported` to see the list of transports available in a specific build of log-carver.*
 
@@ -982,10 +998,12 @@ Sets the transport to use when receiving logs from the endpoint.
 
 "tcp" and "stream" are **insecure** equivalents to "tls" and "streamtls" that do not encrypt traffic or authenticate the identity of endpoints. These should only be used on trusted internal networks. If in doubt, use the secure authenticating transports "tls" and "streamtls". They have no required options.
 
+"tls-proxy", "tcp-proxy", "streamtls-proxy" and "stream-proxy" are equivalents to "tls", "tcp", "streamtls" and "stream" that additionally require a [PROXY protocol](../ProxyProtocol.md) header at the start of every connection, and use the original client address it carries for logging, the admin API and event metadata rather than the address of whatever sits in front of the receiver (a load balancer or TCP proxy). See [`proxy protocol trusted sources`](#proxy-protocol-trusted-sources-receiver) to restrict which peers are allowed to send one.
+
 ### `verify peers` (receiver)
 
 Boolean. Optional. Default: true
-Available when `transport` is `tls` or `streamtls`
+Available when `transport` is one of: `tls`, `tls-proxy`, `streamtls`, `streamtls-proxy`
 
 When `ssl client ca` entries are configured for client certificate verification, the default is to require all connections to provide a client certificate and to be verified. If this is set to false, clients will be able to connect without providing a client certificate or with any client certificate.
 

@@ -28,6 +28,7 @@ import (
 
 	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
+	proxyproto "github.com/pires/go-proxyproto"
 )
 
 type receiverTCP struct {
@@ -225,11 +226,26 @@ func (t *receiverTCP) getTLSConfig() (tlsConfig *tls.Config) {
 func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 	log.Debugf("[R %s - %s] New connection", socket.LocalAddr().String(), socket.RemoteAddr().String())
 
+	var underlying tcpSocket = socket
+	if t.config.EnableProxy {
+		policy, err := t.config.proxyPolicy(socket.RemoteAddr())
+		if err != nil {
+			log.Warningf("[R %s - %s] Rejecting connection: %s", socket.LocalAddr().String(), socket.RemoteAddr().String(), err)
+			socket.Close()
+			return
+		}
+		underlying = &proxyConnCloseWriter{Conn: proxyproto.NewConn(socket, proxyproto.WithPolicy(policy), proxyproto.SetReadHeaderTimeout(proxyHeaderTimeout))}
+	}
+
 	var connectionSocket connectionSocket
 	if t.config.EnableTls {
-		connectionSocket = newConnectionSocketTLS(socket, t.getTLSConfig(), true, t.bind)
+		connectionSocket = newConnectionSocketTLS(underlying, t.getTLSConfig(), true, t.bind)
 	} else {
-		connectionSocket = newConnectionSocketTCP(socket)
+		connectionSocket = newConnectionSocketTCP(underlying)
+	}
+
+	if t.config.EnableProxy {
+		connectionSocket = newConnectionSocketProxy(underlying.(*proxyConnCloseWriter).Conn, connectionSocket)
 	}
 
 	conn := newConnection(t.ctx, connectionSocket, t.protocolFactory, false, t.eventChan)
@@ -239,29 +255,29 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 	t.connMutex.Unlock()
 
 	t.connWait.Add(1)
-	go t.connectionRoutine(socket, conn)
+	go t.connectionRoutine(conn)
 }
 
 // connectionRoutine is a routine for an individual connection that runs it and captures shutdown
-func (t *receiverTCP) connectionRoutine(socket net.Conn, conn *connection) {
+func (t *receiverTCP) connectionRoutine(conn *connection) {
 	defer t.connWait.Done()
 
 	didStart := false
 	if err := conn.run(func() {
-		t.eventChan <- transports.NewConnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc())
+		t.eventChan <- transports.NewConnectEvent(conn.ctx, conn.socket.RemoteAddr().String(), conn.socket.Desc())
 		didStart = true
 	}); err != nil {
 		if err == ErrHardCloseRequested {
-			log.Noticef("[R %s - %s] Client forcefully disconnected", socket.LocalAddr().String(), socket.RemoteAddr().String())
+			log.Noticef("[R %s - %s] Client forcefully disconnected", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String())
 		} else if err != io.EOF { // Ignore io.EOF as it usually means a graceful close without starting up, such as a status check on a TLS port
-			log.Errorf("[R %s - %s] Client failed: %s", socket.LocalAddr().String(), socket.RemoteAddr().String(), err)
+			log.Errorf("[R %s - %s] Client failed: %s", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String(), err)
 		}
 	} else {
-		log.Noticef("[R %s - %s] Client closed", socket.LocalAddr().String(), socket.RemoteAddr().String())
+		log.Noticef("[R %s - %s] Client closed", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String())
 	}
 
 	if didStart {
-		t.eventChan <- transports.NewDisconnectEvent(conn.ctx, socket.RemoteAddr().String(), conn.socket.Desc())
+		t.eventChan <- transports.NewDisconnectEvent(conn.ctx, conn.socket.RemoteAddr().String(), conn.socket.Desc())
 	}
 
 	t.connMutex.Lock()

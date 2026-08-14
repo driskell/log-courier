@@ -21,6 +21,10 @@ const (
 	TransportCourier = "tcp"
 	// TransportTCPTLS is the transport name for encrypted TLS
 	TransportCourierTLS = "tls"
+	// TransportCourierProxy is the transport name for plain TCP behind a PROXY protocol proxy
+	TransportCourierProxy = "tcp-proxy"
+	// TransportCourierProxyTLS is the transport name for encrypted TLS behind a PROXY protocol proxy
+	TransportCourierProxyTLS = "tls-proxy"
 )
 
 var (

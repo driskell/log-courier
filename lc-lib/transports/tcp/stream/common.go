@@ -21,4 +21,8 @@ const (
 	TransportStream = "stream"
 	// TransportStreamTLS is the transport name for encrypted text
 	TransportStreamTLS = "streamtls"
+	// TransportStreamProxy is the transport name for plain text behind a PROXY protocol proxy
+	TransportStreamProxy = "stream-proxy"
+	// TransportStreamProxyTLS is the transport name for encrypted text behind a PROXY protocol proxy
+	TransportStreamProxyTLS = "streamtls-proxy"
 )

@@ -18,17 +18,16 @@ package tcp
 
 import (
 	"context"
-	"net"
 )
 
 // connectionSocketTCP holds a TCP socket
 type connectionSocketTCP struct {
-	*net.TCPConn
+	tcpSocket
 }
 
 // newConnectionSocketTLS return a TCP socket supporting our connection interface
-func newConnectionSocketTCP(tcpSocket *net.TCPConn) *connectionSocketTCP {
-	return &connectionSocketTCP{TCPConn: tcpSocket}
+func newConnectionSocketTCP(socket tcpSocket) *connectionSocketTCP {
+	return &connectionSocketTCP{tcpSocket: socket}
 }
 
 // Setup is not required for a TCP connection so is nil effect

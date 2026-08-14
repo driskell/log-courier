@@ -39,7 +39,9 @@ type ReceiverFactory struct {
 // NewReceiverFactory create a new ReceiverFactory from the provided
 // configuration data, reporting back any configuration errors it discovers.
 func NewReceiverFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (transports.ReceiverFactory, error) {
-	factory, err := tcp.NewReceiverFactory(p, configPath, unUsed, name == TransportStreamTLS)
+	enableTls := name == TransportStreamTLS || name == TransportStreamProxyTLS
+	enableProxy := name == TransportStreamProxy || name == TransportStreamProxyTLS
+	factory, err := tcp.NewReceiverFactory(p, configPath, unUsed, enableTls, enableProxy)
 	if err != nil {
 		return nil, err
 	}
@@ -69,4 +71,6 @@ func (f *ReceiverFactory) ShouldRestart(newFactory transports.ReceiverFactory) b
 func init() {
 	transports.RegisterReceiver(TransportStream, NewReceiverFactory)
 	transports.RegisterReceiver(TransportStreamTLS, NewReceiverFactory)
+	transports.RegisterReceiver(TransportStreamProxy, NewReceiverFactory)
+	transports.RegisterReceiver(TransportStreamProxyTLS, NewReceiverFactory)
 }

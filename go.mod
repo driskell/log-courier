@@ -25,9 +25,10 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/nsf/termbox-go v1.1.1 // indirect
 	github.com/oschwald/maxminddb-golang v1.10.0 // indirect
+	github.com/pires/go-proxyproto v0.8.0 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/stoewer/go-strcase v1.2.1 // indirect
 	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 )

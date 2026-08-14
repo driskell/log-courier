@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"io"
-	"net"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/transports"
@@ -28,7 +27,7 @@ import (
 
 // connectionSocketTLS wraps a TCP socket with TLS
 type connectionSocketTLS struct {
-	tcpSocket *net.TCPConn
+	tcpSocket tcpSocket
 	tlsConfig *tls.Config
 	server    bool
 	poolDesc  string
@@ -38,7 +37,7 @@ type connectionSocketTLS struct {
 }
 
 // newConnectionSocketTLS return a new TLS enabled socket
-func newConnectionSocketTLS(tcpSocket *net.TCPConn, tlsConfig *tls.Config, server bool, poolDesc string) *connectionSocketTLS {
+func newConnectionSocketTLS(tcpSocket tcpSocket, tlsConfig *tls.Config, server bool, poolDesc string) *connectionSocketTLS {
 	return &connectionSocketTLS{
 		tcpSocket: tcpSocket,
 		tlsConfig: tlsConfig,
