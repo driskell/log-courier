@@ -44,7 +44,7 @@ func (s *stubSocket) Setup(context.Context) error { return nil }
 func (s *stubSocket) Desc() string                { return s.desc }
 func (s *stubSocket) CloseWrite() error           { return nil }
 
-func TestConnectionSocketProxyReportsOriginalAddresses(t *testing.T) {
+func TestConnectionSocketProxyReportsClientAddressAndOwnLocalAddr(t *testing.T) {
 	client, server := net.Pipe()
 	defer client.Close()
 	defer server.Close()
@@ -63,8 +63,8 @@ func TestConnectionSocketProxyReportsOriginalAddresses(t *testing.T) {
 	if socket.RemoteAddr().String() != "203.0.113.7:51234" {
 		t.Errorf("RemoteAddr was %q, expected the original client address", socket.RemoteAddr().String())
 	}
-	if socket.LocalAddr().String() != "10.0.2.50:5000" {
-		t.Errorf("LocalAddr was %q, expected the original destination address", socket.LocalAddr().String())
+	if socket.LocalAddr().String() != server.LocalAddr().String() {
+		t.Errorf("LocalAddr was %q, expected this receiver's own local address, not the header's destination", socket.LocalAddr().String())
 	}
 }
 

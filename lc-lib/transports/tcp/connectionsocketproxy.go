@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"time"
 
 	proxyproto "github.com/pires/go-proxyproto"
@@ -42,6 +43,12 @@ func (w *proxyConnCloseWriter) CloseWrite() error {
 	return w.Close()
 }
 
+// LocalAddr returns the address of this receiver rather than the PROXY header's
+// destination address, which is the address the client connected to on the proxy
+func (w *proxyConnCloseWriter) LocalAddr() net.Addr {
+	return w.Raw().LocalAddr()
+}
+
 // connectionSocketProxy wraps a socket with PROXY protocol support, exposing the
 // original client address once the header has been read
 type connectionSocketProxy struct {
@@ -62,14 +69,14 @@ func (p *connectionSocketProxy) Setup(ctx context.Context) error {
 	// that follows it, surfacing the parse/policy error via the normal Read path
 	if _, err := p.proxyConn.Read(nil); err != nil {
 		if err != io.EOF {
-			log.Warningf("[R %s] PROXY protocol header from %s failed: %s", p.proxyConn.LocalAddr().String(), p.proxyConn.Raw().RemoteAddr().String(), err)
+			log.Warningf("[R %s] PROXY protocol header from %s failed: %s", p.proxyConn.Raw().LocalAddr().String(), p.proxyConn.Raw().RemoteAddr().String(), err)
 		}
 		return err
 	}
 
 	if header := p.proxyConn.ProxyHeader(); header != nil {
 		p.desc = fmt.Sprintf("via PROXY from %s", p.proxyConn.Raw().RemoteAddr().String())
-		log.Noticef("[R %s - %s] PROXY protocol header received from %s", p.proxyConn.LocalAddr().String(), p.proxyConn.RemoteAddr().String(), p.proxyConn.Raw().RemoteAddr().String())
+		log.Debugf("[R %s - %s] PROXY protocol header received from %s", p.proxyConn.Raw().LocalAddr().String(), p.proxyConn.RemoteAddr().String(), p.proxyConn.Raw().RemoteAddr().String())
 	}
 
 	return p.connectionSocket.Setup(ctx)
