@@ -65,7 +65,7 @@ func (p *protocol) serverNegotiation() (transports.Event, error) {
 		return nil, fmt.Errorf("unexpected %T during negotiation, expected protocolHELO", message)
 	}
 
-	log.Infof("[R %s < %s] Remote identified as %s", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), heloMessage.Client())
+	log.Debugf("[R %s < %s] Remote identified as %s", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), heloMessage.Client())
 
 	log.Debugf("[R %s > %s] Sending protocol version", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String())
 	if err := createProtocolVERS().Write(p.conn); err != nil {
@@ -100,7 +100,7 @@ func (p *protocol) clientNegotiation() error {
 		return fmt.Errorf("unexpected %T reply to negotiation, expected protocolVERS", message)
 	}
 
-	log.Infof("[T %s < %s] Remote identified as %s", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), versMessage.Client())
+	log.Debugf("[T %s < %s] Remote identified as %s", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), versMessage.Client())
 
 	p.supportsEvnt = versMessage.SupportsEVNT()
 	if p.supportsEvnt {

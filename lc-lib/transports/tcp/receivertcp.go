@@ -268,12 +268,12 @@ func (t *receiverTCP) connectionRoutine(conn *connection) {
 		didStart = true
 	}); err != nil {
 		if err == ErrHardCloseRequested {
-			log.Noticef("[R %s - %s] Client forcefully disconnected", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String())
+			log.Debugf("[R %s - %s] Client forcefully disconnected", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String())
 		} else if err != io.EOF { // Ignore io.EOF as it usually means a graceful close without starting up, such as a status check on a TLS port
 			log.Errorf("[R %s - %s] Client failed: %s", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String(), err)
 		}
 	} else {
-		log.Noticef("[R %s - %s] Client closed", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String())
+		log.Debugf("[R %s - %s] Client closed", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String())
 	}
 
 	if didStart {
