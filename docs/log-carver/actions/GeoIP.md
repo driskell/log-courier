@@ -28,7 +28,7 @@ The path to the MaxMind GeoIP City database. The packaged versions of Log Carver
 
 String. Required
 
-The name of the field to parse. Use `[]` to access nested fields, for example `nested[field]`.
+The name of the field to parse. Use `[]` to access nested fields, for example `nested[field]`, and a backslash to use `[`, `]` or `\` literally in a name, for example `nested\[field\]`.
 
 ### `target`
 

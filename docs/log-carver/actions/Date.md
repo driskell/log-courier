@@ -26,7 +26,7 @@ The `date` action uses patterns to parse a timestamp from a field and store it a
 
 String. Required
 
-The name of the field to parse. Use `[]` to access nested fields, for example `nested[field]`.
+The name of the field to parse. Use `[]` to access nested fields, for example `nested[field]`, and a backslash to use `[`, `]` or `\` literally in a name, for example `nested\[field\]`.
 
 ### `formats`
 

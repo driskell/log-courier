@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -32,10 +31,6 @@ type ResolveParam int
 const (
 	// ResolveParamUnset will unset the value at a path given to event.Resolve
 	ResolveParamUnset ResolveParam = iota
-)
-
-var (
-	keyMatcher = regexp.MustCompile(`^([^\[\]]+)|\[([^\[\]]+)\]`)
 )
 
 // Acknowledger is something that can be called with events once they ar acknowledged
@@ -178,6 +173,7 @@ func (e *Event) MustResolve(path string, set interface{}) interface{} {
 }
 
 // Resolve will return (and optionally set) the value at the given path (field), using a[b][c] syntax
+// where a backslash escapes the next character, so a\[b\] is the single name "a[b]"
 //
 // # It will return an error if the path is invalid, and return nil if the path does not exist
 //
@@ -205,32 +201,21 @@ func (e *Event) MustResolve(path string, set interface{}) interface{} {
 // where the message is the error message, and the "_unmarshal_failure" tag is added
 func (e *Event) Resolve(path string, set interface{}) (output interface{}, err error) {
 	currentMap := e.Data()
-	lastIndex := 0
-	// Begin with simple lookup - if we're not looking up something[xxx] and are looking up something
-	// then we can avoid the regex
-	if strings.IndexRune(path, '[') == -1 {
-		if strings.IndexRune(path, ']') != -1 {
-			return nil, fmt.Errorf("Invalid field: %s", path)
-		}
+	// Begin with simple lookup - if we're not looking up something[xxx] and there are no escapes
+	// then we can avoid splitting the path
+	if strings.IndexAny(path, "[]\\") == -1 {
 		if set != nil && e.isSameMap(currentMap, set) {
 			return nil, fmt.Errorf("Cannot set '%s': would create circular reference", path)
 		}
 		output, err = e.simpleResolve(e.data, path, set)
 		return
 	}
-	results := keyMatcher.FindAllStringSubmatchIndex(path, -1)
-	for j := 0; j < len(results); j++ {
-		// Must always join together
-		if results[j][0] != lastIndex {
-			return nil, fmt.Errorf("Invalid field: %s", path)
-		}
-		lastIndex = results[j][1]
-		nameStart, nameEnd := results[j][2], results[j][3]
-		if nameStart < 0 {
-			nameStart, nameEnd = results[j][4], results[j][5]
-		}
-		name := path[nameStart:nameEnd]
-		if j == len(results)-1 {
+	names, ok := splitPath(path)
+	if !ok {
+		return nil, fmt.Errorf("Invalid field: %s", path)
+	}
+	for j, name := range names {
+		if j == len(names)-1 {
 			// Last item, so will always be a value
 			output, err = e.simpleResolve(currentMap, name, set)
 		} else {
@@ -260,10 +245,71 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 			}
 		}
 	}
-	if lastIndex != len(path) {
-		return nil, fmt.Errorf("Invalid field: %s", path)
-	}
 	return
+}
+
+// splitPath splits a path in a[b][c] syntax into its names, where a backslash escapes the next character
+func splitPath(path string) ([]string, bool) {
+	const (
+		stateName = iota
+		stateBracket
+		stateAfterBracket
+	)
+	var (
+		names []string
+		name  strings.Builder
+		state = stateName
+	)
+	for idx := 0; idx < len(path); idx++ {
+		char := path[idx]
+		switch state {
+		case stateName, stateBracket:
+			if char == '\\' {
+				idx++
+				if idx == len(path) {
+					return nil, false
+				}
+				name.WriteByte(path[idx])
+			} else if char == '[' {
+				if state == stateBracket {
+					return nil, false
+				}
+				if name.Len() != 0 {
+					names = append(names, name.String())
+					name.Reset()
+				}
+				state = stateBracket
+			} else if char == ']' {
+				if state == stateName || name.Len() == 0 {
+					return nil, false
+				}
+				names = append(names, name.String())
+				name.Reset()
+				state = stateAfterBracket
+			} else {
+				name.WriteByte(char)
+			}
+		case stateAfterBracket:
+			if char != '[' {
+				return nil, false
+			}
+			state = stateBracket
+		}
+	}
+	switch state {
+	case stateBracket:
+		return nil, false
+	case stateName:
+		names = append(names, name.String())
+	}
+	return names, true
+}
+
+var keyEscaper = strings.NewReplacer("\\", "\\\\", "[", "\\[", "]", "\\]")
+
+// EscapeKey escapes a key so that Resolve treats it as a single literal name
+func EscapeKey(key string) string {
+	return keyEscaper.Replace(key)
 }
 
 // isSameMap checks if the given value is the same map as the host map to prevent circular references

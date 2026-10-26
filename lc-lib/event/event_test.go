@@ -342,6 +342,117 @@ func TestResolveKeyInvalid(t *testing.T) {
 	}
 }
 
+func TestResolveKeyInvalidEscapes(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{})
+	for _, path := range []string{`sub\`, `sub[inside\]`, `sub[inside][`, `sub[in[side]]`, `sub[inside]\[more\]`} {
+		if result, err := event.Resolve(path, nil); err == nil {
+			t.Errorf("Unexpected successful result for %s: %v", path, result)
+		}
+	}
+}
+
+func TestResolveKeyLeadingBracket(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"message": "Hello world",
+	})
+	result, err := event.Resolve("[message]", nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	if result != "Hello world" {
+		t.Fatalf("Unexpected result: [%v]", result)
+	}
+}
+
+func TestResolveKeyEscapedBrackets(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		"nested[entry]": "literal",
+		"sub": map[string]interface{}{
+			"a[b]": "inner literal",
+		},
+	})
+	result, err := event.Resolve(`nested\[entry\]`, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	if result != "literal" {
+		t.Fatalf("Unexpected result: [%v]", result)
+	}
+
+	result, err = event.Resolve(`sub[a\[b\]]`, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	if result != "inner literal" {
+		t.Fatalf("Unexpected result: [%v]", result)
+	}
+}
+
+func TestResolveKeyEscapedBackslashAndCharacters(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{
+		`back\slash`: 1,
+		"plain":      2,
+	})
+	result, err := event.Resolve(`back\\slash`, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	if result != 1 {
+		t.Fatalf("Unexpected result: [%v]", result)
+	}
+
+	result, err = event.Resolve(`\p\l\a\i\n`, nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	if result != 2 {
+		t.Fatalf("Unexpected result: [%v]", result)
+	}
+}
+
+func TestResolveSetEscapedKey(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{})
+	if _, err := event.Resolve(`nested\[entry\]`, "value"); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	if event.Data()["nested[entry]"] != "value" {
+		t.Fatalf("Literal key was not set: %v", event.Data())
+	}
+	if _, ok := event.Data()["nested"]; ok {
+		t.Fatalf("Nested field was unexpectedly created: %v", event.Data())
+	}
+
+	if _, err := event.Resolve(`sub[a\]b]`, "inner"); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	if sub, ok := event.Data()["sub"].(map[string]interface{}); !ok || sub["a]b"] != "inner" {
+		t.Fatalf("Literal nested key was not set: %v", event.Data())
+	}
+}
+
+func TestEscapeKey(t *testing.T) {
+	if escaped := EscapeKey(`a[b]\c`); escaped != `a\[b\]\\c` {
+		t.Fatalf("Unexpected escaped key: %s", escaped)
+	}
+
+	for _, key := range []string{"plain", "nested[entry]", `trailing\`, "[]", `\[`, "multi☃byte[✓]"} {
+		event := NewEvent(context.Background(), nil, map[string]interface{}{})
+		if _, err := event.Resolve(EscapeKey(key), "value"); err != nil {
+			t.Fatalf("Unexpected error setting %s: %s", key, err)
+		}
+		if event.Data()[key] != "value" {
+			t.Fatalf("Escaped key %s did not set the literal key: %v", key, event.Data())
+		}
+		result, err := event.Resolve(EscapeKey(key), nil)
+		if err != nil {
+			t.Fatalf("Unexpected error resolving %s: %s", key, err)
+		}
+		if result != "value" {
+			t.Fatalf("Unexpected result for %s: [%v]", key, result)
+		}
+	}
+}
+
 func TestResolveKeyMissing(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{
 		"sub": map[string]interface{}{

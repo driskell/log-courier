@@ -30,7 +30,7 @@ When converting patterns previously used in Logstash, the main difference is tha
 
 String. Required
 
-The name of the field to parse. Use `[]` to access nested fields, for example `nested[field]`.
+The name of the field to parse. Use `[]` to access nested fields, for example `nested[field]`, and a backslash to use `[`, `]` or `\` literally in a name, for example `nested\[field\]`.
 
 ### `local patterns`
 

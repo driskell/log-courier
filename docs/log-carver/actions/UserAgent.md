@@ -37,7 +37,7 @@ The following nested fields are also present if data is available, and are other
 
 String. Required
 
-The name of the field to parse. Use `[]` to access nested fields, for example `nested[field]`.
+The name of the field to parse. Use `[]` to access nested fields, for example `nested[field]`, and a backslash to use `[`, `]` or `\` literally in a name, for example `nested\[field\]`.
 
 ### `remove`
 
