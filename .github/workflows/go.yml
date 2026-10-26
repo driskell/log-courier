@@ -32,19 +32,19 @@ jobs:
     strategy:
       matrix:
         # Red Hat we compile inside COPR using the version of Golang for the target OS.
-        # - RHEL9 = 1.22 (Appstream as of 2025-02-28)
-        # Ubuntu we cross-compile in our builder image using Golang 1.24 (latest stable as of 2025-02-28).
-        go: ['1.22', '1.24']
+        # - RHEL9 = 1.26 (Appstream as of 2026-10-26)
+        # Ubuntu we cross-compile in our builder image using Golang 1.27 (latest stable as of 2026-10-26).
+        go: ['1.26', '1.27']
     name: Build Go ${{ matrix.go }}
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout
+      uses: actions/checkout@v7
     - name: Set up Go 1.x
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v7
       with:
         go-version: ${{ matrix.go }}
       id: go
-    - name: Checkout
-      uses: actions/checkout@v3
     - name: Get dependencies
       run: go get -v -t -d ./...
     - name: Generate

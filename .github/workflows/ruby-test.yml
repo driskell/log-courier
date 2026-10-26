@@ -26,7 +26,7 @@ jobs:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v7
     - name: Test
       run: |
         cd ruby/log-courier
@@ -41,7 +41,7 @@ jobs:
     name: Test Logstash Input Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-java@v4
+    - uses: actions/setup-java@v6
       with:
         distribution: temurin
         java-version: '21'
@@ -50,10 +50,10 @@ jobs:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v7
     - name: Load cached Logstash
       id: cache-logstash
-      uses: actions/cache@v3
+      uses: actions/cache@v6
       with:
         path: ruby/logstash
         key: logstash-${{ runner.os }}-${{ hashFiles('ruby/setup_logstash.sh') }}
@@ -76,7 +76,7 @@ jobs:
     name: Test Logstash Output Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-java@v4
+    - uses: actions/setup-java@v6
       with:
         distribution: temurin
         java-version: '21'
@@ -85,10 +85,10 @@ jobs:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v7
     - name: Load cached Logstash
       id: cache-logstash
-      uses: actions/cache@v3
+      uses: actions/cache@v6
       with:
         path: ruby/logstash
         key: logstash-${{ runner.os }}-${{ hashFiles('ruby/setup_logstash.sh') }}
