@@ -228,7 +228,7 @@ ReceiverLoop:
 				connectionStatus.bytes += eventImpl.Size()
 				r.connectionLock.Unlock()
 				// Build the events with our acknowledger and submit the bundle
-				var events = make([]*event.Event, len(eventImpl.Events()))
+				var events = make([]*event.Event, eventImpl.Count())
 				var ctx context.Context
 				for idx, item := range eventImpl.Events() {
 					if acker == nil {
