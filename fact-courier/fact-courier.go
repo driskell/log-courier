@@ -50,7 +50,7 @@ func main() {
 	// Add spooler as first processor, it combines into larger chunks as needed
 	app.Pipeline().AddProcessor(spooler.NewSpooler(app))
 	// Create sink
-	app.Pipeline().SetSink(publisher.NewPublisher())
+	app.Pipeline().SetSink(publisher.NewPublisher(publisher.OrderedAcks()))
 	// Go!
 	app.Run()
 }

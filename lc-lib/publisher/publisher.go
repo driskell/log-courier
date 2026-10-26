@@ -46,8 +46,8 @@ const (
 	keepaliveTimeout time.Duration = 10 * time.Second
 )
 
-// Publisher handles payloads and is responsible for passing ordered
-// acknowledgements to the acknowledgement handlers
+// Publisher handles payloads and is responsible for passing acknowledgements
+// to the acknowledgement handlers, in the order its AckOrdering decides
 // It makes all the load balancing and distribution decisions, leaving
 // transport state management to the EndpointSink
 // We have always used a Push mechanism for load balancing, in the sense that
@@ -64,9 +64,8 @@ type Publisher struct {
 	endpointSink *endpoint.Sink
 	method       method
 
-	payloadList  internallist.List
+	ackOrdering  AckOrdering
 	numPayloads  int64
-	outOfSync    int
 	spoolChan    chan []*event.Event
 	shuttingDown bool
 
@@ -83,10 +82,11 @@ type Publisher struct {
 	resendList       internallist.List
 }
 
-// NewPublisher creates a new publisher instance on the given pipeline
-func NewPublisher() *Publisher {
+// NewPublisher creates a new publisher instance on the given pipeline, dispatching acknowledgements using the given ordering
+func NewPublisher(ackOrdering AckOrdering) *Publisher {
 	return &Publisher{
-		spoolChan: make(chan []*event.Event, 1),
+		ackOrdering: ackOrdering,
+		spoolChan:   make(chan []*event.Event, 1),
 	}
 }
 
@@ -308,12 +308,8 @@ func (p *Publisher) pullBackPending(endpoint *endpoint.Endpoint) {
 	log.Debugf("[P %s] %d payloads pulled back for resend (%d total now held for resend)", endpoint.Server(), len(payloads), p.resendList.Len())
 }
 
-// OnAck handles acknowledgements from endpoints
-// It keeps track of how many out of sync acknowldgements have been made so
-// shutdown can be postponed if we've received Acks for newer events before
-// older events. It also serialises the Ack offsets for correct handling
-// so events are always acknowledged sequentially
-// TODO: Use event.Sequencer to simplify this?
+// OnAck handles acknowledgements from endpoints, leaving the ack ordering to
+// decide when acknowledged events are dispatched
 func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.Payload, firstAck bool, lineCount int) {
 	// Expect next ACK within network timeout if we still have pending
 	if endpoint.NumPending() > 0 {
@@ -337,7 +333,7 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 		p.resendList.Remove(&pendingPayload.ResendElement)
 	}
 
-	numComplete := p.completePayloads(pendingPayload, firstAck)
+	numComplete := p.ackOrdering.acknowledged(pendingPayload, firstAck)
 
 	p.mutex.Lock()
 	if numComplete != 0 {
@@ -355,55 +351,6 @@ func (p *Publisher) OnAck(endpoint *endpoint.Endpoint, pendingPayload *payload.P
 			p.endpointSink.Shutdown()
 		}
 	}
-}
-
-// completePayloads dispatches acknowledgements to the events' original
-// acknowledgers in payload order, starting from the given payload only if it
-// is at the front of the payload list, and returns the number of payloads
-// that became fully acknowledged as a result
-// It keeps track of how many out of sync acknowledgements have been made so
-// shutdown can be postponed if we've received Acks for newer events before
-// older events
-func (p *Publisher) completePayloads(pendingPayload *payload.Payload, firstAck bool) int64 {
-	numComplete := int64(0)
-
-	// We potentially receive out-of-order ACKs due to payloads distributed across servers
-	// This is where we enforce ordering again to ensure the handlers receive ACKs in order
-	if pendingPayload == p.payloadList.Front().Value.(*payload.Payload) {
-		// The out of sync count we have will never include the first payload, so
-		// take the value +1
-		outOfSync := p.outOfSync + 1
-
-		// For each full payload we mark off, we decrease this count, the first we
-		// mark off will always be the first payload - thus the +1. Subsequent
-		// payloads are the out of sync ones - so if we mark them off we decrease
-		// the out of sync count
-		for pendingPayload.HasAck() {
-			event.DispatchAck(pendingPayload.Rollup())
-
-			if !pendingPayload.Complete() {
-				break
-			}
-
-			p.payloadList.Remove(&pendingPayload.Element)
-			outOfSync--
-			p.outOfSync = outOfSync
-
-			numComplete++
-
-			if p.payloadList.Len() == 0 {
-				break
-			}
-
-			pendingPayload = p.payloadList.Front().Value.(*payload.Payload)
-		}
-	} else if firstAck {
-		// If this is NOT the first payload, and this is the first acknowledgement
-		// for this payload, then increase out of sync payload count
-		p.outOfSync++
-	}
-
-	return numComplete
 }
 
 // OnPong handles when endpoints receive a pong message
@@ -466,7 +413,7 @@ func (p *Publisher) tryQueueHeld() bool {
 func (p *Publisher) sendEvents(events []*event.Event) (*endpoint.Endpoint, bool) {
 	pendingPayload := payload.NewPayload(events)
 
-	p.payloadList.PushBack(&pendingPayload.Element)
+	p.ackOrdering.add(pendingPayload)
 
 	p.mutex.Lock()
 	p.numPayloads++
@@ -474,10 +421,9 @@ func (p *Publisher) sendEvents(events []*event.Event) (*endpoint.Endpoint, bool)
 
 	if pendingPayload.Complete() {
 		// Every event was dropped during processing, so there is nothing to
-		// send - keep it in the payload list to preserve acknowledgement
-		// ordering and let the ordered dispatch acknowledge it as soon as it
-		// reaches the front, exactly as a real acknowledgement would
-		numComplete := p.completePayloads(pendingPayload, true)
+		// send - acknowledge it as a real acknowledgement would, so the ack
+		// ordering dispatches it in the same way
+		numComplete := p.ackOrdering.acknowledged(pendingPayload, true)
 
 		p.mutex.Lock()
 		p.numPayloads -= numComplete

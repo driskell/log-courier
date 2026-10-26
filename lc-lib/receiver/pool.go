@@ -151,7 +151,7 @@ ReceiverLoop:
 				expectedAck := r.connectionStatus[connection].progress[0]
 				expectedEvent := expectedAck.event
 				receiver := expectedEvent.Context().Value(transports.ContextReceiver).(transports.Receiver)
-				if err := receiver.Acknowledge(expectedEvent.Context(), expectedEvent.Nonce(), expectedAck.sequence); err != nil {
+				if err := receiver.Acknowledge(expectedEvent.Context(), expectedEvent.Nonce(), expectedAck.ackedThrough); err != nil {
 					r.failConnection(expectedEvent.Context(), receiver, connection, err)
 				}
 				r.scheduler.Set(connection, time.Second*5)
@@ -160,21 +160,18 @@ ReceiverLoop:
 			r.scheduler.Reschedule()
 		case events := <-r.ackChan:
 			r.connectionLock.Lock()
-			currentContext := events[0].Context()
-			connection := currentContext.Value(transports.ContextConnection)
-			position := currentContext.Value(poolContextEventPosition).(*poolEventPosition)
+			// Acknowledge each run of consecutive events from the same payload as one range
+			position := events[0].Context().Value(poolContextEventPosition).(*poolEventPosition)
+			from := position.sequence
 			for _, item := range events[1:] {
-				nextConnection := item.Context().Value(transports.ContextConnection)
-				nextPosition := item.Context().Value(poolContextEventPosition).(*poolEventPosition)
-				// Also check for backwards or same sequence - this effectively manages cases of duplicate nonce as sequence will remain same or reset to 0
-				if nextConnection != connection || *nextPosition.nonce != *position.nonce || nextPosition.sequence <= position.sequence {
-					r.ackEventsEvent(currentContext, connection, position.nonce, position.sequence)
-					currentContext = item.Context()
-					connection = nextConnection
+				next := item.Context().Value(poolContextEventPosition).(*poolEventPosition)
+				if next.progress != position.progress || next.sequence != position.sequence+1 {
+					r.ackRange(position.progress, from, position.sequence)
+					from = next.sequence
 				}
-				position = nextPosition
+				position = next
 			}
-			r.ackEventsEvent(currentContext, connection, position.nonce, position.sequence)
+			r.ackRange(position.progress, from, position.sequence)
 			r.connectionLock.Unlock()
 
 			// If shutting down, have all acknowledgemente been handled, and all receivers closed?
@@ -202,6 +199,7 @@ ReceiverLoop:
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				connectionStatus := r.connectionStatus[connection]
 				var acker event.Acknowledger
+				var progress *poolEventProgress
 				if receiver.SupportsAck() {
 					if len(r.connectionStatus[connection].progress)+1 > int(r.receivers[receiver].config.MaxPendingPayloads) {
 						receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max pending payloads exceeded"))
@@ -212,7 +210,8 @@ ReceiverLoop:
 					if len(connectionStatus.progress) == 0 {
 						r.scheduler.Set(connection, 5*time.Second)
 					}
-					connectionStatus.progress = append(connectionStatus.progress, &poolEventProgress{event: eventImpl, sequence: 0})
+					progress = &poolEventProgress{event: eventImpl}
+					connectionStatus.progress = append(connectionStatus.progress, progress)
 					acker = r
 				} else {
 					// Reset idle timeout
@@ -237,7 +236,7 @@ ReceiverLoop:
 					if acker == nil {
 						ctx = eventImpl.Context()
 					} else {
-						ctx = context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{nonce: eventImpl.Nonce(), sequence: uint32(idx + 1)})
+						ctx = context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{progress: progress, sequence: uint32(idx + 1)})
 					}
 					var item *event.Event
 					if rawEvents != nil {
@@ -268,8 +267,8 @@ ReceiverLoop:
 					// Receive side is closed, and we're just sending, so it'll close automatically once flushed, so clear all scheduled timeouts
 					r.scheduler.Remove(connection)
 				} else {
-					// Add to the scheduler a nil progress to signal that when we finish ack everything - this connection can close
-					r.connectionStatus[connection].progress = append(r.connectionStatus[connection].progress, nil)
+					// Close once the remaining payloads are acknowledged
+					partialAcks.closing = true
 				}
 				r.connectionLock.Unlock()
 			case *transports.DisconnectEvent:
@@ -337,53 +336,44 @@ func (r *Pool) Acknowledge(events []*event.Event) {
 	r.ackChan <- events
 }
 
-// ackEventsEvent processes the acknowledgement, updating any pending partial acknowledgement schedules
-func (r *Pool) ackEventsEvent(ctx context.Context, connection interface{}, nonce *string, sequence uint32) {
+// ackRange processes the acknowledgement of a range of events from a payload, which may arrive in any order
+func (r *Pool) ackRange(progress *poolEventProgress, from uint32, to uint32) {
+	ctx := progress.event.Context()
+	connection := ctx.Value(transports.ContextConnection)
 	status, ok := r.connectionStatus[connection]
 	if !ok {
 		// Connection was lost and this was a late acknowledgement, abandon
 		return
 	}
-	if len(status.progress) == 0 {
-		panic(fmt.Sprintf("Out of order acknowledgement: Nonce=%x; Sequence=%d; ExpectedNonce=<none>; ExpectedSequenceMin=<none>; ExpectedSequenceMax=<none>", *nonce, sequence))
+
+	previous := progress.ackedThrough
+	if !progress.acknowledge(from, to) {
+		// A repeated acknowledgement, or one held until the events before it are acknowledged
+		return
+	}
+	status.lines += int64(progress.ackedThrough - previous)
+
+	if progress.complete() {
+		for idx, entry := range status.progress {
+			if entry == progress {
+				status.progress = append(status.progress[:idx], status.progress[idx+1:]...)
+				break
+			}
+		}
 	}
 
-	partialAcks := status.progress
-	expectedAck := partialAcks[0]
-	expectedEvent := expectedAck.event
-	endSequence := expectedEvent.Count()
-	if *expectedEvent.Nonce() != *nonce || sequence < expectedAck.sequence || sequence > endSequence {
-		panic(fmt.Sprintf("Out of order acknowledgement: Nonce=%x; Sequence=%d; ExpectedNonce=%x; ExpectedSequenceMin=%d; ExpectedSequenceMax=%d", *nonce, sequence, *expectedEvent.Nonce(), expectedAck.sequence, endSequence))
-	}
-
-	status.lines += int64(sequence - expectedAck.sequence)
-
-	lastAck := false
-	closeConnection := false
-	if sequence == endSequence {
-		if len(partialAcks) == 1 {
-			lastAck = true
-		} else if partialAcks[1] == nil {
-			lastAck = true
-			closeConnection = true
-		}
-		copy(partialAcks, partialAcks[1:])
-		status.progress = partialAcks[:len(partialAcks)-1]
-		if lastAck || closeConnection {
-			r.scheduler.Remove(connection)
-		} else {
-			r.scheduler.Set(connection, time.Second*5)
-		}
+	lastAck := len(status.progress) == 0
+	if lastAck {
+		r.scheduler.Remove(connection)
 	} else {
 		r.scheduler.Set(connection, time.Second*5)
-		expectedAck.sequence = sequence
 	}
 
 	receiver := ctx.Value(transports.ContextReceiver).(transports.Receiver)
-	if err := receiver.Acknowledge(ctx, nonce, sequence); err != nil {
+	if err := receiver.Acknowledge(ctx, progress.event.Nonce(), progress.ackedThrough); err != nil {
 		r.failConnection(ctx, receiver, connection, err)
-	} else if lastAck && closeConnection {
-		// Either it's the last ack for a connection on a shutting down receiver, or the connection read closed, so shutdown the connection
+	} else if lastAck && status.closing {
+		// The connection finished sending and everything it sent is now acknowledged, so shut it down
 		receiver.ShutdownConnection(ctx)
 	} else if lastAck {
 		r.startIdleTimeout(ctx, receiver, connection)

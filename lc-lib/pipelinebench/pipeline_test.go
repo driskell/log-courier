@@ -75,7 +75,7 @@ network:
 	app.Pipeline().AddSource(receiver.NewPool(app))
 	app.Pipeline().AddProcessor(spooler.NewSpooler(app))
 	app.Pipeline().AddProcessor(processor.NewPool(app))
-	app.Pipeline().SetSink(publisher.NewPublisher())
+	app.Pipeline().SetSink(publisher.NewPublisher(publisher.UnorderedAcks()))
 
 	p := &benchPipeline{app: app, done: make(chan struct{})}
 	signalChan := make(chan os.Signal, 1)

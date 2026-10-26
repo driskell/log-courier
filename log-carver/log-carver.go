@@ -71,7 +71,7 @@ func main() {
 	app.Pipeline().AddProcessor(processor.NewPool(app))
 
 	// Create sink
-	app.Pipeline().SetSink(publisher.NewPublisher())
+	app.Pipeline().SetSink(publisher.NewPublisher(publisher.UnorderedAcks()))
 
 	// Go!
 	app.Run()

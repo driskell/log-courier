@@ -38,9 +38,8 @@ type Pool struct {
 	pipelines     *Config
 	debugEvents   bool
 	escapeControl bool
-	sequencer     *event.Sequencer
-	fanout        chan *event.Bundle
-	collector     chan *event.Bundle
+	fanout        chan []*event.Event
+	collector     chan []*event.Event
 	guard         *timestampGuard
 
 	apiConfig *admin.Config
@@ -50,7 +49,6 @@ type Pool struct {
 func NewPool(app *core.App) *Pool {
 	return &Pool{
 		input:     make(chan []*event.Event, 1),
-		sequencer: event.NewSequencer(),
 		guard:     &timestampGuard{},
 		apiConfig: admin.FetchConfig(app.Config()),
 	}
@@ -101,8 +99,8 @@ func (p *Pool) Run() {
 		inputChan := p.input
 
 		// Setup channels
-		p.fanout = make(chan *event.Bundle, routineCount)
-		p.collector = make(chan *event.Bundle, routineCount)
+		p.fanout = make(chan []*event.Event, routineCount)
+		p.collector = make(chan []*event.Event, routineCount)
 
 		log.Infof("Processor starting %d routines", routineCount)
 		for i := 0; i < routineCount; i++ {
@@ -136,22 +134,17 @@ func (p *Pool) Run() {
 				// That will account for each routine inside a call to collector
 				// And then one extra on the channel waiting
 				// Any subsequent send would block - yet the processor is waiting on us to collect
-				// We could have two separate routines to fanout and collect but since we're
-				// handling resequencing we should just have one to coordinate that
 				inProgress++
 				if inProgress >= routineCount*2 {
 					inputChan = nil
 				}
 
-				bundle := event.NewBundle(events)
-				p.sequencer.Track(bundle)
-
 				select {
 				case <-p.shutdownChan:
-				case p.fanout <- bundle:
+				case p.fanout <- events:
 				}
-			case bundle := <-p.collector:
-				if bundle == nil {
+			case events := <-p.collector:
+				if events == nil {
 					// A routine shutdown
 					routineCount--
 					if routineCount == 0 {
@@ -166,16 +159,11 @@ func (p *Pool) Run() {
 					inputChan = p.input
 				}
 
-				result := p.sequencer.Enforce(bundle)
-
-			ForwardLoop:
-				for _, bundle := range result {
-					select {
-					case <-p.shutdownChan:
-						shutdown = true
-						break ForwardLoop
-					case p.output <- bundle.Events():
-					}
+				// Forwarded as soon as processed, as acknowledgements no longer depend on the order events are output
+				select {
+				case <-p.shutdownChan:
+					shutdown = true
+				case p.output <- events:
 				}
 			}
 		}
@@ -202,23 +190,22 @@ func (p *Pool) processorRoutine(id int) {
 		select {
 		case <-p.shutdownChan:
 			return
-		case bundle := <-p.fanout:
-			if bundle == nil {
+		case events := <-p.fanout:
+			if events == nil {
 				return
 			}
 
 			start := time.Now()
-			events := bundle.Events()
 			for idx, event := range events {
 				events[idx] = p.processEvent(event)
 			}
 
-			log.Debugf("[Processor %d] Processed %d events in %v", id, bundle.Len(), time.Since(start))
+			log.Debugf("[Processor %d] Processed %d events in %v", id, len(events), time.Since(start))
 
 			select {
 			case <-p.shutdownChan:
 				return
-			case p.collector <- bundle:
+			case p.collector <- events:
 			}
 		}
 	}
