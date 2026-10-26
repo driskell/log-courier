@@ -34,13 +34,14 @@ type Pool struct {
 	shutdownChan <-chan struct{}
 	configChan   <-chan *config.Config
 
-	cfg         *config.Config
-	pipelines   *Config
-	debugEvents bool
-	sequencer   *event.Sequencer
-	fanout      chan *event.Bundle
-	collector   chan *event.Bundle
-	guard       *timestampGuard
+	cfg           *config.Config
+	pipelines     *Config
+	debugEvents   bool
+	escapeControl bool
+	sequencer     *event.Sequencer
+	fanout        chan *event.Bundle
+	collector     chan *event.Bundle
+	guard         *timestampGuard
 
 	apiConfig *admin.Config
 }
@@ -228,6 +229,10 @@ func (p *Pool) processEvent(evnt *event.Event) *event.Event {
 	for _, entry := range p.pipelines.AST {
 		evnt = entry.Process(evnt)
 	}
+	// Escape after the pipeline so actions can still parse data separated by control characters
+	if p.escapeControl {
+		evnt = escapeControlEvent(evnt)
+	}
 	if p.guard.Check(evnt, time.Now()) {
 		log.Debugf("Dropping event with out of range timestamp: %v", evnt.MustResolve("@timestamp", nil))
 	}
@@ -245,5 +250,6 @@ func (p *Pool) applyConfig(cfg *config.Config) {
 	p.pipelines = FetchConfig(cfg)
 	general := cfg.GeneralPart("processor").(*General)
 	p.debugEvents = general.DebugEvents
+	p.escapeControl = general.EscapeControlCharacters
 	p.guard.SetLimits(general.MaximumEventAge, general.MaximumFutureEventAge)
 }

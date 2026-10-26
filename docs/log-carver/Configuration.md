@@ -18,6 +18,7 @@
     - [`listen address`](#listen-address)
   - [`general`](#general)
     - [`debug events`](#debug-events)
+    - [`escape control characters`](#escape-control-characters)
     - [`log file`](#log-file)
     - [`log level`](#log-level)
     - [`log stdout`](#log-stdout)
@@ -334,6 +335,12 @@ The general configuration affects the general behaviour of Log Carver.
 Boolean. Optional. Default: false
 
 Enables debugging of event data. Events will be output to the logs in debug level messages after processing of the event is completed, to allow inspection of pipeline results.
+
+### `escape control characters`
+
+Boolean. Optional. Default: true
+
+Escapes terminal control characters throughout every event after the pipeline has run, as if an [`escape_control`](actions/EscapeControl.md) action were the last action. Actions therefore still see the original data, so they can parse values separated by control characters such as the `\x1D` in Linux audit logs, and anything they decode is escaped too, such as the [`kv`](actions/KV.md) `unquoted hex` option or `json.decode` in a [`set_field`](actions/SetField.md) expression. Control characters are escaped as `\xHH` (for example ESC as `\x1B`), along with any backslash in the same value as `\\`, and tab and newline are kept. Affected events are tagged with `_control_chars`, and with `_control_chars_<field>` for each top-level field that had any, such as `_control_chars_message`. Take care if you disable it: log data can then carry escape sequences that move the cursor, rewrite or hide lines, or set the clipboard when displayed in a terminal, so view stored events through something that escapes them, such as `less`, rather than tools like `cat`, `tail` or the `mysql` client that print them raw.
 
 ## `geoip account id`
 
@@ -811,6 +818,7 @@ Available actions are:
 
 - [Add Tag](actions/AddTag.md)
 - [Date](actions/Date.md)
+- [Escape Control](actions/EscapeControl.md)
 - [GeoIP](actions/GeoIP.md)
 - [Grok](actions/Grok.md)
 - [Key-Value](actions/KV.md)

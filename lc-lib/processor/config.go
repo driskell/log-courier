@@ -30,8 +30,9 @@ const (
 	astStatePipeline astState = iota
 	astStateIf
 
-	defaultGeneralProcessorRoutines    = 4
-	defaultGeneralProcessorDebugEvents = false
+	defaultGeneralProcessorRoutines                = 4
+	defaultGeneralProcessorDebugEvents             = false
+	defaultGeneralProcessorEscapeControlCharacters = true
 )
 
 const (
@@ -41,10 +42,11 @@ const (
 
 // General contains general configuration values
 type General struct {
-	ProcessorRoutines     int           `config:"processor routines"`
-	DebugEvents           bool          `config:"debug events"`
-	MaximumEventAge       time.Duration `config:"maximum event age"`
-	MaximumFutureEventAge time.Duration `config:"maximum future event age"`
+	ProcessorRoutines       int           `config:"processor routines"`
+	DebugEvents             bool          `config:"debug events"`
+	EscapeControlCharacters bool          `config:"escape control characters"`
+	MaximumEventAge         time.Duration `config:"maximum event age"`
+	MaximumFutureEventAge   time.Duration `config:"maximum future event age"`
 }
 
 // Config contains configuration for a processor pipeline
@@ -229,10 +231,11 @@ func FetchConfig(cfg *config.Config) *Config {
 func init() {
 	config.RegisterGeneral("processor", func() interface{} {
 		return &General{
-			ProcessorRoutines:     defaultGeneralProcessorRoutines,
-			DebugEvents:           defaultGeneralProcessorDebugEvents,
-			MaximumEventAge:       defaultGeneralProcessorMaximumEventAge,
-			MaximumFutureEventAge: defaultGeneralProcessorMaximumFutureEventAge,
+			ProcessorRoutines:       defaultGeneralProcessorRoutines,
+			DebugEvents:             defaultGeneralProcessorDebugEvents,
+			EscapeControlCharacters: defaultGeneralProcessorEscapeControlCharacters,
+			MaximumEventAge:         defaultGeneralProcessorMaximumEventAge,
+			MaximumFutureEventAge:   defaultGeneralProcessorMaximumFutureEventAge,
 		}
 	})
 

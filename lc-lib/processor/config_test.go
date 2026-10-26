@@ -80,3 +80,11 @@ func TestGeneralValidateEventBoundsDisabled(t *testing.T) {
 		t.Errorf("Validation failed unexpectedly: %s", err)
 	}
 }
+
+func TestGeneralEscapeControlCharactersDefaultsOn(t *testing.T) {
+	general := config.NewConfig().GeneralPart("processor").(*General)
+
+	if !general.EscapeControlCharacters {
+		t.Error("Escaping control characters is not enabled by default")
+	}
+}

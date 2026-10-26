@@ -278,7 +278,8 @@ func (t *transportDoris) httpRoutine(id int) {
 						}
 						break
 					}
-					log.Errorf("[T %s]{%d} Doris stream load failed: %s", addr.Desc(), id, err)
+					message, _ := event.EscapeControl(err.Error())
+					log.Errorf("[T %s]{%d} Doris stream load failed: %s", addr.Desc(), id, message)
 
 					if t.retryWait(backoff) {
 						return

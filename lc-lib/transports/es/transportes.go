@@ -308,7 +308,8 @@ func (t *transportES) httpRoutine(id int) {
 					err = t.performBulkRequest(addr, id, request)
 				}
 				if err != nil {
-					log.Errorf("[T %s]{%d} Elasticsearch request failed: %s", addr.Desc(), id, err)
+					message, _ := event.EscapeControl(err.Error())
+					log.Errorf("[T %s]{%d} Elasticsearch request failed: %s", addr.Desc(), id, message)
 				}
 
 				if request.AckSequence() != lastAckSequence {
@@ -426,10 +427,11 @@ func (t *transportES) performBulkRequest(addr *addresspool.Address, id int, requ
 
 // logEventErrors logs errors from events
 func logEventErrors(desc string, id int, lastError *bulkResponseError, lastCount int) {
+	message, _ := event.EscapeControl(lastError.Error())
 	if lastCount > 1 {
-		log.Warningf("[T %s]{%d} Failed to index event: %s [Repeated for %d more events]", desc, id, lastError.Error(), lastCount)
+		log.Warningf("[T %s]{%d} Failed to index event: %s [Repeated for %d more events]", desc, id, message, lastCount)
 	} else {
-		log.Warningf("[T %s]{%d} Failed to index event: %s", desc, id, lastError.Error())
+		log.Warningf("[T %s]{%d} Failed to index event: %s", desc, id, message)
 	}
 }
 
