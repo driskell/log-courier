@@ -5,9 +5,8 @@ gemspec
 # Profiler for MRI
 gem 'ruby-prof', '~> 1.4.3', :platforms => :mri, :group => 'test'
 
-# Log Courier gem JSON parsers
+# Log Courier gem JSON parser
 # TODO(Driskell): Move these into platform specific gems?
-gem 'oj', '~> 3.13.9', :platforms => :mri
 gem 'jrjackson', '~> 0.4.11',  :platforms => :jruby
 
 group :development do
