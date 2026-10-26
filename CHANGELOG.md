@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.13.0](https://github.com/driskell/log-courier/compare/v2.12.0...v2.13.0) (2026-10-26)
+
+
+### Features
+
+* Add new nested, separator and unquoted hex optons to the kv action to better support auditd logs ([f48ca7b](https://github.com/driskell/log-courier/commit/f48ca7bc02a149dca10ed43bbc15bc3a7172c26c))
+* Additional admin API cleanup to remove unnecessary outputs, add transport types to lieceners, and add max queue size ([788e098](https://github.com/driskell/log-courier/commit/788e098715e05940020b22b432458b640daa02d2))
+* Allow event key names to include escaped brackets to avoid nesting ([79d3604](https://github.com/driskell/log-courier/commit/79d360465575fff1bdd721a022c8eebdd11d1da9))
+* Do not report EOF on status checks on TLS ports and reduce logging of regular connections without debug ([a81ebf7](https://github.com/driskell/log-courier/commit/a81ebf75c3bc1ecdea66c2e8058a224d96ad39ee))
+* Implement Doris streamloader transport ([aad723b](https://github.com/driskell/log-courier/commit/aad723b772d3b56d058f660036e06736d33e6c4c))
+* Implement max pending queue size to limit spooler size and remove receive count restriction on streams ([46dcea5](https://github.com/driskell/log-courier/commit/46dcea5363243c75b9af374a6821b45b5dd18036))
+* Implement support for the PROXY protocol with new -proxy suffix transports ([ccc7b59](https://github.com/driskell/log-courier/commit/ccc7b59b737998497d2126225fabeb8143a5cef6))
+* Improve lc-admin API code ([9838d15](https://github.com/driskell/log-courier/commit/9838d1528f7fd572f4a4f37c13a82543c5161ca7))
+* Improved geoip database handling and reload ([d908e4a](https://github.com/driskell/log-courier/commit/d908e4a43d2785994dbb94d8f0a565530849b6d1))
+* Integer environment variables ([f2ba2f6](https://github.com/driskell/log-courier/commit/f2ba2f69220f62af77ba759ee210ea585800055c))
+* Integrate GeoIP database download and update if account ID and license key is set ([a343067](https://github.com/driskell/log-courier/commit/a343067fd5bece63bef0624c167595e03c95df14))
+* Introduce maximum event ages and protection against future events with new configuration options ([43e7864](https://github.com/driskell/log-courier/commit/43e78646cf21858c5b2490b1c5616d14bc2b1717))
+* One more reduction of error logs if EOF on handshake which could be a status check ([ec06228](https://github.com/driskell/log-courier/commit/ec062281a361a92b3c9e0e2ccec9b42a98a4a716))
+
+
+### Bug Fixes
+
+* Date action no longer incorrectly parses fractional float date elements ([c036340](https://github.com/driskell/log-courier/commit/c0363400d08da91eefa3e635183fd5aed78c47de))
+* Ensure control characters are escaped by default at the end of all pipelines for safety before storage ([7d88645](https://github.com/driskell/log-courier/commit/7d886455f79144d4c8e1855a19f577a03293122e))
+* Ensure publish timeout is not ignored ([a049201](https://github.com/driskell/log-courier/commit/a0492017fee7a1b0e6a52436e8701259dbe4294c))
+* Fix build dependency issue on xenial ([9302087](https://github.com/driskell/log-courier/commit/9302087e82abf4d58fa0c5776c1b30509858a5ac))
+* Fix missing logic to not output pending payloads on streaming connections ([1f97a54](https://github.com/driskell/log-courier/commit/1f97a54e34d92cb4743b5d19895c2385f72f8e9c))
+* Fix PPA workflow artifact conflict between log-courier and lc-admin ([3bf6d7e](https://github.com/driskell/log-courier/commit/3bf6d7ebab74dd4af6a90d776b0473fd2f55a5cc))
+* Fix race on column setup in Doris and fix incompatibility with Doris 4.1 ([04a7956](https://github.com/driskell/log-courier/commit/04a7956b08696da7353b1102b41f2394874166ab))
+* Prevent json decoding of "nested[item]" becoming item within nested instead of the literal JSON key that is expected ([d5f539d](https://github.com/driskell/log-courier/commit/d5f539d64a740cef84512cf1b534fc97b71208de))
+* Reduce noise on connection acceptance and closure especially when using short-lived streams ([edbe46e](https://github.com/driskell/log-courier/commit/edbe46e044eec02aacbe211bbd56b860b92f3dfd))
+* Remove taint checking that is deprecated from 3.0 ([508dcb8](https://github.com/driskell/log-courier/commit/508dcb834f639a0319fed96816e161f73f36ae62))
+* Resolve pool crash on start due to new event queue structure, improve admin API output, and fix streams not counting completedLines ([29c5745](https://github.com/driskell/log-courier/commit/29c5745a983adf85a3977c10fc9a37e3ecc8929e))
+* Resolve second artifact upload conflict for PPA between log-courier and log-carver ([5e5d5ca](https://github.com/driskell/log-courier/commit/5e5d5caef213cf3d3091063f4df11e5ce17f6225))
+* Resolve systemd packaging issue on xenial and distributions above and equal to jammy ([346caf4](https://github.com/driskell/log-courier/commit/346caf46919afc07af9cf767b65b649fdd5b100b))
+* Show correct local bind address not the proxy bind address ([f5095de](https://github.com/driskell/log-courier/commit/f5095de08d014dc4559cc71807aabda3532fea5f))
+
 ## [2.12.0](https://github.com/driskell/log-courier/compare/v2.11.0...v2.12.0) (2025-02-18)
 
 
