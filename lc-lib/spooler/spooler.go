@@ -213,7 +213,7 @@ func (s *Spooler) reloadConfig(cfg *config.Config) bool {
 		} else if !s.timer.Stop() {
 			<-s.timer.C
 		}
-		s.timer.Reset(passed - s.genConfig.SpoolTimeout)
+		s.timer.Reset(s.genConfig.SpoolTimeout - passed)
 	}
 
 	return true
