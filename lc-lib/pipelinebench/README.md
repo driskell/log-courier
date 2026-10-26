@@ -33,7 +33,7 @@ Fairness metrics:
 | Metric | Meaning |
 | --- | --- |
 | `events/s`, `heavy-events/s`, `light-events/s` | Events acknowledged per second, overall and per sender class |
-| `heavy-p50-ms`, `light-p50-ms`, `light-p90-ms`, `light-p95-ms`, `light-p99-ms`, `light-max-ms` | Time from sending a payload to its full acknowledgement |
+| `heavy-p50-ms`, `light-p50-ms`, `light-p90-ms`, `light-p95-ms`, `light-p99-ms`, `light-p999-ms` | Time from sending a payload to its full acknowledgement. `light-p999-ms` shows a minority of light connections being starved, and is used rather than the maximum, which a single pause can set |
 | `light-wait-ratio` | `light-p50-ms` divided by `heavy-p50-ms`. Near 1 when light senders wait as long as heavy ones despite sending far less, and lower when they are served ahead of heavy backlogs. It isolates fairness from speed, as faster processing lowers both latencies but leaves the ratio unchanged |
 | `closes` | Connections closed by the receiver, for example when the queue is full. A closed connection stops sending, so also reported by throughput, where it means fewer events were delivered |
 

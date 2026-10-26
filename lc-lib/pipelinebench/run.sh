@@ -91,7 +91,7 @@ compare() {
 			if (change ~ /%$/) {
 				delta = substr(change, 1, length(change) - 1) + 0
 				size = delta < 0 ? -delta : delta
-				higherBetter = unit ~ /events\/s$/
+				higherBetter = unit ~ /\/s$/
 				verdict = delta == 0 ? "same" : (higherBetter ? delta > 0 : delta < 0) ? "better" : "worse"
 			}
 			line = sprintf("%-60s %-15s %9s  %-7s  %s", name, unit, change, verdict, $7)

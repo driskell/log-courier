@@ -36,12 +36,13 @@ func (p *benchProtocol) Read() (transports.Event, error)         { return nil, n
 func (p *benchProtocol) NonBlocking() bool                       { return false }
 
 // newBenchSocket returns one end of a loopback TCP connection
-func newBenchSocket(b *testing.B) *benchSocket {
+func newBenchSocket(tb testing.TB) *benchSocket {
+	tb.Helper()
 	listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
-		b.Fatal(err)
+		tb.Fatal(err)
 	}
-	b.Cleanup(func() { listener.Close() })
+	tb.Cleanup(func() { listener.Close() })
 	accepted := make(chan *net.TCPConn, 1)
 	go func() {
 		conn, _ := listener.AcceptTCP()
@@ -49,11 +50,11 @@ func newBenchSocket(b *testing.B) *benchSocket {
 	}()
 	conn, err := net.DialTCP("tcp", nil, listener.Addr().(*net.TCPAddr))
 	if err != nil {
-		b.Fatal(err)
+		tb.Fatal(err)
 	}
-	b.Cleanup(func() { conn.Close() })
+	tb.Cleanup(func() { conn.Close() })
 	if remote := <-accepted; remote != nil {
-		b.Cleanup(func() { remote.Close() })
+		tb.Cleanup(func() { remote.Close() })
 	}
 	return &benchSocket{TCPConn: conn}
 }
