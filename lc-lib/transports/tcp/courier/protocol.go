@@ -28,6 +28,7 @@ import (
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/transports"
 	"github.com/driskell/log-courier/lc-lib/transports/tcp"
+	"gopkg.in/op/go-logging.v1"
 )
 
 type protocol struct {
@@ -119,12 +120,16 @@ func (p *protocol) SendEvents(nonce string, events []*event.Event) error {
 
 	if p.supportsEvnt {
 		msg := &protocolEVNT{nonce: &nonce, events: eventsAsBytes}
-		log.Debugf("[T %s > %s] Sending %s payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
+		if log.IsEnabledFor(logging.DEBUG) {
+			log.Debugf("[T %s > %s] Sending %s payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(eventsAsBytes))
+		}
 		return p.conn.SendMessage(msg)
 	}
 
 	msg := &protocolJDAT{nonce: &nonce, events: eventsAsBytes}
-	log.Debugf("[T %s > %s] Sending %s payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(msg.Events()))
+	if log.IsEnabledFor(logging.DEBUG) {
+		log.Debugf("[T %s > %s] Sending %s payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), msg.Type(), *msg.Nonce(), len(eventsAsBytes))
+	}
 	return p.conn.SendMessage(msg)
 }
 
