@@ -50,7 +50,8 @@ else
 
 	mkdir "$(pwd)/bin-i386" "$(pwd)/bin-amd64" "$(pwd)/bin-arm64"
 	GOARCH=386 go build -mod=vendor -o "$(pwd)/bin-i386" . ./lc-admin ./log-carver ./lc-tlscert
-	GOARCH=amd64 go build -mod=vendor -o "$(pwd)/bin-amd64" . ./lc-admin ./log-carver ./lc-tlscert
+	# Native amd64 enables cgo by default, so disable it to produce a static binary matching the cross-compiled targets
+	CGO_ENABLED=0 GOARCH=amd64 go build -mod=vendor -o "$(pwd)/bin-amd64" . ./lc-admin ./log-carver ./lc-tlscert
 	GOARCH=arm64 go build -mod=vendor -o "$(pwd)/bin-arm64" . ./lc-admin ./log-carver ./lc-tlscert
 	cd -
 	echo '::endgroup::'
