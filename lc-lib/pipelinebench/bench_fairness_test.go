@@ -28,7 +28,6 @@ func BenchmarkPipelineFairness(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			var heavyEvents, lightEvents, closes int
 			var heavyLatencies, lightLatencies []time.Duration
-			var lightRates []float64
 			for i := 0; i < b.N; i++ {
 				p := startPipeline(b, pipelineConfig{
 					sink:                       sinkConfig{routines: 4, payloadLatency: 10 * time.Millisecond},
@@ -57,7 +56,6 @@ func BenchmarkPipelineFairness(b *testing.B) {
 					}
 					lightEvents += result.events
 					lightLatencies = append(lightLatencies, result.latencies...)
-					lightRates = append(lightRates, float64(result.events)/duration.Seconds())
 				}
 			}
 
@@ -68,11 +66,15 @@ func BenchmarkPipelineFairness(b *testing.B) {
 			b.ReportMetric(float64(heavyEvents+lightEvents)/seconds, "events/s")
 			b.ReportMetric(float64(heavyEvents)/seconds, "heavy-events/s")
 			b.ReportMetric(float64(lightEvents)/seconds, "light-events/s")
-			b.ReportMetric(float64(percentile(heavyLatencies, 0.5))/float64(time.Millisecond), "heavy-p50-ms")
-			b.ReportMetric(float64(percentile(lightLatencies, 0.5))/float64(time.Millisecond), "light-p50-ms")
+			heavyP50, lightP50 := percentile(heavyLatencies, 0.5), percentile(lightLatencies, 0.5)
+			b.ReportMetric(float64(heavyP50)/float64(time.Millisecond), "heavy-p50-ms")
+			b.ReportMetric(float64(lightP50)/float64(time.Millisecond), "light-p50-ms")
 			b.ReportMetric(float64(percentile(lightLatencies, 0.99))/float64(time.Millisecond), "light-p99-ms")
 			b.ReportMetric(float64(percentile(lightLatencies, 1))/float64(time.Millisecond), "light-max-ms")
-			b.ReportMetric(jainIndex(lightRates), "light-jain")
+			// Near 1 when light senders wait as long as heavy ones, so fairness changes show apart from speed changes
+			if heavyP50 != 0 {
+				b.ReportMetric(float64(lightP50)/float64(heavyP50), "light-wait-ratio")
+			}
 			b.ReportMetric(float64(closes)/float64(b.N), "closes")
 		})
 	}
