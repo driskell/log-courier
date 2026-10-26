@@ -35,7 +35,7 @@ run() {
 		echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 		echo "go: $(go env GOVERSION)"
 		echo
-		go test ./lc-lib/event ./lc-lib/spooler ./lc-lib/transports/tcp/courier -run '^$' -bench . -benchmem -count "$COUNT"
+		go test ./lc-lib/event ./lc-lib/spooler ./lc-lib/transports/tcp ./lc-lib/transports/tcp/courier -run '^$' -bench . -benchmem -count "$COUNT"
 		go test ./lc-lib/pipelinebench -run '^$' -bench Throughput -benchmem -count "$COUNT"
 		go test ./lc-lib/pipelinebench -run '^$' -bench Fairness -benchtime 1x -count "$COUNT"
 	} | tee "$DIR/latest.txt.tmp"

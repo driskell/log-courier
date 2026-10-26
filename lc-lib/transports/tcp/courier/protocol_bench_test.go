@@ -1,9 +1,11 @@
 package courier
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"testing"
@@ -18,16 +20,28 @@ var silenceLoggingOnce sync.Once
 
 var benchEventJSON = []byte(`{"@timestamp":"2026-10-26T09:15:02.123Z","message":"10.0.0.12 - - [26/Oct/2026:09:15:02 +0000] \"GET /api/v1/items?page=2 HTTP/1.1\" 200 5123 \"-\" \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36\"","host":"web-01","path":"/var/log/nginx/access.log","offset":123456789,"type":"nginx","tags":["prod","web"],"fields":{"env":"prod","team":"platform"}}`)
 
-// discardConnection accepts and discards every message
-type discardConnection struct{}
+func silenceLogging() {
+	silenceLoggingOnce.Do(func() {
+		backend := logging.AddModuleLevel(logging.NewLogBackend(io.Discard, "", 0))
+		backend.SetLevel(logging.ERROR, "")
+		logging.SetBackend(backend)
+	})
+}
 
-func (c *discardConnection) Context() context.Context                      { return context.Background() }
-func (c *discardConnection) Write(data []byte) (int, error)                { return len(data), nil }
-func (c *discardConnection) Flush() error                                  { return nil }
-func (c *discardConnection) Read(data []byte) (int, error)                 { return 0, io.EOF }
-func (c *discardConnection) SendMessage(message tcp.ProtocolMessage) error { return nil }
-func (c *discardConnection) LocalAddr() net.Addr                           { return &net.TCPAddr{} }
-func (c *discardConnection) RemoteAddr() net.Addr                          { return &net.TCPAddr{} }
+// benchConnection records what is written to it, discards sent messages, and reads from a preset buffer
+type benchConnection struct {
+	written bytes.Buffer
+	reader  bytes.Reader
+}
+
+func (c *benchConnection) Context() context.Context                      { return context.Background() }
+func (c *benchConnection) Write(data []byte) (int, error)                { return c.written.Write(data) }
+func (c *benchConnection) Flush() error                                  { return nil }
+func (c *benchConnection) Read(data []byte) (int, error)                 { return c.reader.Read(data) }
+func (c *benchConnection) ReadByte() (byte, error)                       { return c.reader.ReadByte() }
+func (c *benchConnection) SendMessage(message tcp.ProtocolMessage) error { return nil }
+func (c *benchConnection) LocalAddr() net.Addr                           { return &net.TCPAddr{} }
+func (c *benchConnection) RemoteAddr() net.Addr                          { return &net.TCPAddr{} }
 
 // BenchmarkProtocolSendEventsEVNT hands one payload of encoded events to the connection as an EVNT message per op
 // excluding compression and the socket
@@ -50,11 +64,7 @@ func BenchmarkProtocolSendEventsEVNTUnencoded(b *testing.B) {
 // benchmarkProtocolSendEvents sends one 1024 event payload per op, with each event either already encoded as a
 // spooler leaves it, or unencoded as a processor leaves it
 func benchmarkProtocolSendEvents(b *testing.B, supportsEvnt bool, encoded bool) {
-	silenceLoggingOnce.Do(func() {
-		backend := logging.AddModuleLevel(logging.NewLogBackend(io.Discard, "", 0))
-		backend.SetLevel(logging.ERROR, "")
-		logging.SetBackend(backend)
-	})
+	silenceLogging()
 
 	events := make([]*event.Event, 1024)
 	for idx := range events {
@@ -68,7 +78,7 @@ func benchmarkProtocolSendEvents(b *testing.B, supportsEvnt bool, encoded bool) 
 		}
 		events[idx] = event.NewEvent(context.Background(), nil, data)
 	}
-	p := &protocol{conn: &discardConnection{}, isClient: true, supportsEvnt: supportsEvnt}
+	p := &protocol{conn: &benchConnection{}, isClient: true, supportsEvnt: supportsEvnt}
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -80,6 +90,35 @@ func benchmarkProtocolSendEvents(b *testing.B, supportsEvnt bool, encoded bool) 
 			}
 		}
 		if err := p.SendEvents("0123456789abcdef", events); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkProtocolReadEVNT reads one 1024 event EVNT message from the connection per op, including decompression
+// but excluding the socket; MB/s is the rate of decompressed event data
+func BenchmarkProtocolReadEVNT(b *testing.B) {
+	silenceLogging()
+
+	events := make([][]byte, 1024)
+	for idx := range events {
+		events[idx] = benchEventJSON
+	}
+	nonce := "0123456789abcdef"
+	writer := &benchConnection{}
+	if err := (&protocolEVNT{nonce: &nonce, events: events}).Write(writer); err != nil {
+		b.Fatal(err)
+	}
+	// The message type and length header is read before the message is constructed
+	body := writer.written.Bytes()[8:]
+	reader := &benchConnection{}
+
+	b.SetBytes(int64(len(benchEventJSON) * len(events)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		reader.reader.Reset(body)
+		if _, err := newProtocolEVNT(reader, math.MaxUint32); err != nil {
 			b.Fatal(err)
 		}
 	}

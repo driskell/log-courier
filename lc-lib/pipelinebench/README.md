@@ -84,4 +84,6 @@ change to make it the new reference, keeping past references in its history.
 | --- | --- | --- |
 | `lc-lib/event` | `BenchmarkEventBytes`, `BenchmarkEventDataFromBytes` | Encoding or decoding one event |
 | `lc-lib/spooler` | `BenchmarkSpoolerEncodedEvents`, `BenchmarkSpoolerUnencodedEvents` | Spooling one batch of 128 events, with or without an existing encoding |
+| `lc-lib/transports/tcp` | `BenchmarkConnectionReadCompressed` | Decompressing one 1024 event payload read through a connection over a real loopback socket |
 | `lc-lib/transports/tcp/courier` | `BenchmarkProtocolSendEvents*` | Handing one 1024 event payload to a connection, with or without an existing encoding |
+| `lc-lib/transports/tcp/courier` | `BenchmarkProtocolReadEVNT` | Reading one 1024 event EVNT message from a connection, including decompression |
