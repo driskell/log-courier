@@ -19,10 +19,13 @@ import (
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
-// sinkConfig describes the simulated output: each routine encodes a payload then waits payloadLatency
+// sinkConfig describes the simulated output: each routine encodes a payload then waits payloadLatency,
+// or slowLatency for one in every slowEvery payloads when set
 type sinkConfig struct {
 	routines       int
 	payloadLatency time.Duration
+	slowEvery      int
+	slowLatency    time.Duration
 }
 
 // pipelineConfig describes the configuration differences between scenarios
@@ -57,7 +60,9 @@ network:
   servers: [127.0.0.1]
   routines: %d
   payload latency: %s
-`, dir, benchTransport, cfg.receiverMaxPendingPayloads, benchTransport, cfg.sink.routines, cfg.sink.payloadLatency)
+  slow every: %d
+  slow latency: %s
+`, dir, benchTransport, cfg.receiverMaxPendingPayloads, benchTransport, cfg.sink.routines, cfg.sink.payloadLatency, cfg.sink.slowEvery, cfg.sink.slowLatency)
 	if err := os.WriteFile(path, []byte(yaml), 0600); err != nil {
 		tb.Fatal(err)
 	}
@@ -116,7 +121,7 @@ func (p *benchPipeline) connect(name string, payloadEvents int, depth int) *benc
 		receiver: p.receiver,
 		payload:  newBenchPayload(payloadEvents),
 		depth:    depth,
-		acks:     make(chan struct{}, depth*2),
+		acks:     make(chan string, depth*2),
 		drops:    make(chan string, depth+1),
 	}
 	conn.ctx = context.WithValue(context.WithValue(context.Background(), transports.ContextReceiver, transports.Receiver(p.receiver)), transports.ContextConnection, conn)

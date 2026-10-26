@@ -41,7 +41,7 @@ type benchConnection struct {
 	receiver *benchReceiver
 	payload  [][]byte
 	depth    int
-	acks     chan struct{}
+	acks     chan string
 	drops    chan string
 	nonce    int
 }
@@ -68,32 +68,25 @@ func (c *benchConnection) run(maxPayloads int, deadline time.Time, recorded *syn
 	}
 	defer markRecordedDone()
 	stopChan := stop
-	onDrop := func(nonce string) {
-		result.closed = true
+	// Acknowledgements and drops are matched by nonce, as payloads may be acknowledged in any order
+	remove := func(nonce string) (inflightPayload, bool) {
 		for idx, entry := range inflight {
 			if entry.nonce == nonce {
 				if entry.recorded {
 					recordedInflight--
 				}
 				inflight = append(inflight[:idx], inflight[idx+1:]...)
-				break
+				return entry, true
 			}
 		}
+		return inflightPayload{}, false
 	}
-	// Drops are reported before any later payload is accepted, so draining them first keeps acks matched to payloads
-	drainDrops := func() {
-		for {
-			select {
-			case nonce := <-c.drops:
-				onDrop(nonce)
-			default:
-				return
-			}
-		}
+	onDrop := func(nonce string) {
+		result.closed = true
+		remove(nonce)
 	}
 
 	for {
-		drainDrops()
 		recording := !result.closed && sent < maxPayloads && time.Now().Before(deadline)
 		if !recording && recordedInflight == 0 {
 			markRecordedDone()
@@ -131,17 +124,14 @@ func (c *benchConnection) run(maxPayloads int, deadline time.Time, recorded *syn
 		}
 
 		select {
-		case <-c.acks:
-			drainDrops()
+		case nonce := <-c.acks:
 			acked := time.Now()
-			if inflight[0].recorded {
-				result.latencies = append(result.latencies, acked.Sub(inflight[0].sent))
+			if entry, ok := remove(nonce); ok && entry.recorded {
+				result.latencies = append(result.latencies, acked.Sub(entry.sent))
 				if acked.Before(deadline) {
 					result.events += len(c.payload)
 				}
-				recordedInflight--
 			}
-			inflight = inflight[1:]
 		case <-stopChan:
 			stopChan = nil
 		case nonce := <-c.drops:
@@ -185,13 +175,13 @@ func runConnections(tb testing.TB, conns []*benchConnection, maxPayloads func(id
 	return results
 }
 
-// acknowledge is called by the receiver pool and must never block it
-func (c *benchConnection) acknowledge(sequence uint32) {
+// acknowledge is called by the receiver pool and must never block it; only a payload's full acknowledgement completes it
+func (c *benchConnection) acknowledge(nonce string, sequence uint32) {
 	if int(sequence) != len(c.payload) {
 		return
 	}
 	select {
-	case c.acks <- struct{}{}:
+	case c.acks <- nonce:
 	default:
 	}
 }

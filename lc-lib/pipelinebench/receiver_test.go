@@ -28,7 +28,7 @@ type benchReceiver struct {
 }
 
 func (r *benchReceiver) Acknowledge(ctx context.Context, nonce *string, sequence uint32) error {
-	ctx.Value(transports.ContextConnection).(*benchConnection).acknowledge(sequence)
+	ctx.Value(transports.ContextConnection).(*benchConnection).acknowledge(*nonce, sequence)
 	return nil
 }
 

@@ -7,10 +7,13 @@ import (
 	"time"
 )
 
-// fairnessScenario mixes a few heavy senders with many light ones against an output with real latency
+// fairnessScenario mixes a few heavy senders with many light ones against an output with real latency,
+// where one in every slowEvery payloads takes slowLatency when set
 type fairnessScenario struct {
 	heavyConnections, heavyPayloadEvents, heavyDepth int
 	lightConnections, lightPayloadEvents             int
+	slowEvery                                        int
+	slowLatency                                      time.Duration
 }
 
 // BenchmarkPipelineFairness runs one fixed duration scenario per op, of a few heavy senders and many light ones against
@@ -23,14 +26,18 @@ func BenchmarkPipelineFairness(b *testing.B) {
 	for _, scenario := range []fairnessScenario{
 		{heavyConnections: 5, heavyPayloadEvents: 1024, heavyDepth: 1, lightConnections: 295, lightPayloadEvents: 10},
 		{heavyConnections: 5, heavyPayloadEvents: 1024, heavyDepth: 10, lightConnections: 295, lightPayloadEvents: 10},
+		{heavyConnections: 5, heavyPayloadEvents: 1024, heavyDepth: 1, lightConnections: 295, lightPayloadEvents: 10, slowEvery: 50, slowLatency: 250 * time.Millisecond},
 	} {
 		name := fmt.Sprintf("heavy=%dx%dx%d/light=%dx%d", scenario.heavyConnections, scenario.heavyPayloadEvents, scenario.heavyDepth, scenario.lightConnections, scenario.lightPayloadEvents)
+		if scenario.slowEvery > 0 {
+			name += fmt.Sprintf("/slow=1in%dx%s", scenario.slowEvery, scenario.slowLatency)
+		}
 		b.Run(name, func(b *testing.B) {
 			var heavyEvents, lightEvents, closes int
 			var heavyLatencies, lightLatencies []time.Duration
 			for i := 0; i < b.N; i++ {
 				p := startPipeline(b, pipelineConfig{
-					sink:                       sinkConfig{routines: 4, payloadLatency: 10 * time.Millisecond},
+					sink:                       sinkConfig{routines: 4, payloadLatency: 10 * time.Millisecond, slowEvery: scenario.slowEvery, slowLatency: scenario.slowLatency},
 					receiverMaxPendingPayloads: 10,
 				})
 				heavy := make([]*benchConnection, scenario.heavyConnections)

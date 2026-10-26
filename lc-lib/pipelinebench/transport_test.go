@@ -3,6 +3,7 @@ package pipelinebench
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
@@ -15,6 +16,8 @@ import (
 type benchTransportFactory struct {
 	Routines       int           `config:"routines"`
 	PayloadLatency time.Duration `config:"payload latency"`
+	SlowEvery      int64         `config:"slow every"`
+	SlowLatency    time.Duration `config:"slow latency"`
 }
 
 func newBenchTransportFactory(p *config.Parser, configPath string, unUsed map[string]interface{}, name string) (transports.TransportFactory, error) {
@@ -53,6 +56,7 @@ type benchTransportImpl struct {
 	factory   *benchTransportFactory
 	eventChan chan<- transports.Event
 	payloads  chan benchTransportPayload
+	sent      atomic.Int64
 	group     sync.WaitGroup
 	closeOnce sync.Once
 }
@@ -63,8 +67,13 @@ func (t *benchTransportImpl) routine() {
 		for _, evnt := range payload.events {
 			evnt.Bytes()
 		}
-		if t.factory.PayloadLatency > 0 {
-			time.Sleep(t.factory.PayloadLatency)
+		// One in every SlowEvery payloads takes SlowLatency instead, as a retried bulk request would
+		latency := t.factory.PayloadLatency
+		if t.factory.SlowEvery > 0 && t.sent.Add(1)%t.factory.SlowEvery == 0 {
+			latency = t.factory.SlowLatency
+		}
+		if latency > 0 {
+			time.Sleep(latency)
 		}
 		nonce := payload.nonce
 		t.eventChan <- transports.NewAckEvent(t.ctx, &nonce, uint32(len(payload.events)))

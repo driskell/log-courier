@@ -20,6 +20,12 @@ Only the edges are simulated:
 Similar throughput results across connection counts indicate a serial stage
 limits the pipeline.
 
+The fairness scenario suffixed `/slow=1in50x250ms` makes one in every 50
+payloads take 250ms at the output, as a retried bulk request would. While
+acknowledgements are released in a single global order, a slow payload holds
+back the acknowledgements of every payload behind it, so it shows in the light
+senders' `light-p99-ms` and `light-max-ms`.
+
 Fairness metrics:
 
 | Metric | Meaning |
