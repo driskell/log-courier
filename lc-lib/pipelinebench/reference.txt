@@ -1,0 +1,144 @@
+commit: 6dd7eeb74bfcea809da369f0d65b823f402d8435
+date: 2026-10-26T19:19:21Z
+go: go1.27.1
+
+goos: darwin
+goarch: arm64
+pkg: github.com/driskell/log-courier/lc-lib/event
+cpu: Apple M3 Pro
+BenchmarkEventBytes-12            	  612020	      2050 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  609118	      1955 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  620245	      2030 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  598088	      1937 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  617097	      2032 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  595846	      1935 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  631303	      2030 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  617316	      1936 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  626799	      2026 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  600001	      1941 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventDataFromBytes-12    	  425977	      2957 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  428674	      2820 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  426909	      2959 ns/op	    2337 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  411770	      2855 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  422424	      3001 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  421567	      2861 ns/op	    2337 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  424137	      2990 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  421220	      2868 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  421960	      3002 ns/op	    2337 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  420188	      2833 ns/op	    2338 B/op	      47 allocs/op
+PASS
+ok  	github.com/driskell/log-courier/lc-lib/event	25.196s
+goos: darwin
+goarch: arm64
+pkg: github.com/driskell/log-courier/lc-lib/spooler
+cpu: Apple M3 Pro
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1018 ns/op	 125767274 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1252780	      1000 ns/op	 127937326 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1254757	       992.8 ns/op	 128926296 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1214832	       990.8 ns/op	 129183459 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1223744	       958.8 ns/op	 133505765 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1221296	       991.0 ns/op	 129156100 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1027 ns/op	 124610258 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1253881	       963.7 ns/op	 132818724 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1032 ns/op	 123989663 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1237543	      1015 ns/op	 126086013 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4141	    274245 ns/op	    466736 events/s	  143518 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4441	    281574 ns/op	    454587 events/s	  143522 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4396	    272646 ns/op	    469474 events/s	  143523 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4327	    272882 ns/op	    469067 events/s	  143521 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4431	    278890 ns/op	    458963 events/s	  143521 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4278	    274129 ns/op	    466934 events/s	  143519 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4456	    284810 ns/op	    449422 events/s	  143523 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4485	    275753 ns/op	    464184 events/s	  143524 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4321	    280307 ns/op	    456643 events/s	  143536 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4387	    281264 ns/op	    455089 events/s	  143522 B/op	    3199 allocs/op
+PASS
+ok  	github.com/driskell/log-courier/lc-lib/spooler	32.835s
+goos: darwin
+goarch: arm64
+pkg: github.com/driskell/log-courier/lc-lib/transports/tcp/courier
+cpu: Apple M3 Pro
+BenchmarkProtocolSendEventsEVNT-12             	     462	   2599009 ns/op	 1578121 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	     459	   2754525 ns/op	 1578158 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	     448	   2629238 ns/op	 1578109 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	     418	   2683306 ns/op	 1578141 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	     456	   2622897 ns/op	 1578132 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	     416	   2735707 ns/op	 1578127 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	     445	   2769703 ns/op	 1578160 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	     457	   2606659 ns/op	 1578110 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	     462	   2739615 ns/op	 1578086 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	     454	   2675926 ns/op	 1578087 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     417	   2598573 ns/op	 1578115 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     462	   2667760 ns/op	 1578130 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     464	   2654950 ns/op	 1578118 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     464	   2711592 ns/op	 1578124 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     462	   2601457 ns/op	 1578129 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     457	   2733888 ns/op	 1578116 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     462	   2725270 ns/op	 1578120 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     464	   2614268 ns/op	 1578083 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     459	   2742408 ns/op	 1578086 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	     462	   2684207 ns/op	 1578129 B/op	   39950 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     230	   4930773 ns/op	 2725418 B/op	   65576 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     242	   5194765 ns/op	 2725295 B/op	   65575 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     235	   5077598 ns/op	 2725516 B/op	   65577 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     230	   4952820 ns/op	 2725393 B/op	   65576 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     241	   5219810 ns/op	 2725488 B/op	   65576 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     242	   5206582 ns/op	 2725404 B/op	   65576 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     241	   4943220 ns/op	 2725656 B/op	   65576 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     241	   5190401 ns/op	 2725007 B/op	   65574 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     240	   5192188 ns/op	 2725426 B/op	   65576 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     237	   4988909 ns/op	 2725373 B/op	   65576 allocs/op
+PASS
+ok  	github.com/driskell/log-courier/lc-lib/transports/tcp/courier	47.318s
+goos: darwin
+goarch: arm64
+pkg: github.com/driskell/log-courier/lc-lib/pipelinebench
+cpu: Apple M3 Pro
+BenchmarkPipelineThroughput/connections=1-12         	  192349	      6411 ns/op	    156107 events/s	    6569 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  170898	      6259 ns/op	    159863 events/s	    6664 B/op	     148 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  189572	      6425 ns/op	    156365 events/s	    6594 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  184866	      6162 ns/op	    162706 events/s	    6580 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  164547	      6215 ns/op	    161204 events/s	    6576 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  185434	      6228 ns/op	    161381 events/s	    6596 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  183019	      6209 ns/op	    161298 events/s	    6573 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  188137	      6357 ns/op	    157533 events/s	    6573 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  159399	      6433 ns/op	    155790 events/s	    6657 B/op	     148 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  166809	      6047 ns/op	    165480 events/s	    6567 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  177961	      7032 ns/op	    142369 events/s	    6573 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  161739	      6763 ns/op	    147917 events/s	    6565 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  177168	      7174 ns/op	    140193 events/s	    6604 B/op	     145 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  171510	      6920 ns/op	    144945 events/s	    6584 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  177265	      7055 ns/op	    142470 events/s	    6598 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  172455	      6621 ns/op	    151550 events/s	    6585 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  154834	      6962 ns/op	    144393 events/s	    6601 B/op	     145 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  173450	      7217 ns/op	    139072 events/s	    6588 B/op	     144 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  163957	      7019 ns/op	    143260 events/s	    6602 B/op	     145 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  148219	      6860 ns/op	    146031 events/s	    6577 B/op	     144 allocs/op
+PASS
+ok  	github.com/driskell/log-courier/lc-lib/pipelinebench	33.957s
+goos: darwin
+goarch: arm64
+pkg: github.com/driskell/log-courier/lc-lib/pipelinebench
+cpu: Apple M3 Pro
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    123904 events/s	     78848 heavy-events/s	        65.06 heavy-p50-ms	     45056 light-events/s	         1.000 light-jain	       113.7 light-max-ms	        65.10 light-p50-ms	       102.6 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    123904 events/s	     78848 heavy-events/s	        64.26 heavy-p50-ms	     45056 light-events/s	         1.000 light-jain	       109.4 light-max-ms	        64.60 light-p50-ms	       105.6 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    123904 events/s	     78848 heavy-events/s	        64.00 heavy-p50-ms	     45056 light-events/s	         1.000 light-jain	       113.5 light-max-ms	        64.50 light-p50-ms	       111.9 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    123904 events/s	     78848 heavy-events/s	        64.57 heavy-p50-ms	     45056 light-events/s	         1.000 light-jain	       115.4 light-max-ms	        64.42 light-p50-ms	       110.6 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    123904 events/s	     78848 heavy-events/s	        64.20 heavy-p50-ms	     45056 light-events/s	         1.000 light-jain	       135.0 light-max-ms	        63.79 light-p50-ms	       128.0 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    125542 events/s	     79872 heavy-events/s	        64.05 heavy-p50-ms	     45670 light-events/s	         1.000 light-jain	       113.1 light-max-ms	        63.95 light-p50-ms	       101.6 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    123904 events/s	     78848 heavy-events/s	        64.34 heavy-p50-ms	     45056 light-events/s	         1.000 light-jain	       107.5 light-max-ms	        64.57 light-p50-ms	        99.57 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    124348 events/s	     78848 heavy-events/s	        64.15 heavy-p50-ms	     45500 light-events/s	         1.000 light-jain	       119.5 light-max-ms	        64.41 light-p50-ms	       114.7 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    129718 events/s	     82330 heavy-events/s	        60.73 heavy-p50-ms	     47388 light-events/s	         1.000 light-jain	       115.1 light-max-ms	        60.93 light-p50-ms	       101.2 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    124312 events/s	     78848 heavy-events/s	        63.84 heavy-p50-ms	     45464 light-events/s	         1.000 light-jain	       121.8 light-max-ms	        63.61 light-p50-ms	       101.2 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    136943 events/s	    128819 heavy-events/s	       366.7 heavy-p50-ms	      8124 light-events/s	         0.9991 light-jain	       399.1 light-max-ms	       365.9 light-p50-ms	       395.6 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    134442 events/s	    126566 heavy-events/s	       373.5 heavy-p50-ms	      7876 light-events/s	         0.9987 light-jain	       441.0 light-max-ms	       372.9 light-p50-ms	       423.3 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    136696 events/s	    128614 heavy-events/s	       369.2 heavy-p50-ms	      8082 light-events/s	         0.9989 light-jain	       414.1 light-max-ms	       366.3 light-p50-ms	       396.6 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    143974 events/s	    135578 heavy-events/s	       351.1 heavy-p50-ms	      8396 light-events/s	         0.9991 light-jain	       417.4 light-max-ms	       349.9 light-p50-ms	       386.9 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    146500 events/s	    138240 heavy-events/s	       344.6 heavy-p50-ms	      8260 light-events/s	         1.000 light-jain	       395.0 light-max-ms	       343.5 light-p50-ms	       394.9 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    133052 events/s	    125338 heavy-events/s	       380.1 heavy-p50-ms	      7714 light-events/s	         0.9996 light-jain	       419.1 light-max-ms	       379.2 light-p50-ms	       403.7 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    133528 events/s	    125542 heavy-events/s	       380.4 heavy-p50-ms	      7986 light-events/s	         0.9986 light-jain	       418.9 light-max-ms	       378.8 light-p50-ms	       417.9 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    135063 events/s	    127181 heavy-events/s	       375.4 heavy-p50-ms	      7882 light-events/s	         0.9987 light-jain	       415.2 light-max-ms	       374.9 light-p50-ms	       415.2 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    137102 events/s	    129024 heavy-events/s	       368.3 heavy-p50-ms	      8078 light-events/s	         0.9989 light-jain	       413.1 light-max-ms	       366.2 light-p50-ms	       396.8 light-p99-ms
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    132425 events/s	    124723 heavy-events/s	       379.1 heavy-p50-ms	      7702 light-events/s	         0.9997 light-jain	       448.1 light-max-ms	       378.0 light-p50-ms	       420.8 light-p99-ms
+PASS
+ok  	github.com/driskell/log-courier/lc-lib/pipelinebench	206.834s

@@ -1,0 +1,79 @@
+# Pipeline Benchmarks
+
+Benchmarks for the log-carver pipeline, run in-process with the same wiring as
+`log-carver/log-carver.go`: receiver pool → spooler → processor → publisher.
+
+Only the edges are simulated:
+
+- **Connections** feed the receiver pool directly. Their payloads decode JSON on
+  every `Events()` call, as the courier protocol messages do.
+- **The output transport** sits behind the real publisher. Each of its routines
+  encodes a payload, waits a configured latency, then acknowledges it.
+
+## Benchmarks
+
+| Benchmark | One op is | Reports |
+| --- | --- | --- |
+| `BenchmarkPipelineThroughput` | One event through the whole pipeline to an output that acknowledges instantly, with `b.N` events split across 1 or 100 connections | `ns/op` and `allocs/op` per event, `events/s` |
+| `BenchmarkPipelineFairness` | One 5 second scenario (1 second with `-short`) of 5 heavy senders (1024 event payloads, 1 or 10 in flight) and 295 light senders (10 event payloads, 1 in flight) against an output with 10ms latency | Throughput and acknowledgement latency per sender class |
+
+Similar throughput results across connection counts indicate a serial stage
+limits the pipeline.
+
+Fairness metrics:
+
+| Metric | Meaning |
+| --- | --- |
+| `events/s`, `heavy-events/s`, `light-events/s` | Events acknowledged per second, overall and per sender class |
+| `heavy-p50-ms`, `light-p50-ms`, `light-p99-ms`, `light-max-ms` | Time from sending a payload to its full acknowledgement |
+| `light-jain` | Jain's fairness index of throughput across light connections, where 1 is perfectly equal |
+| `closes` | Connections closed by the receiver, for example when the queue is full |
+
+Only payloads sent before the scenario deadline are recorded. Load continues
+until every recorded payload is acknowledged so the tail of the run sees the
+same conditions, then connections drain and disconnect.
+
+## Running
+
+Throughput lets Go choose `b.N`. Fairness is one long scenario per op, so runs
+once per count:
+
+```sh
+go test ./lc-lib/pipelinebench -run '^$' -bench Throughput -benchmem -count 5
+go test ./lc-lib/pipelinebench -run '^$' -bench Fairness -benchtime 1x -count 5
+```
+
+Add `-cpuprofile`, `-memprofile`, `-blockprofile` or `-mutexprofile` to see
+where time, allocations or waiting occur.
+
+## Reference report
+
+`run.sh` runs these and the related micro benchmarks into a single report,
+`latest.txt`, headed with the commit, date and Go version, and compares it with
+the committed `reference.txt` using a pinned
+[benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat):
+
+```sh
+lc-lib/pipelinebench/run.sh                     # run, then compare with the reference
+lc-lib/pipelinebench/run.sh --diff              # compare the last run without running again
+lc-lib/pipelinebench/run.sh --update-reference  # make the last run the new reference
+```
+
+The comparison shows the full benchstat table, where `~` marks a change that is
+not statistically significant, followed by a summary of only the significant
+changes. Changes of at least `THRESHOLD` percent (default 10) are listed first,
+each marked better or worse for its metric. `COUNT` sets the runs per benchmark
+(default 10), as benchstat needs at least 4 to detect a change and 6 for a
+confidence interval.
+
+Results depend on the machine, so only compare reports from the same hardware;
+the report records the OS, architecture and CPU. Commit `reference.txt` with a
+change to make it the new reference, keeping past references in its history.
+
+## Related micro benchmarks
+
+| Package | Benchmarks | One op is |
+| --- | --- | --- |
+| `lc-lib/event` | `BenchmarkEventBytes`, `BenchmarkEventDataFromBytes` | Encoding or decoding one event |
+| `lc-lib/spooler` | `BenchmarkSpoolerEncodedEvents`, `BenchmarkSpoolerUnencodedEvents` | Spooling one batch of 128 events, with or without an existing encoding |
+| `lc-lib/transports/tcp/courier` | `BenchmarkProtocolSendEvents*` | Handing one 1024 event payload to a connection, with or without an existing encoding |
