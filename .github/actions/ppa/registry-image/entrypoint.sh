@@ -5,6 +5,8 @@ set -eo pipefail
 VERSION=${VERSION#refs/tags/}
 RELEASE=1
 DRELEASE=${DRELEASE}
+DISTS="trusty xenial bionic focal jammy noble oracular"
+PPA_FILES="https://launchpad.net/~devel-k/+archive/ubuntu/log-courier2/+sourcefiles/${NAME}"
 
 git config --global safe.directory /github/workspace
 
@@ -16,9 +18,32 @@ if [ "${NAME}" != "log-courier" ] && [ ! -d "${NAME}" ]; then
 fi
 echo '::endgroup::'
 
-if [ "${DRELEASE}" != 1 ]; then
+echo "::group::Checking for existing uploads of ${VERSION#v}-${RELEASE}~*${DRELEASE}"
+EXISTING=()
+for DIST in $DISTS; do
+	DIST_VERSION="${VERSION#v}-${RELEASE}~${DIST}${DRELEASE}"
+	# Launchpad redirects to the file when the version exists
+	STATUS=$(curl -sI -o /dev/null -w '%{http_code}' --max-time 60 "${PPA_FILES}/${DIST_VERSION}/${NAME}_${DIST_VERSION}.dsc")
+	case "${STATUS}" in
+	303) EXISTING+=("${DIST_VERSION}") ;;
+	404) ;;
+	*)
+		echo "Unexpected HTTP status ${STATUS} checking for ${DIST_VERSION}"
+		exit 1
+		;;
+	esac
+done
+echo "${EXISTING[*]:-None found}"
+echo '::endgroup::'
+
+if [ "${#EXISTING[@]}" -gt 0 ]; then
+	# Every upload of this version must share an identical orig tarball, so reuse the one already uploaded
+	echo "::group::Downloading original source for ${VERSION#v}-${RELEASE} from existing upload ${EXISTING[0]}"
+	wget --progress dot:giga "${PPA_FILES}/${EXISTING[0]}/${NAME}_${VERSION#v}.orig.tar.gz" -O ~/"${NAME}_${VERSION#v}.orig.tar.gz"
+	echo '::endgroup::'
+elif [ "${DRELEASE}" != 1 ]; then
 	echo "::group::Downloading original source for ${VERSION#v}-${RELEASE} from previous release"
-	wget --progress dot:giga "https://launchpad.net/~devel-k/+archive/ubuntu/log-courier2/+sourcefiles/${NAME}/${VERSION#v}-${RELEASE}~trusty$(( DRELEASE - 1 ))/${NAME}_${VERSION#v}.orig.tar.gz" -O ~/"${NAME}_${VERSION#v}.orig.tar.gz"
+	wget --progress dot:giga "${PPA_FILES}/${VERSION#v}-${RELEASE}~trusty$(( DRELEASE - 1 ))/${NAME}_${VERSION#v}.orig.tar.gz" -O ~/"${NAME}_${VERSION#v}.orig.tar.gz"
 	echo '::endgroup::'
 else
 	echo "::group::Generating sources for $REF"
@@ -70,7 +95,12 @@ D6AB748910B1CF77C9A0A5BD3B83B8DE48FE9B1E:6:
 EOF
 echo '::endgroup::'
 
-for DIST in trusty xenial bionic focal jammy noble oracular; do
+for DIST in $DISTS; do
+	if [[ " ${EXISTING[*]} " == *" ${VERSION#v}-${RELEASE}~${DIST}${DRELEASE} "* ]]; then
+		echo "Skipping ${DIST} as ${VERSION#v}-${RELEASE}~${DIST}${DRELEASE} is already uploaded"
+		continue
+	fi
+
 	echo "::group::Preparing debian package for $DIST"
 	rm -rf ~/"${NAME}"
 	cd ~

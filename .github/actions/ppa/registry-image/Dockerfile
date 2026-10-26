@@ -5,7 +5,7 @@
 # The earliest crossover therefore is bionic - which fortunately uses similar GLIBC that means binaries also work on trusty and xenial
 FROM ubuntu:bionic
 RUN apt -qy update
-RUN DEBIAN_FRONTEND=noninteractive apt-get -qy install git devscripts debhelper sbuild ubuntu-dev-tools ca-certificates
+RUN DEBIAN_FRONTEND=noninteractive apt-get -qy install git devscripts debhelper sbuild ubuntu-dev-tools ca-certificates curl
 RUN wget -q https://go.dev/dl/go1.27.3.linux-amd64.tar.gz -O /tmp/go.tar.gz && tar -C /usr/local -xzf /tmp/go.tar.gz && rm -f /tmp/go.tar.gz
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
