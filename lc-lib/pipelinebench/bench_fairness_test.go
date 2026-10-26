@@ -76,6 +76,8 @@ func BenchmarkPipelineFairness(b *testing.B) {
 			heavyP50, lightP50 := percentile(heavyLatencies, 0.5), percentile(lightLatencies, 0.5)
 			b.ReportMetric(float64(heavyP50)/float64(time.Millisecond), "heavy-p50-ms")
 			b.ReportMetric(float64(lightP50)/float64(time.Millisecond), "light-p50-ms")
+			b.ReportMetric(float64(percentile(lightLatencies, 0.9))/float64(time.Millisecond), "light-p90-ms")
+			b.ReportMetric(float64(percentile(lightLatencies, 0.95))/float64(time.Millisecond), "light-p95-ms")
 			b.ReportMetric(float64(percentile(lightLatencies, 0.99))/float64(time.Millisecond), "light-p99-ms")
 			b.ReportMetric(float64(percentile(lightLatencies, 1))/float64(time.Millisecond), "light-max-ms")
 			// Near 1 when light senders wait as long as heavy ones, so fairness changes show apart from speed changes

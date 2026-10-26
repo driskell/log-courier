@@ -23,15 +23,17 @@ limits the pipeline.
 The fairness scenario suffixed `/slow=1in50x250ms` makes one in every 50
 payloads take 250ms at the output, as a retried bulk request would. While
 acknowledgements are released in a single global order, a slow payload holds
-back the acknowledgements of every payload behind it, so it shows in the light
-senders' `light-p99-ms` and `light-max-ms`.
+back the acknowledgements of every payload behind it. Around 2% of light
+payloads sit inside a slow payload and wait for it whatever the ordering, which
+sets `light-p99-ms`, so the payloads held back behind it show in `light-p90-ms`
+and `light-p95-ms`.
 
 Fairness metrics:
 
 | Metric | Meaning |
 | --- | --- |
 | `events/s`, `heavy-events/s`, `light-events/s` | Events acknowledged per second, overall and per sender class |
-| `heavy-p50-ms`, `light-p50-ms`, `light-p99-ms`, `light-max-ms` | Time from sending a payload to its full acknowledgement |
+| `heavy-p50-ms`, `light-p50-ms`, `light-p90-ms`, `light-p95-ms`, `light-p99-ms`, `light-max-ms` | Time from sending a payload to its full acknowledgement |
 | `light-wait-ratio` | `light-p50-ms` divided by `heavy-p50-ms`. Near 1 when light senders wait as long as heavy ones despite sending far less, and lower when they are served ahead of heavy backlogs. It isolates fairness from speed, as faster processing lowers both latencies but leaves the ratio unchanged |
 | `closes` | Connections closed by the receiver, for example when the queue is full. A closed connection stops sending, so also reported by throughput, where it means fewer events were delivered |
 
