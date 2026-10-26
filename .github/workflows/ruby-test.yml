@@ -41,6 +41,10 @@ jobs:
     name: Test Logstash Input Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ matrix.ruby }}
@@ -72,6 +76,10 @@ jobs:
     name: Test Logstash Output Courier ${{ matrix.ruby }}
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ matrix.ruby }}
