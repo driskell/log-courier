@@ -18,6 +18,7 @@ package processor
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -69,7 +70,9 @@ func (d *dateAction) Process(evnt *event.Event) *event.Event {
 			if err != nil {
 				continue
 			}
-			result = time.Unix(int64(unix), int64((unix - float64(int64(unix))*1000)))
+			secs, frac := math.Modf(unix)
+			// Round to microseconds so float64 noise doesn't shift the fraction
+			result = time.Unix(int64(secs), int64(math.Round(frac*1e6))*int64(time.Microsecond))
 		default:
 			result, err = time.Parse(layout, value)
 			if err != nil {
