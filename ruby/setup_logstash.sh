@@ -6,9 +6,9 @@ if [ -d logstash ]; then
 	rm -rf logstash
 fi
 
-git clone -b v8.6.1 https://github.com/elastic/logstash.git logstash --depth 1
+git clone -b v8.19.23 https://github.com/elastic/logstash.git logstash --depth 1
 
 (
 	cd logstash
-	rake bootstrap
+	./gradlew installDevelopmentGems
 )
