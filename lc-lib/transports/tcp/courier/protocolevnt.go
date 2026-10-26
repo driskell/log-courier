@@ -51,10 +51,11 @@ func newProtocolEVNT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessag
 
 	nonce := string(data)
 
-	decompressor, err := zlib.NewReader(conn)
+	decompressor, err := newDecompressor(conn)
 	if err != nil {
 		return nil, err
 	}
+	defer releaseDecompressor(decompressor)
 
 	events := make([][]byte, 0, 100)
 

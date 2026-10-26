@@ -55,10 +55,11 @@ func newProtocolJDAT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessag
 
 	nonce := string(data[:16])
 
-	decompressor, err := zlib.NewReader(bytes.NewReader(data[16:]))
+	decompressor, err := newDecompressor(bytes.NewReader(data[16:]))
 	if err != nil {
 		return nil, err
 	}
+	defer releaseDecompressor(decompressor)
 
 	events := make([][]byte, 0, 100)
 
