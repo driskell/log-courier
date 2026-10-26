@@ -37,7 +37,6 @@ jobs:
         REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
-        COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
     - name: Upload Sources
       uses: actions/upload-artifact@v4
@@ -66,7 +65,6 @@ jobs:
         REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
-        COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
     - name: Upload Sources
       uses: actions/upload-artifact@v4
@@ -95,7 +93,6 @@ jobs:
         REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
-        COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
     - name: Upload Sources
       uses: actions/upload-artifact@v4
@@ -124,7 +121,6 @@ jobs:
         REF: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         VERSION: ${{ (github.event.inputs && github.event.inputs.tag) || github.ref }}
         DRELEASE: ${{ (github.event.inputs && github.event.inputs.drelease) || 1 }}
-        COPR_CLI: ${{ secrets.COPR_CLI }}
         GNU_PG: ${{ secrets.GNU_PG }}
     - name: Upload Sources
       uses: actions/upload-artifact@v4
