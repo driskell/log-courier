@@ -230,14 +230,27 @@ ReceiverLoop:
 				// Build the events with our acknowledger and submit the bundle
 				var events = make([]*event.Event, eventImpl.Count())
 				var ctx context.Context
-				for idx, item := range eventImpl.Events() {
+				// Raw events stay encoded so decoding happens later in the parallel processor routines
+				var rawEvents [][]byte
+				var decodedEvents []map[string]interface{}
+				if rawEventsImpl, ok := eventImpl.(transports.RawEventsEvent); ok {
+					rawEvents = rawEventsImpl.RawEvents()
+				} else {
+					decodedEvents = eventImpl.Events()
+				}
+				for idx := range events {
 					if acker == nil {
 						ctx = eventImpl.Context()
 					} else {
 						ctx = context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{nonce: eventImpl.Nonce(), sequence: uint32(idx + 1)})
 					}
-					item := event.NewEvent(ctx, acker, item)
-					item.MustResolve("@metadata[receiver]", connectionStatus.metadataReceiver)
+					var item *event.Event
+					if rawEvents != nil {
+						item = event.NewEventFromBytes(ctx, acker, rawEvents[idx])
+					} else {
+						item = event.NewEvent(ctx, acker, decodedEvents[idx])
+					}
+					item.MustResolveMetadata("receiver", connectionStatus.metadataReceiver)
 					events[idx] = item
 				}
 				spoolEntry := &spoolEntry{events, size}

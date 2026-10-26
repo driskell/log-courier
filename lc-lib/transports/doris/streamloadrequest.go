@@ -82,7 +82,7 @@ func (p *streamLoadRequest) Read(dst []byte) (n int, err error) {
 					if key != p.restJSONColumn {
 						mappedEvent[key] = value
 					}
-				} else if key != "@metadata" {
+				} else if key != event.MetadataKey {
 					// Unmapped field - add to rest data (exclude @ prefixed metadata fields)
 					restData[key] = value
 				}

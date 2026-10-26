@@ -191,6 +191,82 @@ func TestNewEventBytesInvalid(t *testing.T) {
 	}
 }
 
+func TestNewEventBytesKeepsBytesUntilDecoded(t *testing.T) {
+	data := []byte("{\"message\":\"basic event\"}")
+	event := NewEventFromBytes(context.Background(), nil, data)
+	if !bytes.Equal(event.Bytes(), data) {
+		t.Fatalf("Event bytes are not the original bytes: %s", string(event.Bytes()))
+	}
+}
+
+func TestNewEventBytesMetadataKeepsBytes(t *testing.T) {
+	data := []byte("{\"message\":\"basic event\"}")
+	event := NewEventFromBytes(context.Background(), nil, data)
+	event.MustResolve("@metadata[receiver]", "test receiver")
+	if !bytes.Equal(event.Bytes(), data) {
+		t.Fatalf("Event bytes are not the original bytes after setting metadata: %s", string(event.Bytes()))
+	}
+	if value := event.MustResolve("@metadata[receiver]", nil); value != "test receiver" {
+		t.Fatalf("Metadata was not kept: %v", value)
+	}
+	if value := event.Data()["@metadata"].(Metadata)["receiver"]; value != "test receiver" {
+		t.Fatalf("Metadata was not present in data after decode: %v", event.Data())
+	}
+}
+
+func TestNewEventBytesInvalidMetadata(t *testing.T) {
+	event := NewEventFromBytes(context.Background(), nil, []byte("invalid bytes"))
+	event.MustResolve("@metadata[receiver]", "test receiver")
+	if value := event.Data()["@metadata"].(Metadata)["receiver"]; value != "test receiver" {
+		t.Fatalf("Metadata was not present in data after failed unmarshal: %v", event.Data())
+	}
+}
+
+func TestEventMetadataSharedWithData(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "basic event"})
+	event.MustResolve("@metadata[resolved]", "resolved value")
+	metadata := event.Data()["@metadata"].(Metadata)
+	if metadata["resolved"] != "resolved value" {
+		t.Fatalf("Resolved metadata was not visible in data: %v", metadata)
+	}
+	metadata["direct"] = "direct value"
+	if value := event.MustResolve("@metadata[direct]", nil); value != "direct value" {
+		t.Fatalf("Metadata set in data was not visible to resolve: %v", value)
+	}
+}
+
+func TestResolveMetadataMatchesResolve(t *testing.T) {
+	event := NewEventFromBytes(context.Background(), nil, []byte("{\"message\":\"basic event\"}"))
+	event.MustResolveMetadata("receiver", "test receiver")
+	event.MustResolveMetadata("nested[value]", "nested value")
+	if value := event.MustResolve("@metadata[receiver]", nil); value != "test receiver" {
+		t.Fatalf("Metadata set by ResolveMetadata was not visible to Resolve: %v", value)
+	}
+	if value := event.MustResolve("@metadata[nested][value]", nil); value != "nested value" {
+		t.Fatalf("Nested metadata set by ResolveMetadata was not visible to Resolve: %v", value)
+	}
+	event.MustResolve("@metadata[resolved]", "resolved value")
+	if value := event.MustResolveMetadata("resolved", nil); value != "resolved value" {
+		t.Fatalf("Metadata set by Resolve was not visible to ResolveMetadata: %v", value)
+	}
+}
+
+func TestResolveMetadataInvalidPath(t *testing.T) {
+	event := NewEventFromBytes(context.Background(), nil, []byte("{\"message\":\"basic event\"}"))
+	if _, err := event.ResolveMetadata("invalid]", "value"); err == nil {
+		t.Fatal("Unexpectedly resolved an invalid metadata path")
+	}
+}
+
+func TestNewEventBytesClearCacheWithoutDecode(t *testing.T) {
+	event := NewEventFromBytes(context.Background(), nil, []byte("{\"message\":\"basic event\",\"@timestamp\":\"2020-02-01T13:00:00.000Z\"}"))
+	event.MustResolve("@metadata[receiver]", "test receiver")
+	event.ClearCache()
+	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"basic event\",\"tags\":[]}")) {
+		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
+	}
+}
+
 func TestEventBytes(t *testing.T) {
 	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "Test message", "@timestamp": "2020-02-01T13:00:00.000Z"})
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"Test message\",\"tags\":[]}")) {

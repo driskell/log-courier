@@ -92,6 +92,12 @@ type EventsEvent interface {
 	Size() int
 }
 
+// RawEventsEvent is an EventsEvent that can also provide each event as its undecoded JSON
+type RawEventsEvent interface {
+	EventsEvent
+	RawEvents() [][]byte
+}
+
 // StatusEvent contains information about a status change for a transport
 type StatusEvent struct {
 	context      context.Context

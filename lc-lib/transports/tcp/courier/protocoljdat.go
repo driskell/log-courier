@@ -183,6 +183,11 @@ func (p *protocolJDAT) Events() []map[string]interface{} {
 	return events
 }
 
+// RawEvents returns the undecoded events - this implements transports.RawEventsEvent
+func (p *protocolJDAT) RawEvents() [][]byte {
+	return p.events
+}
+
 // Count returns the number of events
 func (p *protocolJDAT) Count() uint32 {
 	return uint32(len(p.events))

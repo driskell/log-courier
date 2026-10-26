@@ -33,6 +33,9 @@ const (
 	ResolveParamUnset ResolveParam = iota
 )
 
+// MetadataKey is the top-level key of the @metadata entry, which is never encoded
+const MetadataKey = "@metadata"
+
 // Acknowledger is something that can be called with events once they ar acknowledged
 type Acknowledger interface {
 	Acknowledge([]*Event)
@@ -45,6 +48,9 @@ type Event struct {
 	data  map[string]interface{}
 
 	encoded []byte
+
+	// metadata is the @metadata entry, held outside data as it never comes from or goes to the encoded form
+	metadata Metadata
 
 	dropped bool
 }
@@ -97,13 +103,21 @@ func (e *Event) Data() map[string]interface{} {
 			e.data = make(map[string]interface{})
 			e.data["message"] = err.Error()
 			e.data["@timestamp"] = Timestamp(time.Now())
-			e.data["@metadata"] = Metadata{}
+			e.data[MetadataKey] = e.metadataEntry()
 			e.data["tags"] = Tags{"_unmarshal_failure"}
 		} else {
 			e.convertData()
 		}
 	}
 	return e.data
+}
+
+// metadataEntry returns the @metadata entry, creating it if needed
+func (e *Event) metadataEntry() Metadata {
+	if e.metadata == nil {
+		e.metadata = Metadata{}
+	}
+	return e.metadata
 }
 
 // convertData is the internal function that enforces guaranteed types
@@ -158,7 +172,7 @@ func (e *Event) convertData() {
 		e.data["@timestamp"] = Timestamp(time.Now())
 	}
 	// Normalize "@metadata"
-	e.data["@metadata"] = Metadata{}
+	e.data[MetadataKey] = e.metadataEntry()
 }
 
 // MustResolve is the same as Resolve but will panic if an error occurs
@@ -200,14 +214,44 @@ func (e *Event) MustResolve(path string, set interface{}) interface{} {
 // then a new event with only a message key (and the above defaults) will be created
 // where the message is the error message, and the "_unmarshal_failure" tag is added
 func (e *Event) Resolve(path string, set interface{}) (output interface{}, err error) {
-	currentMap := e.Data()
+	if strings.HasPrefix(path, MetadataKey) {
+		if len(path) == len(MetadataKey) {
+			// The @metadata entry itself keeps its builtin protection against being set or unset
+			return e.resolvePath(map[string]interface{}{MetadataKey: e.metadataEntry()}, path, set)
+		}
+		if path[len(MetadataKey)] == '[' {
+			return e.ResolveMetadata(path[len(MetadataKey):], set)
+		}
+	}
+	return e.resolvePath(e.Data(), path, set)
+}
+
+// MustResolveMetadata is the same as ResolveMetadata but will panic if an error occurs
+//
+// This should never be used with user input, and only used with hard-coded field names that are guaranteed to be correct syntax
+func (e *Event) MustResolveMetadata(path string, set interface{}) interface{} {
+	output, err := e.ResolveMetadata(path, set)
+	if err != nil {
+		panic(err)
+	}
+	return output
+}
+
+// ResolveMetadata is the same as Resolve for a path within @metadata, so "receiver" resolves
+// "@metadata[receiver]", without decoding the event as @metadata never comes from the encoded form
+func (e *Event) ResolveMetadata(path string, set interface{}) (output interface{}, err error) {
+	return e.resolvePath(e.metadataEntry(), path, set)
+}
+
+// resolvePath implements Resolve against the given top-level map
+func (e *Event) resolvePath(currentMap map[string]interface{}, path string, set interface{}) (output interface{}, err error) {
 	// Begin with simple lookup - if we're not looking up something[xxx] and there are no escapes
 	// then we can avoid splitting the path
 	if strings.IndexAny(path, "[]\\") == -1 {
 		if set != nil && e.isSameMap(currentMap, set) {
 			return nil, fmt.Errorf("Cannot set '%s': would create circular reference", path)
 		}
-		output, err = e.simpleResolve(e.data, path, set)
+		output, err = e.simpleResolve(currentMap, path, set)
 		return
 	}
 	names, ok := splitPath(path)
@@ -394,6 +438,8 @@ func (e *Event) RemoveTag(tag string) {
 
 // ClearCache clears any cached representations, always call it if the event is changed
 func (e *Event) ClearCache() {
+	// An event never decoded holds its data only in the encoded form
+	e.Data()
 	e.encoded = nil
 }
 
@@ -407,7 +453,7 @@ func (e *Event) Bytes() []byte {
 		var err error
 		prunedData := make(map[string]interface{})
 		for key, value := range e.data {
-			if key == "@metadata" {
+			if key == MetadataKey {
 				continue
 			}
 			prunedData[key] = value

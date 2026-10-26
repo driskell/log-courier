@@ -164,6 +164,11 @@ func (p *protocolEVNT) Events() []map[string]interface{} {
 	return events
 }
 
+// RawEvents returns the undecoded events - this implements transports.RawEventsEvent
+func (p *protocolEVNT) RawEvents() [][]byte {
+	return p.events
+}
+
 // Count returns the number of events
 func (p *protocolEVNT) Count() uint32 {
 	return uint32(len(p.events))
