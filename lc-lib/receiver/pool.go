@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
@@ -59,7 +60,9 @@ type Pool struct {
 	connectionLock    sync.RWMutex
 	connectionStatus  map[interface{}]*poolConnectionStatus
 	spool             []*spoolEntry
-	spoolSize         int64
+	// Atomic so the admin API can read them while Run modifies the spool
+	spoolPayloads atomic.Int64
+	spoolSize     atomic.Int64
 
 	generalConfig  *config.General
 	apiConfig      *admin.Config
@@ -198,7 +201,7 @@ ReceiverLoop:
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				connectionStatus := r.connectionStatus[connection]
-				if r.spoolSize+int64(size) > r.generalConfig.MaxQueueSize {
+				if r.spoolSize.Load()+int64(size) > r.generalConfig.MaxQueueSize {
 					receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max queue size exceeded"))
 					r.connectionLock.Unlock()
 					break
@@ -239,7 +242,8 @@ ReceiverLoop:
 				}
 				spoolEntry := &spoolEntry{events, size}
 				r.spool = append(r.spool, spoolEntry)
-				r.spoolSize += int64(spoolEntry.size)
+				r.spoolPayloads.Add(1)
+				r.spoolSize.Add(int64(spoolEntry.size))
 				spoolChan = r.output
 			case *transports.EndEvent:
 				// Connection EOF
@@ -301,7 +305,8 @@ ReceiverLoop:
 		case spoolChan <- nextSpoolEvents:
 			copy(r.spool, r.spool[1:])
 			r.spool = r.spool[:len(r.spool)-1]
-			r.spoolSize -= int64(nextSpool.size)
+			r.spoolPayloads.Add(-1)
+			r.spoolSize.Add(-int64(nextSpool.size))
 			if len(r.spool) == 0 {
 				spoolChan = nil
 			}
