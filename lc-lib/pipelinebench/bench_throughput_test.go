@@ -26,7 +26,7 @@ func BenchmarkPipelineThroughput(b *testing.B) {
 			payloads := (b.N + payloadEvents - 1) / payloadEvents
 			b.ReportAllocs()
 			b.ResetTimer()
-			results := runConnections(conns, func(idx int) int {
+			results := runConnections(b, conns, func(idx int) int {
 				quota := payloads / connections
 				if idx < payloads%connections {
 					quota++
@@ -35,14 +35,19 @@ func BenchmarkPipelineThroughput(b *testing.B) {
 			}, time.Now().Add(time.Hour))
 			b.StopTimer()
 
-			events := 0
+			events, closes := 0, 0
 			for _, result := range results {
 				if result.closed {
-					b.Fatal("connection was closed by the receiver")
+					closes++
 				}
 				events += result.events
 			}
+			// Closed connections deliver fewer than b.N events, so time is reported per delivered event
+			if events != 0 {
+				b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(events), "ns/op")
+			}
 			b.ReportMetric(float64(events)/b.Elapsed().Seconds(), "events/s")
+			b.ReportMetric(float64(closes), "closes")
 			p.stop(b)
 		})
 	}

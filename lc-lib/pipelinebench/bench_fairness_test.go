@@ -43,7 +43,7 @@ func BenchmarkPipelineFairness(b *testing.B) {
 					light[idx] = p.connect(fmt.Sprintf("light%d", idx), scenario.lightPayloadEvents, 1)
 				}
 
-				results := runConnections(append(heavy, light...), func(int) int { return math.MaxInt }, time.Now().Add(duration))
+				results := runConnections(b, append(heavy, light...), func(int) int { return math.MaxInt }, time.Now().Add(duration))
 				p.stop(b)
 
 				for idx, result := range results {

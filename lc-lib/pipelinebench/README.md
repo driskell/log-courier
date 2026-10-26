@@ -14,7 +14,7 @@ Only the edges are simulated:
 
 | Benchmark | One op is | Reports |
 | --- | --- | --- |
-| `BenchmarkPipelineThroughput` | One event through the whole pipeline to an output that acknowledges instantly, with `b.N` events split across 1 or 100 connections | `ns/op` and `allocs/op` per event, `events/s` |
+| `BenchmarkPipelineThroughput` | One event through the whole pipeline to an output that acknowledges instantly, with `b.N` events split across 1 or 100 connections | `ns/op` per delivered event, `allocs/op` per event, `events/s`, `closes` |
 | `BenchmarkPipelineFairness` | One 5 second scenario (1 second with `-short`) of 5 heavy senders (1024 event payloads, 1 or 10 in flight) and 295 light senders (10 event payloads, 1 in flight) against an output with 10ms latency | Throughput and acknowledgement latency per sender class |
 
 Similar throughput results across connection counts indicate a serial stage
@@ -27,7 +27,7 @@ Fairness metrics:
 | `events/s`, `heavy-events/s`, `light-events/s` | Events acknowledged per second, overall and per sender class |
 | `heavy-p50-ms`, `light-p50-ms`, `light-p99-ms`, `light-max-ms` | Time from sending a payload to its full acknowledgement |
 | `light-jain` | Jain's fairness index of throughput across light connections, where 1 is perfectly equal |
-| `closes` | Connections closed by the receiver, for example when the queue is full |
+| `closes` | Connections closed by the receiver, for example when the queue is full. A closed connection stops sending, so also reported by throughput, where it means fewer events were delivered |
 
 Only payloads sent before the scenario deadline are recorded. Load continues
 until every recorded payload is acknowledged so the tail of the run sees the

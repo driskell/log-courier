@@ -98,10 +98,15 @@ func (p *benchPipeline) stop(tb testing.TB) {
 	select {
 	case <-p.done:
 	case <-time.After(30 * time.Second):
-		var stacks strings.Builder
-		pprof.Lookup("goroutine").WriteTo(&stacks, 1)
-		tb.Fatalf("pipeline did not shut down:\n%s", stacks.String())
+		tb.Fatalf("pipeline did not shut down:\n%s", goroutineStacks())
 	}
+}
+
+// goroutineStacks returns the stacks of all goroutines, to show where a hang occurred
+func goroutineStacks() string {
+	var stacks strings.Builder
+	pprof.Lookup("goroutine").WriteTo(&stacks, 1)
+	return stacks.String()
 }
 
 // connect opens a simulated client connection that sends payloads of payloadEvents events
@@ -112,7 +117,7 @@ func (p *benchPipeline) connect(name string, payloadEvents int, depth int) *benc
 		payload:  newBenchPayload(payloadEvents),
 		depth:    depth,
 		acks:     make(chan struct{}, depth*2),
-		closed:   make(chan struct{}),
+		drops:    make(chan string, depth+1),
 	}
 	conn.ctx = context.WithValue(context.WithValue(context.Background(), transports.ContextReceiver, transports.Receiver(p.receiver)), transports.ContextConnection, conn)
 	p.receiver.eventChan <- transports.NewConnectEvent(conn.ctx, name, benchTransport)
