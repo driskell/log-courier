@@ -201,11 +201,6 @@ ReceiverLoop:
 				connection := eventImpl.Context().Value(transports.ContextConnection)
 				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 				connectionStatus := r.connectionStatus[connection]
-				if r.spoolSize.Load()+int64(size) > r.generalConfig.MaxQueueSize {
-					receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max queue size exceeded"))
-					r.connectionLock.Unlock()
-					break
-				}
 				var acker event.Acknowledger
 				if receiver.SupportsAck() {
 					if len(r.connectionStatus[connection].progress)+1 > int(r.receivers[receiver].config.MaxPendingPayloads) {
@@ -258,6 +253,10 @@ ReceiverLoop:
 				r.spoolPayloads.Add(1)
 				r.spoolSize.Add(int64(spoolEntry.size))
 				spoolChan = r.output
+				// A full queue stops receiving so connections wait to send rather than being closed
+				if r.spoolSize.Load() >= r.generalConfig.MaxQueueSize {
+					eventChan = nil
+				}
 			case *transports.EndEvent:
 				// Connection EOF
 				r.connectionLock.Lock()
@@ -322,6 +321,10 @@ ReceiverLoop:
 			r.spoolSize.Add(-int64(nextSpool.size))
 			if len(r.spool) == 0 {
 				spoolChan = nil
+			}
+			// Resume when back under the limit, or once empty in case the limit is below a single payload
+			if eventChan == nil && (r.spoolSize.Load() < r.generalConfig.MaxQueueSize || len(r.spool) == 0) {
+				eventChan = r.eventChan
 			}
 		}
 	}

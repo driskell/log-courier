@@ -913,17 +913,15 @@ Maximum number of bytes that can be received and queued from clients at any
 one moment in time.
 
 If too many events are being received than can be processed then this queue
-can build in size. When this queue is full, when data is received from a
-connection that cannot be added to the queue, the data is discarded and the
-connection closed.
+can build in size. When this queue is full, Log Carver stops receiving from all
+connections until it has processed enough of the queue to fall back under this
+size, so clients wait to send rather than being disconnected. The queue may
+exceed this size by up to one received payload.
 
-Warnings will be logged when this happened no more frequently than 1 per
-minute to note that events are discarded.
-
-For protocol-based transports that support acknowledgement, no data loss
-occurs as the client will know to resubmit the data again on a retried
-connection attempt which in the Log Courier case will backoff longer on
-each connection attempt to allow Log Carver to catchup.
+While receiving is paused, connections remain open and no data is lost, as
+clients wait for Log Carver to catch up. Clients that support acknowledgement
+continue to receive partial acknowledgements for queued events, keeping their
+connections alive while they wait.
 
 ### `max tls version` (receiver)
 
