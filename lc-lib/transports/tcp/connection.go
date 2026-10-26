@@ -321,6 +321,10 @@ func (t *connection) SendMessage(message ProtocolMessage) error {
 // Used by protocol structures to fetch message data
 // io.ByteReader is necessary for compression readers to not read too much
 func (t *connection) ReadByte() (byte, error) {
+	// Buffered data needs no deadline or shutdown checks, which run whenever the buffer must be refilled
+	if t.rwBuffer.Reader.Buffered() > 0 {
+		return t.rwBuffer.Reader.ReadByte()
+	}
 	var message [1]byte
 	if _, err := t.Read(message[:]); err != nil {
 		return 0, err
