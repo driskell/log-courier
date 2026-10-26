@@ -65,7 +65,7 @@ func (g *jsonAction) Process(evnt *event.Event) *event.Event {
 		return evnt
 	}
 	for name, value := range v {
-		_, err = evnt.Resolve(name, value)
+		_, err = evnt.Resolve(event.EscapeKey(name), value)
 		if err != nil {
 			evnt.AddError("json", fmt.Sprintf("Decode of field '%s' failed: %s", g.Field, err.Error()))
 			return evnt
