@@ -52,6 +52,13 @@ func NewApp(name, version string) *App {
 	}
 }
 
+// NewAppWithConfig creates a courier application around an already loaded configuration, without StartUp
+func NewAppWithConfig(name, version string, cfg *config.Config) *App {
+	app := NewApp(name, version)
+	app.config = cfg
+	return app
+}
+
 // StartUp processes the command line arguments and sets up logging
 func (a *App) StartUp() {
 	var version bool
