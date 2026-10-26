@@ -17,11 +17,17 @@
 package processor
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
+)
+
+const (
+	defaultKVActionSeparators = " "
 )
 
 type kvState int
@@ -37,10 +43,15 @@ const (
 )
 
 type kvAction struct {
-	Field  string `config:"field"`
-	Prefix string `config:"prefix"`
+	Field       string   `config:"field"`
+	Prefix      string   `config:"prefix"`
+	Separators  string   `config:"separators"`
+	Nested      []string `config:"nested"`
+	UnquotedHex []string `config:"unquoted hex"`
 
 	prefixPattern event.Pattern
+	nested        map[string]struct{}
+	unquotedHex   map[string]struct{}
 }
 
 func newKVAction(p *config.Parser, configPath string, unused map[string]interface{}, name string) (ASTEntry, error) {
@@ -52,9 +63,29 @@ func newKVAction(p *config.Parser, configPath string, unused map[string]interfac
 	return action, nil
 }
 
+func (k *kvAction) Defaults() {
+	k.Separators = defaultKVActionSeparators
+}
+
 func (k *kvAction) Validate(p *config.Parser, configPath string) error {
+	if k.Separators == "" {
+		return fmt.Errorf("Separators for kv at %s must not be empty", configPath)
+	}
+	if strings.ContainsAny(k.Separators, "=\"'\\") {
+		return fmt.Errorf("Separators for kv at %s must not contain '=', quotes or backslash", configPath)
+	}
 	k.prefixPattern = event.NewPatternFromString(k.Prefix)
+	k.nested = kvNameSet(k.Nested)
+	k.unquotedHex = kvNameSet(k.UnquotedHex)
 	return nil
+}
+
+func kvNameSet(names []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		set[name] = struct{}{}
+	}
+	return set
 }
 
 func (k *kvAction) Process(event *event.Event) *event.Event {
@@ -80,19 +111,35 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 		return event
 	}
 
+	k.parse(event, stringValue, prefix)
+	return event
+}
+
+func (k *kvAction) isSeparator(char rune) bool {
+	return strings.ContainsRune(k.Separators, char)
+}
+
+// parse stores each pair from input with the given prefix, returning false if parsing was interrupted
+func (k *kvAction) parse(evnt *event.Event, input string, prefix string) bool {
 	state := kvStateName
-	storeValue := func(name string, value string) bool {
-		field := prefix + strings.ReplaceAll(strings.ReplaceAll(name, "[", ""), "]", "")
-		_, err := event.Resolve(field, value)
+	storeValue := func(name string, value string, quoted bool) bool {
+		if _, ok := k.nested[name]; ok {
+			return k.parse(evnt, value, prefix+event.EscapeKey(name)+"_")
+		}
+		if _, ok := k.unquotedHex[name]; ok && !quoted {
+			value = decodeKVHex(value)
+		}
+		field := prefix + event.EscapeKey(name)
+		_, err := evnt.Resolve(field, value)
 		if err != nil {
-			event.AddError("kv", fmt.Sprintf("Failed to set field '%s': %s", field, err))
+			evnt.AddError("kv", fmt.Sprintf("Failed to set field '%s': %s", field, err))
 			return false
 		}
 		return true
 	}
 
 	var (
-		value      []rune = []rune(stringValue)
+		value      []rune = []rune(input)
 		name       string
 		nameStart  int
 		valueStart int
@@ -101,9 +148,12 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 	for idx := 0; idx < len(value); idx++ {
 		switch state {
 		case kvStateName:
+			if k.isSeparator(value[idx]) {
+				continue
+			}
 			if value[idx] == '=' {
-				event.AddError("kv", "Parsing interrupted, encountered key with no name")
-				return event
+				evnt.AddError("kv", "Parsing interrupted, encountered key with no name")
+				return false
 			}
 			state = kvStateNameRaw
 			nameStart = idx
@@ -117,21 +167,26 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 				state = kvStateValueQuoted
 				valueStart = idx + 1
 				quoteStyle = value[idx]
+			} else if k.isSeparator(value[idx]) {
+				if !storeValue(name, "", false) {
+					return false
+				}
+				state = kvStateName
 			} else {
 				state = kvStateValueRaw
 				valueStart = idx
 			}
 		case kvStateValueRaw:
-			if value[idx] == ' ' {
-				if !storeValue(name, string(value[valueStart:idx])) {
-					return event
+			if k.isSeparator(value[idx]) {
+				if !storeValue(name, string(value[valueStart:idx]), false) {
+					return false
 				}
 				state = kvStateName
 			}
 		case kvStateValueQuoted:
 			if value[idx] == quoteStyle {
-				if !storeValue(name, string(value[valueStart:idx])) {
-					return event
+				if !storeValue(name, string(value[valueStart:idx]), true) {
+					return false
 				}
 				state = kvStateValueQuotedEnd
 			} else if value[idx] == '\\' {
@@ -140,26 +195,38 @@ func (k *kvAction) Process(event *event.Event) *event.Event {
 		case kvStateValueQuotedEsc:
 			state = kvStateValueQuoted
 		case kvStateValueQuotedEnd:
-			if value[idx] != ' ' {
-				event.AddError("kv", "Parsing interrupted, unexpected text after end of quoted value")
-				return event
+			if !k.isSeparator(value[idx]) {
+				evnt.AddError("kv", "Parsing interrupted, unexpected text after end of quoted value")
+				return false
 			}
 			state = kvStateName
 		}
 	}
 	switch state {
 	case kvStateValueRaw:
-		if !storeValue(name, string(value[valueStart:])) {
-			return event
-		}
+		return storeValue(name, string(value[valueStart:]), false)
+	case kvStateValue:
+		return storeValue(name, "", false)
 	case kvStateValueQuotedEnd:
 	case kvStateName:
 	default:
-		event.AddError("kv", "Parsing interrupted, unexpected end of field")
-		return event
+		evnt.AddError("kv", "Parsing interrupted, unexpected end of field")
+		return false
 	}
 
-	return event
+	return true
+}
+
+// decodeKVHex decodes an uppercase hex value with NUL separators as spaces, returning it unchanged if it is not valid hex or UTF-8
+func decodeKVHex(value string) string {
+	if strings.ContainsAny(value, "abcdef") {
+		return value
+	}
+	decoded, err := hex.DecodeString(value)
+	if err != nil || !utf8.Valid(decoded) {
+		return value
+	}
+	return strings.ReplaceAll(string(decoded), "\x00", " ")
 }
 
 // init will register the action
