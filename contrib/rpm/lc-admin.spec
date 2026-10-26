@@ -13,7 +13,7 @@ URL: https://github.com/driskell/log-courier
 Source: https://github.com/driskell/log-courier/archive/v%{version}.zip
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 
-BuildRequires: golang >= 1.5
+BuildRequires: golang >= 1.21
 BuildRequires: git
 
 %description
