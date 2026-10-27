@@ -49,7 +49,7 @@ func createProtocolVERS() tcp.ProtocolMessage {
 }
 
 // newProtocolVERS reads a new protocolVERS
-func newProtocolVERS(t tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
+func newProtocolVERS(t tcp.Connection, bodyLength uint32) (receivedMessage, error) {
 	if bodyLength > 32 {
 		return nil, fmt.Errorf("protocol error: Corrupt message (VERS size %d > 32)", bodyLength)
 	}

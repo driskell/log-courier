@@ -34,7 +34,7 @@ type protocolACKN struct {
 var _ transports.AckEvent = (*protocolACKN)(nil)
 
 // newProtocolACKN reads a new protocolACKN
-func newProtocolACKN(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
+func newProtocolACKN(conn tcp.Connection, bodyLength uint32) (receivedMessage, error) {
 	if bodyLength != 20 {
 		return nil, fmt.Errorf("protocol error: Corrupt message (ACKN size %d != 20)", bodyLength)
 	}

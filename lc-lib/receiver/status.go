@@ -17,6 +17,7 @@
 package receiver
 
 import (
+	"context"
 	"sort"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
@@ -36,7 +37,11 @@ type poolAckRange struct {
 
 // poolEventProgress tracks the acknowledgement of a received payload, whose events may be acknowledged in any order
 type poolEventProgress struct {
-	event transports.EventsEvent
+	ctx   context.Context
+	nonce *string
+	// count is the number of the payload's events received so far, and final is set once all have been
+	count uint32
+	final bool
 	// ackedThrough is the end of the contiguous acknowledged prefix, which is the sequence the protocol reports
 	ackedThrough uint32
 	// pending holds sorted, non-overlapping ranges acknowledged beyond a gap after ackedThrough
@@ -73,9 +78,9 @@ func (p *poolEventProgress) acknowledge(from, to uint32) bool {
 	return true
 }
 
-// complete returns true once every event in the payload is acknowledged
+// complete returns true once every event in the payload is received and acknowledged
 func (p *poolEventProgress) complete() bool {
-	return p.ackedThrough == p.event.Count()
+	return p.final && p.ackedThrough == p.count
 }
 
 type poolConnectionStatus struct {
@@ -87,6 +92,8 @@ type poolConnectionStatus struct {
 	metadataReceiver MetadataReceiver
 	// progress holds payloads pending acknowledgement in the order they were received
 	progress []*poolEventProgress
+	// window is the connection's receive window, known once it first asks for its events to be taken
+	window *transports.ReceiveWindow
 	// closing is set once the connection has finished sending, so it closes when progress empties
 	closing     bool
 	lines       int64
@@ -114,6 +121,14 @@ func newPoolConnectionStatus(p *Pool, name string, listener string, remote strin
 	}
 }
 
+// receiving returns the payload still being received, or nil if every payload has been received in full
+func (p *poolConnectionStatus) receiving() *poolEventProgress {
+	if len(p.progress) == 0 || p.progress[len(p.progress)-1].final {
+		return nil
+	}
+	return p.progress[len(p.progress)-1]
+}
+
 func (p *poolConnectionStatus) Update() error {
 	p.p.connectionLock.RLock()
 	defer p.p.connectionLock.RUnlock()
@@ -125,6 +140,10 @@ func (p *poolConnectionStatus) Update() error {
 	p.SetEntry("receivedBytes", api.Bytes(p.bytes))
 	if p.supportsAck {
 		p.SetEntry("pendingPayloads", api.Number(len(p.progress)))
+	}
+	if p.window != nil {
+		p.SetEntry("windowBytes", api.Bytes(p.window.Held()))
+		p.SetEntry("windowSize", api.Bytes(p.window.Size()))
 	}
 	return nil
 }

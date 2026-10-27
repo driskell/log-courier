@@ -31,11 +31,13 @@ import (
 var registeredGeneralCreators = make(map[string]SectionCreator)
 
 const (
-	defaultGeneralHost         string        = "localhost.localdomain"
-	defaultGeneralLogLevel     logging.Level = logging.INFO
-	defaultGeneralLogStdout    bool          = true
-	defaultGeneralLogSyslog    bool          = false
-	defaultGeneralMaxQueueSize int64         = 128 * 1024 * 1024 // 128 MiB
+	defaultGeneralHost              string        = "localhost.localdomain"
+	defaultGeneralLogLevel          logging.Level = logging.INFO
+	defaultGeneralLogStdout         bool          = true
+	defaultGeneralLogSyslog         bool          = false
+	defaultGeneralMaxQueueSize      int64         = 128 * 1024 * 1024 // 128 MiB
+	defaultGeneralReceiveWindowSize int64         = 2 * 1024 * 1024   // 2 MiB
+	defaultGeneralReceiveWindowFill float64       = 0.8
 )
 
 var (
@@ -45,14 +47,16 @@ var (
 
 // General holds the general configuration
 type General struct {
-	PersistDir   string                 `config:"persist directory"`
-	GlobalFields map[string]interface{} `config:"global fields"`
-	Host         string                 `config:"host"`
-	LogFile      string                 `config:"log file"`
-	LogLevel     logging.Level          `config:"log level"`
-	LogStdout    bool                   `config:"log stdout"`
-	LogSyslog    bool                   `config:"log syslog"`
-	MaxQueueSize int64                  `config:"max queue size"`
+	PersistDir        string                 `config:"persist directory"`
+	GlobalFields      map[string]interface{} `config:"global fields"`
+	Host              string                 `config:"host"`
+	LogFile           string                 `config:"log file"`
+	LogLevel          logging.Level          `config:"log level"`
+	LogStdout         bool                   `config:"log stdout"`
+	LogSyslog         bool                   `config:"log syslog"`
+	MaxQueueSize      int64                  `config:"max queue size"`
+	ReceiveWindowSize int64                  `config:"receive window size"`
+	ReceiveWindowFill float64                `config:"receive window fill"`
 
 	Custom map[string]interface{} `config:",embed_dynamic"`
 }
@@ -73,6 +77,16 @@ func (gc *General) Validate(p *Parser, path string) (err error) {
 			log.Warning("Failed to determine the FQDN: %s", hostErr)
 			log.Warning("Falling back to using default hostname: %s", gc.Host)
 		}
+	}
+
+	if gc.ReceiveWindowSize < 1 {
+		err = fmt.Errorf("%sreceive window size must be at least 1", path)
+		return
+	}
+
+	if gc.ReceiveWindowFill <= 0 || gc.ReceiveWindowFill > 1 {
+		err = fmt.Errorf("%sreceive window fill must be greater than 0 and no more than 1", path)
+		return
 	}
 
 	// Ensure all GlobalFields are map[string]interface{}
@@ -109,12 +123,14 @@ func RegisterGeneral(name string, creator SectionCreator) {
 func init() {
 	RegisterSection("general", func() interface{} {
 		c := &General{
-			PersistDir:   DefaultGeneralPersistDir,
-			LogLevel:     defaultGeneralLogLevel,
-			LogStdout:    defaultGeneralLogStdout,
-			LogSyslog:    defaultGeneralLogSyslog,
-			MaxQueueSize: defaultGeneralMaxQueueSize,
-			Custom:       make(map[string]interface{}),
+			PersistDir:        DefaultGeneralPersistDir,
+			LogLevel:          defaultGeneralLogLevel,
+			LogStdout:         defaultGeneralLogStdout,
+			LogSyslog:         defaultGeneralLogSyslog,
+			MaxQueueSize:      defaultGeneralMaxQueueSize,
+			ReceiveWindowSize: defaultGeneralReceiveWindowSize,
+			ReceiveWindowFill: defaultGeneralReceiveWindowFill,
+			Custom:            make(map[string]interface{}),
 		}
 
 		for k, creator := range registeredGeneralCreators {

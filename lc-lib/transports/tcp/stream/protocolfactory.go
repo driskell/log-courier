@@ -26,7 +26,7 @@ type protocolFactory struct{}
 func (p *protocolFactory) NewProtocol(conn tcp.Connection) tcp.Protocol {
 	return &protocol{
 		conn:       conn,
-		lineReader: harvester.NewLineReader(conn, 4096, 1048576),
+		lineReader: harvester.NewLineReader(conn, 4096, conn.ReceiveWindowSize()),
 	}
 }
 

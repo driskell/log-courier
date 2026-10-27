@@ -634,3 +634,27 @@ func TestMultilineErrorTimeout(t *testing.T) {
 		t.Error("Teardown returned incorrect offset: ", offset)
 	}
 }
+
+func newMultilineFactoryWithSpool(t *testing.T, spoolMaxBytes int64) *CodecMultilineFactory {
+	cfg := config.NewConfig()
+	cfg.GeneralPart("harvester").(*harvester.General).MaxLineBytes = 1024
+	cfg.GeneralPart("spooler").(*spooler.General).SpoolMaxBytes = spoolMaxBytes
+
+	factory, err := NewMultilineCodecFactory(config.NewParser(cfg), "", map[string]interface{}{"patterns": []string{"^ "}}, "multiline")
+	if err != nil {
+		t.Fatalf("Failed to create multiline codec: %s", err)
+	}
+	return factory.(*CodecMultilineFactory)
+}
+
+func TestMultilineMaxBytesDefaultsToOneMebibyte(t *testing.T) {
+	if maxBytes := newMultilineFactoryWithSpool(t, 10485760).MaxMultilineBytes; maxBytes != 1048576 {
+		t.Fatalf("Expected max multiline bytes to default to 1048576, got %d", maxBytes)
+	}
+}
+
+func TestMultilineMaxBytesDefaultsToSpoolMaxBytesWhenSmaller(t *testing.T) {
+	if maxBytes := newMultilineFactoryWithSpool(t, 4096).MaxMultilineBytes; maxBytes != 4096 {
+		t.Fatalf("Expected max multiline bytes to default to spool max bytes of 4096, got %d", maxBytes)
+	}
+}

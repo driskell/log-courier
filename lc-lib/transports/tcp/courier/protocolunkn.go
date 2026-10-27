@@ -26,7 +26,7 @@ type protocolUNKN struct {
 }
 
 // newProtocolUNKN reads a new protocolUNKN
-func newProtocolUNKN(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
+func newProtocolUNKN(conn tcp.Connection, bodyLength uint32) (receivedMessage, error) {
 	if bodyLength != 0 {
 		return nil, fmt.Errorf("protocol error: Corrupt message UNKN size %d != 0", bodyLength)
 	}

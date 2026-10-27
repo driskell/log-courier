@@ -32,6 +32,8 @@ type sinkConfig struct {
 type pipelineConfig struct {
 	sink                       sinkConfig
 	receiverMaxPendingPayloads int
+	// maxQueueSize overrides the receiver queue budget in bytes when set
+	maxQueueSize int64
 }
 
 // benchPipeline is a running in-process log-carver pipeline
@@ -47,9 +49,12 @@ func startPipeline(tb testing.TB, cfg pipelineConfig) *benchPipeline {
 
 	dir := tb.TempDir()
 	path := filepath.Join(dir, "log-carver.yaml")
+	general := fmt.Sprintf("  persist directory: %q\n", dir)
+	if cfg.maxQueueSize > 0 {
+		general += fmt.Sprintf("  max queue size: %d\n", cfg.maxQueueSize)
+	}
 	yaml := fmt.Sprintf(`general:
-  persist directory: %q
-admin:
+%sadmin:
   enabled: false
 receivers:
 - transport: %s
@@ -62,7 +67,7 @@ network:
   payload latency: %s
   slow every: %d
   slow latency: %s
-`, dir, benchTransport, cfg.receiverMaxPendingPayloads, benchTransport, cfg.sink.routines, cfg.sink.payloadLatency, cfg.sink.slowEvery, cfg.sink.slowLatency)
+`, general, benchTransport, cfg.receiverMaxPendingPayloads, benchTransport, cfg.sink.routines, cfg.sink.payloadLatency, cfg.sink.slowEvery, cfg.sink.slowLatency)
 	if err := os.WriteFile(path, []byte(yaml), 0600); err != nil {
 		tb.Fatal(err)
 	}
@@ -122,9 +127,11 @@ func (p *benchPipeline) connect(name string, payloadEvents int, depth int) *benc
 		payload:  newBenchPayload(payloadEvents),
 		depth:    depth,
 		acks:     make(chan string, depth*2),
-		drops:    make(chan string, depth+1),
+		closed:   make(chan struct{}, 1),
 	}
 	conn.ctx = context.WithValue(context.WithValue(context.Background(), transports.ContextReceiver, transports.Receiver(p.receiver)), transports.ContextConnection, conn)
+	general := p.app.Config().General()
+	conn.window = transports.NewReceiveWindow(conn.ctx, int(general.ReceiveWindowSize), general.ReceiveWindowFill)
 	p.receiver.eventChan <- transports.NewConnectEvent(conn.ctx, name, benchTransport)
 	return conn
 }

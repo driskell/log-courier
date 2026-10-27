@@ -2,6 +2,7 @@ package receiver
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -45,7 +46,10 @@ func (r *testReceiver) Shutdown() {
 	}()
 }
 
-type testConnection struct{}
+// testConnection identifies a connection, with a field so each instance has a distinct address
+type testConnection struct {
+	name string
+}
 
 func newTestPool(maxQueueSize int64) (*Pool, *testReceiver, chan []*event.Event) {
 	output := make(chan []*event.Event)
@@ -64,20 +68,40 @@ func newTestPool(maxQueueSize int64) (*Pool, *testReceiver, chan []*event.Event)
 		connectionStatus:  make(map[interface{}]*poolConnectionStatus),
 		generalConfig:     &config.General{MaxQueueSize: maxQueueSize},
 		done:              make(chan struct{}),
+		queue:             newFairQueue(),
+		admission:         newAdmissionControl(),
 	}
 	return pool, receiver, output
 }
 
-func newTestPayload(ctx context.Context, nonce string, size int) transports.EventsEvent {
+// testPayload is a payload of events a test connection sends
+type testPayload struct {
+	ctx   context.Context
+	nonce string
+	count int
+	size  int
+}
+
+func newTestPayload(ctx context.Context, nonce string, size int) *testPayload {
 	return newTestPayloadOf(ctx, nonce, 1, size)
 }
 
-func newTestPayloadOf(ctx context.Context, nonce string, count int, size int) transports.EventsEvent {
-	events := make([]map[string]interface{}, count)
-	for idx := range events {
-		events[idx] = map[string]interface{}{"message": "test"}
+func newTestPayloadOf(ctx context.Context, nonce string, count int, size int) *testPayload {
+	return &testPayload{ctx: ctx, nonce: nonce, count: count, size: size}
+}
+
+// hold adds the payload's events to a receive window, sharing its size between them, and optionally ends it
+func (p *testPayload) hold(window *transports.ReceiveWindow, from int, to int, end bool) {
+	for idx := from; idx < to; idx++ {
+		size := p.size / p.count
+		if idx == p.count-1 {
+			size = p.size - size*(p.count-1)
+		}
+		window.Add(&p.nonce, map[string]interface{}{"message": "test"}, size)
 	}
-	return transports.NewEventsEvent(ctx, &nonce, events, size)
+	if end {
+		window.End(&p.nonce)
+	}
 }
 
 // startTestPool runs a pool with one connected client, returning a function that disconnects it and shuts the pool down
@@ -92,7 +116,7 @@ func startTestPool(t *testing.T) (*Pool, *testReceiver, <-chan []*event.Event, c
 		close(done)
 	}()
 
-	ctx := context.WithValue(context.WithValue(context.Background(), transports.ContextConnection, &testConnection{}), transports.ContextReceiver, transports.Receiver(receiver))
+	ctx := context.WithValue(context.WithValue(context.Background(), transports.ContextConnection, &testConnection{name: "test"}), transports.ContextReceiver, transports.Receiver(receiver))
 	sendTestEvent(t, pool, transports.NewConnectEvent(ctx, "remote", "test"), "Pool did not accept the connection")
 	return pool, receiver, output, ctx, func() {
 		sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test"), "Pool did not accept the disconnection")
@@ -148,8 +172,8 @@ func expectNoTestAck(t *testing.T, receiver *testReceiver) {
 
 func TestPoolAcknowledgesPayloadsInAnyOrder(t *testing.T) {
 	pool, receiver, output, ctx, stop := startTestPool(t)
-	sendTestEvent(t, pool, newTestPayloadOf(ctx, "first", 4, 4), "Pool did not receive the first payload")
-	sendTestEvent(t, pool, newTestPayloadOf(ctx, "second", 4, 4), "Pool did not receive the second payload")
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "first", 4, 4), "Pool did not receive the first payload")
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "second", 4, 4), "Pool did not receive the second payload")
 	first := receiveTestEvents(t, output)
 	second := receiveTestEvents(t, output)
 
@@ -162,7 +186,7 @@ func TestPoolAcknowledgesPayloadsInAnyOrder(t *testing.T) {
 
 func TestPoolHoldsAcknowledgementUntilEarlierEventsAcknowledged(t *testing.T) {
 	pool, receiver, output, ctx, stop := startTestPool(t)
-	sendTestEvent(t, pool, newTestPayloadOf(ctx, "payload", 6, 6), "Pool did not receive the payload")
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "payload", 6, 6), "Pool did not receive the payload")
 	events := receiveTestEvents(t, output)
 
 	acknowledgeTestEvents(t, pool, events[3:])
@@ -174,7 +198,7 @@ func TestPoolHoldsAcknowledgementUntilEarlierEventsAcknowledged(t *testing.T) {
 
 func TestPoolAcknowledgesPartialPrefix(t *testing.T) {
 	pool, receiver, output, ctx, stop := startTestPool(t)
-	sendTestEvent(t, pool, newTestPayloadOf(ctx, "payload", 6, 6), "Pool did not receive the payload")
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "payload", 6, 6), "Pool did not receive the payload")
 	events := receiveTestEvents(t, output)
 
 	acknowledgeTestEvents(t, pool, events[:2])
@@ -188,8 +212,8 @@ func TestPoolAcknowledgesPartialPrefix(t *testing.T) {
 
 func TestPoolClosesFinishedConnectionOnceAcknowledged(t *testing.T) {
 	pool, receiver, output, ctx, stop := startTestPool(t)
-	sendTestEvent(t, pool, newTestPayloadOf(ctx, "first", 2, 2), "Pool did not receive the first payload")
-	sendTestEvent(t, pool, newTestPayloadOf(ctx, "second", 2, 2), "Pool did not receive the second payload")
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "first", 2, 2), "Pool did not receive the first payload")
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "second", 2, 2), "Pool did not receive the second payload")
 	first := receiveTestEvents(t, output)
 	second := receiveTestEvents(t, output)
 	sendTestEvent(t, pool, transports.NewEndEvent(ctx), "Pool did not receive the end of the connection")
@@ -209,7 +233,7 @@ func TestPoolClosesFinishedConnectionOnceAcknowledged(t *testing.T) {
 
 func TestPoolIgnoresAcknowledgementAfterDisconnect(t *testing.T) {
 	pool, receiver, output, ctx, stop := startTestPool(t)
-	sendTestEvent(t, pool, newTestPayloadOf(ctx, "payload", 2, 2), "Pool did not receive the payload")
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "payload", 2, 2), "Pool did not receive the payload")
 	events := receiveTestEvents(t, output)
 	sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test"), "Pool did not accept the disconnection")
 
@@ -237,46 +261,9 @@ func receiveTestOutput(t *testing.T, output <-chan []*event.Event) {
 	}
 }
 
-func TestPoolWaitsWhenQueueFull(t *testing.T) {
-	pool, receiver, output := newTestPool(100)
-	shutdownChan := make(chan struct{})
-	pool.shutdownChan = shutdownChan
-	done := make(chan struct{})
-	go func() {
-		pool.Run()
-		close(done)
-	}()
-
-	ctx := context.WithValue(context.WithValue(context.Background(), transports.ContextConnection, &testConnection{}), transports.ContextReceiver, transports.Receiver(receiver))
-	sendTestEvent(t, pool, transports.NewConnectEvent(ctx, "remote", "test"), "Pool did not accept the connection")
-	sendTestEvent(t, pool, newTestPayload(ctx, "first", 100), "Pool did not receive a payload while its queue had space")
-
-	select {
-	case pool.eventChan <- newTestPayload(ctx, "second", 100):
-		t.Fatal("Pool received a payload while its queue was full")
-	case <-time.After(100 * time.Millisecond):
-	}
-
-	receiveTestOutput(t, output)
-	sendTestEvent(t, pool, newTestPayload(ctx, "second", 100), "Pool did not resume receiving after its queue drained")
-
-	if closes := receiver.closes.Load(); closes != 0 {
-		t.Fatalf("Pool closed %d connections instead of waiting", closes)
-	}
-
-	receiveTestOutput(t, output)
-	sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test"), "Pool did not accept the disconnection")
-	close(shutdownChan)
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("Pool did not shut down")
-	}
-}
-
 func TestPoolAcknowledgementAfterExitReturns(t *testing.T) {
 	pool, _, output, ctx, stop := startTestPool(t)
-	sendTestEvent(t, pool, newTestPayloadOf(ctx, "payload", 2, 2), "Pool did not receive the payload")
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "payload", 2, 2), "Pool did not receive the payload")
 	events := receiveTestEvents(t, output)
 	stop()
 
@@ -290,4 +277,265 @@ func TestPoolAcknowledgementAfterExitReturns(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Acknowledgement blocked after the pool exited")
 	}
+}
+
+func TestPoolDrainsLightPayloadAheadOfHeavyBacklog(t *testing.T) {
+	pool, receiver, output, heavy, stop := startTestPool(t)
+	light := context.WithValue(context.WithValue(context.Background(), transports.ContextConnection, &testConnection{name: "light"}), transports.ContextReceiver, transports.Receiver(receiver))
+	sendTestEvent(t, pool, transports.NewConnectEvent(light, "light", "test"), "Pool did not accept the light connection")
+	for i := 0; i < 3; i++ {
+		sendTestPayload(t, pool, newTestPayloadOf(heavy, fmt.Sprintf("heavy%d", i), 600, 600*400), "Pool did not receive a heavy payload")
+	}
+	sendTestPayload(t, pool, newTestPayloadOf(light, "light", 10, 10*400), "Pool did not receive the light payload")
+
+	drained := false
+	for idx := 0; idx < 2 && !drained; idx++ {
+		drained = len(receiveTestEvents(t, output)) == 10
+	}
+	if !drained {
+		t.Fatal("Light payload was not drained within the first two slices, behind the heavy backlog")
+	}
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(light, "light", "test"), "Pool did not accept the light disconnection")
+	stop()
+}
+
+func TestPoolAcknowledgesPayloadDrainedInSlices(t *testing.T) {
+	pool, receiver, output, ctx, stop := startTestPool(t)
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "payload", 600, 600), "Pool did not receive the payload")
+	first := receiveTestEvents(t, output)
+	second := receiveTestEvents(t, output)
+	third := receiveTestEvents(t, output)
+	if len(first) != 256 || len(second) != 256 || len(third) != 88 {
+		t.Fatalf("Expected slices of 256, 256 and 88 events, got %d, %d and %d", len(first), len(second), len(third))
+	}
+
+	acknowledgeTestEvents(t, pool, third)
+	expectNoTestAck(t, receiver)
+	acknowledgeTestEvents(t, pool, second)
+	expectNoTestAck(t, receiver)
+	acknowledgeTestEvents(t, pool, first)
+	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 600})
+	stop()
+}
+
+// requestTestTake asks the pool to take the events held in a receive window, as a connection does
+func requestTestTake(t *testing.T, pool *Pool, window *transports.ReceiveWindow) {
+	t.Helper()
+	sendTestEvent(t, pool, transports.NewAdmissionEvent(window.Context(), window), "Pool did not receive the admission request")
+}
+
+func expectTestTaken(t *testing.T, window *transports.ReceiveWindow, message string) {
+	t.Helper()
+	select {
+	case <-window.Taken():
+	case <-time.After(5 * time.Second):
+		t.Fatal(message)
+	}
+}
+
+func expectTestNotTaken(t *testing.T, window *transports.ReceiveWindow, message string) {
+	t.Helper()
+	select {
+	case <-window.Taken():
+		t.Fatal(message)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// holdTestPayload holds a whole payload in a new receive window and asks the pool to take it
+func holdTestPayload(t *testing.T, pool *Pool, payload *testPayload) *transports.ReceiveWindow {
+	t.Helper()
+	window := transports.NewReceiveWindow(payload.ctx, 1<<30, 1)
+	payload.hold(window, 0, payload.count, true)
+	requestTestTake(t, pool, window)
+	return window
+}
+
+// sendTestPayload sends a payload as a connection does, waiting until the pool takes it
+func sendTestPayload(t *testing.T, pool *Pool, payload *testPayload, message string) {
+	t.Helper()
+	expectTestTaken(t, holdTestPayload(t, pool, payload), "Pool did not take the payload: "+message)
+}
+
+func newTestConnectionContext(receiver *testReceiver, name string) context.Context {
+	return context.WithValue(context.WithValue(context.Background(), transports.ContextConnection, &testConnection{name: name}), transports.ContextReceiver, transports.Receiver(receiver))
+}
+
+// startTestPoolWithQueue runs a pool with the given queue budget, returning a function that shuts it down
+func startTestPoolWithQueue(t *testing.T, maxQueueSize int64) (*Pool, *testReceiver, <-chan []*event.Event, func()) {
+	t.Helper()
+	pool, receiver, output := newTestPool(maxQueueSize)
+	shutdownChan := make(chan struct{})
+	pool.shutdownChan = shutdownChan
+	done := make(chan struct{})
+	go func() {
+		pool.Run()
+		close(done)
+	}()
+	return pool, receiver, output, func() {
+		close(shutdownChan)
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Pool did not shut down")
+		}
+	}
+}
+
+func TestPoolHoldsEventsWhileQueueFull(t *testing.T) {
+	pool, receiver, output, stop := startTestPoolWithQueue(t, 100)
+	ctx := newTestConnectionContext(receiver, "test")
+	sendTestEvent(t, pool, transports.NewConnectEvent(ctx, "remote", "test"), "Pool did not accept the connection")
+	sendTestPayload(t, pool, newTestPayload(ctx, "first", 100), "Pool did not receive a payload while its queue had space")
+
+	window := holdTestPayload(t, pool, newTestPayload(ctx, "second", 100))
+	expectTestNotTaken(t, window, "Pool took events from a connection with events queued while its queue was full")
+	receiveTestOutput(t, output)
+	expectTestTaken(t, window, "Pool did not take the events once its queue drained")
+
+	if closes := receiver.closes.Load(); closes != 0 {
+		t.Fatalf("Pool closed %d connections instead of holding them", closes)
+	}
+	receiveTestOutput(t, output)
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test"), "Pool did not accept the disconnection")
+	stop()
+}
+
+func TestPoolTakesEventsFromConnectionWithNothingQueuedWhileQueueFull(t *testing.T) {
+	pool, receiver, output, stop := startTestPoolWithQueue(t, 100)
+	busy := newTestConnectionContext(receiver, "busy")
+	idle := newTestConnectionContext(receiver, "idle")
+	sendTestEvent(t, pool, transports.NewConnectEvent(busy, "busy", "test"), "Pool did not accept the busy connection")
+	sendTestEvent(t, pool, transports.NewConnectEvent(idle, "idle", "test"), "Pool did not accept the idle connection")
+	sendTestPayload(t, pool, newTestPayload(busy, "busy", 100), "Pool did not receive the busy payload")
+
+	sendTestPayload(t, pool, newTestPayload(idle, "idle", 100), "Pool held back a connection with nothing queued while its queue was full")
+
+	receiveTestOutput(t, output)
+	receiveTestOutput(t, output)
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(busy, "busy", "test"), "Pool did not accept the busy disconnection")
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(idle, "idle", "test"), "Pool did not accept the idle disconnection")
+	stop()
+}
+
+func TestPoolTakesFromLightSenderBeforeHeavySenderOfLargePayload(t *testing.T) {
+	pool, receiver, output, stop := startTestPoolWithQueue(t, 1<<20)
+	heavy := newTestConnectionContext(receiver, "heavy")
+	light := newTestConnectionContext(receiver, "light")
+	sendTestEvent(t, pool, transports.NewConnectEvent(heavy, "heavy", "test"), "Pool did not accept the heavy connection")
+	sendTestEvent(t, pool, transports.NewConnectEvent(light, "light", "test"), "Pool did not accept the light connection")
+	sendTestPayload(t, pool, newTestPayloadOf(heavy, "heavy", 1024, 1<<20), "Pool did not receive the heavy payload")
+	sendTestPayload(t, pool, newTestPayloadOf(light, "light", 10, 4096), "Pool did not receive the light payload")
+
+	heavyWindow := holdTestPayload(t, pool, newTestPayloadOf(heavy, "heavy2", 10, 4096))
+	lightWindow := holdTestPayload(t, pool, newTestPayloadOf(light, "light2", 10, 4096))
+	for {
+		receiveTestEvents(t, output)
+		// Checked in turn, as a select would choose at random once both are taken
+		select {
+		case <-lightWindow.Taken():
+			sendTestEvent(t, pool, transports.NewDisconnectEvent(light, "light", "test"), "Pool did not accept the light disconnection")
+			sendTestEvent(t, pool, transports.NewDisconnectEvent(heavy, "heavy", "test"), "Pool did not accept the heavy disconnection")
+			stop()
+			return
+		default:
+		}
+		select {
+		case <-heavyWindow.Taken():
+			t.Fatal("Pool took from the heavy sender again before the light sender")
+		default:
+		}
+	}
+}
+
+func TestPoolAcknowledgesPayloadReceivedInSegments(t *testing.T) {
+	pool, receiver, output, ctx, stop := startTestPool(t)
+	payload := newTestPayloadOf(ctx, "payload", 6, 6)
+	window := transports.NewReceiveWindow(ctx, 1<<30, 1)
+	payload.hold(window, 0, 3, false)
+	requestTestTake(t, pool, window)
+	expectTestTaken(t, window, "Pool did not take the first segment")
+	first := receiveTestEvents(t, output)
+
+	acknowledgeTestEvents(t, pool, first)
+	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 3})
+
+	payload.hold(window, 3, 6, true)
+	requestTestTake(t, pool, window)
+	expectTestTaken(t, window, "Pool did not take the second segment")
+	second := receiveTestEvents(t, output)
+	if len(first) != 3 || len(second) != 3 {
+		t.Fatalf("Expected segments of 3 and 3 events, got %d and %d", len(first), len(second))
+	}
+
+	acknowledgeTestEvents(t, pool, second)
+	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 6})
+	sendTestEvent(t, pool, transports.NewPingEvent(ctx), "Pool did not receive the ping")
+	if closes := receiver.closes.Load(); closes != 0 {
+		t.Fatal("Pool failed the connection for a ping once every payload was acknowledged")
+	}
+	stop()
+}
+
+func TestPoolCompletesPayloadEndedAfterItsEventsAreAcknowledged(t *testing.T) {
+	pool, receiver, output, ctx, stop := startTestPool(t)
+	payload := newTestPayloadOf(ctx, "payload", 2, 2)
+	window := transports.NewReceiveWindow(ctx, 1<<30, 1)
+	payload.hold(window, 0, 2, false)
+	requestTestTake(t, pool, window)
+	expectTestTaken(t, window, "Pool did not take the events")
+	acknowledgeTestEvents(t, pool, receiveTestEvents(t, output))
+	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 2})
+
+	sendTestEvent(t, pool, transports.NewEndEvent(ctx), "Pool did not receive the end of the connection")
+	if shutdowns := receiver.shutdowns.Load(); shutdowns != 0 {
+		t.Fatal("Pool shut down the connection before its payload was received in full")
+	}
+
+	window.End(&payload.nonce)
+	requestTestTake(t, pool, window)
+	expectTestTaken(t, window, "Pool did not take the end of the payload")
+	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 2})
+	if shutdowns := receiver.shutdowns.Load(); shutdowns != 1 {
+		t.Fatalf("Pool shut down the connection %d times once its payload completed, expected once", shutdowns)
+	}
+	stop()
+}
+
+func TestPoolAcknowledgesSkippedEventsWithTheirPayload(t *testing.T) {
+	pool, receiver, output, ctx, stop := startTestPool(t)
+	nonce := "payload"
+	window := transports.NewReceiveWindow(ctx, 1<<30, 1)
+	window.Skip(&nonce)
+	window.Add(&nonce, map[string]interface{}{"message": "second"}, 1)
+	window.Skip(&nonce)
+	window.Add(&nonce, map[string]interface{}{"message": "fourth"}, 1)
+	window.End(&nonce)
+	requestTestTake(t, pool, window)
+	expectTestTaken(t, window, "Pool did not take the payload")
+	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 1})
+
+	second := receiveTestEvents(t, output)
+	fourth := receiveTestEvents(t, output)
+	if len(second) != 1 || len(fourth) != 1 {
+		t.Fatalf("Expected the two events that were not skipped, got %d and %d", len(second), len(fourth))
+	}
+	acknowledgeTestEvents(t, pool, second)
+	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 3})
+	acknowledgeTestEvents(t, pool, fourth)
+	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 4})
+	stop()
+}
+
+func TestPoolAcknowledgesPayloadWhoseEventsWereAllSkipped(t *testing.T) {
+	pool, receiver, _, ctx, stop := startTestPool(t)
+	nonce := "payload"
+	window := transports.NewReceiveWindow(ctx, 1<<30, 1)
+	window.Skip(&nonce)
+	window.Skip(&nonce)
+	window.End(&nonce)
+	requestTestTake(t, pool, window)
+	expectTestTaken(t, window, "Pool did not take the payload")
+	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 2})
+	stop()
 }

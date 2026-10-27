@@ -1,15 +1,11 @@
 package receiver
 
 import (
-	"context"
 	"testing"
-
-	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
 func newTestProgress(count int) *poolEventProgress {
-	nonce := "nonce"
-	return &poolEventProgress{event: transports.NewEventsEvent(context.Background(), &nonce, make([]map[string]interface{}, count), 0)}
+	return &poolEventProgress{count: uint32(count), final: true}
 }
 
 func assertProgress(t *testing.T, progress *poolEventProgress, advanced bool, expectedAdvanced bool, expectedAckedThrough uint32) {
@@ -69,4 +65,16 @@ func TestProgressMergesOverlappingRanges(t *testing.T) {
 	assertProgress(t, progress, progress.acknowledge(2, 6), true, 6)
 	assertProgress(t, progress, progress.acknowledge(9, 10), false, 6)
 	assertProgress(t, progress, progress.acknowledge(7, 9), true, 10)
+}
+
+func TestProgressIsIncompleteUntilEveryEventIsReceived(t *testing.T) {
+	progress := &poolEventProgress{count: 4}
+	assertProgress(t, progress, progress.acknowledge(1, 4), true, 4)
+	if progress.complete() {
+		t.Fatal("Progress was complete before the payload was received in full")
+	}
+	progress.final = true
+	if !progress.complete() {
+		t.Fatal("Progress was not complete once the payload was received in full and acknowledged")
+	}
 }

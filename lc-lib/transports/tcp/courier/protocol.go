@@ -58,7 +58,7 @@ func (p *protocol) serverNegotiation() (transports.Event, error) {
 
 	heloMessage, ok := message.(*protocolHELO)
 	if !ok {
-		if messageImpl, ok := message.(transports.EventsEvent); ok {
+		if messageImpl, ok := message.(tcp.StreamMessage); ok {
 			// Backwards compatible path with older log-courier which do not perform a negotiation
 			log.Infof("[R %s < %s] Remote does not support protocol handshake", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String())
 			return messageImpl, nil
@@ -151,8 +151,13 @@ func (p *protocol) Pong() error {
 	return p.conn.SendMessage(&protocolPONG{})
 }
 
-// readMsg reads a single message from the connection
-func (p *protocol) readMsg() (tcp.ProtocolMessage, error) {
+// receivedMessage is a message read from the connection, either complete or a stream of events read as they arrive
+type receivedMessage interface {
+	Type() string
+}
+
+// readMsg reads a single message from the connection, of which only the start of an events message is read
+func (p *protocol) readMsg() (receivedMessage, error) {
 	var header [8]byte
 
 	if _, err := p.conn.Read(header[:]); err != nil {
@@ -162,7 +167,7 @@ func (p *protocol) readMsg() (tcp.ProtocolMessage, error) {
 	// Grab length of message
 	bodyLength := binary.BigEndian.Uint32(header[4:8])
 
-	var newFunc func(tcp.Connection, uint32) (tcp.ProtocolMessage, error)
+	var newFunc func(tcp.Connection, uint32) (receivedMessage, error)
 	switch {
 	case bytes.Equal(header[0:4], []byte("????")): // UNKN
 		newFunc = newProtocolUNKN
@@ -183,7 +188,7 @@ func (p *protocol) readMsg() (tcp.ProtocolMessage, error) {
 		newFunc = newProtocolJDAT
 	case bytes.Equal(header[0:4], []byte("EVNT")):
 		if p.isClient {
-			return nil, errors.New("protocol error: Unexpected JDAT message received on client connection")
+			return nil, errors.New("protocol error: Unexpected EVNT message received on client connection")
 		}
 		newFunc = newProtocolEVNT
 	default:
@@ -215,8 +220,8 @@ func (p *protocol) Read() (transports.Event, error) {
 		case *protocolPING:
 			log.Debugf("[R %s < %s] Received ping", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String())
 			return transports.NewPingEvent(p.conn.Context()), nil
-		case transports.EventsEvent:
-			log.Debugf("[R %s < %s] Received payload with nonce %x and %d events", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), *transportEvent.Nonce(), transportEvent.Count())
+		case tcp.StreamMessage:
+			log.Debugf("[R %s < %s] Receiving payload with nonce %x", p.conn.LocalAddr().String(), p.conn.RemoteAddr().String(), *transportEvent.Nonce())
 			return transportEvent, nil
 		}
 	}

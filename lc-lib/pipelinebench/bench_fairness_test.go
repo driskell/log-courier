@@ -14,6 +14,8 @@ type fairnessScenario struct {
 	lightConnections, lightPayloadEvents             int
 	slowEvery                                        int
 	slowLatency                                      time.Duration
+	// maxQueueSize sets a receiver queue budget smaller than the senders' combined backlog when set
+	maxQueueSize int64
 }
 
 // BenchmarkPipelineFairness runs one fixed duration scenario per op, of a few heavy senders and many light ones against
@@ -27,10 +29,14 @@ func BenchmarkPipelineFairness(b *testing.B) {
 		{heavyConnections: 5, heavyPayloadEvents: 1024, heavyDepth: 1, lightConnections: 295, lightPayloadEvents: 10},
 		{heavyConnections: 5, heavyPayloadEvents: 1024, heavyDepth: 10, lightConnections: 295, lightPayloadEvents: 10},
 		{heavyConnections: 5, heavyPayloadEvents: 1024, heavyDepth: 1, lightConnections: 295, lightPayloadEvents: 10, slowEvery: 50, slowLatency: 250 * time.Millisecond},
+		{heavyConnections: 5, heavyPayloadEvents: 1024, heavyDepth: 10, lightConnections: 295, lightPayloadEvents: 10, maxQueueSize: 4 << 20},
 	} {
 		name := fmt.Sprintf("heavy=%dx%dx%d/light=%dx%d", scenario.heavyConnections, scenario.heavyPayloadEvents, scenario.heavyDepth, scenario.lightConnections, scenario.lightPayloadEvents)
 		if scenario.slowEvery > 0 {
 			name += fmt.Sprintf("/slow=1in%dx%s", scenario.slowEvery, scenario.slowLatency)
+		}
+		if scenario.maxQueueSize > 0 {
+			name += fmt.Sprintf("/queue=%dMiB", scenario.maxQueueSize>>20)
 		}
 		b.Run(name, func(b *testing.B) {
 			var heavyEvents, lightEvents, closes int
@@ -39,6 +45,7 @@ func BenchmarkPipelineFairness(b *testing.B) {
 				p := startPipeline(b, pipelineConfig{
 					sink:                       sinkConfig{routines: 4, payloadLatency: 10 * time.Millisecond, slowEvery: scenario.slowEvery, slowLatency: scenario.slowLatency},
 					receiverMaxPendingPayloads: 10,
+					maxQueueSize:               scenario.maxQueueSize,
 				})
 				heavy := make([]*benchConnection, scenario.heavyConnections)
 				for idx := range heavy {

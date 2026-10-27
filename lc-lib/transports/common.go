@@ -84,20 +84,6 @@ type AckEvent interface {
 	Sequence() uint32
 }
 
-type EventsEvent interface {
-	Event
-	Events() []map[string]interface{}
-	Nonce() *string
-	Count() uint32
-	Size() int
-}
-
-// RawEventsEvent is an EventsEvent that can also provide each event as its undecoded JSON
-type RawEventsEvent interface {
-	EventsEvent
-	RawEvents() [][]byte
-}
-
 // StatusEvent contains information about a status change for a transport
 type StatusEvent struct {
 	context      context.Context
@@ -197,6 +183,32 @@ func (e *DisconnectEvent) Desc() string {
 	return e.desc
 }
 
+// AdmissionEvent asks the receiver pool to take the events held in a connection's receive window
+type AdmissionEvent struct {
+	context context.Context
+	window  *ReceiveWindow
+}
+
+var _ Event = (*AdmissionEvent)(nil)
+
+// NewAdmissionEvent generates a new AdmissionEvent for the given connection context and receive window
+func NewAdmissionEvent(context context.Context, window *ReceiveWindow) *AdmissionEvent {
+	return &AdmissionEvent{
+		context: context,
+		window:  window,
+	}
+}
+
+// Context returns the connection context
+func (e *AdmissionEvent) Context() context.Context {
+	return e.context
+}
+
+// Window returns the receive window holding the events to take
+func (e *AdmissionEvent) Window() *ReceiveWindow {
+	return e.window
+}
+
 // EndEvent marks the end of a stream of events from an endpoint
 type EndEvent struct {
 	context context.Context
@@ -285,50 +297,6 @@ func (e *ackEvent) Nonce() *string {
 // Sequence returns the sequence value
 func (e *ackEvent) Sequence() uint32 {
 	return e.sequence
-}
-
-// eventsEvent contains information about an events bundle
-type eventsEvent struct {
-	context context.Context
-	nonce   *string
-	events  []map[string]interface{}
-	size    int
-}
-
-var _ EventsEvent = (*eventsEvent)(nil)
-
-// NewEventsEvent generates a new EventsEvent for the given bundle of events
-func NewEventsEvent(context context.Context, nonce *string, events []map[string]interface{}, size int) EventsEvent {
-	return &eventsEvent{
-		context: context,
-		nonce:   nonce,
-		events:  events,
-		size:    size,
-	}
-}
-
-// Context returns the endpoint associated with this event
-func (e *eventsEvent) Context() context.Context {
-	return e.context
-}
-
-// Nonce returns the nonce value
-func (e *eventsEvent) Nonce() *string {
-	return e.nonce
-}
-
-// Events returns the events
-func (e *eventsEvent) Events() []map[string]interface{} {
-	return e.events
-}
-
-// Count returns the number of events in the payload
-func (e *eventsEvent) Count() uint32 {
-	return uint32(len(e.events))
-}
-
-func (e *eventsEvent) Size() int {
-	return e.size
 }
 
 // ParseTLSVersion parses a TLS version string into the tls library value for min/max config

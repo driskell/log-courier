@@ -28,6 +28,12 @@ payloads sit inside a slow payload and wait for it whatever the ordering, which
 sets `light-p99-ms`, so the payloads held back behind it show in `light-p90-ms`
 and `light-p95-ms`.
 
+The fairness scenario suffixed `/queue=4MiB` limits the receiver queue to 4MiB,
+far below the roughly 20MB the heavy senders alone keep in flight, so the queue
+stays full. It shows how light senders fare when the receiver must hold back
+connections because its budget is exhausted, rather than only how the queue is
+drained.
+
 Fairness metrics:
 
 | Metric | Meaning |

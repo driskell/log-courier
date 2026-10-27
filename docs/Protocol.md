@@ -170,6 +170,11 @@ ACKN message response from the server.
 If a server fails to decompress a JDAT message, it MUST disconnect the client
 immediately.
 
+A server MAY process events before the end of the compressed data is reached,
+and so MAY ignore the ZLIB checksum that ends it, relying on the connection for
+integrity. A server MAY skip an event larger than it is configured to accept,
+acknowledging it as if it were processed.
+
 Implementations MAY enforce a limit on the length of the message, and the
 sending and receiving side SHOULD be configured with the same limits.
 

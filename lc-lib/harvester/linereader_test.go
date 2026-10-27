@@ -19,6 +19,7 @@ package harvester
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -129,4 +130,27 @@ func TestLineReadTooLong(t *testing.T) {
 	checkLine(t, reader, string("12345678901234567890"), 21, nil)
 	checkLine(t, reader, "", 0, io.EOF)
 	checkBufferedLen(t, reader, 0)
+}
+
+func TestLineReaderLineReadyOnlyWithCompleteLineBuffered(t *testing.T) {
+	reader := NewLineReader(strings.NewReader("first\nsec"), 1024, 1024)
+	if reader.LineReady() {
+		t.Fatal("Line reported ready before anything was read")
+	}
+	if _, _, err := reader.ReadItem(); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	if reader.LineReady() {
+		t.Fatal("Line reported ready with only part of a line buffered")
+	}
+}
+
+func TestLineReaderLineReadyWithLineTooLongToHold(t *testing.T) {
+	reader := NewLineReader(strings.NewReader("first\nabcdefghij"), 1024, 8)
+	if _, _, err := reader.ReadItem(); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	if !reader.LineReady() {
+		t.Fatal("Line not reported ready with more buffered than a line may hold")
+	}
 }

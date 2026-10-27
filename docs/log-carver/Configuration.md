@@ -23,9 +23,12 @@
     - [`log level`](#log-level)
     - [`log stdout`](#log-stdout)
     - [`log syslog`](#log-syslog)
+    - [`max queue size`](#max-queue-size)
     - [`maximum event age`](#maximum-event-age)
     - [`maximum future event age`](#maximum-future-event-age)
     - [`processor routines`](#processor-routines)
+    - [`receive window fill`](#receive-window-fill)
+    - [`receive window size`](#receive-window-size)
     - [`spool max bytes`](#spool-max-bytes)
     - [`spool size`](#spool-size)
     - [`spool timeout`](#spool-timeout)
@@ -72,7 +75,6 @@
     - [`enabled` (receiver)](#enabled-receiver)
     - [`listen`](#listen)
     - [`max pending payloads` (receiver)](#max-pending-payloads-receiver)
-    - [`max queue size` (receiver)](#max-queue-size-receiver)
     - [`max tls version` (receiver)](#max-tls-version-receiver)
     - [`min tls version` (receiver)](#min-tls-version-receiver)
     - [`name` (receiver)](#name-receiver)
@@ -387,6 +389,29 @@ Enables sending of Log Carver's internal log to syslog. May be used in conjuncti
 
 *This option is ignored by Windows builds.*
 
+### `max queue size`
+
+Number. Optional. Default: 134217728 (128 MiB)
+Since 2.13.0
+
+Maximum number of bytes that can be received and queued from clients at any
+one moment in time.
+
+If too many events are being received than can be processed then this queue
+can build in size. Events a connection has received are held in its
+[`receive window`](#receive-window-size) and only taken into the queue
+while it has room, so a connection that already has events queued waits once
+the queue is full, rather than being disconnected. Connections are served
+fairly, and one that sends a lot waits longer between turns, so connections
+sending little are not held back by those sending a lot. Events from a
+connection with nothing queued are taken straight away, so the queue may exceed
+this size by up to one receive window for each connection.
+
+While a connection waits, it remains open and no data is lost, as the client
+waits for Log Carver to catch up. Clients that support acknowledgement continue
+to receive partial acknowledgements for queued events, keeping their
+connections alive while they wait.
+
 ### `maximum event age`
 
 Duration. Optional. Default: "90d"  
@@ -430,6 +455,52 @@ At the time of writing, the only file saved here is `GeoLite2-City.mmdb` when [`
 Number. Optional. Default: 4. Min: 1. Max: 128
 
 The number of processor routines to start. Event spools are distributed across the processor routines for parallel processing. Increasing this may allow the usage of more CPUs and therefore faster processing of events.
+
+### `receive window fill`
+
+Number. Optional. Default: 0.8
+Since 2.14.0
+
+Fraction of the [`receive window size`](#receive-window-size) a connection
+fills before asking for its events to be taken into the queue. Must be greater
+than 0 and no more than 1.
+
+A connection also asks once a payload ends, or once the next event will not
+fit, so a payload smaller than the window is taken whole. Continuing to receive
+while waiting to be taken lets a connection keep its window filling. A lower
+value takes events sooner but in smaller pieces, which costs more to process.
+
+Changing this restarts the receivers, reconnecting their clients.
+
+### `receive window size`
+
+Number. Optional. Default: 2097152 (2 MiB)
+Since 2.14.0
+
+Maximum number of bytes of events each connection may receive ahead of them
+being taken into the queue, which is also the largest single event that can be
+received.
+
+Each connection receives events into its receive window without waiting, and
+asks for them to be taken into the queue once they fill the window to
+[`receive window fill`](#receive-window-fill), or a payload ends, or the next
+event will not fit. It only waits once its window is full, so the memory used
+to receive is at most this size for each connection, in addition to
+[`max queue size`](#max-queue-size), even when every client reconnects and
+sends at once. A `stream` connection may also hold one line it is reading, of
+up to this size.
+
+A `courier` event larger than this size is decompressed and discarded without
+being held, a warning is logged for the payload it was in, and it is
+acknowledged so the client does not send it again. A `stream` line longer than
+this size is split into several events, each tagged `splitline`.
+
+The default leaves room above Log Courier's default `max line bytes` and
+multiline codec `max multiline bytes`, both 1 MiB, for the fields added to each
+event, such as the path of the file it was read from. Keep that room when
+changing either side.
+
+Changing this restarts the receivers, reconnecting their clients.
 
 ### `spool max bytes`
 
@@ -903,25 +974,6 @@ to retry.
 
 *You should only change this value if you changed the equivilant value on a
 Log Courier client.*
-
-### `max queue size` (receiver)
-
-Number. Optional. Default: 134217728 (128 MiB)
-Since 2.13.0
-
-Maximum number of bytes that can be received and queued from clients at any
-one moment in time.
-
-If too many events are being received than can be processed then this queue
-can build in size. When this queue is full, Log Carver stops receiving from all
-connections until it has processed enough of the queue to fall back under this
-size, so clients wait to send rather than being disconnected. The queue may
-exceed this size by up to one received payload.
-
-While receiving is paused, connections remain open and no data is lost, as
-clients wait for Log Carver to catch up. Clients that support acknowledgement
-continue to receive partial acknowledgements for queued events, keeping their
-connections alive while they wait.
 
 ### `max tls version` (receiver)
 

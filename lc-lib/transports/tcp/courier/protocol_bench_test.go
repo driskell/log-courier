@@ -30,8 +30,9 @@ func silenceLogging() {
 
 // benchConnection records what is written to it, discards sent messages, and reads from a preset buffer
 type benchConnection struct {
-	written bytes.Buffer
-	reader  bytes.Reader
+	written    bytes.Buffer
+	reader     bytes.Reader
+	windowSize int
 }
 
 func (c *benchConnection) Context() context.Context                      { return context.Background() }
@@ -40,6 +41,7 @@ func (c *benchConnection) Flush() error                                  { retur
 func (c *benchConnection) Read(data []byte) (int, error)                 { return c.reader.Read(data) }
 func (c *benchConnection) ReadByte() (byte, error)                       { return c.reader.ReadByte() }
 func (c *benchConnection) SendMessage(message tcp.ProtocolMessage) error { return nil }
+func (c *benchConnection) ReceiveWindowSize() int                        { return c.windowSize }
 func (c *benchConnection) LocalAddr() net.Addr                           { return &net.TCPAddr{} }
 func (c *benchConnection) RemoteAddr() net.Addr                          { return &net.TCPAddr{} }
 
@@ -111,14 +113,18 @@ func BenchmarkProtocolReadEVNT(b *testing.B) {
 	}
 	// The message type and length header is read before the message is constructed
 	body := writer.written.Bytes()[8:]
-	reader := &benchConnection{}
+	reader := &benchConnection{windowSize: 1 << 20}
 
 	b.SetBytes(int64(len(benchEventJSON) * len(events)))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		reader.reader.Reset(body)
-		if _, err := newProtocolEVNT(reader, math.MaxUint32); err != nil {
+		message, err := newProtocolEVNT(reader, math.MaxUint32)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err := readTestEvents(message.(tcp.StreamMessage)); err != nil {
 			b.Fatal(err)
 		}
 	}

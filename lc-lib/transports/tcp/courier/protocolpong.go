@@ -26,7 +26,7 @@ type protocolPONG struct {
 }
 
 // newProtocolPONG reads a new protocolPONG
-func newProtocolPONG(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
+func newProtocolPONG(conn tcp.Connection, bodyLength uint32) (receivedMessage, error) {
 	if bodyLength != 0 {
 		return nil, fmt.Errorf("protocol error: Corrupt message PONG size %d != 0", bodyLength)
 	}

@@ -47,6 +47,9 @@ type connection struct {
 	eventChan    chan<- transports.Event
 	sendChan     chan ProtocolMessage
 	rwBuffer     bufio.ReadWriter
+	// window holds received events until the receiver takes them, and is nil for a client connection
+	window     *transports.ReceiveWindow
+	windowSize int
 
 	// senderErr stores exit error from sender so if receiver succeeds but sender not we can return it
 	senderErr error
@@ -62,11 +65,12 @@ type connection struct {
 	sendShutdownLock sync.RWMutex
 }
 
-func newConnection(ctx context.Context, socket connectionSocket, protocolFactory ProtocolFactory, isClient bool, eventChan chan<- transports.Event) *connection {
+func newConnection(ctx context.Context, socket connectionSocket, protocolFactory ProtocolFactory, isClient bool, eventChan chan<- transports.Event, windowSize int, windowFill float64) *connection {
 	ret := &connection{
-		socket:    socket,
-		isClient:  isClient,
-		eventChan: eventChan,
+		socket:     socket,
+		isClient:   isClient,
+		eventChan:  eventChan,
+		windowSize: windowSize,
 		// TODO: Make configurable. Allow up to 100 pending messages.
 		// This will cope with a max pending payload size of 100 for each connection by allowing 100 acks to be queued
 		sendChan:             make(chan ProtocolMessage, 100),
@@ -76,6 +80,9 @@ func newConnection(ctx context.Context, socket connectionSocket, protocolFactory
 	ret.protocol = protocolFactory.NewProtocol(ret)
 
 	ret.ctx, ret.shutdownFunc = context.WithCancel(context.WithValue(ctx, transports.ContextConnection, ret))
+	if !isClient {
+		ret.window = transports.NewReceiveWindow(ret.ctx, windowSize, windowFill)
+	}
 
 	return ret
 }
@@ -106,17 +113,11 @@ func (t *connection) run(startedCallback func()) error {
 		startedCallback()
 	}
 
-	// If handshake isn't implemented by a client in server mode, we may have an events message already
-	// Ensure it is sent AFTER the startedCallback and not before, which might mean something isn't ready
-	if event != nil {
-		if err := t.sendEvent(event); err != nil {
-			return err
-		}
-	}
-
 	t.wait.Add(1)
 	go t.senderRoutine()
-	err = t.receiver()
+	// If handshake isn't implemented by a client in server mode, we may have an events message already, which is
+	// handled after the startedCallback and once the sender runs to send its acknowledgements
+	err = t.receiver(event)
 	if err != nil && err != io.EOF {
 		// Teardown if error occurs and it wasn't a graceful EOF (nil err means CloseRead called so also graceful)
 		t.shutdownFunc()
@@ -174,6 +175,83 @@ func (t *connection) sender() error {
 	}
 }
 
+// handleReceived passes a received event to the receiver, reading an events message into the receive window
+func (t *connection) handleReceived(transportEvent transports.Event) error {
+	if message, ok := transportEvent.(StreamMessage); ok {
+		return t.receiveEvents(message)
+	}
+	return t.sendEvent(transportEvent)
+}
+
+// receiveEvents reads each event of a message into the receive window, asking the receiver to take them once they
+// fill enough of the window or the message ends, and waiting only while the window is too full to hold the next
+func (t *connection) receiveEvents(message StreamMessage) error {
+	nonce := message.Nonce()
+	for {
+		raw, decoded, size, skipped, err := message.Next(t.reserveWindow)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if skipped {
+			t.window.Skip(nonce)
+			continue
+		}
+		// An event whose size was not known in advance is reserved once read
+		if err := t.reserveWindow(size); err != nil {
+			return err
+		}
+		var request bool
+		if raw != nil {
+			request = t.window.AddRaw(nonce, raw)
+		} else {
+			request = t.window.Add(nonce, decoded, size)
+		}
+		if request {
+			if err := t.requestTake(); err != nil {
+				return err
+			}
+		}
+	}
+	if t.window.End(nonce) {
+		return t.requestTake()
+	}
+	return nil
+}
+
+// reserveWindow waits until the receive window can hold an event of the given size, first asking the receiver to take
+// what it holds if it cannot
+func (t *connection) reserveWindow(size int) error {
+	if t.window.Fits(size) {
+		return nil
+	}
+	if t.window.Request() {
+		if err := t.requestTake(); err != nil {
+			return err
+		}
+	}
+	return t.awaitWindow(func() bool { return t.window.Fits(size) })
+}
+
+// requestTake asks the receiver to take the events held in the receive window
+func (t *connection) requestTake() error {
+	return t.sendEvent(transports.NewAdmissionEvent(t.ctx, t.window))
+}
+
+// awaitWindow waits until the receiver has taken enough from the receive window for ready to return true
+func (t *connection) awaitWindow(ready func() bool) error {
+	for !ready() {
+		select {
+		case <-t.ctx.Done():
+			return ErrHardCloseRequested
+		case <-t.window.Taken():
+		}
+	}
+	return nil
+}
+
 // sendEvent ships an event structure whilst also monitoring for
 // any shutdown signal. Returns true if shutdown was signalled
 func (t *connection) sendEvent(transportEvent transports.Event) error {
@@ -186,24 +264,33 @@ func (t *connection) sendEvent(transportEvent transports.Event) error {
 	return nil
 }
 
-// receiver handles socket reads
+// receiver handles socket reads, starting with any event already read during negotiation
 // Returns nil error on shutdown, or an actual error
-func (t *connection) receiver() (err error) {
+func (t *connection) receiver(transportEvent transports.Event) (err error) {
 	for {
-		var transportEvent transports.Event
-		transportEvent, err = t.protocol.Read()
-		if err != nil {
-			break
+		if transportEvent == nil {
+			transportEvent, err = t.protocol.Read()
+			if err != nil {
+				break
+			}
 		}
 
-		if err := t.sendEvent(transportEvent); err != nil {
+		if err = t.handleReceived(transportEvent); err != nil {
 			break
 		}
+		transportEvent = nil
 	}
 
 	// Some of the protocol readers might return unexpected - treat it always as EOF
 	if err == io.ErrUnexpectedEOF {
 		err = io.EOF
+	}
+
+	// The receiver must take the events already read before it learns the connection ended
+	if err == io.EOF && t.window != nil {
+		if windowErr := t.awaitWindow(t.window.Empty); windowErr != nil {
+			err = windowErr
+		}
 	}
 
 	// Send EOF signal so receiver or transport can handle it accordingly, but keep existing error
@@ -346,6 +433,11 @@ func (t *connection) Write(data []byte) (int, error) {
 // Flush any remaining data in the rwBuffer to the connection
 func (t *connection) Flush() error {
 	return t.rwBuffer.Flush()
+}
+
+// ReceiveWindowSize returns the most event data held for the receiver at once
+func (t *connection) ReceiveWindowSize() int {
+	return t.windowSize
 }
 
 // LocalAddr returns the local endpoint

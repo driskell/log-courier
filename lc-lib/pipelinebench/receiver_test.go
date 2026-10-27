@@ -35,14 +35,13 @@ func (r *benchReceiver) Acknowledge(ctx context.Context, nonce *string, sequence
 func (r *benchReceiver) Pong(context.Context) error { return nil }
 
 func (r *benchReceiver) FailConnection(ctx context.Context, err error) {
-	ctx.Value(transports.ContextConnection).(*benchConnection).drop("")
+	ctx.Value(transports.ContextConnection).(*benchConnection).close()
 }
 
 func (r *benchReceiver) ShutdownConnection(context.Context) {}
 
-// ShutdownConnectionRead is called with the context of the payload the pool rejected
 func (r *benchReceiver) ShutdownConnectionRead(ctx context.Context, err error) {
-	ctx.Value(transports.ContextConnection).(*benchConnection).drop(ctx.Value(contextPayloadNonce).(string))
+	ctx.Value(transports.ContextConnection).(*benchConnection).close()
 }
 
 // Shutdown reports the receiver finished from another routine as the pool calls this from its own loop

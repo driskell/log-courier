@@ -26,7 +26,7 @@ type protocolPING struct {
 }
 
 // newProtocolPING reads a new protocolPING
-func newProtocolPING(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
+func newProtocolPING(conn tcp.Connection, bodyLength uint32) (receivedMessage, error) {
 	if bodyLength != 0 {
 		return nil, fmt.Errorf("protocol error: Corrupt message PING size %d != 0", bodyLength)
 	}

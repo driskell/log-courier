@@ -248,7 +248,7 @@ func (t *receiverTCP) startConnection(socket *net.TCPConn) {
 		connectionSocket = newConnectionSocketProxy(underlying.(*proxyConnCloseWriter).Conn, connectionSocket)
 	}
 
-	conn := newConnection(t.ctx, connectionSocket, t.protocolFactory, false, t.eventChan)
+	conn := newConnection(t.ctx, connectionSocket, t.protocolFactory, false, t.eventChan, int(t.config.config.General().ReceiveWindowSize), t.config.config.General().ReceiveWindowFill)
 
 	t.connMutex.Lock()
 	t.connections[conn] = conn

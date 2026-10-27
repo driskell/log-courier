@@ -47,7 +47,7 @@ func createProtocolHELO() tcp.ProtocolMessage {
 }
 
 // newProtocolHELO reads a new protocolHELO
-func newProtocolHELO(t tcp.Connection, bodyLength uint32) (tcp.ProtocolMessage, error) {
+func newProtocolHELO(t tcp.Connection, bodyLength uint32) (receivedMessage, error) {
 	if bodyLength > 32 {
 		return nil, fmt.Errorf("protocol error: Corrupt message (HELO size %d > 32)", bodyLength)
 	}

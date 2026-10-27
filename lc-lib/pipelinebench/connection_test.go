@@ -2,7 +2,6 @@ package pipelinebench
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -28,12 +27,6 @@ type connectionResult struct {
 	closed    bool
 }
 
-// benchContextKey is a context key for values the harness attaches to payloads
-type benchContextKey string
-
-// contextPayloadNonce identifies the payload a receiver call relates to
-const contextPayloadNonce benchContextKey = "nonce"
-
 // benchConnection simulates a client that keeps up to depth payloads in flight
 type benchConnection struct {
 	ctx      context.Context
@@ -41,9 +34,11 @@ type benchConnection struct {
 	receiver *benchReceiver
 	payload  [][]byte
 	depth    int
+	window   *transports.ReceiveWindow
 	acks     chan string
-	drops    chan string
-	nonce    int
+	// closed is signalled when the receiver closes the connection
+	closed chan struct{}
+	nonce  int
 }
 
 type inflightPayload struct {
@@ -54,7 +49,7 @@ type inflightPayload struct {
 
 // run sends up to maxPayloads payloads, recording those sent before the deadline, and marks recorded done once
 // they are all acknowledged; it keeps the load steady with unrecorded payloads until stop closes, then drains and disconnects
-// A connection closed by the receiver stops sending and drains the payloads the receiver accepted before disconnecting
+// A connection closed by the receiver stops sending and abandons its payloads in flight
 func (c *benchConnection) run(maxPayloads int, deadline time.Time, recorded *sync.WaitGroup, stop <-chan struct{}) *connectionResult {
 	result := &connectionResult{}
 	inflight := make([]inflightPayload, 0, c.depth)
@@ -68,7 +63,7 @@ func (c *benchConnection) run(maxPayloads int, deadline time.Time, recorded *syn
 	}
 	defer markRecordedDone()
 	stopChan := stop
-	// Acknowledgements and drops are matched by nonce, as payloads may be acknowledged in any order
+	// Acknowledgements are matched by nonce, as payloads may be acknowledged in any order
 	remove := func(nonce string) (inflightPayload, bool) {
 		for idx, entry := range inflight {
 			if entry.nonce == nonce {
@@ -81,9 +76,10 @@ func (c *benchConnection) run(maxPayloads int, deadline time.Time, recorded *syn
 		}
 		return inflightPayload{}, false
 	}
-	onDrop := func(nonce string) {
+	onClosed := func() {
 		result.closed = true
-		remove(nonce)
+		inflight = inflight[:0]
+		recordedInflight = 0
 	}
 
 	for {
@@ -109,16 +105,12 @@ func (c *benchConnection) run(maxPayloads int, deadline time.Time, recorded *syn
 			nonce := fmt.Sprintf("%s-%d", c.name, c.nonce)
 			c.nonce++
 			inflight = append(inflight, inflightPayload{nonce: nonce, sent: time.Now(), recorded: recording})
-			ctx := context.WithValue(c.ctx, contextPayloadNonce, nonce)
-			select {
-			case c.receiver.eventChan <- &benchEventsEvent{ctx: ctx, nonce: &nonce, events: c.payload, size: payloadSize(c.payload)}:
-				sent++
-				if recording {
-					recordedInflight++
-				}
-			case nonce := <-c.drops:
-				inflight = inflight[:len(inflight)-1]
-				onDrop(nonce)
+			sent++
+			if recording {
+				recordedInflight++
+			}
+			if !c.send(nonce) {
+				onClosed()
 			}
 			continue
 		}
@@ -134,8 +126,8 @@ func (c *benchConnection) run(maxPayloads int, deadline time.Time, recorded *syn
 			}
 		case <-stopChan:
 			stopChan = nil
-		case nonce := <-c.drops:
-			onDrop(nonce)
+		case <-c.closed:
+			onClosed()
 		}
 	}
 
@@ -186,45 +178,41 @@ func (c *benchConnection) acknowledge(nonce string, sequence uint32) {
 	}
 }
 
-// drop reports the receiver closed the connection, rejecting the payload with the given nonce if any; it must never block the receiver pool
-func (c *benchConnection) drop(nonce string) {
+// close reports the receiver closed the connection; it must never block the receiver pool
+func (c *benchConnection) close() {
 	select {
-	case c.drops <- nonce:
+	case c.closed <- struct{}{}:
 	default:
-		panic(fmt.Sprintf("connection %s dropped more payloads than it had in flight", c.name))
 	}
 }
 
-func payloadSize(payload [][]byte) int {
-	size := 0
-	for _, data := range payload {
-		size += len(data)
-	}
-	return size
-}
-
-// benchEventsEvent provides raw events, and decodes them on every Events call, as the courier protocol messages do
-type benchEventsEvent struct {
-	ctx    context.Context
-	nonce  *string
-	events [][]byte
-	size   int
-}
-
-func (e *benchEventsEvent) Context() context.Context { return e.ctx }
-func (e *benchEventsEvent) Nonce() *string           { return e.nonce }
-func (e *benchEventsEvent) Count() uint32            { return uint32(len(e.events)) }
-func (e *benchEventsEvent) Size() int                { return e.size }
-func (e *benchEventsEvent) RawEvents() [][]byte      { return e.events }
-
-func (e *benchEventsEvent) Events() []map[string]interface{} {
-	events := make([]map[string]interface{}, 0, len(e.events))
-	for _, data := range e.events {
-		var decoded map[string]interface{}
-		if err := json.Unmarshal(data, &decoded); err != nil {
-			decoded = map[string]interface{}{"message": err.Error()}
+// send holds each event of a payload in the receive window as a receiving connection does, waiting while the window
+// is full, returning false if the receiver closes the connection meanwhile
+func (c *benchConnection) send(nonce string) bool {
+	for _, data := range c.payload {
+		if !c.window.Fits(len(data)) && c.window.Request() && !c.requestTake() {
+			return false
 		}
-		events = append(events, decoded)
+		for !c.window.Fits(len(data)) {
+			select {
+			case <-c.window.Taken():
+			case <-c.closed:
+				return false
+			}
+		}
+		if c.window.AddRaw(&nonce, data) && !c.requestTake() {
+			return false
+		}
 	}
-	return events
+	return !c.window.End(&nonce) || c.requestTake()
+}
+
+// requestTake asks the receiver pool to take the events held in the receive window
+func (c *benchConnection) requestTake() bool {
+	select {
+	case c.receiver.eventChan <- transports.NewAdmissionEvent(c.ctx, c.window):
+		return true
+	case <-c.closed:
+		return false
+	}
 }

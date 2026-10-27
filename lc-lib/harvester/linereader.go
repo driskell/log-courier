@@ -69,6 +69,13 @@ func (lr *LineReader) BufferedLen() int {
 	return lr.end - lr.start
 }
 
+// LineReady returns true if ReadItem can return a line, or a segment of a line too long to hold, without reading more
+func (lr *LineReader) LineReady() bool {
+	buffered := lr.buf[lr.start:lr.end]
+	n := bytes.IndexByte(buffered, '\n')
+	return (n >= 0 && n < lr.curMax) || len(buffered) >= lr.curMax
+}
+
 // ReadItem returns a line event from the file
 // Returns ErrMaxDataSizeTruncation if the line was cut short because it was longer
 // than the maximum line length allowed. Subsequent returned lines will be a

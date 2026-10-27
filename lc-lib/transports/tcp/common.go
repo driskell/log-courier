@@ -33,9 +33,6 @@ const (
 )
 
 var (
-	// ErrEventTooLarge occurs when a message breaches the size limit configured
-	ErrEventTooLarge = errors.New("JDAT compressed entry message too large to decode")
-
 	// ErrUnexpectedEnd occurs when a message ends unexpectedly
 	ErrUnexpectedEnd = errors.New("unexpected end of JDAT compressed entry")
 
@@ -67,11 +64,21 @@ type Protocol interface {
 	NonBlocking() bool
 }
 
+// StreamMessage is a received message whose events are read one at a time as they arrive, which is never written
+type StreamMessage interface {
+	transports.Event
+	Nonce() *string
+	// Next returns the next event and its size, skipped set instead if it was too large to hold, or io.EOF after the
+	// last; reserve is called with the event's size before it is held in memory where the size is known in advance
+	Next(reserve func(size int) error) (raw []byte, decoded map[string]interface{}, size int, skipped bool, err error)
+}
+
 type ProtocolFactory interface {
 	NewProtocol(Connection) Protocol
 	SupportsAck() bool
 }
 
+// ProtocolMessage is a complete message that can be written to the connection
 type ProtocolMessage interface {
 	Write(Connection) error
 }
@@ -82,6 +89,8 @@ type Connection interface {
 	Flush() error
 	Read(data []byte) (int, error)
 	SendMessage(message ProtocolMessage) error
+	// ReceiveWindowSize returns the most event data held for the receiver at once, which no single event may exceed
+	ReceiveWindowSize() int
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
 }

@@ -27,21 +27,15 @@ import (
 	"github.com/gizak/termui/v3/widgets"
 )
 
-type receiverResponseListener struct {
-	Listen             string `json:"listen"`
-	MaxPendingPayloads int    `json:"maxPendingPayloads"`
-}
-
 type receiverResponse struct {
 	Connections []struct {
-		CompletedLines  int    `json:"completedLines"`
-		PendingPayloads int    `json:"pendingPayloads"`
-		Listener        string `json:"listener"`
-		Remote          string `json:"remote"`
-		Description     string `json:"description"`
+		CompletedLines int    `json:"completedLines"`
+		WindowBytes    int64  `json:"windowBytes"`
+		WindowSize     int64  `json:"windowSize"`
+		Remote         string `json:"remote"`
+		Description    string `json:"description"`
 	} `json:"connections"`
-	Listeners []*receiverResponseListener `json:"listeners"`
-	Status    struct {
+	Status struct {
 		ActiveConnections int `json:"activeConnections"`
 	} `json:"status"`
 }
@@ -66,7 +60,7 @@ func NewReceiver(client *admin.Client, updateChan chan<- interface{}) View {
 
 	p.view = newView()
 	p.table = lcwidgets.NewTable()
-	p.table.ColumnNames = []string{"Remote", "Description", "Lines", "Pending"}
+	p.table.ColumnNames = []string{"Remote", "Description", "Lines", "Window"}
 
 	return p
 }
@@ -102,9 +96,6 @@ func (p *Receiver) StartUpdate() {
 	sort.SliceStable(resp.Connections, func(i int, j int) bool {
 		return strings.Compare(resp.Connections[i].Remote, resp.Connections[j].Remote) < 0
 	})
-	sort.SliceStable(resp.Listeners, func(i int, j int) bool {
-		return strings.Compare(resp.Listeners[i].Listen, resp.Listeners[j].Listen) < 0
-	})
 
 	p.updateChan <- &resp
 }
@@ -126,26 +117,17 @@ func (p *Receiver) CompleteUpdate(resp interface{}) {
 		p.gauges = make([]*widgets.Gauge, len(p.data.Connections))
 		copy(p.gauges, oldGauges)
 	}
-	listenerIndex := make(map[string]*receiverResponseListener)
-	for _, listener := range p.data.Listeners {
-		listenerIndex[listener.Listen] = listener
-	}
 	for idx, data := range p.data.Connections {
-		listener, ok := listenerIndex[data.Listener]
-		if !ok {
+		// A receive window is only reported for a connection that has sent events
+		if data.WindowSize == 0 {
 			p.gauges[idx] = nil
 			continue
 		}
 		if p.gauges[idx] == nil {
 			p.gauges[idx] = widgets.NewGauge()
 		}
-		if listener.MaxPendingPayloads == 0 {
-			// Support older clients
-			listener.MaxPendingPayloads = 10
-		}
-		p.gauges[idx].Percent = int(data.PendingPayloads * 100 / listener.MaxPendingPayloads)
+		p.gauges[idx].Percent = int(min(data.WindowBytes*100/data.WindowSize, 100))
 		p.gauges[idx].Border = false
-		p.gauges[idx].Label = fmt.Sprintf("%d/%d", data.PendingPayloads, 10)
 	}
 
 	var rows [][]interface{}

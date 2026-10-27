@@ -39,11 +39,6 @@ const (
 	poolContextEventPosition poolContext = "eventpos"
 )
 
-type spoolEntry struct {
-	events []*event.Event
-	size   int
-}
-
 // Pool manages a list of receivers
 type Pool struct {
 	// Pipeline
@@ -59,12 +54,14 @@ type Pool struct {
 	scheduler         *scheduler.Scheduler
 	connectionLock    sync.RWMutex
 	connectionStatus  map[interface{}]*poolConnectionStatus
-	spool             []*spoolEntry
+	// queue holds received events until the spooler takes them, drained fairly across connections
+	queue *fairQueue
 	// Atomic so the admin API can read them while Run modifies the spool
-	spoolPayloads atomic.Int64
-	spoolSize     atomic.Int64
-	// paused stops receiving while the spool is full
-	paused bool
+	spoolSize atomic.Int64
+	// admissions counts each time events were taken from a connection's receive window, atomic for the admin API
+	admissions atomic.Int64
+	// admission decides when the events held in each connection's receive window are taken into the queue
+	admission *admissionControl
 	// shuttingDown is set once receivers are asked to shut down, so Run exits when they and their connections finish
 	shuttingDown bool
 	// done is closed when Run exits
@@ -87,6 +84,8 @@ func NewPool(app *core.App) *Pool {
 		eventChan:        make(chan transports.Event),
 		scheduler:        scheduler.NewScheduler(),
 		connectionStatus: make(map[interface{}]*poolConnectionStatus),
+		queue:            newFairQueue(),
+		admission:        newAdmissionControl(),
 		done:             make(chan struct{}),
 	}
 }
@@ -144,7 +143,7 @@ func (r *Pool) Run() {
 			r.sendPartialAcks()
 		case events := <-r.ackChan:
 			r.handleAcks(events)
-		case receiverEvent := <-r.intake():
+		case receiverEvent := <-r.eventChan:
 			r.handleEvent(receiverEvent)
 		case r.spoolOutput() <- r.nextSpool():
 			r.dequeueSpool()
@@ -163,17 +162,9 @@ func (r *Pool) finished() bool {
 	return r.shuttingDown && len(r.receivers) == 0 && len(r.connectionStatus) == 0
 }
 
-// intake returns the channel to receive events from, or nil while receiving is paused
-func (r *Pool) intake() <-chan transports.Event {
-	if r.paused {
-		return nil
-	}
-	return r.eventChan
-}
-
 // spoolOutput returns the channel to send queued events to, or nil when there are none
 func (r *Pool) spoolOutput() chan<- []*event.Event {
-	if len(r.spool) == 0 {
+	if r.queue.peek() == nil {
 		return nil
 	}
 	return r.output
@@ -181,23 +172,17 @@ func (r *Pool) spoolOutput() chan<- []*event.Event {
 
 // nextSpool returns the next queued events to send, or nil when there are none
 func (r *Pool) nextSpool() []*event.Event {
-	if len(r.spool) == 0 {
-		return nil
+	if slice := r.queue.peek(); slice != nil {
+		return slice.events
 	}
-	return r.spool[0].events
+	return nil
 }
 
-// dequeueSpool removes the queued events that were sent, resuming receiving if it was paused and there is now space
+// dequeueSpool removes the queued events that were sent, admitting waiting connections now there may be room
 func (r *Pool) dequeueSpool() {
-	sent := r.spool[0]
-	copy(r.spool, r.spool[1:])
-	r.spool = r.spool[:len(r.spool)-1]
-	r.spoolPayloads.Add(-1)
-	r.spoolSize.Add(-int64(sent.size))
-	// Resume when back under the limit, or once empty in case the limit is below a single payload
-	if r.paused && (r.spoolSize.Load() < r.generalConfig.MaxQueueSize || len(r.spool) == 0) {
-		r.paused = false
-	}
+	size, _ := r.queue.pop()
+	r.spoolSize.Add(-int64(size))
+	r.admit()
 }
 
 // sendPartialAcks resends the current acknowledgement for connections whose partial acknowledgement is due
@@ -209,10 +194,9 @@ func (r *Pool) sendPartialAcks() {
 		}
 		r.connectionLock.Lock()
 		expectedAck := r.connectionStatus[connection].progress[0]
-		expectedEvent := expectedAck.event
-		receiver := expectedEvent.Context().Value(transports.ContextReceiver).(transports.Receiver)
-		if err := receiver.Acknowledge(expectedEvent.Context(), expectedEvent.Nonce(), expectedAck.ackedThrough); err != nil {
-			r.failConnection(expectedEvent.Context(), receiver, connection, err)
+		receiver := expectedAck.ctx.Value(transports.ContextReceiver).(transports.Receiver)
+		if err := receiver.Acknowledge(expectedAck.ctx, expectedAck.nonce, expectedAck.ackedThrough); err != nil {
+			r.failConnection(expectedAck.ctx, receiver, connection, err)
 		}
 		r.scheduler.Set(connection, time.Second*5)
 		r.connectionLock.Unlock()
@@ -242,8 +226,8 @@ func (r *Pool) handleEvent(receiverEvent transports.Event) {
 	switch eventImpl := receiverEvent.(type) {
 	case *transports.ConnectEvent:
 		r.handleConnect(eventImpl)
-	case transports.EventsEvent:
-		r.handleEvents(eventImpl)
+	case *transports.AdmissionEvent:
+		r.handleAdmission(eventImpl)
 	case *transports.EndEvent:
 		r.handleEnd(eventImpl)
 	case *transports.DisconnectEvent:
@@ -269,70 +253,109 @@ func (r *Pool) handleConnect(eventImpl *transports.ConnectEvent) {
 	r.apiConnections.ReplaceEntry(eventImpl.Remote(), connectionStatus)
 }
 
-// handleEvents builds events from a received payload and queues them, pausing receiving once the queue is full
-func (r *Pool) handleEvents(eventImpl transports.EventsEvent) {
-	size := calcSize(eventImpl)
-	r.connectionLock.Lock()
+// handleAdmission takes a connection's request for the events held in its receive window to be taken, taking them
+// now if they may be
+func (r *Pool) handleAdmission(eventImpl *transports.AdmissionEvent) {
 	connection := eventImpl.Context().Value(transports.ContextConnection)
-	receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-	connectionStatus := r.connectionStatus[connection]
+	status, ok := r.connectionStatus[connection]
+	if !ok {
+		return
+	}
+	if status.window == nil {
+		r.connectionLock.Lock()
+		status.window = eventImpl.Window()
+		r.connectionLock.Unlock()
+	}
+	r.admission.request(connection, eventImpl.Window())
+	r.admit()
+}
+
+// admit takes the events held by the connections that may now proceed, given what each has queued and the room left
+func (r *Pool) admit() {
+	room := func() bool {
+		return r.spoolSize.Load() < r.generalConfig.MaxQueueSize
+	}
+	r.admission.admit(r.queue.queued, room, func(request *admissionRequest) {
+		r.admissions.Add(1)
+		size := 0
+		for _, segment := range request.window.Take() {
+			size += r.receiveSegment(request.window.Context(), segment)
+		}
+		r.admission.charge(request.connection, size)
+	})
+}
+
+// receiveSegment builds events from a segment of a received payload and queues them, returning its size
+func (r *Pool) receiveSegment(ctx context.Context, segment *transports.EventsSegment) int {
+	r.connectionLock.Lock()
+	connection := ctx.Value(transports.ContextConnection)
+	receiver := ctx.Value(transports.ContextReceiver).(transports.Receiver)
+	connectionStatus, ok := r.connectionStatus[connection]
+	if !ok {
+		r.connectionLock.Unlock()
+		return 0
+	}
 	var acker event.Acknowledger
 	var progress *poolEventProgress
 	if receiver.SupportsAck() {
-		if len(r.connectionStatus[connection].progress)+1 > int(r.receivers[receiver].config.MaxPendingPayloads) {
-			receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max pending payloads exceeded"))
+		if segment.Offset == 0 {
+			if len(connectionStatus.progress)+1 > int(r.receivers[receiver].config.MaxPendingPayloads) {
+				receiver.ShutdownConnectionRead(ctx, fmt.Errorf("max pending payloads exceeded"))
+				r.connectionLock.Unlock()
+				return 0
+			}
+			// Schedule partial ack if this is first set of events
+			if len(connectionStatus.progress) == 0 {
+				r.scheduler.Set(connection, 5*time.Second)
+			}
+			progress = &poolEventProgress{ctx: ctx, nonce: segment.Nonce}
+			connectionStatus.progress = append(connectionStatus.progress, progress)
+		} else if progress = connectionStatus.receiving(); progress == nil {
+			// The payload was refused when its first segment arrived
 			r.connectionLock.Unlock()
-			return
+			return 0
 		}
-		// Schedule partial ack if this is first set of events
-		if len(connectionStatus.progress) == 0 {
-			r.scheduler.Set(connection, 5*time.Second)
+		progress.count += segment.Skipped + segment.Count()
+		progress.final = segment.Final
+		if segment.Skipped != 0 {
+			// Skipped events are never queued, so they are acknowledged as soon as they are known
+			r.ackRange(progress, segment.Offset+1, segment.Offset+segment.Skipped)
+		} else if progress.complete() {
+			r.sendAck(connectionStatus, progress)
 		}
-		progress = &poolEventProgress{event: eventImpl}
-		connectionStatus.progress = append(connectionStatus.progress, progress)
 		acker = r
 	} else {
 		// Reset idle timeout
-		r.startIdleTimeout(eventImpl.Context(), receiver, connection)
+		r.startIdleTimeout(ctx, receiver, connection)
 		// Count lines here as there is no ACK to do it
-		connectionStatus.lines += int64(eventImpl.Count())
+		connectionStatus.lines += int64(segment.Count())
 	}
-	connectionStatus.bytes += eventImpl.Size()
+	connectionStatus.bytes += segment.Size
 	r.connectionLock.Unlock()
-	// Build the events with our acknowledger and submit the bundle
-	var events = make([]*event.Event, eventImpl.Count())
-	var ctx context.Context
-	// Raw events stay encoded so decoding happens later in the parallel processor routines
-	var rawEvents [][]byte
-	var decodedEvents []map[string]interface{}
-	if rawEventsImpl, ok := eventImpl.(transports.RawEventsEvent); ok {
-		rawEvents = rawEventsImpl.RawEvents()
-	} else {
-		decodedEvents = eventImpl.Events()
+	if segment.Count() == 0 {
+		return 0
 	}
+	// Build the events with our acknowledger and submit the bundle
+	var events = make([]*event.Event, segment.Count())
+	// Raw events stay encoded so decoding happens later in the parallel processor routines
+	first := segment.Offset + segment.Skipped + 1
 	for idx := range events {
-		if acker == nil {
-			ctx = eventImpl.Context()
-		} else {
-			ctx = context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{progress: progress, sequence: uint32(idx + 1)})
+		eventCtx := ctx
+		if acker != nil {
+			eventCtx = context.WithValue(ctx, poolContextEventPosition, &poolEventPosition{progress: progress, sequence: first + uint32(idx)})
 		}
 		var item *event.Event
-		if rawEvents != nil {
-			item = event.NewEventFromBytes(ctx, acker, rawEvents[idx])
+		if segment.Raw != nil {
+			item = event.NewEventFromBytes(eventCtx, acker, segment.Raw[idx])
 		} else {
-			item = event.NewEvent(ctx, acker, decodedEvents[idx])
+			item = event.NewEvent(eventCtx, acker, segment.Decoded[idx])
 		}
 		item.MustResolveMetadata("receiver", connectionStatus.metadataReceiver)
 		events[idx] = item
 	}
-	spoolEntry := &spoolEntry{events, size}
-	r.spool = append(r.spool, spoolEntry)
-	r.spoolPayloads.Add(1)
-	r.spoolSize.Add(int64(spoolEntry.size))
-	// A full queue stops receiving so connections wait to send rather than being closed
-	if r.spoolSize.Load() >= r.generalConfig.MaxQueueSize {
-		r.paused = true
-	}
+	r.queue.push(connection, events, segment.Size)
+	r.spoolSize.Add(int64(segment.Size))
+	return segment.Size
 }
 
 // handleEnd closes a connection that finished sending, once everything it sent is acknowledged
@@ -340,7 +363,8 @@ func (r *Pool) handleEnd(eventImpl *transports.EndEvent) {
 	r.connectionLock.Lock()
 	defer r.connectionLock.Unlock()
 	connection := eventImpl.Context().Value(transports.ContextConnection)
-	if partialAcks, ok := r.connectionStatus[connection]; !ok || len(partialAcks.progress) == 0 {
+	partialAcks, ok := r.connectionStatus[connection]
+	if !ok || len(partialAcks.progress) == 0 {
 		// Nothing left to ack - close send side
 		receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
 		receiver.ShutdownConnection(eventImpl.Context())
@@ -360,6 +384,8 @@ func (r *Pool) handleDisconnect(eventImpl *transports.DisconnectEvent) {
 	delete(r.connectionStatus, connection)
 	r.scheduler.Remove(connection)
 	r.connectionLock.Unlock()
+	r.admission.forget(connection)
+	r.admit()
 	// RemoveEntryIfValue outside of connection lock, as entry updates that hold the entry lock will take the connection lock
 	// We only remove if value matches, in case a reconnection occurred on same port before we handled disconnect that replaced it
 	r.apiConnections.RemoveEntryIfValue(connectionStatus.remote, connectionStatus)
@@ -388,7 +414,8 @@ func (r *Pool) handlePing(eventImpl *transports.PingEvent) {
 	// Immediately send a pong back - ignore failure - remote will time itself out
 	connection := eventImpl.Context().Value(transports.ContextConnection)
 	receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-	if status, ok := r.connectionStatus[connection]; ok && len(status.progress) != 0 {
+	status, ok := r.connectionStatus[connection]
+	if ok && len(status.progress) != 0 {
 		// We should not be receiving PING if we haven't finished acknowleding - this violates protocol
 		r.failConnection(eventImpl.Context(), receiver, connection, fmt.Errorf("received ping message on non-idle connection"))
 	} else if err := receiver.Pong(eventImpl.Context()); err != nil {
@@ -410,9 +437,7 @@ func (r *Pool) Acknowledge(events []*event.Event) {
 
 // ackRange processes the acknowledgement of a range of events from a payload, which may arrive in any order
 func (r *Pool) ackRange(progress *poolEventProgress, from uint32, to uint32) {
-	ctx := progress.event.Context()
-	connection := ctx.Value(transports.ContextConnection)
-	status, ok := r.connectionStatus[connection]
+	status, ok := r.connectionStatus[progress.ctx.Value(transports.ContextConnection)]
 	if !ok {
 		// Connection was lost and this was a late acknowledgement, abandon
 		return
@@ -424,7 +449,13 @@ func (r *Pool) ackRange(progress *poolEventProgress, from uint32, to uint32) {
 		return
 	}
 	status.lines += int64(progress.ackedThrough - previous)
+	r.sendAck(status, progress)
+}
 
+// sendAck reports how far a payload is acknowledged, and stops tracking it once it is complete
+func (r *Pool) sendAck(status *poolConnectionStatus, progress *poolEventProgress) {
+	ctx := progress.ctx
+	connection := ctx.Value(transports.ContextConnection)
 	if progress.complete() {
 		for idx, entry := range status.progress {
 			if entry == progress {
@@ -442,7 +473,7 @@ func (r *Pool) ackRange(progress *poolEventProgress, from uint32, to uint32) {
 	}
 
 	receiver := ctx.Value(transports.ContextReceiver).(transports.Receiver)
-	if err := receiver.Acknowledge(ctx, progress.event.Nonce(), progress.ackedThrough); err != nil {
+	if err := receiver.Acknowledge(ctx, progress.nonce, progress.ackedThrough); err != nil {
 		r.failConnection(ctx, receiver, connection, err)
 	} else if lastAck && status.closing {
 		// The connection finished sending and everything it sent is now acknowledged, so shut it down
@@ -537,8 +568,4 @@ func (r *Pool) shutdown() {
 	for _, receiver := range r.receiversByListen {
 		receiver.Shutdown()
 	}
-}
-
-func calcSize(eventImpl transports.EventsEvent) int {
-	return eventImpl.Size()
 }

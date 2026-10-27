@@ -31,6 +31,9 @@ import (
 const (
 	codecMultilineWhatPrevious = 0x00000001
 	codecMultilineWhatNext     = 0x00000002
+
+	// defaultMaxMultilineBytes leaves room within Log Carver's default receive window for the fields added to each event
+	defaultMaxMultilineBytes int64 = 1024 * 1024
 )
 
 // CodecMultilineFactory holds the configuration for a multiline codec
@@ -93,7 +96,7 @@ func NewMultilineCodecFactory(p *config.Parser, configPath string, unused map[st
 	spoolMaxBytes := p.Config().GeneralPart("spooler").(*spooler.General).SpoolMaxBytes
 
 	if result.MaxMultilineBytes == 0 {
-		result.MaxMultilineBytes = spoolMaxBytes
+		result.MaxMultilineBytes = min(defaultMaxMultilineBytes, spoolMaxBytes)
 	}
 
 	// We conciously allow a line 4 bytes longer what we would normally have as the limit

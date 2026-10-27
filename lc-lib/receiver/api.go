@@ -31,7 +31,7 @@ func (a *apiStatus) Update() error {
 	// Update the values and pass through to node
 	a.r.connectionLock.RLock()
 	a.SetEntry("activeConnections", api.Number(len(a.r.connectionStatus)))
-	a.SetEntry("queuePayloads", api.Number(a.r.spoolPayloads.Load()))
+	a.SetEntry("admissions", api.Number(a.r.admissions.Load()))
 	a.SetEntry("queueSize", api.Number(a.r.spoolSize.Load()))
 	a.SetEntry("maxQueueSize", api.Number(a.r.generalConfig.MaxQueueSize))
 	a.r.connectionLock.RUnlock()

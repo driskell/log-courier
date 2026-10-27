@@ -566,6 +566,23 @@ func (p *Parser) populateEntry(vField reflect.Value, vRawConfig reflect.Value, c
 		return
 	}
 
+	if vField.Kind() == reflect.Float64 {
+		var number float64
+
+		if vMapIndex.Kind() == reflect.Float64 {
+			number = vMapIndex.Float()
+		} else if vMapIndex.Kind() == reflect.Int {
+			number = float64(vMapIndex.Int())
+		} else {
+			err = fmt.Errorf("Option %s%s is not a valid number", configPath, tag)
+			return
+		}
+
+		log.Debugf("populateEntry value: %v (%s%s)", number, configPath, tag)
+		retValue = reflect.ValueOf(number)
+		return
+	}
+
 	if vField.Kind() == reflect.Bool {
 		if vMapIndex.Kind() != reflect.Bool {
 			err = fmt.Errorf("Option %s%s must be a boolean", configPath, tag)

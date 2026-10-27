@@ -107,6 +107,12 @@ func (f *ReceiverFactory) ShouldRestart(newFactory *ReceiverFactory) bool {
 	if !reflect.DeepEqual(newFactory.TrustedProxies, f.TrustedProxies) {
 		return true
 	}
+	if newFactory.config.General().ReceiveWindowSize != f.config.General().ReceiveWindowSize {
+		return true
+	}
+	if newFactory.config.General().ReceiveWindowFill != f.config.General().ReceiveWindowFill {
+		return true
+	}
 	return f.ServerTlsConfiguration.HasChanged(newFactory.ServerTlsConfiguration)
 }
 

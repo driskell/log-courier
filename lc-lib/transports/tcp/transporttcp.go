@@ -180,7 +180,7 @@ func (t *transportTCP) connect() (*connection, error) {
 		connectionSocket = newConnectionSocketTCP(socket.(*net.TCPConn))
 	}
 
-	conn := newConnection(t.ctx, connectionSocket, t.protocolFactory, true, t.eventChan)
+	conn := newConnection(t.ctx, connectionSocket, t.protocolFactory, true, t.eventChan, 0, 0)
 
 	log.Noticef("[T %s - %s] Connected", socket.LocalAddr().String(), socket.RemoteAddr().String())
 	return conn, nil

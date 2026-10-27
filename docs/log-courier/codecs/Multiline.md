@@ -34,12 +34,15 @@ If the `json` [`reader`](../Configuration.md#reader) is used, this codec will ca
 
 ### `max multiline bytes`
 
-Number. Optional. Default: `spool max bytes`
+Number. Optional. Default: 1048576 or `spool max bytes`, whichever is smaller
 
 The maximum multiline length to process. If a multiline block exeeds this
 length, it will be split across multiple events.
 
-This setting can not be greater than the `spool max bytes` setting.
+This setting can not be greater than the `spool max bytes` setting. Log Carver
+skips any event larger than its `receive window size`, which defaults to
+2097152, so keep this setting within that size, allowing room for the fields
+added to each event.
 
 ### `patterns`
 

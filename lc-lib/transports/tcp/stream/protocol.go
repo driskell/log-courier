@@ -17,6 +17,9 @@
 package stream
 
 import (
+	"context"
+	"io"
+
 	"github.com/driskell/log-courier/lc-lib/event"
 	"github.com/driskell/log-courier/lc-lib/harvester"
 	"github.com/driskell/log-courier/lc-lib/transports"
@@ -26,6 +29,8 @@ import (
 type protocol struct {
 	conn       tcp.Connection
 	lineReader *harvester.LineReader
+	// err is the error that ended the stream
+	err error
 }
 
 // Negotiation does not happen for a plain event stream
@@ -53,29 +58,54 @@ func (p *protocol) Pong() error {
 	panic("Not implemented")
 }
 
-// Read reads a line from the connection and calculates an event
-// Returns nil event if shutdown, with an optional error
+// Read returns the lines arriving on the stream as a message of events
 func (p *protocol) Read() (transports.Event, error) {
-	var event map[string]interface{}
-	var length int
-	var err error
-
-	for {
-		event, length, err = p.lineReader.ReadItem()
-		if err == nil || err == harvester.ErrMaxDataSizeTruncation {
-			break
-		}
-
-		return nil, err
+	if p.err != nil {
+		return nil, p.err
 	}
-
-	log.Debugf("Received event: %v", event)
-
-	// TODO: Read multiple before generating event
-	return transports.NewEventsEvent(p.conn.Context(), &transports.NilNonce, []map[string]interface{}{event}, length), nil
+	return &streamMessage{protocol: p}, nil
 }
 
 // NonBlocking returns trues because a stream does not have well defined event boundaries so we have to check periodically
 func (p *protocol) NonBlocking() bool {
 	return true
+}
+
+// streamMessage reads the lines of the stream available without waiting as events, ending once more must be read
+type streamMessage struct {
+	protocol *protocol
+	read     bool
+}
+
+var _ tcp.StreamMessage = (*streamMessage)(nil)
+
+// Context returns the connection context
+func (m *streamMessage) Context() context.Context {
+	return m.protocol.conn.Context()
+}
+
+// Nonce returns the nonce used for sources without nonces
+func (m *streamMessage) Nonce() *string {
+	return &transports.NilNonce
+}
+
+// Next reads the next line, splitting a line longer than the receive window into several tagged events
+func (m *streamMessage) Next(func(int) error) ([]byte, map[string]interface{}, int, bool, error) {
+	// Ending once no further line is ready lets the receiver take the lines read so far before waiting for more
+	if m.read && !m.protocol.lineReader.LineReady() {
+		return nil, nil, 0, false, io.EOF
+	}
+	m.read = true
+
+	data, length, err := m.protocol.lineReader.ReadItem()
+	if err == harvester.ErrMaxDataSizeTruncation {
+		data["tags"] = event.Tags{"splitline"}
+	} else if err != nil {
+		// The message ends here and Read then reports why
+		m.protocol.err = err
+		return nil, nil, 0, false, io.EOF
+	}
+
+	log.Debugf("Received event: %v", data)
+	return nil, data, length, false, nil
 }
