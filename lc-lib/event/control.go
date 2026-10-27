@@ -42,6 +42,85 @@ func controlLength(value string, idx int) int {
 	return 0
 }
 
+// EscapeControl escapes control characters throughout the event, including in top-level keys, returning the
+// escaped names of the top-level keys that had any; an event never decoded is left as it is if it has none
+func (e *Event) EscapeControl() []string {
+	if e.FreeOfControl() {
+		return nil
+	}
+	data := e.Data()
+	var found []string
+	for key, value := range data {
+		escapedKey, keyFound := EscapeControl(key)
+		escaped, valueFound := EscapeControlValue(value)
+		if !keyFound && !valueFound {
+			continue
+		}
+		if keyFound {
+			delete(data, key)
+		}
+		data[escapedKey] = escaped
+		found = append(found, escapedKey)
+	}
+	if found != nil {
+		e.ClearCache()
+	}
+	return found
+}
+
+// encodedHasControl returns true if encoded JSON holds a character controlLength reports once decoded, written either
+// raw or as an escape; raw bytes below 0x20 other than whitespace are invalid JSON, so are reported to be decoded
+func encodedHasControl(encoded []byte) bool {
+	for idx := 0; idx < len(encoded); idx++ {
+		char := encoded[idx]
+		switch {
+		case char < 0x20:
+			if char != '\t' && char != '\n' && char != '\r' {
+				return true
+			}
+		case char == 0x7f:
+			return true
+		case char == 0xc2 && idx+1 < len(encoded) && encoded[idx+1] >= 0x80 && encoded[idx+1] <= 0x9f:
+			return true
+		case char == '\\' && idx+1 < len(encoded):
+			idx++
+			switch encoded[idx] {
+			case 'b', 'f', 'r':
+				return true
+			case 'u':
+				if idx+4 >= len(encoded) {
+					return true
+				}
+				code, ok := parseHex4(encoded[idx+1 : idx+5])
+				if !ok || (code < 0x20 && code != '\t' && code != '\n') || (code >= 0x7f && code <= 0x9f) {
+					return true
+				}
+				idx += 4
+			}
+		}
+	}
+	return false
+}
+
+// parseHex4 parses four hexadecimal digits
+func parseHex4(digits []byte) (int, bool) {
+	code := 0
+	for _, digit := range digits {
+		code <<= 4
+		switch {
+		case digit >= '0' && digit <= '9':
+			code |= int(digit - '0')
+		case digit >= 'a' && digit <= 'f':
+			code |= int(digit-'a') + 10
+		case digit >= 'A' && digit <= 'F':
+			code |= int(digit-'A') + 10
+		default:
+			return 0, false
+		}
+	}
+	return code, true
+}
+
 // EscapeControl returns the value with control characters escaped as \xHH, and whether any were found
 //
 // The value is returned unchanged without allocation if it has no control characters, otherwise

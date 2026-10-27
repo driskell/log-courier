@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -258,10 +259,10 @@ func TestResolveMetadataInvalidPath(t *testing.T) {
 	}
 }
 
-func TestNewEventBytesClearCacheWithoutDecode(t *testing.T) {
+func TestNewEventBytesValidateWithoutDecode(t *testing.T) {
 	event := NewEventFromBytes(context.Background(), nil, []byte("{\"message\":\"basic event\",\"@timestamp\":\"2020-02-01T13:00:00.000Z\"}"))
 	event.MustResolve("@metadata[receiver]", "test receiver")
-	event.ClearCache()
+	event.Validate()
 	if !bytes.Equal(event.Bytes(), []byte("{\"@timestamp\":\"2020-02-01T13:00:00Z\",\"message\":\"basic event\",\"tags\":[]}")) {
 		t.Fatalf("Invalid event bytes: %s", string(event.Bytes()))
 	}
@@ -880,3 +881,23 @@ func TestEventDrop(t *testing.T) {
 // TODO: Bytes() encoding error
 
 // TODO: Context
+
+func TestEventBytesLeavesOutMetadataWithoutChangingData(t *testing.T) {
+	event := NewEvent(context.Background(), nil, map[string]interface{}{"message": "test"})
+	event.MustResolveMetadata("receiver", "test receiver")
+	if encoded := string(event.Bytes()); strings.Contains(encoded, "@metadata") || !strings.Contains(encoded, `"message":"test"`) {
+		t.Fatalf("Expected the event encoded without @metadata, got %s", encoded)
+	}
+	if _, ok := event.Data()[MetadataKey]; !ok {
+		t.Fatal("Encoding removed @metadata from the event's data")
+	}
+}
+
+func TestEventBytesEncodesOnlyEachEventsOwnFields(t *testing.T) {
+	first := NewEvent(context.Background(), nil, map[string]interface{}{"message": "first", "only_first": true})
+	second := NewEvent(context.Background(), nil, map[string]interface{}{"message": "second"})
+	first.Bytes()
+	if encoded := string(second.Bytes()); strings.Contains(encoded, "only_first") {
+		t.Fatalf("Expected only the second event's fields, got %s", encoded)
+	}
+}

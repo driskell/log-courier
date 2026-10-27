@@ -18,7 +18,7 @@ package event
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -33,8 +33,17 @@ const (
 	ResolveParamUnset ResolveParam = iota
 )
 
-// MetadataKey is the top-level key of the @metadata entry, which is never encoded
-const MetadataKey = "@metadata"
+// errNotObject occurs when event data is valid JSON but not an object
+var errNotObject = errors.New("event data is not a JSON object")
+
+const (
+	// MetadataKey is the top-level key of the @metadata entry, which is never encoded
+	MetadataKey = "@metadata"
+	// TimestampKey is the top-level key of the @timestamp entry, which every event has
+	TimestampKey = "@timestamp"
+	// TagsKey is the top-level key of the tags entry, which every event has
+	TagsKey = "tags"
+)
 
 // Acknowledger is something that can be called with events once they ar acknowledged
 type Acknowledger interface {
@@ -51,6 +60,11 @@ type Event struct {
 
 	// metadata is the @metadata entry, held outside data as it never comes from or goes to the encoded form
 	metadata Metadata
+	// timestamp is the @timestamp read from the encoded form without decoding it, when timestampRead is set
+	timestamp     Timestamp
+	timestampRead bool
+	// validated is set once the encoded form, if any, is what decoding and encoding the event would produce
+	validated bool
 
 	dropped bool
 }
@@ -94,17 +108,19 @@ func NewEventFromBytes(ctx context.Context, acker Acknowledger, data []byte) *Ev
 	}
 }
 
-// Data returns the internal event data for reading or mutation
-// The return data must NOT be mutated
+// Data returns the internal event data for reading
+// The returned data, and any value within it, must NOT be mutated, as every change must go through the Event so its
+// encoded form is discarded
 func (e *Event) Data() map[string]interface{} {
 	if e.data == nil {
-		err := json.Unmarshal(e.encoded, &e.data)
+		data, err := decodeData(e.encoded)
+		e.data = data
 		if err != nil {
 			e.data = make(map[string]interface{})
 			e.data["message"] = err.Error()
-			e.data["@timestamp"] = Timestamp(time.Now())
+			e.data[TimestampKey] = Timestamp(time.Now())
 			e.data[MetadataKey] = e.metadataEntry()
-			e.data["tags"] = Tags{"_unmarshal_failure"}
+			e.data[TagsKey] = Tags{"_unmarshal_failure"}
 		} else {
 			e.convertData()
 		}
@@ -123,14 +139,14 @@ func (e *Event) metadataEntry() Metadata {
 // convertData is the internal function that enforces guaranteed types
 func (e *Event) convertData() {
 	// Normalize "tags" first (other resolutions ignore it)
-	if entry, ok := e.data["tags"]; ok {
+	if entry, ok := e.data[TagsKey]; ok {
 		switch value := entry.(type) {
 		case Tags:
 		case string:
-			e.data["tags"] = Tags{value}
+			e.data[TagsKey] = Tags{value}
 		case []interface{}:
 			// From unmarshaled over the wire we get []interface{}
-			tags := Tags{}
+			tags := make(Tags, 0, len(value))
 			for _, tag := range value {
 				tagString, ok := tag.(string)
 				if !ok {
@@ -140,36 +156,36 @@ func (e *Event) convertData() {
 				}
 				tags = append(tags, tagString)
 			}
-			e.data["tags"] = tags
+			e.data[TagsKey] = tags
 		default:
-			e.data["tags"] = Tags{"_tags_parse_failure"}
+			e.data[TagsKey] = Tags{"_tags_parse_failure"}
 			e.data["tags_parse_error"] = fmt.Sprintf("tags was not a string or string list, was %T", value)
 		}
 	} else {
-		e.data["tags"] = Tags{}
+		e.data[TagsKey] = Tags{}
 	}
 	// Normalize "@timestamp" to a time.Time
-	if entry, ok := e.data["@timestamp"]; ok {
+	if entry, ok := e.data[TimestampKey]; ok {
 		switch value := entry.(type) {
 		case Timestamp:
 		case time.Time:
-			e.data["@timestamp"] = Timestamp(value)
+			e.data[TimestampKey] = Timestamp(value)
 		case string:
 			parsed, err := time.Parse(time.RFC3339, value)
 			if err != nil {
-				e.data["@timestamp"] = Timestamp(time.Now())
+				e.data[TimestampKey] = Timestamp(time.Now())
 				e.data["timestamp_parse_error"] = err
 				e.AddTag("_timestamp_parse_failure")
 			} else {
-				e.data["@timestamp"] = Timestamp(parsed)
+				e.data[TimestampKey] = Timestamp(parsed)
 			}
 		default:
-			e.data["@timestamp"] = Timestamp(time.Now())
+			e.data[TimestampKey] = Timestamp(time.Now())
 			e.data["timestamp_parse_error"] = fmt.Sprintf("@timestamp was not a string, was %T", value)
 			e.AddTag("_timestamp_parse_failure")
 		}
 	} else {
-		e.data["@timestamp"] = Timestamp(time.Now())
+		e.data[TimestampKey] = Timestamp(time.Now())
 	}
 	// Normalize "@metadata"
 	e.data[MetadataKey] = e.metadataEntry()
@@ -194,7 +210,7 @@ func (e *Event) MustResolve(path string, set interface{}) interface{} {
 // If you specify non-nil in the set parameter - the path will be set to that value and
 // the old value will be returned - and any non-map parts of the path will be converted to empty maps
 //
-// # Remember ClearCache is required to flush any cached representations if you set or unset a value
+// Setting or unsetting a value discards the cached encoded form, so values it returns must not be changed in place.
 //
 // The following paths are guaranteed to exist and be of a specific type:
 //
@@ -223,7 +239,11 @@ func (e *Event) Resolve(path string, set interface{}) (output interface{}, err e
 			return e.ResolveMetadata(path[len(MetadataKey):], set)
 		}
 	}
-	return e.resolvePath(e.Data(), path, set)
+	output, err = e.resolvePath(e.Data(), path, set)
+	if set != nil && err == nil {
+		e.ClearCache()
+	}
+	return output, err
 }
 
 // MustResolveMetadata is the same as ResolveMetadata but will panic if an error occurs
@@ -395,18 +415,19 @@ func (e *Event) simpleResolve(currentMap map[string]interface{}, path string, se
 // AddError adds an error tag and an error message field for a specific action that has failed
 func (e *Event) AddError(action string, message string) {
 	e.Data()[fmt.Sprintf("_%s_error", action)] = message
+	e.ClearCache()
 	e.AddTag(fmt.Sprintf("_%s_failure", action))
 }
 
 // AddTag adds a tag to the event
-// Remember ClearCache is required to flush any cached representations
 func (e *Event) AddTag(tag string) {
 	data := e.Data()
-	tags := data["tags"].(Tags)
+	defer e.ClearCache()
+	tags := data[TagsKey].(Tags)
 	length := len(tags)
 	idx := sort.SearchStrings(tags, tag)
 	if idx >= length {
-		data["tags"] = append(tags, tag)
+		data[TagsKey] = append(tags, tag)
 	} else if tags[idx] != tag && length < 1024 {
 		// Max 1024 tags - this also prevents CWE-190 from CodeQL (Size computation for allocation may overflow) due to length+1 without bound check
 		if length+1 > cap(tags) {
@@ -419,28 +440,65 @@ func (e *Event) AddTag(tag string) {
 			copy(tags[idx+1:], tags[idx:])
 		}
 		tags[idx] = tag
-		data["tags"] = tags
+		data[TagsKey] = tags
 	}
 }
 
-// RemoveTag adds a tag to the event
-// Remember ClearCache is required to flush any cached representations
+// RemoveTag removes a tag from the event
 func (e *Event) RemoveTag(tag string) {
 	data := e.Data()
-	tags := data["tags"].(Tags)
+	defer e.ClearCache()
+	tags := data[TagsKey].(Tags)
 	length := len(tags)
 	idx := sort.SearchStrings(tags, tag)
 	if idx < length && tags[idx] == tag {
 		copy(tags[idx:], tags[idx+1:])
-		data["tags"] = tags[:length-1]
+		data[TagsKey] = tags[:length-1]
 	}
 }
 
-// ClearCache clears any cached representations, always call it if the event is changed
+// ClearCache discards the cached encoded form of a decoded event, which every change through the Event does
 func (e *Event) ClearCache() {
-	// An event never decoded holds its data only in the encoded form
-	e.Data()
+	// An event never decoded cannot have been changed
+	if e.data == nil {
+		return
+	}
 	e.encoded = nil
+}
+
+// Validate ensures the encoded form is what decoding and encoding the event would produce, before it is sent: a
+// received form that already is, and is unchanged, is kept even if the event was decoded to read it; otherwise the
+// event is encoded again
+func (e *Event) Validate() {
+	if e.validated {
+		return
+	}
+	if e.encoded != nil && !encodedNormalised(e.encoded) {
+		e.Data()
+		e.encoded = nil
+	}
+	// Encoding decoded data always gives a valid form, so later changes need no validating again
+	e.validated = true
+}
+
+// Timestamp returns the event's @timestamp, reading it from the encoded form where possible rather than decoding it
+func (e *Event) Timestamp() (Timestamp, bool) {
+	if e.data == nil {
+		if !e.timestampRead {
+			e.timestamp, e.timestampRead = scanTimestamp(e.encoded)
+		}
+		if e.timestampRead {
+			return e.timestamp, true
+		}
+	}
+	timestamp, ok := e.Data()[TimestampKey].(Timestamp)
+	return timestamp, ok
+}
+
+// FreeOfControl returns true if the event has not been decoded and its encoded form holds no control characters,
+// so escaping control characters would not change it
+func (e *Event) FreeOfControl() bool {
+	return e.data == nil && !encodedHasControl(e.encoded)
 }
 
 // Bytes returns the encoded event bytes
@@ -451,14 +509,7 @@ func (e *Event) ClearCache() {
 func (e *Event) Bytes() []byte {
 	if e.encoded == nil {
 		var err error
-		prunedData := make(map[string]interface{})
-		for key, value := range e.data {
-			if key == MetadataKey {
-				continue
-			}
-			prunedData[key] = value
-		}
-		if e.encoded, err = json.Marshal(prunedData); err != nil {
+		if e.encoded, err = encodeData(e.data); err != nil {
 			e.encoded = []byte("{\"tags\":[\"_encode_failure\"]}")
 		}
 	}

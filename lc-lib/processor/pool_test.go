@@ -1,7 +1,9 @@
 package processor
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/config"
 	"github.com/driskell/log-courier/lc-lib/event"
@@ -65,5 +67,22 @@ func TestPoolEscapesControlCharactersByDefault(t *testing.T) {
 
 	if evnt.Data()["message"] != `a\x1B` {
 		t.Errorf("Message was not escaped: %q", evnt.Data()["message"])
+	}
+}
+
+func TestProcessEventJudgesDuplicatedTimestampByTheValueSent(t *testing.T) {
+	now := time.Now().UTC()
+	current := now.Format(time.RFC3339Nano)
+	old := now.Add(-48 * time.Hour).Format(time.RFC3339Nano)
+	pool := &Pool{pipelines: &Config{}, guard: &timestampGuard{}}
+	pool.guard.SetLimits(24*time.Hour, 0)
+
+	sentCurrent := pool.processEvent(event.NewEventFromBytes(context.Background(), nil, []byte(`{"@timestamp":"`+old+`","tags":[],"@timestamp":"`+current+`"}`)))
+	if sentCurrent.Dropped() {
+		t.Error("Event was dropped for a duplicated @timestamp that is not the one sent")
+	}
+	sentOld := pool.processEvent(event.NewEventFromBytes(context.Background(), nil, []byte(`{"@timestamp":"`+current+`","tags":[],"@timestamp":"`+old+`"}`)))
+	if !sentOld.Dropped() {
+		t.Error("Event was kept although the @timestamp sent is too old")
 	}
 }

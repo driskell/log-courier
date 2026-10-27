@@ -60,7 +60,7 @@ func (g *timestampGuard) Check(evnt *event.Event, now time.Time) bool {
 		return false
 	}
 
-	timestamp, ok := evnt.MustResolve("@timestamp", nil).(event.Timestamp)
+	timestamp, ok := evnt.Timestamp()
 	if !ok {
 		return false
 	}

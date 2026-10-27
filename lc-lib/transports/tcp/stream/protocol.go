@@ -99,7 +99,7 @@ func (m *streamMessage) Next(func(int) error) ([]byte, map[string]interface{}, i
 
 	data, length, err := m.protocol.lineReader.ReadItem()
 	if err == harvester.ErrMaxDataSizeTruncation {
-		data["tags"] = event.Tags{"splitline"}
+		data[event.TagsKey] = event.Tags{"splitline"}
 	} else if err != nil {
 		// The message ends here and Read then reports why
 		m.protocol.err = err

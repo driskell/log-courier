@@ -52,9 +52,8 @@ func (e *escapeControlAction) Process(evnt *event.Event) *event.Event {
 		if !ok {
 			continue
 		}
-		if _, isString := value.(string); isString {
-			evnt.MustResolve(field, escaped)
-		}
+		// Written back through the event even when escaped in place, so its encoded form is discarded
+		evnt.MustResolve(field, escaped)
 		tagControlChars(evnt, field)
 	}
 	return evnt
@@ -62,18 +61,8 @@ func (e *escapeControlAction) Process(evnt *event.Event) *event.Event {
 
 // escapeControlEvent escapes control characters throughout the event, tagging each top-level field that had any
 func escapeControlEvent(evnt *event.Event) *event.Event {
-	data := evnt.Data()
-	for key, value := range data {
-		escapedKey, keyFound := event.EscapeControl(key)
-		escaped, valueFound := event.EscapeControlValue(value)
-		if !keyFound && !valueFound {
-			continue
-		}
-		if keyFound {
-			delete(data, key)
-		}
-		data[escapedKey] = escaped
-		tagControlChars(evnt, escapedKey)
+	for _, key := range evnt.EscapeControl() {
+		tagControlChars(evnt, key)
 	}
 	return evnt
 }

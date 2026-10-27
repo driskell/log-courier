@@ -127,8 +127,8 @@ func (m *MuninCollector) collectRunner(runner *MuninRunner, timestamp time.Time)
 
 	// Set timestamp, plugin name and other fields
 	subject := map[string]interface{}{
-		"@timestamp": timestamp,
-		"type":       "metricsets",
+		event.TimestampKey: timestamp,
+		"type":             "metricsets",
 		"event": map[string]interface{}{
 			"dataset": fmt.Sprintf("fact-courier.munin.%s", runner.Name()),
 		},

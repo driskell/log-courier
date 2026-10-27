@@ -70,7 +70,7 @@ func (sc *StreamConfig) Validate(p *config.Parser, path string) (err error) {
 // Decorate applies all transformations necessary from the stream configuration
 // to the data that will eventually become an event
 func (sc *StreamConfig) Decorate(data map[string]interface{}) map[string]interface{} {
-	data["@timestamp"] = time.Now()
+	data[TimestampKey] = time.Now()
 	if sc.AddHostField {
 		if sc.EnableECS {
 			data["host"] = map[string]interface{}{

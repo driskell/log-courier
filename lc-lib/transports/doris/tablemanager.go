@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/addresspool"
+	"github.com/driskell/log-courier/lc-lib/event"
 )
 
 // tableManager handles Doris table creation and column management
@@ -44,12 +45,12 @@ func newTableManager(config *TransportDorisFactory, table string) *tableManager 
 	}
 
 	tm.columnDefs = map[string]string{
-		"@timestamp":             "datetime",
+		event.TimestampKey:       "datetime",
 		"type":                   "varchar(255)",
 		"host":                   "varchar(255)",
 		"path":                   "varchar(5120)",
 		"offset":                 "bigint",
-		"tags":                   "array<varchar(255)>",
+		event.TagsKey:            "array<varchar(255)>",
 		"message":                "text",
 		tm.config.RestJSONColumn: "variant",
 	}

@@ -87,7 +87,7 @@ func (d *dateAction) Process(evnt *event.Event) *event.Event {
 			result = time.Date(time.Now().Year(), result.Month(), result.Day(), result.Hour(), result.Minute(), result.Second(), result.Nanosecond(), result.Location())
 		}
 
-		evnt.MustResolve("@timestamp", result)
+		evnt.MustResolve(event.TimestampKey, result)
 		if d.Remove {
 			_, err := evnt.Resolve(d.Field, event.ResolveParamUnset)
 			if err != nil {

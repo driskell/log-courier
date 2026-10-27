@@ -111,3 +111,20 @@ func TestEscapeControlActionReportsUnresolvableField(t *testing.T) {
 		t.Error("Remaining fields were not escaped after a failure")
 	}
 }
+
+func TestEscapeControlActionLeavesCleanReceivedEventUndecoded(t *testing.T) {
+	evnt := (&escapeControlAction{}).Process(event.NewEventFromBytes(context.Background(), nil, []byte(`{"message":"clean"}`)))
+
+	if !evnt.FreeOfControl() {
+		t.Error("Clean received event was decoded to escape it")
+	}
+}
+
+func TestEscapeControlActionEscapesReceivedEvent(t *testing.T) {
+	evnt := (&escapeControlAction{}).Process(event.NewEventFromBytes(context.Background(), nil, []byte(`{"message":"a\u001b[2J"}`)))
+
+	if evnt.Data()["message"] != `a\x1B[2J` {
+		t.Errorf("Received event was not escaped: %#v", evnt.Data())
+	}
+	assertControlTestTags(t, evnt, "_control_chars", "_control_chars_message")
+}

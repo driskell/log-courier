@@ -251,10 +251,11 @@ func (p *Pool) processEvent(evnt *event.Event) *event.Event {
 	if p.escapeControl {
 		evnt = escapeControlEvent(evnt)
 	}
+	// Validated first so an event decoded because it cannot be sent as received is judged on its decoded @timestamp
+	evnt.Validate()
 	if p.guard.Check(evnt, time.Now()) {
-		log.Debugf("Dropping event with out of range timestamp: %v", evnt.MustResolve("@timestamp", nil))
+		log.Debugf("Dropping event with out of range timestamp: %v", evnt.MustResolve(event.TimestampKey, nil))
 	}
-	evnt.ClearCache()
 	if p.debugEvents {
 		eventJSON, _ := json.Marshal(evnt.Data())
 		log.Debugf("Final event: %s", eventJSON)

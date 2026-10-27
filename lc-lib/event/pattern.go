@@ -57,7 +57,6 @@ func NewPatternFromString(pattern string) Pattern {
 
 // Format implementation for pattern strings
 func (p variablePattern) Format(event *Event) (string, error) {
-	data := event.Data()
 	pattern := string(p)
 
 	results := matcher.FindAllStringSubmatchIndex(pattern, -1)
@@ -73,8 +72,8 @@ func (p variablePattern) Format(event *Event) (string, error) {
 		variable := pattern[results[i][2]:results[i][3]]
 		if variable[0] == '+' {
 			// Date pattern from event timestamp
-			if timestamp, ok := data["@timestamp"]; ok {
-				output += timestamp.(Timestamp).Format(variable[1:])
+			if timestamp, ok := event.Timestamp(); ok {
+				output += timestamp.Format(variable[1:])
 			} else {
 				// No date field so just use current time
 				output += time.Now().Format(variable[1:])
