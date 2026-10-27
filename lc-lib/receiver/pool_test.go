@@ -26,6 +26,11 @@ type testReceiver struct {
 	eventChan chan<- transports.Event
 	acks      chan testAck
 	closes    atomic.Int64
+	// failures and readShutdowns count the connections failed, and those whose receiving was stopped
+	failures      atomic.Int64
+	readShutdowns atomic.Int64
+	// noAck makes the receiver one without acknowledgements
+	noAck     bool
 	shutdowns atomic.Int64
 }
 
@@ -34,12 +39,18 @@ func (r *testReceiver) Acknowledge(_ context.Context, nonce *string, sequence ui
 	return nil
 }
 
-func (r *testReceiver) Pong(context.Context) error                    { return nil }
-func (r *testReceiver) FailConnection(context.Context, error)         { r.closes.Add(1) }
-func (r *testReceiver) ShutdownConnection(context.Context)            { r.shutdowns.Add(1) }
-func (r *testReceiver) ShutdownConnectionRead(context.Context, error) { r.closes.Add(1) }
-func (r *testReceiver) Factory() transports.ReceiverFactory           { return nil }
-func (r *testReceiver) SupportsAck() bool                             { return true }
+func (r *testReceiver) Pong(context.Context) error { return nil }
+func (r *testReceiver) FailConnection(context.Context, error) {
+	r.closes.Add(1)
+	r.failures.Add(1)
+}
+func (r *testReceiver) ShutdownConnection(context.Context) { r.shutdowns.Add(1) }
+func (r *testReceiver) ShutdownConnectionRead(context.Context, error) {
+	r.closes.Add(1)
+	r.readShutdowns.Add(1)
+}
+func (r *testReceiver) Factory() transports.ReceiverFactory { return nil }
+func (r *testReceiver) SupportsAck() bool                   { return !r.noAck }
 
 func (r *testReceiver) Shutdown() {
 	ctx := context.WithValue(context.Background(), transports.ContextReceiver, transports.Receiver(r))
@@ -71,6 +82,7 @@ func newTestPool(maxQueueSize int64) (*Pool, *testReceiver, chan []*event.Event)
 		generalConfig:     &config.General{MaxQueueSize: maxQueueSize},
 		done:              make(chan struct{}),
 		closedRetention:   closedConnectionRetention,
+		idleTimeout:       idleConnectionTimeout,
 		queue:             newFairQueue(),
 		admission:         newAdmissionControl(),
 	}
@@ -636,5 +648,57 @@ func TestPoolCountsLinesReceivedBeforeTheyAreAcknowledged(t *testing.T) {
 	awaitTestAPIConnections(t, pool, "Expected lines counted as acknowledged", func(connections []map[string]interface{}) bool {
 		return len(connections) == 1 && connections[0]["receivedLines"] == 3.0 && connections[0]["completedLines"] == 3.0
 	})
+	stop()
+}
+
+// startTestIdlePool runs a pool whose connections time out when idle almost at once, connecting one to it
+func startTestIdlePool(t *testing.T, noAck bool) (*testReceiver, func()) {
+	t.Helper()
+	pool, receiver, _ := newTestPool(1 << 20)
+	receiver.noAck = noAck
+	pool.idleTimeout = 50 * time.Millisecond
+	shutdownChan := make(chan struct{})
+	pool.shutdownChan = shutdownChan
+	done := make(chan struct{})
+	go func() {
+		pool.Run()
+		close(done)
+	}()
+	ctx := newTestConnectionContext(receiver, "idle")
+	sendTestEvent(t, pool, transports.NewConnectEvent(ctx, "remote", "test"), "Pool did not accept the connection")
+	return receiver, func() {
+		sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test", nil), "Pool did not accept the disconnection")
+		close(shutdownChan)
+		<-done
+	}
+}
+
+// awaitTestCount waits until a counter reaches one
+func awaitTestCount(t *testing.T, counter *atomic.Int64, message string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for counter.Load() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal(message)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestPoolFailsIdleConnectionThatShouldPing(t *testing.T) {
+	receiver, stop := startTestIdlePool(t, false)
+	awaitTestCount(t, &receiver.failures, "Idle connection that should ping was not failed")
+	if receiver.readShutdowns.Load() != 0 {
+		t.Fatal("Idle connection that should ping was closed gracefully instead of failed")
+	}
+	stop()
+}
+
+func TestPoolGracefullyClosesIdleConnectionWithoutAcknowledgements(t *testing.T) {
+	receiver, stop := startTestIdlePool(t, true)
+	awaitTestCount(t, &receiver.readShutdowns, "Idle connection without acknowledgements was not closed")
+	if receiver.failures.Load() != 0 {
+		t.Fatal("Idle connection without acknowledgements was failed instead of closed gracefully")
+	}
 	stop()
 }

@@ -18,6 +18,7 @@ package receiver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -34,6 +35,13 @@ import (
 
 // closedConnectionRetention is how long a connection that has gone stays listed in the API
 const closedConnectionRetention = 5 * time.Second
+
+// idleConnectionTimeout is how long a connection may send nothing before it is closed
+// TODO: Make configurable - it's not configurable on courier side yet and it's 900 there
+const idleConnectionTimeout = 1000 * time.Second
+
+// errIdleConnection is why a connection that sent nothing within the idle timeout is closed
+var errIdleConnection = errors.New("no data received within timeout")
 
 // PoolContext is a context key for Pool
 type poolContext string
@@ -71,6 +79,8 @@ type Pool struct {
 	done chan struct{}
 	// closedRetention is how long a connection that has gone stays listed in the API
 	closedRetention time.Duration
+	// idleTimeout is how long a connection may send nothing before it is closed
+	idleTimeout time.Duration
 
 	generalConfig  *config.General
 	apiConfig      *admin.Config
@@ -93,6 +103,7 @@ func NewPool(app *core.App) *Pool {
 		admission:        newAdmissionControl(),
 		done:             make(chan struct{}),
 		closedRetention:  closedConnectionRetention,
+		idleTimeout:      idleConnectionTimeout,
 	}
 }
 
@@ -500,13 +511,15 @@ func (r *Pool) sendAck(status *poolConnectionStatus, progress *poolEventProgress
 	}
 }
 
-// startIdleTimeout scheduled an idle timeout timer
-// All connections should send pings or some other data within a timeout period
+// startIdleTimeout schedules closing a connection that sends nothing within the idle timeout, which fails one that
+// should be sending pings, and gracefully closes one without acknowledgements as it has no pings to keep it open
 func (r *Pool) startIdleTimeout(ctx context.Context, receiver transports.Receiver, connection interface{}) {
-	// Set a network timeout - we should be receiving pings - close connections that do nothing
-	// TODO: Make configurable - it's not configurable on courier side yet and it's 900 there
-	r.scheduler.SetCallback(connection, 1000*time.Second, func() {
-		r.failConnection(ctx, receiver, connection, fmt.Errorf("no data received within timeout"))
+	r.scheduler.SetCallback(connection, r.idleTimeout, func() {
+		if receiver.SupportsAck() {
+			r.failConnection(ctx, receiver, connection, errIdleConnection)
+			return
+		}
+		receiver.ShutdownConnectionRead(ctx, errIdleConnection)
 	})
 }
 
