@@ -40,6 +40,32 @@ func CalculateSpeed(duration time.Duration, average float64, measurement float64
 	return CalculateRunningAverage(float64(duration)/float64(time.Second), 5, average, measurement)
 }
 
+// SpeedMeter measures how fast a counter increases, as a running average over 5 seconds
+type SpeedMeter struct {
+	speed           float64
+	lastCount       int64
+	lastMeasurement time.Time
+	secondsNoChange int
+}
+
+// Measure records the counter's current value, returning its speed per second
+func (m *SpeedMeter) Measure(count int64, now time.Time) float64 {
+	if !m.lastMeasurement.IsZero() {
+		duration := now.Sub(m.lastMeasurement)
+		if duration > 0 {
+			m.speed = CalculateSpeed(duration, m.speed, float64(count-m.lastCount)/duration.Seconds(), &m.secondsNoChange)
+		}
+	}
+	m.lastCount = count
+	m.lastMeasurement = now
+	return m.speed
+}
+
+// Speed returns the speed per second from the last measurement
+func (m *SpeedMeter) Speed() float64 {
+	return m.speed
+}
+
 // CalculateRunningAverage returns a running average
 // On the first call, where the existing average is 0, it will return the
 // measurement unchanged

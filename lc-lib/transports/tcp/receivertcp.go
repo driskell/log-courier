@@ -171,7 +171,7 @@ func (t *receiverTCP) Pong(ctx context.Context) error {
 func (t *receiverTCP) FailConnection(ctx context.Context, err error) {
 	connection := ctx.Value(transports.ContextConnection).(*connection)
 	log.Errorf("[R %s - %s] Failing connection: %s", connection.socket.LocalAddr().String(), connection.socket.RemoteAddr().String(), err)
-	connection.Teardown()
+	connection.Fail(err)
 }
 
 // ShutdownConnection shuts down a connection gracefully by closing the send side
@@ -263,6 +263,8 @@ func (t *receiverTCP) connectionRoutine(conn *connection) {
 	defer t.connWait.Done()
 
 	didStart := false
+	// failure is why the connection ended, or nil if it closed cleanly
+	var failure error
 	if err := conn.run(func() {
 		t.eventChan <- transports.NewConnectEvent(conn.ctx, conn.socket.RemoteAddr().String(), conn.socket.Desc())
 		didStart = true
@@ -271,13 +273,14 @@ func (t *receiverTCP) connectionRoutine(conn *connection) {
 			log.Debugf("[R %s - %s] Client forcefully disconnected", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String())
 		} else if err != io.EOF { // Ignore io.EOF as it usually means a graceful close without starting up, such as a status check on a TLS port
 			log.Errorf("[R %s - %s] Client failed: %s", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String(), err)
+			failure = err
 		}
 	} else {
 		log.Debugf("[R %s - %s] Client closed", conn.socket.LocalAddr().String(), conn.socket.RemoteAddr().String())
 	}
 
 	if didStart {
-		t.eventChan <- transports.NewDisconnectEvent(conn.ctx, conn.socket.RemoteAddr().String(), conn.socket.Desc())
+		t.eventChan <- transports.NewDisconnectEvent(conn.ctx, conn.socket.RemoteAddr().String(), conn.socket.Desc(), failure)
 	}
 
 	t.connMutex.Lock()

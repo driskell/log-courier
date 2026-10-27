@@ -32,6 +32,9 @@ import (
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
+// closedConnectionRetention is how long a connection that has gone stays listed in the API
+const closedConnectionRetention = 5 * time.Second
+
 // PoolContext is a context key for Pool
 type poolContext string
 
@@ -66,6 +69,8 @@ type Pool struct {
 	shuttingDown bool
 	// done is closed when Run exits
 	done chan struct{}
+	// closedRetention is how long a connection that has gone stays listed in the API
+	closedRetention time.Duration
 
 	generalConfig  *config.General
 	apiConfig      *admin.Config
@@ -87,6 +92,7 @@ func NewPool(app *core.App) *Pool {
 		queue:            newFairQueue(),
 		admission:        newAdmissionControl(),
 		done:             make(chan struct{}),
+		closedRetention:  closedConnectionRetention,
 	}
 }
 
@@ -124,6 +130,8 @@ func (r *Pool) Init(cfg *config.Config) error {
 func (r *Pool) Run() {
 	defer close(r.done)
 	shutdownChan := r.shutdownChan
+	measureTicker := time.NewTicker(time.Second)
+	defer measureTicker.Stop()
 
 	for {
 		select {
@@ -141,6 +149,8 @@ func (r *Pool) Run() {
 			r.updateReceivers(newConfig)
 		case <-r.scheduler.OnNext():
 			r.sendPartialAcks()
+		case now := <-measureTicker.C:
+			r.takeMeasurements(now)
 		case events := <-r.ackChan:
 			r.handleAcks(events)
 		case receiverEvent := <-r.eventChan:
@@ -183,6 +193,15 @@ func (r *Pool) dequeueSpool() {
 	size, _ := r.queue.pop()
 	r.spoolSize.Add(-int64(size))
 	r.admit()
+}
+
+// takeMeasurements measures how fast each connection is completing lines
+func (r *Pool) takeMeasurements(now time.Time) {
+	r.connectionLock.Lock()
+	defer r.connectionLock.Unlock()
+	for _, status := range r.connectionStatus {
+		status.lineSpeed.Measure(status.lines, now)
+	}
 }
 
 // sendPartialAcks resends the current acknowledgement for connections whose partial acknowledgement is due
@@ -369,19 +388,23 @@ func (r *Pool) handleEnd(eventImpl *transports.EndEvent) {
 	}
 }
 
-// handleDisconnect stops tracking a connection that has gone
+// handleDisconnect stops tracking a connection that has gone, leaving it listed in the API for a while as closed
 func (r *Pool) handleDisconnect(eventImpl *transports.DisconnectEvent) {
 	r.connectionLock.Lock()
 	connection := eventImpl.Context().Value(transports.ContextConnection)
 	connectionStatus := r.connectionStatus[connection]
 	delete(r.connectionStatus, connection)
 	r.scheduler.Remove(connection)
+	connectionStatus.closed = true
+	connectionStatus.failure = eventImpl.Err()
 	r.connectionLock.Unlock()
 	r.admission.forget(connection)
 	r.admit()
-	// RemoveEntryIfValue outside of connection lock, as entry updates that hold the entry lock will take the connection lock
-	// We only remove if value matches, in case a reconnection occurred on same port before we handled disconnect that replaced it
-	r.apiConnections.RemoveEntryIfValue(connectionStatus.remote, connectionStatus)
+	// Removed from its own routine, outside of the connection lock, as entry updates that hold the entry lock will take the connection lock
+	// We only remove if value matches, in case a reconnection occurred on same port and replaced it
+	time.AfterFunc(r.closedRetention, func() {
+		r.apiConnections.RemoveEntryIfValue(connectionStatus.remote, connectionStatus)
+	})
 }
 
 // handleStatus stops tracking a receiver that has finished

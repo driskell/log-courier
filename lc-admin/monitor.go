@@ -62,6 +62,12 @@ func NewMonitor(client *admin.Client) *monitor {
 			name:    "Receiver",
 		},
 		{
+			id:      "processor",
+			factory: views.NewProcessor,
+			key:     "p",
+			name:    "Processor",
+		},
+		{
 			id:      "publisher",
 			factory: views.NewPublisher,
 			key:     "t",
@@ -120,13 +126,26 @@ func (m *monitor) Run() error {
 	status.Text = fmt.Sprintf("%s v%s", name, version)
 	status.SetRect(0, termHeight-1, termWidth, termHeight)
 
+	// Uptime sits in the bottom right corner, and is left empty for a remote that does not report when it started
+	uptime := widgets.NewParagraph()
+	uptime.Border = false
+	updateUptime := func() {
+		started := m.client.RemoteStarted()
+		if started.IsZero() {
+			return
+		}
+		uptime.Text = "Uptime: " + formatUptime(time.Since(started))
+		uptime.SetRect(termWidth-len(uptime.Text)-1, termHeight-1, termWidth, termHeight)
+	}
+	updateUptime()
+
 	var currentView views.View
 	if m.initialView != "" {
 		currentView = m.viewsByKey[m.initialView].factory(m.client, m.updateChan)
 		currentView.SetRect(0, 1, termWidth, termHeight-1)
 	}
 
-	ui.Render(menu, currentView, status)
+	ui.Render(menu, currentView, status, uptime)
 
 	var updateAt <-chan time.Time
 	var updatingView views.View
@@ -146,30 +165,31 @@ func (m *monitor) Run() error {
 				termHeight = payload.Height
 				menu.SetRect(0, 0, termWidth, 1)
 				status.SetRect(0, termHeight-1, termWidth, termHeight)
+				updateUptime()
 				currentView.SetRect(0, 1, termWidth, termHeight-1)
 				ui.Clear()
-				ui.Render(menu, currentView, status)
+				ui.Render(menu, currentView, status, uptime)
 			case "q", "<C-c>":
 				return nil
 			case "u", "<Up>", "<MouseWheelUp>":
 				if scrollable, ok := currentView.(lcwidgets.Scrollable); ok {
 					scrollable.ScrollUp()
-					ui.Render(menu, currentView, status)
+					ui.Render(menu, currentView, status, uptime)
 				}
 			case "d", "<Down>", "<MouseWheelDown>":
 				if scrollable, ok := currentView.(lcwidgets.Scrollable); ok {
 					scrollable.ScrollDown()
-					ui.Render(menu, currentView, status)
+					ui.Render(menu, currentView, status, uptime)
 				}
 			case "<PageUp>":
 				if scrollable, ok := currentView.(lcwidgets.Scrollable); ok {
 					scrollable.PageUp()
-					ui.Render(menu, currentView, status)
+					ui.Render(menu, currentView, status, uptime)
 				}
 			case "<PageDown>":
 				if scrollable, ok := currentView.(lcwidgets.Scrollable); ok {
 					scrollable.PageDown()
-					ui.Render(menu, currentView, status)
+					ui.Render(menu, currentView, status, uptime)
 				}
 			default:
 				if view, ok := m.viewsByKey[e.ID]; ok && view.enabled {
@@ -193,7 +213,24 @@ func (m *monitor) Run() error {
 				updatingView = currentView
 				go currentView.StartUpdate()
 			}
-			ui.Render(menu, currentView, status)
+			updateUptime()
+			ui.Render(menu, currentView, status, uptime)
 		}
 	}
+}
+
+// formatUptime formats a duration as days, hours, minutes and seconds, leaving out leading units that are zero
+func formatUptime(duration time.Duration) string {
+	seconds := int64(duration / time.Second)
+	days, hours, minutes := seconds/86400, seconds/3600%24, seconds/60%60
+	seconds %= 60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd %dh %dm %ds", days, hours, minutes, seconds)
+	case hours > 0:
+		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+	case minutes > 0:
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	}
+	return fmt.Sprintf("%ds", seconds)
 }

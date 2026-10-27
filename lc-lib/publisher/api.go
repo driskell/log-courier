@@ -31,6 +31,7 @@ func (a *apiStatus) Update() error {
 	// Update the values and pass through to node
 	a.p.mutex.RLock()
 	a.SetEntry("speed", api.Float(a.p.lineSpeed))
+	a.SetEntry("averageLatency", api.Float(a.p.averageLatency))
 	a.SetEntry("publishedLines", api.Number(a.p.lastLineCount))
 	a.SetEntry("pendingPayloads", api.Number(a.p.numPayloads))
 	a.SetEntry("maxPendingPayloads", api.Number(a.p.netConfig.MaxPendingPayloads))

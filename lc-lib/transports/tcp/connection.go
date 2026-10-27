@@ -51,8 +51,6 @@ type connection struct {
 	window     *transports.ReceiveWindow
 	windowSize int
 
-	// senderErr stores exit error from sender so if receiver succeeds but sender not we can return it
-	senderErr error
 	// senderShutdown stores whether sender is active or not, so SendMessage can return ErrInvalidState
 	senderShutdown bool
 	// receiverShutdownChan is closed by CloseRead to request receiver to stop receiving and exit gracefully
@@ -63,6 +61,9 @@ type connection struct {
 	receiverShutdownOnce sync.Once
 	// sendShutdownLock provides access to sendShutdown and ensures only a single close of sendChan
 	sendShutdownLock sync.RWMutex
+	// err is why the connection ended, guarded by errLock
+	err     error
+	errLock sync.Mutex
 }
 
 func newConnection(ctx context.Context, socket connectionSocket, protocolFactory ProtocolFactory, isClient bool, eventChan chan<- transports.Event, windowSize int, windowFill float64) *connection {
@@ -118,6 +119,7 @@ func (t *connection) run(startedCallback func()) error {
 	// If handshake isn't implemented by a client in server mode, we may have an events message already, which is
 	// handled after the startedCallback and once the sender runs to send its acknowledgements
 	err = t.receiver(event)
+	t.recordError(err)
 	if err != nil && err != io.EOF {
 		// Teardown if error occurs and it wasn't a graceful EOF (nil err means CloseRead called so also graceful)
 		t.shutdownFunc()
@@ -126,18 +128,28 @@ func (t *connection) run(startedCallback func()) error {
 	// Wait for sender to complete due to Teardown or nil sent
 	t.wait.Wait()
 
-	// If we had no receiver error, did sender save one when it shutdown?
-	if err == nil {
-		err = t.senderErr
-	}
-
-	// EOF is not an error to be returned
-	// We check it here, after checking sender error, because with TLS an EOF can come from a send too
+	// EOF is not an error to be returned, and with TLS an EOF can come from a send too
+	t.errLock.Lock()
+	err = t.err
+	t.errLock.Unlock()
 	if err == io.EOF {
 		err = nil
 	}
 
 	return err
+}
+
+// recordError keeps the first error that ends the connection, as later ones are usually caused by it, except that a
+// failure replaces a graceful EOF as the connection still delivers acknowledgements after the remote stops sending
+func (t *connection) recordError(err error) {
+	if err == nil {
+		return
+	}
+	t.errLock.Lock()
+	if t.err == nil || (t.err == io.EOF && err != io.EOF) {
+		t.err = err
+	}
+	t.errLock.Unlock()
 }
 
 // senderRoutine wraps the sender into a routine and handles error communication
@@ -146,9 +158,9 @@ func (t *connection) senderRoutine() {
 		t.wait.Done()
 	}()
 
-	t.senderErr = t.sender()
-	if t.senderErr != nil {
+	if err := t.sender(); err != nil {
 		// Sender issue, close connections
+		t.recordError(err)
 		t.shutdownFunc()
 	}
 }
@@ -365,6 +377,12 @@ ReceiverReadLoop:
 // No waiting happens and connections are not gracefully closed
 func (t *connection) Teardown() {
 	t.shutdownFunc()
+}
+
+// Fail ends the connection forcefully, recording why so it is reported as the reason the connection ended
+func (t *connection) Fail(err error) {
+	t.recordError(err)
+	t.Teardown()
 }
 
 // CloseRead stops the receiving of data from this connection

@@ -69,6 +69,9 @@ Show the status of the event processor with the `processor` command.
 
 This reports `droppedTooOldEvents` and `droppedFutureEvents`, the number of events dropped since startup because their `@timestamp` was outside of the bounds set by the [`maximum event age`](log-carver/Configuration.md#maximum-event-age) and [`maximum future event age`](log-carver/Configuration.md#maximum-future-event-age) options, along with `maximumEventAge` and `maximumFutureEventAge`, the currently configured values of those options in seconds.
 
+`processor` alone also lists `routines`, with the `id` of each processor routine
+and `processedEvents`, the number of events it has processed since startup.
+
 ### `reload`
 
 Requests Log Courier to reload its configuration.

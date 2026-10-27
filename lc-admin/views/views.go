@@ -17,6 +17,8 @@
 package views
 
 import (
+	"fmt"
+
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
 )
@@ -50,4 +52,12 @@ func (v *view) Draw(buf *ui.Buffer) {
 		text.SetRect(v.Inner.Min.X, v.Inner.Min.Y, v.Inner.Max.X, v.Inner.Max.Y)
 		text.Draw(buf)
 	}
+}
+
+// formatSpeed formats a speed per second for display, or a dash when the remote does not report it
+func formatSpeed(speed *float64) string {
+	if speed == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%.1f", *speed)
 }

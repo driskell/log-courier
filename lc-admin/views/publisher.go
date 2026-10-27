@@ -30,19 +30,21 @@ import (
 
 type publisherResponse struct {
 	Endpoints []struct {
-		AverageLatency  float64 `json:"averageLatency"`
-		LastError       *string `json:"last_error"`
-		LastErrorTime   *string `json:"last_error_time"`
-		PendingPayloads int     `json:"pendingPayloads"`
-		PublishedLines  int     `json:"publishedLines"`
-		Server          string  `json:"server"`
-		Status          string  `json:"status"`
+		AverageLatency  float64  `json:"averageLatency"`
+		LastError       *string  `json:"last_error"`
+		LastErrorTime   *string  `json:"last_error_time"`
+		PendingPayloads int      `json:"pendingPayloads"`
+		PublishedLines  int      `json:"publishedLines"`
+		Speed           *float64 `json:"speed"`
+		Server          string   `json:"server"`
+		Status          string   `json:"status"`
 	} `json:"endpoints"`
 	Status struct {
-		PendingPayloads    int     `json:"pendingPayloads"`
-		MaxPendingPayloads int     `json:"maxPendingPayloads"`
-		PublishedLines     int     `json:"publishedLines"`
-		Speed              float64 `json:"speed"`
+		PendingPayloads    int      `json:"pendingPayloads"`
+		MaxPendingPayloads int      `json:"maxPendingPayloads"`
+		PublishedLines     int      `json:"publishedLines"`
+		Speed              float64  `json:"speed"`
+		AverageLatency     *float64 `json:"averageLatency"`
 	} `json:"status"`
 }
 
@@ -67,7 +69,7 @@ func NewPublisher(client *admin.Client, updateChan chan<- interface{}) View {
 
 	p.view = newView()
 	p.table = lcwidgets.NewTable()
-	p.table.ColumnNames = []string{"Server", "Status", "Time(ms) Per Event", "Lines", "Pending", "Last Error Time", "Last Error"}
+	p.table.ColumnNames = []string{"Server", "Status", "Time(ms) Per Event", "Events/s", "Lines", "Pending", "Last Error Time", "Last Error"}
 	p.mainGauge = widgets.NewGauge()
 
 	return p
@@ -136,22 +138,23 @@ func (p *Publisher) CompleteUpdate(resp interface{}) {
 	}
 
 	if p.data == nil {
-		rows[0] = []interface{}{"Loading...", "", "", "", "", "", ""}
+		rows[0] = []interface{}{"Loading...", "", "", "", "", "", "", ""}
 	} else {
 		idx := 0
 		for _, data := range p.data.Endpoints {
-			rows[idx] = make([]interface{}, 7)
+			rows[idx] = make([]interface{}, 8)
 			rows[idx][0] = data.Server
 			rows[idx][1] = data.Status
 			rows[idx][2] = fmt.Sprintf("%.3f", data.AverageLatency)
-			rows[idx][3] = fmt.Sprintf("%d", data.PublishedLines)
-			rows[idx][4] = fmt.Sprintf("%d", data.PendingPayloads)
+			rows[idx][3] = formatSpeed(data.Speed)
+			rows[idx][4] = fmt.Sprintf("%d", data.PublishedLines)
+			rows[idx][5] = fmt.Sprintf("%d", data.PendingPayloads)
 			if data.LastError == nil || data.LastErrorTime == nil {
-				rows[idx][5] = ""
 				rows[idx][6] = ""
+				rows[idx][7] = ""
 			} else {
-				rows[idx][5] = *data.LastErrorTime
-				rows[idx][6] = *data.LastError
+				rows[idx][6] = *data.LastErrorTime
+				rows[idx][7] = *data.LastError
 			}
 
 			idx += 1
@@ -169,15 +172,16 @@ func (p *Publisher) CompleteUpdate(resp interface{}) {
 func (p *Publisher) SetRect(x1, y1, x2, y2 int) {
 	p.view.SetRect(x1, y1, x2, y2)
 
-	// 6*3+2 for dividers and padding
+	// 7*3+2 for dividers and padding
 	// 10 for status
 	// 20 for latency
+	// 12 for events per second
 	// 20 for lines
 	// 10 for pending
 	// 21 for last error date (19 char RFC)
 	// divide rest unevenly
-	calculatedWidth := int((p.Inner.Dx() - 20 - 10 - 20 - 20 - 10 - 21) / 2)
-	columnWidths := []int{int(float64(calculatedWidth) * 0.5), 10, 20, 20, 10, 21, int(float64(calculatedWidth) * 1.5)}
+	calculatedWidth := int((p.Inner.Dx() - 23 - 10 - 20 - 12 - 20 - 10 - 21) / 2)
+	columnWidths := []int{int(float64(calculatedWidth) * 0.5), 10, 20, 12, 20, 10, 21, int(float64(calculatedWidth) * 1.5)}
 
 	p.table.ColumnWidths = columnWidths
 	p.table.SetRect(p.Min.X, p.Inner.Min.Y+1, p.Max.X, p.Max.Y)
@@ -195,7 +199,12 @@ func (p *Publisher) Draw(buf *ui.Buffer) {
 
 	if p.data != nil {
 		x += 1
-		cells := ui.TrimCells(ui.ParseStyles(fmt.Sprintf("[Speed:](mod:bold) %.3f eps", p.data.Status.Speed), ui.Theme.Paragraph.Text), p.Inner.Dx()/2-2)
+		// A remote that has no endpoint latency yet, or does not report it, shows a dash
+		latency := "-"
+		if p.data.Status.AverageLatency != nil && *p.data.Status.AverageLatency > 0 {
+			latency = fmt.Sprintf("%.3f ms", *p.data.Status.AverageLatency)
+		}
+		cells := ui.TrimCells(ui.ParseStyles(fmt.Sprintf("[Speed:](mod:bold) %.3f eps  [Average Latency:](mod:bold) %s", p.data.Status.Speed, latency), ui.Theme.Paragraph.Text), p.Inner.Dx()/2-2)
 		for _, cell := range cells {
 			buf.SetCell(cell, image.Point{x, y})
 			x += 1

@@ -42,7 +42,8 @@ func (a *apiEndpoint) Update() error {
 	}
 	a.SetEntry("pendingPayloads", api.Number(a.e.NumPending()))
 	a.SetEntry("publishedLines", api.Number(a.e.LineCount()))
-	a.SetEntry("averageLatency", api.Float(a.e.AverageLatency()/time.Millisecond))
+	a.SetEntry("speed", api.Float(a.e.lineSpeed.Speed()))
+	a.SetEntry("averageLatency", api.Float(LatencyMilliseconds(a.e.AverageLatency())))
 	a.e.mutex.RUnlock()
 
 	return nil

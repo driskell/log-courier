@@ -2,6 +2,8 @@ package receiver
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -68,6 +70,7 @@ func newTestPool(maxQueueSize int64) (*Pool, *testReceiver, chan []*event.Event)
 		connectionStatus:  make(map[interface{}]*poolConnectionStatus),
 		generalConfig:     &config.General{MaxQueueSize: maxQueueSize},
 		done:              make(chan struct{}),
+		closedRetention:   closedConnectionRetention,
 		queue:             newFairQueue(),
 		admission:         newAdmissionControl(),
 	}
@@ -119,7 +122,7 @@ func startTestPool(t *testing.T) (*Pool, *testReceiver, <-chan []*event.Event, c
 	ctx := context.WithValue(context.WithValue(context.Background(), transports.ContextConnection, &testConnection{name: "test"}), transports.ContextReceiver, transports.Receiver(receiver))
 	sendTestEvent(t, pool, transports.NewConnectEvent(ctx, "remote", "test"), "Pool did not accept the connection")
 	return pool, receiver, output, ctx, func() {
-		sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test"), "Pool did not accept the disconnection")
+		sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test", nil), "Pool did not accept the disconnection")
 		close(shutdownChan)
 		select {
 		case <-done:
@@ -235,7 +238,7 @@ func TestPoolIgnoresAcknowledgementAfterDisconnect(t *testing.T) {
 	pool, receiver, output, ctx, stop := startTestPool(t)
 	sendTestPayload(t, pool, newTestPayloadOf(ctx, "payload", 2, 2), "Pool did not receive the payload")
 	events := receiveTestEvents(t, output)
-	sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test"), "Pool did not accept the disconnection")
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test", nil), "Pool did not accept the disconnection")
 
 	acknowledgeTestEvents(t, pool, events)
 	expectNoTestAck(t, receiver)
@@ -295,7 +298,7 @@ func TestPoolDrainsLightPayloadAheadOfHeavyBacklog(t *testing.T) {
 	if !drained {
 		t.Fatal("Light payload was not drained within the first two slices, behind the heavy backlog")
 	}
-	sendTestEvent(t, pool, transports.NewDisconnectEvent(light, "light", "test"), "Pool did not accept the light disconnection")
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(light, "light", "test", nil), "Pool did not accept the light disconnection")
 	stop()
 }
 
@@ -397,7 +400,7 @@ func TestPoolHoldsEventsWhileQueueFull(t *testing.T) {
 		t.Fatalf("Pool closed %d connections instead of holding them", closes)
 	}
 	receiveTestOutput(t, output)
-	sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test"), "Pool did not accept the disconnection")
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test", nil), "Pool did not accept the disconnection")
 	stop()
 }
 
@@ -413,8 +416,8 @@ func TestPoolTakesEventsFromConnectionWithNothingQueuedWhileQueueFull(t *testing
 
 	receiveTestOutput(t, output)
 	receiveTestOutput(t, output)
-	sendTestEvent(t, pool, transports.NewDisconnectEvent(busy, "busy", "test"), "Pool did not accept the busy disconnection")
-	sendTestEvent(t, pool, transports.NewDisconnectEvent(idle, "idle", "test"), "Pool did not accept the idle disconnection")
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(busy, "busy", "test", nil), "Pool did not accept the busy disconnection")
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(idle, "idle", "test", nil), "Pool did not accept the idle disconnection")
 	stop()
 }
 
@@ -434,8 +437,8 @@ func TestPoolTakesFromLightSenderBeforeHeavySenderOfLargePayload(t *testing.T) {
 		// Checked in turn, as a select would choose at random once both are taken
 		select {
 		case <-lightWindow.Taken():
-			sendTestEvent(t, pool, transports.NewDisconnectEvent(light, "light", "test"), "Pool did not accept the light disconnection")
-			sendTestEvent(t, pool, transports.NewDisconnectEvent(heavy, "heavy", "test"), "Pool did not accept the heavy disconnection")
+			sendTestEvent(t, pool, transports.NewDisconnectEvent(light, "light", "test", nil), "Pool did not accept the light disconnection")
+			sendTestEvent(t, pool, transports.NewDisconnectEvent(heavy, "heavy", "test", nil), "Pool did not accept the heavy disconnection")
 			stop()
 			return
 		default:
@@ -549,5 +552,75 @@ func TestPoolKeepsConnectionWithManyPayloadsAwaitingAcknowledgement(t *testing.T
 	if closes := receiver.closes.Load(); closes != 0 {
 		t.Fatalf("Pool closed the connection %d times for having payloads awaiting acknowledgement", closes)
 	}
+	stop()
+}
+
+// testAPIConnections returns the connections listed in the pool's API
+func testAPIConnections(t *testing.T, pool *Pool) []map[string]interface{} {
+	t.Helper()
+	if err := pool.apiConnections.Update(); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	encoded, err := json.Marshal(&pool.apiConnections)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	var connections []map[string]interface{}
+	if err := json.Unmarshal(encoded, &connections); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	return connections
+}
+
+// awaitTestAPIConnections waits until the connections listed in the pool's API satisfy expected
+func awaitTestAPIConnections(t *testing.T, pool *Pool, message string, expected func([]map[string]interface{}) bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		connections := testAPIConnections(t, pool)
+		if expected(connections) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s, got %v", message, connections)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestPoolListsFailedConnectionUntilRetentionPasses(t *testing.T) {
+	pool, receiver, _ := newTestPool(1 << 20)
+	pool.closedRetention = 200 * time.Millisecond
+	shutdownChan := make(chan struct{})
+	pool.shutdownChan = shutdownChan
+	done := make(chan struct{})
+	go func() {
+		pool.Run()
+		close(done)
+	}()
+	ctx := newTestConnectionContext(receiver, "test")
+	sendTestEvent(t, pool, transports.NewConnectEvent(ctx, "remote", "test"), "Pool did not accept the connection")
+	awaitTestAPIConnections(t, pool, "Expected one active connection", func(connections []map[string]interface{}) bool {
+		return len(connections) == 1 && connections[0]["status"] == "active"
+	})
+
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test", errors.New("connection reset")), "Pool did not accept the disconnection")
+	awaitTestAPIConnections(t, pool, "Expected the failed connection listed with its error", func(connections []map[string]interface{}) bool {
+		return len(connections) == 1 && connections[0]["status"] == "failed" && connections[0]["error"] == "connection reset"
+	})
+	awaitTestAPIConnections(t, pool, "Expected the failed connection no longer listed once its retention passed", func(connections []map[string]interface{}) bool {
+		return len(connections) == 0
+	})
+	close(shutdownChan)
+	<-done
+}
+
+func TestPoolListsCleanlyClosedConnectionAsClosed(t *testing.T) {
+	pool, _, _, ctx, stop := startTestPool(t)
+	sendTestEvent(t, pool, transports.NewDisconnectEvent(ctx, "remote", "test", nil), "Pool did not accept the disconnection")
+	awaitTestAPIConnections(t, pool, "Expected the closed connection listed as closed", func(connections []map[string]interface{}) bool {
+		return len(connections) == 1 && connections[0]["status"] == "closed"
+	})
+	sendTestEvent(t, pool, transports.NewConnectEvent(ctx, "remote", "test"), "Pool did not accept the reconnection")
 	stop()
 }

@@ -18,6 +18,8 @@ package processor
 
 import (
 	"encoding/json"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin"
@@ -41,6 +43,12 @@ type Pool struct {
 	fanout        chan []*event.Event
 	collector     chan []*event.Event
 	guard         *timestampGuard
+	// routines is the number of processor routines running, and processed counts the events each has processed
+	routines  atomic.Int64
+	processed [maxProcessorRoutines]atomic.Int64
+	// speeds measures how fast each routine processes events, guarded by speedsMutex
+	speeds      [maxProcessorRoutines]core.SpeedMeter
+	speedsMutex sync.Mutex
 
 	apiConfig *admin.Config
 }
@@ -81,6 +89,7 @@ func (p *Pool) Init(cfg *config.Config) error {
 	if p.apiConfig.Enabled {
 		processorAPI := &api.Node{}
 		processorAPI.SetEntry("status", &apiStatus{p: p})
+		processorAPI.SetEntry("routines", &apiRoutines{p: p})
 		p.apiConfig.SetEntry("processor", processorAPI)
 	}
 
@@ -90,6 +99,8 @@ func (p *Pool) Init(cfg *config.Config) error {
 // Run starts the processing routines
 func (p *Pool) Run() {
 	shutdownChan := p.shutdownChan
+	measureTicker := time.NewTicker(time.Second)
+	defer measureTicker.Stop()
 
 	for {
 		var newConfig *config.Config
@@ -103,6 +114,7 @@ func (p *Pool) Run() {
 		p.collector = make(chan []*event.Event, routineCount)
 
 		log.Infof("Processor starting %d routines", routineCount)
+		p.routines.Store(int64(routineCount))
 		for i := 0; i < routineCount; i++ {
 			go p.processorRoutine(i)
 		}
@@ -114,6 +126,8 @@ func (p *Pool) Run() {
 				shutdown = true
 				shutdownChan = nil
 				log.Infof("Processor shutting down %d routines", routineCount)
+			case now := <-measureTicker.C:
+				p.takeMeasurements(now)
 			case newConfig = <-p.configChan:
 				// Request shutdown so we can restart with new configuration
 				close(p.fanout)
@@ -180,6 +194,22 @@ func (p *Pool) Run() {
 	log.Info("Processor exiting")
 }
 
+// takeMeasurements measures how fast each routine is processing events
+func (p *Pool) takeMeasurements(now time.Time) {
+	p.speedsMutex.Lock()
+	defer p.speedsMutex.Unlock()
+	for id, routines := 0, int(p.routines.Load()); id < routines; id++ {
+		p.speeds[id].Measure(p.processed[id].Load(), now)
+	}
+}
+
+// speed returns how fast the routine with the given id is processing events per second
+func (p *Pool) speed(id int) float64 {
+	p.speedsMutex.Lock()
+	defer p.speedsMutex.Unlock()
+	return p.speeds[id].Speed()
+}
+
 // processorRoutine runs a single routine for processing
 func (p *Pool) processorRoutine(id int) {
 	defer func() {
@@ -201,6 +231,7 @@ func (p *Pool) processorRoutine(id int) {
 			}
 
 			log.Debugf("[Processor %d] Processed %d events in %v", id, len(events), time.Since(start))
+			p.processed[id].Add(int64(len(events)))
 
 			select {
 			case <-p.shutdownChan:

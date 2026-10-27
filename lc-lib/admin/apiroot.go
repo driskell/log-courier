@@ -18,6 +18,7 @@ package admin
 
 import (
 	"net/url"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 	"github.com/driskell/log-courier/lc-lib/core"
@@ -44,6 +45,7 @@ func newAPIRoot(app *core.App) *apiRoot {
 
 	root.SetEntry("name", api.NewDataEntry(api.String(app.Name())))
 	root.SetEntry("version", api.NewDataEntry(api.String(app.Version())))
+	root.SetEntry("started", api.NewDataEntry(api.String(app.Started().UTC().Format(time.RFC3339))))
 	root.SetEntry("reload", api.NewCallbackEntry(func(values url.Values) (string, error) {
 		if err := app.ReloadConfig(); err != nil {
 			return "", err

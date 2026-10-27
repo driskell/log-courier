@@ -69,8 +69,10 @@ type Publisher struct {
 	spoolChan    chan []*event.Event
 	shuttingDown bool
 
-	lineCount       int64
-	lineSpeed       float64
+	lineCount int64
+	lineSpeed float64
+	// averageLatency is the mean time in milliseconds per event across endpoints that have measured one
+	averageLatency  float64
 	lastLineCount   int64
 	lastMeasurement time.Time
 	secondsNoAck    int
@@ -484,7 +486,22 @@ func (p *Publisher) timeoutKeepalive(endpoint *endpoint.Endpoint) {
 }
 
 func (p *Publisher) takeMeasurements() {
+	now := time.Now()
+	latencyTotal, latencyCount := 0., 0
+	for item := p.endpointSink.Front(); item != nil; item = item.Next() {
+		item.MeasureSpeed(now)
+		// An endpoint that has not yet completed a payload has no latency to include
+		if latency := item.AverageLatency(); latency > 0 {
+			latencyTotal += endpoint.LatencyMilliseconds(latency)
+			latencyCount++
+		}
+	}
+
 	p.mutex.Lock()
+	p.averageLatency = 0
+	if latencyCount != 0 {
+		p.averageLatency = latencyTotal / float64(latencyCount)
+	}
 	p.lineSpeed = core.CalculateSpeed(time.Since(p.lastMeasurement), p.lineSpeed, float64(p.lineCount-p.lastLineCount), &p.secondsNoAck)
 	p.lastLineCount = p.lineCount
 	p.lastMeasurement = time.Now()

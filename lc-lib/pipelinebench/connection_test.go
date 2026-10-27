@@ -131,7 +131,7 @@ func (c *benchConnection) run(maxPayloads int, deadline time.Time, recorded *syn
 		}
 	}
 
-	c.receiver.eventChan <- transports.NewDisconnectEvent(c.ctx, c.name, benchTransport)
+	c.receiver.eventChan <- transports.NewDisconnectEvent(c.ctx, c.name, benchTransport, nil)
 	return result
 }
 

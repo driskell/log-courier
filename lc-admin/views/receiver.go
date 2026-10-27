@@ -29,11 +29,14 @@ import (
 
 type receiverResponse struct {
 	Connections []struct {
-		CompletedLines int    `json:"completedLines"`
-		WindowBytes    int64  `json:"windowBytes"`
-		WindowSize     int64  `json:"windowSize"`
-		Remote         string `json:"remote"`
-		Description    string `json:"description"`
+		CompletedLines int      `json:"completedLines"`
+		Speed          *float64 `json:"speed"`
+		WindowBytes    int64    `json:"windowBytes"`
+		WindowSize     int64    `json:"windowSize"`
+		Remote         string   `json:"remote"`
+		Description    string   `json:"description"`
+		Status         string   `json:"status"`
+		Error          string   `json:"error"`
 	} `json:"connections"`
 	Status struct {
 		ActiveConnections int `json:"activeConnections"`
@@ -60,7 +63,7 @@ func NewReceiver(client *admin.Client, updateChan chan<- interface{}) View {
 
 	p.view = newView()
 	p.table = lcwidgets.NewTable()
-	p.table.ColumnNames = []string{"Remote", "Description", "Lines", "Window"}
+	p.table.ColumnNames = []string{"Remote", "Description", "Lines", "Events/s", "Window"}
 
 	return p
 }
@@ -118,8 +121,8 @@ func (p *Receiver) CompleteUpdate(resp interface{}) {
 		copy(p.gauges, oldGauges)
 	}
 	for idx, data := range p.data.Connections {
-		// A receive window is only reported for a connection that has sent events
-		if data.WindowSize == 0 {
+		// A receive window is only reported for a connection that has sent events, and is not shown once it has gone
+		if data.WindowSize == 0 || data.Status == "closed" || data.Status == "failed" {
 			p.gauges[idx] = nil
 			continue
 		}
@@ -128,6 +131,10 @@ func (p *Receiver) CompleteUpdate(resp interface{}) {
 		}
 		p.gauges[idx].Percent = int(min(data.WindowBytes*100/data.WindowSize, 100))
 		p.gauges[idx].Border = false
+		p.gauges[idx].BarColor = ui.Theme.Gauge.Bar
+		if p.gauges[idx].Percent >= receiverWindowWarnPercent {
+			p.gauges[idx].BarColor = ui.ColorYellow
+		}
 	}
 
 	var rows [][]interface{}
@@ -138,25 +145,28 @@ func (p *Receiver) CompleteUpdate(resp interface{}) {
 	}
 
 	if p.data == nil {
-		rows[0] = []interface{}{"Loading...", "", "", ""}
+		rows[0] = []interface{}{"Loading...", "", "", "", ""}
 	} else {
 		idx := 0
 		for dataIdx, data := range p.data.Connections {
-			rows[idx] = make([]interface{}, 4)
-			rows[idx][0] = data.Remote
-			rows[idx][1] = data.Description
-			rows[idx][2] = fmt.Sprintf("%d", data.CompletedLines)
-			if p.gauges[dataIdx] == nil {
-				rows[idx][3] = "-"
-			} else {
-				rows[idx][3] = p.gauges[dataIdx]
+			colour := receiverStatusColour(data.Status)
+			rows[idx] = make([]interface{}, 5)
+			rows[idx][0] = styleCell(data.Remote, colour)
+			rows[idx][1] = styleCell(data.Description, colour)
+			rows[idx][2] = styleCell(fmt.Sprintf("%d", data.CompletedLines), colour)
+			rows[idx][3] = styleCell(formatSpeed(data.Speed), colour)
+			switch {
+			case data.Status == "failed":
+				rows[idx][4] = styleCell("failed: "+data.Error, colour)
+			case data.Status == "closed":
+				rows[idx][4] = styleCell("closed", colour)
+			case p.gauges[dataIdx] == nil:
+				rows[idx][4] = "-"
+			default:
+				rows[idx][4] = p.gauges[dataIdx]
 			}
 			idx += 1
 		}
-
-		sort.Slice(rows, func(i, j int) bool {
-			return strings.Compare(rows[i][0].(string), rows[j][0].(string)) == -1
-		})
 	}
 
 	p.table.Rows = rows
@@ -166,11 +176,12 @@ func (p *Receiver) CompleteUpdate(resp interface{}) {
 func (p *Receiver) SetRect(x1, y1, x2, y2 int) {
 	p.view.SetRect(x1, y1, x2, y2)
 
-	// 3*3+2 for dividers and padding
+	// 4*3+2 for dividers and padding
 	// 20 for lines
+	// 12 for events per second
 	// divide amongst remaining 3 columns
-	calculatedWidth := int((p.Inner.Dx() - 11 - 20) / 3)
-	columnWidths := []int{calculatedWidth, calculatedWidth, 20, calculatedWidth}
+	calculatedWidth := int((p.Inner.Dx() - 14 - 20 - 12) / 3)
+	columnWidths := []int{calculatedWidth, calculatedWidth, 20, 12, calculatedWidth}
 
 	p.table.ColumnWidths = columnWidths
 	p.table.SetRect(p.Min.X, p.Min.Y, p.Max.X, p.Max.Y)
@@ -184,4 +195,26 @@ func (p *Receiver) Draw(buf *ui.Buffer) {
 	}
 
 	p.table.Draw(buf)
+}
+
+// receiverWindowWarnPercent is how full a receive window is before its gauge is shown in yellow
+const receiverWindowWarnPercent = 90
+
+// receiverStatusColour returns the colour a connection with the given status is shown in, or empty for the default
+func receiverStatusColour(status string) string {
+	switch status {
+	case "closing", "closed":
+		return "yellow"
+	case "failed":
+		return "red"
+	}
+	return ""
+}
+
+// styleCell colours a cell's text, replacing square brackets as the table would read them as styling
+func styleCell(text string, colour string) string {
+	if colour == "" {
+		return text
+	}
+	return "[" + strings.NewReplacer("[", "(", "]", ")").Replace(text) + "](fg:" + colour + ")"
 }

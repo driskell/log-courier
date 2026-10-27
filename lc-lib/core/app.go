@@ -40,6 +40,7 @@ type App struct {
 	config     *config.Config
 	signalChan chan os.Signal
 	logFile    *defaultLogBackend
+	started    time.Time
 }
 
 // NewApp creates a new courier application
@@ -49,6 +50,7 @@ func NewApp(name, version string) *App {
 		version:    version,
 		pipeline:   NewPipeline(),
 		signalChan: make(chan os.Signal, 1),
+		started:    time.Now(),
 	}
 }
 
@@ -230,6 +232,11 @@ func (a *App) Name() string {
 // Version returns the app version
 func (a *App) Version() string {
 	return a.version
+}
+
+// Started returns when the application started
+func (a *App) Started() time.Time {
+	return a.started
 }
 
 // configureLogging enables the available logging backends

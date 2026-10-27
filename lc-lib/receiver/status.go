@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
+	"github.com/driskell/log-courier/lc-lib/core"
 	"github.com/driskell/log-courier/lc-lib/transports"
 )
 
@@ -94,9 +95,14 @@ type poolConnectionStatus struct {
 	progress []*poolEventProgress
 	// window is the connection's receive window, known once it first asks for its events to be taken
 	window *transports.ReceiveWindow
+	// closed is set once the connection has gone, with failure set to why if it did not close cleanly
+	closed  bool
+	failure error
 	// closing is set once the connection has finished sending, so it closes when progress empties
-	closing     bool
-	lines       int64
+	closing bool
+	lines   int64
+	// lineSpeed measures how fast lines are completed
+	lineSpeed   core.SpeedMeter
 	bytes       int
 	supportsAck bool
 
@@ -137,6 +143,7 @@ func (p *poolConnectionStatus) Update() error {
 	p.SetEntry("listener", api.String(p.listener))
 	p.SetEntry("description", api.String(p.desc))
 	p.SetEntry("completedLines", api.Number(p.lines))
+	p.SetEntry("speed", api.Float(p.lineSpeed.Speed()))
 	p.SetEntry("receivedBytes", api.Bytes(p.bytes))
 	if p.supportsAck {
 		p.SetEntry("pendingPayloads", api.Number(len(p.progress)))
@@ -144,6 +151,17 @@ func (p *poolConnectionStatus) Update() error {
 	if p.window != nil {
 		p.SetEntry("windowBytes", api.Bytes(p.window.Held()))
 		p.SetEntry("windowSize", api.Bytes(p.window.Size()))
+	}
+	switch {
+	case p.failure != nil:
+		p.SetEntry("status", api.String("failed"))
+		p.SetEntry("error", api.String(p.failure.Error()))
+	case p.closed:
+		p.SetEntry("status", api.String("closed"))
+	case p.closing:
+		p.SetEntry("status", api.String("closing"))
+	default:
+		p.SetEntry("status", api.String("active"))
 	}
 	return nil
 }

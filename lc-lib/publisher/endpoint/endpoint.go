@@ -63,9 +63,11 @@ type Endpoint struct {
 	numPayloads     int
 	pongPending     bool
 
-	lastErr           error
-	lastErrTime       time.Time
-	lineCount         int64
+	lastErr     error
+	lastErrTime time.Time
+	lineCount   int64
+	// lineSpeed measures how fast lines are acknowledged, guarded by mutex
+	lineSpeed         core.SpeedMeter
 	averageLatency    float64
 	transmissionStart time.Time
 	estDelTime        time.Time
@@ -222,6 +224,18 @@ func (e *Endpoint) EstDelTime() time.Time {
 // AverageLatency returns the endpoint's average latency
 func (e *Endpoint) AverageLatency() time.Duration {
 	return time.Duration(e.averageLatency)
+}
+
+// MeasureSpeed measures how fast the endpoint is acknowledging lines
+func (e *Endpoint) MeasureSpeed(now time.Time) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	e.lineSpeed.Measure(e.lineCount, now)
+}
+
+// LatencyMilliseconds returns a latency in fractional milliseconds
+func LatencyMilliseconds(latency time.Duration) float64 {
+	return float64(latency) / float64(time.Millisecond)
 }
 
 // ReduceLatency artificially reduces the recorded latency of the endpoint. It

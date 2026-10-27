@@ -3,6 +3,7 @@ package tcp
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -278,5 +279,26 @@ func TestConnectionEndsOnlyOnceReceiveWindowIsTaken(t *testing.T) {
 	}
 	if err := <-result; err != io.EOF {
 		t.Fatalf("Expected io.EOF, got %v", err)
+	}
+}
+
+func TestConnectionRecordsFirstErrorAsReasonItEnded(t *testing.T) {
+	conn := newTestConnection(t, strings.NewReader(""))
+	first, second := errors.New("first"), errors.New("second")
+	conn.recordError(first)
+	conn.recordError(second)
+	conn.recordError(io.EOF)
+	if conn.err != first {
+		t.Fatalf("Expected the first error kept, got %v", conn.err)
+	}
+}
+
+func TestConnectionFailureReplacesGracefulEnd(t *testing.T) {
+	conn := newTestConnection(t, strings.NewReader(""))
+	failure := errors.New("acknowledgement failed")
+	conn.recordError(io.EOF)
+	conn.Fail(failure)
+	if conn.err != failure {
+		t.Fatalf("Expected the failure to replace the graceful end, got %v", conn.err)
 	}
 }

@@ -155,17 +155,24 @@ type DisconnectEvent struct {
 	context context.Context
 	remote  string
 	desc    string
+	err     error
 }
 
 var _ Event = (*DisconnectEvent)(nil)
 
-// NewDisconnectEvent generates a new DisconnectEvent for the given Endpoint
-func NewDisconnectEvent(context context.Context, remote string, desc string) *DisconnectEvent {
+// NewDisconnectEvent generates a new DisconnectEvent for the given Endpoint, with the error that ended it if it failed
+func NewDisconnectEvent(context context.Context, remote string, desc string, err error) *DisconnectEvent {
 	return &DisconnectEvent{
 		context: context,
 		remote:  remote,
 		desc:    desc,
+		err:     err,
 	}
+}
+
+// Err returns the error that ended the connection, or nil if it closed cleanly
+func (e *DisconnectEvent) Err() error {
+	return e.err
 }
 
 // Context returns the endpoint associated with this event

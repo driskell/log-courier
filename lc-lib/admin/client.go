@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/driskell/log-courier/lc-lib/admin/api"
 )
@@ -40,6 +41,7 @@ type Client struct {
 	remoteSummary map[string]interface{}
 	remoteName    string
 	remoteVersion string
+	remoteStarted time.Time
 	fakeHost      string
 }
 
@@ -93,6 +95,11 @@ func (c *Client) initClient() error {
 	if version, ok := c.remoteSummary["version"].(string); ok {
 		c.remoteVersion = version
 	}
+	if started, ok := c.remoteSummary["started"].(string); ok {
+		if startedTime, err := time.Parse(time.RFC3339, started); err == nil {
+			c.remoteStarted = startedTime
+		}
+	}
 
 	return nil
 }
@@ -100,6 +107,11 @@ func (c *Client) initClient() error {
 // RemoteVersion returns the version of the remotely connected Log Courier
 func (c *Client) RemoteClient() (string, string) {
 	return c.remoteName, c.remoteVersion
+}
+
+// RemoteStarted returns when the remotely connected Log Courier started, or the zero time if it does not report it
+func (c *Client) RemoteStarted() time.Time {
+	return c.remoteStarted
 }
 
 // RemoteSummary returns the summary data of the root node on the remote

@@ -31,6 +31,7 @@ const (
 	astStateIf
 
 	defaultGeneralProcessorRoutines                = 4
+	maxProcessorRoutines                           = 128
 	defaultGeneralProcessorDebugEvents             = false
 	defaultGeneralProcessorEscapeControlCharacters = true
 )
@@ -64,8 +65,8 @@ type ConfigASTEntry struct {
 
 // Validate the additional general configuration
 func (gc *General) Validate(p *config.Parser, path string) (err error) {
-	if gc.ProcessorRoutines > 128 {
-		err = fmt.Errorf("%sprocessor routines can not be greater than 128", path)
+	if gc.ProcessorRoutines > maxProcessorRoutines {
+		err = fmt.Errorf("%sprocessor routines can not be greater than %d", path, maxProcessorRoutines)
 		return
 	}
 
