@@ -63,6 +63,12 @@ type Pool struct {
 	// Atomic so the admin API can read them while Run modifies the spool
 	spoolPayloads atomic.Int64
 	spoolSize     atomic.Int64
+	// paused stops receiving while the spool is full
+	paused bool
+	// shuttingDown is set once receivers are asked to shut down, so Run exits when they and their connections finish
+	shuttingDown bool
+	// done is closed when Run exits
+	done chan struct{}
 
 	generalConfig  *config.General
 	apiConfig      *admin.Config
@@ -81,6 +87,7 @@ func NewPool(app *core.App) *Pool {
 		eventChan:        make(chan transports.Event),
 		scheduler:        scheduler.NewScheduler(),
 		connectionStatus: make(map[interface{}]*poolConnectionStatus),
+		done:             make(chan struct{}),
 	}
 }
 
@@ -116,224 +123,289 @@ func (r *Pool) Init(cfg *config.Config) error {
 
 // Run starts listening
 func (r *Pool) Run() {
-	var spoolChan chan<- []*event.Event
-	eventChan := r.eventChan
+	defer close(r.done)
 	shutdownChan := r.shutdownChan
 
-ReceiverLoop:
 	for {
-		var nextSpool *spoolEntry = nil
-		var nextSpoolEvents []*event.Event = nil
-
-		if len(r.spool) != 0 {
-			nextSpool = r.spool[0]
-			nextSpoolEvents = nextSpool.events
-		}
-
 		select {
 		case <-shutdownChan:
 			if len(r.receivers) == 0 {
 				// Nothing to wait to shutdown, return now, don't even log
-				break ReceiverLoop
+				log.Info("Receiver pool exiting")
+				return
 			}
 			log.Info("Receiver pool is shutting down receivers")
 			r.shutdown()
+			r.shuttingDown = true
 			shutdownChan = nil
 		case newConfig := <-r.configChan:
 			r.updateReceivers(newConfig)
 		case <-r.scheduler.OnNext():
-			for {
-				connection := r.scheduler.Next()
-				if connection == nil {
-					break
-				}
-				r.connectionLock.Lock()
-				expectedAck := r.connectionStatus[connection].progress[0]
-				expectedEvent := expectedAck.event
-				receiver := expectedEvent.Context().Value(transports.ContextReceiver).(transports.Receiver)
-				if err := receiver.Acknowledge(expectedEvent.Context(), expectedEvent.Nonce(), expectedAck.ackedThrough); err != nil {
-					r.failConnection(expectedEvent.Context(), receiver, connection, err)
-				}
-				r.scheduler.Set(connection, time.Second*5)
-				r.connectionLock.Unlock()
-			}
-			r.scheduler.Reschedule()
+			r.sendPartialAcks()
 		case events := <-r.ackChan:
-			r.connectionLock.Lock()
-			// Acknowledge each run of consecutive events from the same payload as one range
-			position := events[0].Context().Value(poolContextEventPosition).(*poolEventPosition)
-			from := position.sequence
-			for _, item := range events[1:] {
-				next := item.Context().Value(poolContextEventPosition).(*poolEventPosition)
-				if next.progress != position.progress || next.sequence != position.sequence+1 {
-					r.ackRange(position.progress, from, position.sequence)
-					from = next.sequence
-				}
-				position = next
-			}
-			r.ackRange(position.progress, from, position.sequence)
-			r.connectionLock.Unlock()
+			r.handleAcks(events)
+		case receiverEvent := <-r.intake():
+			r.handleEvent(receiverEvent)
+		case r.spoolOutput() <- r.nextSpool():
+			r.dequeueSpool()
+		}
 
-			// If shutting down, have all acknowledgemente been handled, and all receivers closed?
-			if shutdownChan == nil && len(r.receivers) == 0 && len(r.connectionStatus) == 0 {
-				break ReceiverLoop
-			}
-		case receiverEvent := <-eventChan:
-			switch eventImpl := receiverEvent.(type) {
-			case *transports.ConnectEvent:
-				// New connection - start an idle timeout
-				connection := eventImpl.Context().Value(transports.ContextConnection)
-				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-				r.startIdleTimeout(eventImpl.Context(), receiver, connection)
-				r.connectionLock.Lock()
-				connectionStatus := newPoolConnectionStatus(r, r.receivers[receiver].config.Name, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc(), receiver.SupportsAck())
-				r.connectionStatus[connection] = connectionStatus
-				r.connectionLock.Unlock()
-				// ReplaceEntry outside of connection lock, as entry updates that hold the entry lock will take the connection lock
-				// We replace because a reconnect on the same port could occur before we get around to handling the disconnection, and we're keyed by port
-				r.apiConnections.ReplaceEntry(eventImpl.Remote(), connectionStatus)
-			case transports.EventsEvent:
-				size := calcSize(eventImpl)
-				r.connectionLock.Lock()
-				connection := eventImpl.Context().Value(transports.ContextConnection)
-				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-				connectionStatus := r.connectionStatus[connection]
-				var acker event.Acknowledger
-				var progress *poolEventProgress
-				if receiver.SupportsAck() {
-					if len(r.connectionStatus[connection].progress)+1 > int(r.receivers[receiver].config.MaxPendingPayloads) {
-						receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max pending payloads exceeded"))
-						r.connectionLock.Unlock()
-						break
-					}
-					// Schedule partial ack if this is first set of events
-					if len(connectionStatus.progress) == 0 {
-						r.scheduler.Set(connection, 5*time.Second)
-					}
-					progress = &poolEventProgress{event: eventImpl}
-					connectionStatus.progress = append(connectionStatus.progress, progress)
-					acker = r
-				} else {
-					// Reset idle timeout
-					r.startIdleTimeout(eventImpl.Context(), receiver, connection)
-					// Count lines here as there is no ACK to do it
-					connectionStatus.lines += int64(eventImpl.Count())
-				}
-				connectionStatus.bytes += eventImpl.Size()
-				r.connectionLock.Unlock()
-				// Build the events with our acknowledger and submit the bundle
-				var events = make([]*event.Event, eventImpl.Count())
-				var ctx context.Context
-				// Raw events stay encoded so decoding happens later in the parallel processor routines
-				var rawEvents [][]byte
-				var decodedEvents []map[string]interface{}
-				if rawEventsImpl, ok := eventImpl.(transports.RawEventsEvent); ok {
-					rawEvents = rawEventsImpl.RawEvents()
-				} else {
-					decodedEvents = eventImpl.Events()
-				}
-				for idx := range events {
-					if acker == nil {
-						ctx = eventImpl.Context()
-					} else {
-						ctx = context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{progress: progress, sequence: uint32(idx + 1)})
-					}
-					var item *event.Event
-					if rawEvents != nil {
-						item = event.NewEventFromBytes(ctx, acker, rawEvents[idx])
-					} else {
-						item = event.NewEvent(ctx, acker, decodedEvents[idx])
-					}
-					item.MustResolveMetadata("receiver", connectionStatus.metadataReceiver)
-					events[idx] = item
-				}
-				spoolEntry := &spoolEntry{events, size}
-				r.spool = append(r.spool, spoolEntry)
-				r.spoolPayloads.Add(1)
-				r.spoolSize.Add(int64(spoolEntry.size))
-				spoolChan = r.output
-				// A full queue stops receiving so connections wait to send rather than being closed
-				if r.spoolSize.Load() >= r.generalConfig.MaxQueueSize {
-					eventChan = nil
-				}
-			case *transports.EndEvent:
-				// Connection EOF
-				r.connectionLock.Lock()
-				connection := eventImpl.Context().Value(transports.ContextConnection)
-				if partialAcks, ok := r.connectionStatus[connection]; !ok || len(partialAcks.progress) == 0 {
-					// Nothing left to ack - close send side
-					receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-					receiver.ShutdownConnection(eventImpl.Context())
-					// Receive side is closed, and we're just sending, so it'll close automatically once flushed, so clear all scheduled timeouts
-					r.scheduler.Remove(connection)
-				} else {
-					// Close once the remaining payloads are acknowledged
-					partialAcks.closing = true
-				}
-				r.connectionLock.Unlock()
-			case *transports.DisconnectEvent:
-				// Connection disconnected
-				r.connectionLock.Lock()
-				connection := eventImpl.Context().Value(transports.ContextConnection)
-				connectionStatus := r.connectionStatus[connection]
-				delete(r.connectionStatus, connection)
-				r.scheduler.Remove(connection)
-				r.connectionLock.Unlock()
-				// RemoveEntryIfValue outside of connection lock, as entry updates that hold the entry lock will take the connection lock
-				// We only remove if value matches, in case a reconnection occurred on same port before we handled disconnect that replaced it
-				r.apiConnections.RemoveEntryIfValue(connectionStatus.remote, connectionStatus)
-			case *transports.StatusEvent:
-				if eventImpl.StatusChange() == transports.Finished {
-					// Remove the receiver from our list and exit if all receivers are finished
-					receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-					status := r.receivers[receiver]
-					delete(r.receivers, receiver)
-					// Only a receiver that is active will exist in the receiversByListen index
-					// Inactive receivers are ones removed during a config reload for listens we don't want anymore
-					if status.active {
-						delete(r.receiversByListen, status.listen)
-					}
-					// If shutting down, have all acknowledgements been handled, and all receivers closed?
-					if shutdownChan == nil && len(r.receivers) == 0 && len(r.connectionStatus) == 0 {
-						break ReceiverLoop
-					}
-					log.Info("Receiver pool waiting on %d connections to close", len(r.connectionStatus))
-				}
-			case *transports.PingEvent:
-				// Immediately send a pong back - ignore failure - remote will time itself out
-				connection := eventImpl.Context().Value(transports.ContextConnection)
-				receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
-				if status, ok := r.connectionStatus[connection]; ok && len(status.progress) != 0 {
-					// We should not be receiving PING if we haven't finished acknowleding - this violates protocol
-					r.failConnection(eventImpl.Context(), receiver, connection, fmt.Errorf("received ping message on non-idle connection"))
-				} else if err := receiver.Pong(eventImpl.Context()); err != nil {
-					r.failConnection(eventImpl.Context(), receiver, connection, err)
-				} else {
-					// Reset idle timeout
-					r.startIdleTimeout(eventImpl.Context(), receiver, connection)
-				}
-			}
-		case spoolChan <- nextSpoolEvents:
-			copy(r.spool, r.spool[1:])
-			r.spool = r.spool[:len(r.spool)-1]
-			r.spoolPayloads.Add(-1)
-			r.spoolSize.Add(-int64(nextSpool.size))
-			if len(r.spool) == 0 {
-				spoolChan = nil
-			}
-			// Resume when back under the limit, or once empty in case the limit is below a single payload
-			if eventChan == nil && (r.spoolSize.Load() < r.generalConfig.MaxQueueSize || len(r.spool) == 0) {
-				eventChan = r.eventChan
-			}
+		if r.finished() {
+			break
 		}
 	}
 
 	log.Info("Receiver pool exiting")
 }
 
+// finished returns true once shutting down with every receiver and connection closed
+func (r *Pool) finished() bool {
+	return r.shuttingDown && len(r.receivers) == 0 && len(r.connectionStatus) == 0
+}
+
+// intake returns the channel to receive events from, or nil while receiving is paused
+func (r *Pool) intake() <-chan transports.Event {
+	if r.paused {
+		return nil
+	}
+	return r.eventChan
+}
+
+// spoolOutput returns the channel to send queued events to, or nil when there are none
+func (r *Pool) spoolOutput() chan<- []*event.Event {
+	if len(r.spool) == 0 {
+		return nil
+	}
+	return r.output
+}
+
+// nextSpool returns the next queued events to send, or nil when there are none
+func (r *Pool) nextSpool() []*event.Event {
+	if len(r.spool) == 0 {
+		return nil
+	}
+	return r.spool[0].events
+}
+
+// dequeueSpool removes the queued events that were sent, resuming receiving if it was paused and there is now space
+func (r *Pool) dequeueSpool() {
+	sent := r.spool[0]
+	copy(r.spool, r.spool[1:])
+	r.spool = r.spool[:len(r.spool)-1]
+	r.spoolPayloads.Add(-1)
+	r.spoolSize.Add(-int64(sent.size))
+	// Resume when back under the limit, or once empty in case the limit is below a single payload
+	if r.paused && (r.spoolSize.Load() < r.generalConfig.MaxQueueSize || len(r.spool) == 0) {
+		r.paused = false
+	}
+}
+
+// sendPartialAcks resends the current acknowledgement for connections whose partial acknowledgement is due
+func (r *Pool) sendPartialAcks() {
+	for {
+		connection := r.scheduler.Next()
+		if connection == nil {
+			break
+		}
+		r.connectionLock.Lock()
+		expectedAck := r.connectionStatus[connection].progress[0]
+		expectedEvent := expectedAck.event
+		receiver := expectedEvent.Context().Value(transports.ContextReceiver).(transports.Receiver)
+		if err := receiver.Acknowledge(expectedEvent.Context(), expectedEvent.Nonce(), expectedAck.ackedThrough); err != nil {
+			r.failConnection(expectedEvent.Context(), receiver, connection, err)
+		}
+		r.scheduler.Set(connection, time.Second*5)
+		r.connectionLock.Unlock()
+	}
+	r.scheduler.Reschedule()
+}
+
+// handleAcks acknowledges each run of consecutive events from the same payload as one range
+func (r *Pool) handleAcks(events []*event.Event) {
+	r.connectionLock.Lock()
+	defer r.connectionLock.Unlock()
+	position := events[0].Context().Value(poolContextEventPosition).(*poolEventPosition)
+	from := position.sequence
+	for _, item := range events[1:] {
+		next := item.Context().Value(poolContextEventPosition).(*poolEventPosition)
+		if next.progress != position.progress || next.sequence != position.sequence+1 {
+			r.ackRange(position.progress, from, position.sequence)
+			from = next.sequence
+		}
+		position = next
+	}
+	r.ackRange(position.progress, from, position.sequence)
+}
+
+// handleEvent processes an event from a receiver
+func (r *Pool) handleEvent(receiverEvent transports.Event) {
+	switch eventImpl := receiverEvent.(type) {
+	case *transports.ConnectEvent:
+		r.handleConnect(eventImpl)
+	case transports.EventsEvent:
+		r.handleEvents(eventImpl)
+	case *transports.EndEvent:
+		r.handleEnd(eventImpl)
+	case *transports.DisconnectEvent:
+		r.handleDisconnect(eventImpl)
+	case *transports.StatusEvent:
+		r.handleStatus(eventImpl)
+	case *transports.PingEvent:
+		r.handlePing(eventImpl)
+	}
+}
+
+// handleConnect starts tracking a new connection, with an idle timeout
+func (r *Pool) handleConnect(eventImpl *transports.ConnectEvent) {
+	connection := eventImpl.Context().Value(transports.ContextConnection)
+	receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
+	r.startIdleTimeout(eventImpl.Context(), receiver, connection)
+	r.connectionLock.Lock()
+	connectionStatus := newPoolConnectionStatus(r, r.receivers[receiver].config.Name, r.receivers[receiver].listen, eventImpl.Remote(), eventImpl.Desc(), receiver.SupportsAck())
+	r.connectionStatus[connection] = connectionStatus
+	r.connectionLock.Unlock()
+	// ReplaceEntry outside of connection lock, as entry updates that hold the entry lock will take the connection lock
+	// We replace because a reconnect on the same port could occur before we get around to handling the disconnection, and we're keyed by port
+	r.apiConnections.ReplaceEntry(eventImpl.Remote(), connectionStatus)
+}
+
+// handleEvents builds events from a received payload and queues them, pausing receiving once the queue is full
+func (r *Pool) handleEvents(eventImpl transports.EventsEvent) {
+	size := calcSize(eventImpl)
+	r.connectionLock.Lock()
+	connection := eventImpl.Context().Value(transports.ContextConnection)
+	receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
+	connectionStatus := r.connectionStatus[connection]
+	var acker event.Acknowledger
+	var progress *poolEventProgress
+	if receiver.SupportsAck() {
+		if len(r.connectionStatus[connection].progress)+1 > int(r.receivers[receiver].config.MaxPendingPayloads) {
+			receiver.ShutdownConnectionRead(eventImpl.Context(), fmt.Errorf("max pending payloads exceeded"))
+			r.connectionLock.Unlock()
+			return
+		}
+		// Schedule partial ack if this is first set of events
+		if len(connectionStatus.progress) == 0 {
+			r.scheduler.Set(connection, 5*time.Second)
+		}
+		progress = &poolEventProgress{event: eventImpl}
+		connectionStatus.progress = append(connectionStatus.progress, progress)
+		acker = r
+	} else {
+		// Reset idle timeout
+		r.startIdleTimeout(eventImpl.Context(), receiver, connection)
+		// Count lines here as there is no ACK to do it
+		connectionStatus.lines += int64(eventImpl.Count())
+	}
+	connectionStatus.bytes += eventImpl.Size()
+	r.connectionLock.Unlock()
+	// Build the events with our acknowledger and submit the bundle
+	var events = make([]*event.Event, eventImpl.Count())
+	var ctx context.Context
+	// Raw events stay encoded so decoding happens later in the parallel processor routines
+	var rawEvents [][]byte
+	var decodedEvents []map[string]interface{}
+	if rawEventsImpl, ok := eventImpl.(transports.RawEventsEvent); ok {
+		rawEvents = rawEventsImpl.RawEvents()
+	} else {
+		decodedEvents = eventImpl.Events()
+	}
+	for idx := range events {
+		if acker == nil {
+			ctx = eventImpl.Context()
+		} else {
+			ctx = context.WithValue(eventImpl.Context(), poolContextEventPosition, &poolEventPosition{progress: progress, sequence: uint32(idx + 1)})
+		}
+		var item *event.Event
+		if rawEvents != nil {
+			item = event.NewEventFromBytes(ctx, acker, rawEvents[idx])
+		} else {
+			item = event.NewEvent(ctx, acker, decodedEvents[idx])
+		}
+		item.MustResolveMetadata("receiver", connectionStatus.metadataReceiver)
+		events[idx] = item
+	}
+	spoolEntry := &spoolEntry{events, size}
+	r.spool = append(r.spool, spoolEntry)
+	r.spoolPayloads.Add(1)
+	r.spoolSize.Add(int64(spoolEntry.size))
+	// A full queue stops receiving so connections wait to send rather than being closed
+	if r.spoolSize.Load() >= r.generalConfig.MaxQueueSize {
+		r.paused = true
+	}
+}
+
+// handleEnd closes a connection that finished sending, once everything it sent is acknowledged
+func (r *Pool) handleEnd(eventImpl *transports.EndEvent) {
+	r.connectionLock.Lock()
+	defer r.connectionLock.Unlock()
+	connection := eventImpl.Context().Value(transports.ContextConnection)
+	if partialAcks, ok := r.connectionStatus[connection]; !ok || len(partialAcks.progress) == 0 {
+		// Nothing left to ack - close send side
+		receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
+		receiver.ShutdownConnection(eventImpl.Context())
+		// Receive side is closed, and we're just sending, so it'll close automatically once flushed, so clear all scheduled timeouts
+		r.scheduler.Remove(connection)
+	} else {
+		// Close once the remaining payloads are acknowledged
+		partialAcks.closing = true
+	}
+}
+
+// handleDisconnect stops tracking a connection that has gone
+func (r *Pool) handleDisconnect(eventImpl *transports.DisconnectEvent) {
+	r.connectionLock.Lock()
+	connection := eventImpl.Context().Value(transports.ContextConnection)
+	connectionStatus := r.connectionStatus[connection]
+	delete(r.connectionStatus, connection)
+	r.scheduler.Remove(connection)
+	r.connectionLock.Unlock()
+	// RemoveEntryIfValue outside of connection lock, as entry updates that hold the entry lock will take the connection lock
+	// We only remove if value matches, in case a reconnection occurred on same port before we handled disconnect that replaced it
+	r.apiConnections.RemoveEntryIfValue(connectionStatus.remote, connectionStatus)
+}
+
+// handleStatus stops tracking a receiver that has finished
+func (r *Pool) handleStatus(eventImpl *transports.StatusEvent) {
+	if eventImpl.StatusChange() != transports.Finished {
+		return
+	}
+	receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
+	status := r.receivers[receiver]
+	delete(r.receivers, receiver)
+	// Only a receiver that is active will exist in the receiversByListen index
+	// Inactive receivers are ones removed during a config reload for listens we don't want anymore
+	if status.active {
+		delete(r.receiversByListen, status.listen)
+	}
+	if !r.finished() {
+		log.Info("Receiver pool waiting on %d connections to close", len(r.connectionStatus))
+	}
+}
+
+// handlePing replies to a ping from an idle connection
+func (r *Pool) handlePing(eventImpl *transports.PingEvent) {
+	// Immediately send a pong back - ignore failure - remote will time itself out
+	connection := eventImpl.Context().Value(transports.ContextConnection)
+	receiver := eventImpl.Context().Value(transports.ContextReceiver).(transports.Receiver)
+	if status, ok := r.connectionStatus[connection]; ok && len(status.progress) != 0 {
+		// We should not be receiving PING if we haven't finished acknowleding - this violates protocol
+		r.failConnection(eventImpl.Context(), receiver, connection, fmt.Errorf("received ping message on non-idle connection"))
+	} else if err := receiver.Pong(eventImpl.Context()); err != nil {
+		r.failConnection(eventImpl.Context(), receiver, connection, err)
+	} else {
+		// Reset idle timeout
+		r.startIdleTimeout(eventImpl.Context(), receiver, connection)
+	}
+}
+
 // Acknowledge processes event acknowledgements (implements event.Acknowledger)
 func (r *Pool) Acknowledge(events []*event.Event) {
-	r.ackChan <- events
+	select {
+	case r.ackChan <- events:
+	case <-r.done:
+		// The pool exits only once every connection has gone, so there is no client left to acknowledge
+	}
 }
 
 // ackRange processes the acknowledgement of a range of events from a payload, which may arrive in any order

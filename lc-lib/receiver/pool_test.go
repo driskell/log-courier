@@ -63,6 +63,7 @@ func newTestPool(maxQueueSize int64) (*Pool, *testReceiver, chan []*event.Event)
 		scheduler:         scheduler.NewScheduler(),
 		connectionStatus:  make(map[interface{}]*poolConnectionStatus),
 		generalConfig:     &config.General{MaxQueueSize: maxQueueSize},
+		done:              make(chan struct{}),
 	}
 	return pool, receiver, output
 }
@@ -270,5 +271,23 @@ func TestPoolWaitsWhenQueueFull(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("Pool did not shut down")
+	}
+}
+
+func TestPoolAcknowledgementAfterExitReturns(t *testing.T) {
+	pool, _, output, ctx, stop := startTestPool(t)
+	sendTestEvent(t, pool, newTestPayloadOf(ctx, "payload", 2, 2), "Pool did not receive the payload")
+	events := receiveTestEvents(t, output)
+	stop()
+
+	acknowledged := make(chan struct{})
+	go func() {
+		pool.Acknowledge(events)
+		close(acknowledged)
+	}()
+	select {
+	case <-acknowledged:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Acknowledgement blocked after the pool exited")
 	}
 }
