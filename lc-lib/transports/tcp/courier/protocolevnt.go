@@ -60,14 +60,16 @@ func newProtocolEVNT(conn tcp.Connection, bodyLength uint32) (tcp.ProtocolMessag
 	events := make([][]byte, 0, 100)
 
 	size := 0
+	// The size prefix is decoded in place so reading each event needs no allocation for it
+	var sizePrefix [4]byte
 	for {
-		var eventSize uint32
-		if err := binary.Read(decompressor, binary.BigEndian, &eventSize); err != nil {
+		if _, err := io.ReadFull(decompressor, sizePrefix[:]); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return nil, err
 		}
+		eventSize := binary.BigEndian.Uint32(sizePrefix[:])
 
 		if eventSize > 10485760 {
 			return nil, tcp.ErrEventTooLarge

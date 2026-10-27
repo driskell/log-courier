@@ -1,180 +1,180 @@
-commit: 1e70ccdd28492202365f4b6f972d995e0926ed20-modified
-date: 2026-10-26T23:43:09Z
+commit: 6f0e5157bc8cf550b3baca6f241e0c1485271ad6-modified
+date: 2026-10-26T23:56:46Z
 go: go1.27.1
 
 goos: darwin
 goarch: arm64
 pkg: github.com/driskell/log-courier/lc-lib/event
 cpu: Apple M3 Pro
-BenchmarkEventBytes-12            	  558105	      1796 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventBytes-12            	  660292	      1771 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventBytes-12            	  658604	      1792 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventBytes-12            	  654705	      1786 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventBytes-12            	  659290	      2010 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventBytes-12            	  653652	      1838 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventBytes-12            	  654583	      1815 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventBytes-12            	  619413	      1827 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventBytes-12            	  652430	      2008 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventBytes-12            	  647168	      1790 ns/op	    1113 B/op	      25 allocs/op
-BenchmarkEventDataFromBytes-12    	  431432	      2697 ns/op	    2338 B/op	      47 allocs/op
-BenchmarkEventDataFromBytes-12    	  438332	      2665 ns/op	    2338 B/op	      47 allocs/op
-BenchmarkEventDataFromBytes-12    	  373996	      3052 ns/op	    2337 B/op	      47 allocs/op
-BenchmarkEventDataFromBytes-12    	  438536	      2728 ns/op	    2337 B/op	      47 allocs/op
-BenchmarkEventDataFromBytes-12    	  435896	      2695 ns/op	    2338 B/op	      47 allocs/op
-BenchmarkEventDataFromBytes-12    	  439340	      2746 ns/op	    2337 B/op	      47 allocs/op
-BenchmarkEventDataFromBytes-12    	  431762	      2989 ns/op	    2338 B/op	      47 allocs/op
-BenchmarkEventDataFromBytes-12    	  437216	      2720 ns/op	    2338 B/op	      47 allocs/op
-BenchmarkEventDataFromBytes-12    	  443385	      2709 ns/op	    2337 B/op	      47 allocs/op
-BenchmarkEventDataFromBytes-12    	  415497	      2814 ns/op	    2337 B/op	      47 allocs/op
+BenchmarkEventBytes-12            	  615159	      1850 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  644889	      1808 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  582009	      2026 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  659170	      1798 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  657946	      1807 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  651267	      1821 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  636259	      2013 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  608025	      1809 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  661599	      1813 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventBytes-12            	  654546	      1816 ns/op	    1113 B/op	      25 allocs/op
+BenchmarkEventDataFromBytes-12    	  439998	      2952 ns/op	    2337 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  451004	      2661 ns/op	    2337 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  450075	      2637 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  449964	      2650 ns/op	    2337 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  445084	      2934 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  450043	      2666 ns/op	    2337 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  443912	      2650 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  446594	      2666 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  444247	      2957 ns/op	    2338 B/op	      47 allocs/op
+BenchmarkEventDataFromBytes-12    	  445614	      2692 ns/op	    2337 B/op	      47 allocs/op
 PASS
-ok  	github.com/driskell/log-courier/lc-lib/event	25.201s
+ok  	github.com/driskell/log-courier/lc-lib/event	25.786s
 goos: darwin
 goarch: arm64
 pkg: github.com/driskell/log-courier/lc-lib/spooler
 cpu: Apple M3 Pro
-BenchmarkSpoolerEncodedEvents-12      	 1005285	      1059 ns/op	 120854930 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerEncodedEvents-12      	 1000000	      1063 ns/op	 120435246 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerEncodedEvents-12      	 1000000	      1058 ns/op	 121023523 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerEncodedEvents-12      	 1000000	      1063 ns/op	 120449961 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerEncodedEvents-12      	 1000000	      1155 ns/op	 110806853 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerEncodedEvents-12      	 1000000	      1053 ns/op	 121529102 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerEncodedEvents-12      	 1000000	      1052 ns/op	 121645816 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerEncodedEvents-12      	 1000000	      1054 ns/op	 121388298 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerEncodedEvents-12      	 1000000	      1172 ns/op	 109199457 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerEncodedEvents-12      	 1000000	      1046 ns/op	 122329279 events/s	    1187 B/op	       0 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4371	    274037 ns/op	    467090 events/s	  143521 B/op	    3199 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4416	    275286 ns/op	    464971 events/s	  143519 B/op	    3199 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4347	    301667 ns/op	    424308 events/s	  143519 B/op	    3199 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4333	    275284 ns/op	    464974 events/s	  143517 B/op	    3199 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4161	    274803 ns/op	    465788 events/s	  143517 B/op	    3199 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4360	    275925 ns/op	    463895 events/s	  143521 B/op	    3199 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4322	    296470 ns/op	    431746 events/s	  143537 B/op	    3199 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4400	    275901 ns/op	    463935 events/s	  143522 B/op	    3199 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4324	    274785 ns/op	    465818 events/s	  143521 B/op	    3199 allocs/op
-BenchmarkSpoolerUnencodedEvents-12    	    4171	    274622 ns/op	    466096 events/s	  143517 B/op	    3199 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1132767	      1007 ns/op	 127133744 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1156 ns/op	 110739085 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1053 ns/op	 121562554 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1055 ns/op	 121371925 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1055 ns/op	 121289004 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1046 ns/op	 122375563 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1146 ns/op	 111661231 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1046 ns/op	 122343309 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1045 ns/op	 122503107 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerEncodedEvents-12      	 1000000	      1055 ns/op	 121278244 events/s	    1187 B/op	       0 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4264	    286895 ns/op	    446156 events/s	  143523 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4324	    271283 ns/op	    471832 events/s	  143518 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4389	    271786 ns/op	    470958 events/s	  143519 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4466	    271887 ns/op	    470784 events/s	  143539 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4539	    293338 ns/op	    436357 events/s	  143522 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4459	    270269 ns/op	    473603 events/s	  143521 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4412	    271605 ns/op	    471272 events/s	  143525 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4456	    274019 ns/op	    467121 events/s	  143523 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4396	    293074 ns/op	    436750 events/s	  143521 B/op	    3199 allocs/op
+BenchmarkSpoolerUnencodedEvents-12    	    4288	    275011 ns/op	    465435 events/s	  143521 B/op	    3199 allocs/op
 PASS
-ok  	github.com/driskell/log-courier/lc-lib/spooler	25.168s
+ok  	github.com/driskell/log-courier/lc-lib/spooler	25.220s
 goos: darwin
 goarch: arm64
 pkg: github.com/driskell/log-courier/lc-lib/transports/tcp
 cpu: Apple M3 Pro
-BenchmarkConnectionReadCompressed-12    	    7208	    144781 ns/op	2638.14 MB/s	   41014 B/op	      20 allocs/op
-BenchmarkConnectionReadCompressed-12    	    8163	    143979 ns/op	2652.82 MB/s	   41014 B/op	      20 allocs/op
-BenchmarkConnectionReadCompressed-12    	    8259	    144491 ns/op	2643.43 MB/s	   41015 B/op	      20 allocs/op
-BenchmarkConnectionReadCompressed-12    	    8121	    154822 ns/op	2467.04 MB/s	   41014 B/op	      20 allocs/op
-BenchmarkConnectionReadCompressed-12    	    8235	    144701 ns/op	2639.59 MB/s	   41013 B/op	      20 allocs/op
-BenchmarkConnectionReadCompressed-12    	    8217	    143600 ns/op	2659.84 MB/s	   41014 B/op	      20 allocs/op
-BenchmarkConnectionReadCompressed-12    	    8224	    144433 ns/op	2644.49 MB/s	   41014 B/op	      20 allocs/op
-BenchmarkConnectionReadCompressed-12    	    8286	    156844 ns/op	2435.23 MB/s	   41014 B/op	      20 allocs/op
-BenchmarkConnectionReadCompressed-12    	    8204	    144470 ns/op	2643.81 MB/s	   41013 B/op	      20 allocs/op
-BenchmarkConnectionReadCompressed-12    	    8108	    143978 ns/op	2652.86 MB/s	   41013 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    7840	    147953 ns/op	2581.59 MB/s	   41014 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    8150	    144825 ns/op	2637.34 MB/s	   41016 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    8178	    155881 ns/op	2450.27 MB/s	   41014 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    8197	    144139 ns/op	2649.88 MB/s	   41014 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    8125	    143623 ns/op	2659.41 MB/s	   41015 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    8340	    144043 ns/op	2651.65 MB/s	   41012 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    8006	    157928 ns/op	2418.51 MB/s	   41015 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    8218	    144323 ns/op	2646.52 MB/s	   41015 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    8325	    143492 ns/op	2661.83 MB/s	   41015 B/op	      20 allocs/op
+BenchmarkConnectionReadCompressed-12    	    8110	    143634 ns/op	2659.20 MB/s	   41014 B/op	      20 allocs/op
 PASS
-ok  	github.com/driskell/log-courier/lc-lib/transports/tcp	13.117s
+ok  	github.com/driskell/log-courier/lc-lib/transports/tcp	12.219s
 goos: darwin
 goarch: arm64
 pkg: github.com/driskell/log-courier/lc-lib/transports/tcp/courier
 cpu: Apple M3 Pro
-BenchmarkProtocolSendEventsEVNT-12             	  417852	      2867 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNT-12             	  393708	      3149 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNT-12             	  402006	      2926 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNT-12             	  421730	      2886 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNT-12             	  410144	      2964 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNT-12             	  371248	      3235 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNT-12             	  420271	      2817 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNT-12             	  423747	      2866 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNT-12             	  406818	      2949 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNT-12             	  340866	      2970 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  416492	      2878 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  414205	      2873 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  420675	      3147 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  401602	      2983 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  420825	      2882 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  408079	      2891 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  410810	      3240 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  419746	      2883 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  403606	      2845 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsJDAT-12             	  403011	      2865 ns/op	   27344 B/op	       3 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     561	   2359778 ns/op	 1168922 B/op	   25612 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     559	   2155606 ns/op	 1169008 B/op	   25613 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     558	   2152296 ns/op	 1169053 B/op	   25613 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     559	   2212660 ns/op	 1169008 B/op	   25613 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     552	   2146863 ns/op	 1169011 B/op	   25613 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     556	   2154317 ns/op	 1169055 B/op	   25613 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     554	   2372062 ns/op	 1168983 B/op	   25613 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     554	   2154781 ns/op	 1169035 B/op	   25613 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     554	   2152611 ns/op	 1169117 B/op	   25614 allocs/op
-BenchmarkProtocolSendEventsEVNTUnencoded-12    	     556	   2168702 ns/op	 1168989 B/op	   25613 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    5911	    219240 ns/op	1723.48 MB/s	  462524 B/op	    2073 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    5953	    197958 ns/op	1908.76 MB/s	  462509 B/op	    2073 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    6010	    196071 ns/op	1927.14 MB/s	  462510 B/op	    2073 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    5946	    196647 ns/op	1921.50 MB/s	  462510 B/op	    2073 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    5965	    219494 ns/op	1721.49 MB/s	  462509 B/op	    2073 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    5842	    196878 ns/op	1919.24 MB/s	  462508 B/op	    2073 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    6092	    195541 ns/op	1932.36 MB/s	  462516 B/op	    2073 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    6063	    195981 ns/op	1928.03 MB/s	  462523 B/op	    2073 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    6008	    218270 ns/op	1731.14 MB/s	  462510 B/op	    2073 allocs/op
-BenchmarkProtocolReadEVNT-12                   	    6079	    195936 ns/op	1928.46 MB/s	  462515 B/op	    2073 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  358100	      3212 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  414087	      2798 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  400485	      2772 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  418106	      2843 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  417957	      3225 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  419325	      2935 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  428295	      2920 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  415824	      2816 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  417306	      3175 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNT-12             	  421682	      2854 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  404433	      2838 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  418602	      2934 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  422042	      3239 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  412570	      2907 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  408766	      2919 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  420373	      2799 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  398917	      3270 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  396080	      2895 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  397471	      2887 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsJDAT-12             	  412003	      2887 ns/op	   27344 B/op	       3 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     559	   2356707 ns/op	 1168901 B/op	   25612 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     564	   2201211 ns/op	 1168995 B/op	   25613 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     555	   2150480 ns/op	 1169104 B/op	   25614 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     558	   2355877 ns/op	 1169044 B/op	   25613 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     560	   2132673 ns/op	 1169024 B/op	   25613 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     565	   2134171 ns/op	 1169160 B/op	   25614 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     566	   2125017 ns/op	 1169059 B/op	   25613 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     483	   2337710 ns/op	 1168967 B/op	   25613 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     561	   2117970 ns/op	 1169114 B/op	   25614 allocs/op
+BenchmarkProtocolSendEventsEVNTUnencoded-12    	     561	   2147864 ns/op	 1169107 B/op	   25614 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6080	    207239 ns/op	1823.29 MB/s	  458425 B/op	    1049 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6302	    189161 ns/op	1997.53 MB/s	  458423 B/op	    1049 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6253	    186242 ns/op	2028.85 MB/s	  458425 B/op	    1049 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6273	    185520 ns/op	2036.74 MB/s	  458405 B/op	    1049 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6391	    197426 ns/op	1913.92 MB/s	  458418 B/op	    1049 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6394	    186777 ns/op	2023.03 MB/s	  458423 B/op	    1049 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6363	    185909 ns/op	2032.48 MB/s	  458423 B/op	    1049 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6283	    186106 ns/op	2030.33 MB/s	  458423 B/op	    1049 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6308	    206934 ns/op	1825.97 MB/s	  458417 B/op	    1049 allocs/op
+BenchmarkProtocolReadEVNT-12                   	    6338	    186789 ns/op	2022.90 MB/s	  458424 B/op	    1049 allocs/op
 PASS
-ok  	github.com/driskell/log-courier/lc-lib/transports/tcp/courier	54.238s
+ok  	github.com/driskell/log-courier/lc-lib/transports/tcp/courier	52.298s
 goos: darwin
 goarch: arm64
 pkg: github.com/driskell/log-courier/lc-lib/pipelinebench
 cpu: Apple M3 Pro
-BenchmarkPipelineThroughput/connections=1-12         	  921799	      1356 ns/op	         0 closes	    737518 events/s	    3884 B/op	      77 allocs/op
-BenchmarkPipelineThroughput/connections=1-12         	  922587	      1295 ns/op	         0 closes	    771966 events/s	    3841 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=1-12         	  919933	      1294 ns/op	         0 closes	    772853 events/s	    3843 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=1-12         	  775208	      1295 ns/op	         0 closes	    772122 events/s	    3845 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=1-12         	  938128	      1282 ns/op	         0 closes	    780133 events/s	    3843 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=1-12         	  929246	      1475 ns/op	         0 closes	    677986 events/s	    3843 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=1-12         	  940636	      1299 ns/op	         0 closes	    769875 events/s	    3842 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=1-12         	  924748	      1452 ns/op	         0 closes	    688485 events/s	    3844 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=1-12         	  913749	      1294 ns/op	         0 closes	    773036 events/s	    3843 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=1-12         	  938929	      1284 ns/op	         0 closes	    779069 events/s	    3840 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	  888525	      1127 ns/op	         0 closes	    887342 events/s	    3841 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	 1084266	      1116 ns/op	         0 closes	    896015 events/s	    3839 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	  924138	      1117 ns/op	         0 closes	    894902 events/s	    3840 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	 1072489	      1107 ns/op	         0 closes	    903054 events/s	    3840 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	 1078482	      1254 ns/op	         0 closes	    797569 events/s	    3842 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	 1070583	      1113 ns/op	         0 closes	    898363 events/s	    3839 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	 1076982	      1233 ns/op	         0 closes	    810717 events/s	    3838 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	 1076505	      1098 ns/op	         0 closes	    910391 events/s	    3841 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	 1073236	      1237 ns/op	         0 closes	    808277 events/s	    3842 B/op	      75 allocs/op
-BenchmarkPipelineThroughput/connections=100-12       	 1061244	      1111 ns/op	         0 closes	    900292 events/s	    3841 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  924410	      1262 ns/op	         0 closes	    792548 events/s	    3840 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  665530	      1516 ns/op	         0 closes	    659720 events/s	    3841 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  911055	      1280 ns/op	         0 closes	    781255 events/s	    3842 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  936553	      1358 ns/op	         0 closes	    736605 events/s	    3843 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  794122	      1309 ns/op	         0 closes	    763737 events/s	    3843 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  933021	      1305 ns/op	         0 closes	    766192 events/s	    3844 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  934425	      1446 ns/op	         0 closes	    691576 events/s	    3842 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  923414	      1285 ns/op	         0 closes	    778300 events/s	    3842 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  931940	      1454 ns/op	         0 closes	    687645 events/s	    3844 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=1-12         	  926344	      1280 ns/op	         0 closes	    781388 events/s	    3842 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	 1067259	      1108 ns/op	         0 closes	    902799 events/s	    3842 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	 1068904	      1105 ns/op	         0 closes	    905264 events/s	    3837 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	 1071732	      1151 ns/op	         0 closes	    868789 events/s	    3839 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	 1066892	      1106 ns/op	         0 closes	    904275 events/s	    3837 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	 1075796	      1103 ns/op	         0 closes	    906374 events/s	    3839 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  968846	      1121 ns/op	         0 closes	    892172 events/s	    3841 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	 1076520	      1111 ns/op	         0 closes	    899869 events/s	    3840 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	  911803	      1123 ns/op	         0 closes	    890392 events/s	    3840 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	 1079578	      1107 ns/op	         0 closes	    903315 events/s	    3840 B/op	      75 allocs/op
+BenchmarkPipelineThroughput/connections=100-12       	 1024777	      1194 ns/op	         0 closes	    837174 events/s	    3838 B/op	      75 allocs/op
 PASS
-ok  	github.com/driskell/log-courier/lc-lib/pipelinebench	45.292s
+ok  	github.com/driskell/log-courier/lc-lib/pipelinebench	43.860s
 goos: darwin
 goarch: arm64
 pkg: github.com/driskell/log-courier/lc-lib/pipelinebench
 cpu: Apple M3 Pro
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    302825 events/s	    190259 heavy-events/s	        26.29 heavy-p50-ms	    112566 light-events/s	        25.90 light-p50-ms	        28.64 light-p90-ms	        31.33 light-p95-ms	        50.65 light-p99-ms	        74.09 light-p999-ms	         0.9850 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    303260 events/s	    190464 heavy-events/s	        26.39 heavy-p50-ms	    112796 light-events/s	        26.18 light-p50-ms	        28.63 light-p90-ms	        30.71 light-p95-ms	        39.57 light-p99-ms	        62.37 light-p999-ms	         0.9923 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    302898 events/s	    190464 heavy-events/s	        26.25 heavy-p50-ms	    112434 light-events/s	        25.90 light-p50-ms	        28.47 light-p90-ms	        30.18 light-p95-ms	        46.18 light-p99-ms	        83.67 light-p999-ms	         0.9867 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    302899 events/s	    190259 heavy-events/s	        26.14 heavy-p50-ms	    112640 light-events/s	        25.86 light-p50-ms	        28.63 light-p90-ms	        31.97 light-p95-ms	        43.66 light-p99-ms	        74.70 light-p999-ms	         0.9894 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    302087 events/s	    189235 heavy-events/s	        26.30 heavy-p50-ms	    112852 light-events/s	        26.01 light-p50-ms	        28.49 light-p90-ms	        30.51 light-p95-ms	        45.35 light-p99-ms	        76.35 light-p999-ms	         0.9890 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    301668 events/s	    189440 heavy-events/s	        26.41 heavy-p50-ms	    112228 light-events/s	        26.10 light-p50-ms	        28.48 light-p90-ms	        30.20 light-p95-ms	        43.40 light-p99-ms	        86.78 light-p999-ms	         0.9882 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    303648 events/s	    190874 heavy-events/s	        26.22 heavy-p50-ms	    112774 light-events/s	        25.95 light-p50-ms	        28.52 light-p90-ms	        31.11 light-p95-ms	        46.78 light-p99-ms	        71.53 light-p999-ms	         0.9898 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    301670 events/s	    189850 heavy-events/s	        26.58 heavy-p50-ms	    111820 light-events/s	        26.23 light-p50-ms	        28.52 light-p90-ms	        31.10 light-p95-ms	        43.71 light-p99-ms	        78.05 light-p999-ms	         0.9869 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    302488 events/s	    189440 heavy-events/s	        26.26 heavy-p50-ms	    113048 light-events/s	        25.99 light-p50-ms	        28.41 light-p90-ms	        31.43 light-p95-ms	        42.92 light-p99-ms	        76.28 light-p999-ms	         0.9898 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    302693 events/s	    190259 heavy-events/s	        26.30 heavy-p50-ms	    112434 light-events/s	        25.97 light-p50-ms	        28.79 light-p90-ms	        32.09 light-p95-ms	        40.33 light-p99-ms	        77.49 light-p999-ms	         0.9872 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    302419 events/s	    285491 heavy-events/s	       175.2 heavy-p50-ms	     16928 light-events/s	       173.4 light-p50-ms	       186.1 light-p90-ms	       191.8 light-p95-ms	       230.4 light-p99-ms	       230.6 light-p999-ms	         0.9899 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    301571 events/s	    284877 heavy-events/s	       175.8 heavy-p50-ms	     16694 light-events/s	       174.3 light-p50-ms	       186.0 light-p90-ms	       195.4 light-p95-ms	       226.6 light-p99-ms	       234.3 light-p999-ms	         0.9916 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    302899 events/s	    285901 heavy-events/s	       174.4 heavy-p50-ms	     16998 light-events/s	       173.0 light-p50-ms	       184.4 light-p90-ms	       206.5 light-p95-ms	       229.6 light-p99-ms	       240.2 light-p999-ms	         0.9920 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    295660 events/s	    279142 heavy-events/s	       178.8 heavy-p50-ms	     16518 light-events/s	       178.2 light-p50-ms	       191.3 light-p90-ms	       196.2 light-p95-ms	       239.5 light-p99-ms	       242.8 light-p999-ms	         0.9962 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    285037 events/s	    269107 heavy-events/s	       185.2 heavy-p50-ms	     15930 light-events/s	       183.9 light-p50-ms	       196.7 light-p90-ms	       204.6 light-p95-ms	       235.5 light-p99-ms	       244.6 light-p999-ms	         0.9926 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    284427 events/s	    268493 heavy-events/s	       186.3 heavy-p50-ms	     15934 light-events/s	       185.5 light-p50-ms	       199.4 light-p90-ms	       204.5 light-p95-ms	       222.2 light-p99-ms	       228.3 light-p999-ms	         0.9956 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    284423 events/s	    268493 heavy-events/s	       185.5 heavy-p50-ms	     15930 light-events/s	       183.8 light-p50-ms	       195.7 light-p90-ms	       205.5 light-p95-ms	       242.8 light-p99-ms	       246.9 light-p999-ms	         0.9908 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    286489 events/s	    270541 heavy-events/s	       185.3 heavy-p50-ms	     15948 light-events/s	       183.8 light-p50-ms	       197.6 light-p90-ms	       200.2 light-p95-ms	       212.1 light-p99-ms	       239.8 light-p999-ms	         0.9919 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    284023 events/s	    268083 heavy-events/s	       186.1 heavy-p50-ms	     15940 light-events/s	       184.2 light-p50-ms	       197.5 light-p90-ms	       202.8 light-p95-ms	       235.3 light-p99-ms	       248.9 light-p999-ms	         0.9899 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    284640 events/s	    268698 heavy-events/s	       185.6 heavy-p50-ms	     15942 light-events/s	       183.9 light-p50-ms	       195.7 light-p90-ms	       204.0 light-p95-ms	       241.8 light-p99-ms	       246.9 light-p999-ms	         0.9904 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    214402 events/s	    125338 heavy-events/s	        28.83 heavy-p50-ms	     89064 light-events/s	        28.39 light-p50-ms	        37.30 light-p90-ms	        42.52 light-p95-ms	       268.7 light-p99-ms	       272.4 light-p999-ms	         0.9849 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    214082 events/s	    126976 heavy-events/s	        29.48 heavy-p50-ms	     87106 light-events/s	        28.94 light-p50-ms	        38.41 light-p90-ms	        42.19 light-p95-ms	       268.3 light-p99-ms	       279.0 light-p999-ms	         0.9816 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    213194 events/s	    125542 heavy-events/s	        29.12 heavy-p50-ms	     87652 light-events/s	        28.68 light-p50-ms	        38.97 light-p90-ms	        42.53 light-p95-ms	       267.8 light-p99-ms	       272.0 light-p999-ms	         0.9847 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    214317 events/s	    129843 heavy-events/s	        29.29 heavy-p50-ms	     84474 light-events/s	        28.74 light-p50-ms	        38.07 light-p90-ms	        42.86 light-p95-ms	       269.4 light-p99-ms	       286.4 light-p999-ms	         0.9814 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    213036 events/s	    124928 heavy-events/s	        29.36 heavy-p50-ms	     88108 light-events/s	        28.91 light-p50-ms	        40.58 light-p90-ms	        43.62 light-p95-ms	       266.6 light-p99-ms	       269.5 light-p999-ms	         0.9847 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    213777 events/s	    129229 heavy-events/s	        29.33 heavy-p50-ms	     84548 light-events/s	        28.83 light-p50-ms	        40.16 light-p90-ms	        43.47 light-p95-ms	       268.9 light-p99-ms	       279.4 light-p999-ms	         0.9829 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    213227 events/s	    128205 heavy-events/s	        29.46 heavy-p50-ms	     85022 light-events/s	        28.81 light-p50-ms	        39.41 light-p90-ms	        42.76 light-p95-ms	       269.2 light-p99-ms	       279.9 light-p999-ms	         0.9781 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    214798 events/s	    123290 heavy-events/s	        29.16 heavy-p50-ms	     91508 light-events/s	        28.54 light-p50-ms	        38.55 light-p90-ms	        42.60 light-p95-ms	       266.1 light-p99-ms	       272.8 light-p999-ms	         0.9788 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    212790 events/s	    123904 heavy-events/s	        29.35 heavy-p50-ms	     88886 light-events/s	        28.90 light-p50-ms	        39.09 light-p90-ms	        41.84 light-p95-ms	       267.5 light-p99-ms	       272.5 light-p999-ms	         0.9847 light-wait-ratio
-BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    212480 events/s	    128410 heavy-events/s	        29.42 heavy-p50-ms	     84070 light-events/s	        28.83 light-p50-ms	        39.61 light-p90-ms	        43.05 light-p95-ms	       269.4 light-p99-ms	       279.9 light-p999-ms	         0.9800 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    301424 events/s	    189440 heavy-events/s	        26.23 heavy-p50-ms	    111984 light-events/s	        26.03 light-p50-ms	        28.79 light-p90-ms	        32.10 light-p95-ms	        48.33 light-p99-ms	        83.33 light-p999-ms	         0.9925 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    302002 events/s	    189850 heavy-events/s	        26.36 heavy-p50-ms	    112152 light-events/s	        26.09 light-p50-ms	        28.39 light-p90-ms	        31.63 light-p95-ms	        44.29 light-p99-ms	        82.35 light-p999-ms	         0.9899 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    301982 events/s	    190054 heavy-events/s	        26.16 heavy-p50-ms	    111928 light-events/s	        25.95 light-p50-ms	        28.83 light-p90-ms	        33.14 light-p95-ms	        48.55 light-p99-ms	        64.19 light-p999-ms	         0.9922 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    300031 events/s	    188211 heavy-events/s	        26.66 heavy-p50-ms	    111820 light-events/s	        26.32 light-p50-ms	        29.25 light-p90-ms	        33.68 light-p95-ms	        41.62 light-p99-ms	        58.11 light-p999-ms	         0.9869 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    303104 events/s	    190464 heavy-events/s	        26.32 heavy-p50-ms	    112640 light-events/s	        26.18 light-p50-ms	        28.41 light-p90-ms	        30.80 light-p95-ms	        45.16 light-p99-ms	        61.92 light-p999-ms	         0.9945 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    302283 events/s	    190259 heavy-events/s	        26.38 heavy-p50-ms	    112024 light-events/s	        26.16 light-p50-ms	        28.78 light-p90-ms	        32.35 light-p95-ms	        42.79 light-p99-ms	        73.55 light-p999-ms	         0.9916 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    303922 events/s	    190874 heavy-events/s	        26.19 heavy-p50-ms	    113048 light-events/s	        25.99 light-p50-ms	        28.51 light-p90-ms	        30.37 light-p95-ms	        40.40 light-p99-ms	        75.48 light-p999-ms	         0.9926 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    303922 events/s	    191078 heavy-events/s	        26.29 heavy-p50-ms	    112844 light-events/s	        25.95 light-p50-ms	        28.43 light-p90-ms	        31.25 light-p95-ms	        47.95 light-p99-ms	        56.70 light-p999-ms	         0.9868 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    304742 events/s	    191078 heavy-events/s	        26.20 heavy-p50-ms	    113664 light-events/s	        25.91 light-p50-ms	        28.16 light-p90-ms	        29.78 light-p95-ms	        44.77 light-p99-ms	        75.62 light-p999-ms	         0.9890 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10-12         	       1	         0 closes	    302284 events/s	    190054 heavy-events/s	        26.39 heavy-p50-ms	    112230 light-events/s	        26.13 light-p50-ms	        28.59 light-p90-ms	        30.11 light-p95-ms	        44.68 light-p99-ms	        59.80 light-p999-ms	         0.9899 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    300984 events/s	    284058 heavy-events/s	       176.1 heavy-p50-ms	     16926 light-events/s	       174.4 light-p50-ms	       186.7 light-p90-ms	       194.4 light-p95-ms	       203.3 light-p99-ms	       210.7 light-p999-ms	         0.9906 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    304649 events/s	    287539 heavy-events/s	       174.0 heavy-p50-ms	     17110 light-events/s	       172.4 light-p50-ms	       183.1 light-p90-ms	       195.4 light-p95-ms	       219.2 light-p99-ms	       239.3 light-p999-ms	         0.9910 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    302080 events/s	    285082 heavy-events/s	       175.9 heavy-p50-ms	     16998 light-events/s	       174.1 light-p50-ms	       184.6 light-p90-ms	       190.8 light-p95-ms	       219.3 light-p99-ms	       227.5 light-p999-ms	         0.9900 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    300236 events/s	    283648 heavy-events/s	       175.1 heavy-p50-ms	     16588 light-events/s	       174.1 light-p50-ms	       191.2 light-p90-ms	       200.7 light-p95-ms	       230.1 light-p99-ms	       240.6 light-p999-ms	         0.9940 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    284628 events/s	    268698 heavy-events/s	       186.4 heavy-p50-ms	     15930 light-events/s	       185.8 light-p50-ms	       196.3 light-p90-ms	       202.6 light-p95-ms	       216.9 light-p99-ms	       230.3 light-p999-ms	         0.9971 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    281540 events/s	    265626 heavy-events/s	       187.5 heavy-p50-ms	     15914 light-events/s	       186.2 light-p50-ms	       198.0 light-p90-ms	       204.9 light-p95-ms	       239.6 light-p99-ms	       246.5 light-p999-ms	         0.9931 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    283399 events/s	    267469 heavy-events/s	       186.3 heavy-p50-ms	     15930 light-events/s	       185.4 light-p50-ms	       199.9 light-p90-ms	       208.8 light-p95-ms	       222.9 light-p99-ms	       231.4 light-p999-ms	         0.9949 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    281339 events/s	    265421 heavy-events/s	       187.0 heavy-p50-ms	     15918 light-events/s	       185.9 light-p50-ms	       198.3 light-p90-ms	       210.4 light-p95-ms	       243.4 light-p99-ms	       249.0 light-p999-ms	         0.9940 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    286326 events/s	    270336 heavy-events/s	       185.2 heavy-p50-ms	     15990 light-events/s	       183.4 light-p50-ms	       196.6 light-p90-ms	       202.8 light-p95-ms	       217.6 light-p99-ms	       226.6 light-p999-ms	         0.9907 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x10/light=295x10-12        	       1	         0 closes	    282357 events/s	    266445 heavy-events/s	       186.5 heavy-p50-ms	     15912 light-events/s	       185.4 light-p50-ms	       196.9 light-p90-ms	       202.4 light-p95-ms	       251.9 light-p99-ms	       257.3 light-p999-ms	         0.9941 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    213799 events/s	    128205 heavy-events/s	        29.50 heavy-p50-ms	     85594 light-events/s	        28.97 light-p50-ms	        40.91 light-p90-ms	        43.81 light-p95-ms	       268.7 light-p99-ms	       271.0 light-p999-ms	         0.9819 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    212736 events/s	    123904 heavy-events/s	        29.32 heavy-p50-ms	     88832 light-events/s	        28.61 light-p50-ms	        37.61 light-p90-ms	        42.30 light-p95-ms	       267.8 light-p99-ms	       271.6 light-p999-ms	         0.9756 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    212284 events/s	    125338 heavy-events/s	        29.31 heavy-p50-ms	     86946 light-events/s	        28.77 light-p50-ms	        39.10 light-p90-ms	        42.76 light-p95-ms	       268.6 light-p99-ms	       311.0 light-p999-ms	         0.9814 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    212785 events/s	    123699 heavy-events/s	        29.37 heavy-p50-ms	     89086 light-events/s	        28.96 light-p50-ms	        39.71 light-p90-ms	        42.97 light-p95-ms	       267.0 light-p99-ms	       272.8 light-p999-ms	         0.9859 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    214024 events/s	    128614 heavy-events/s	        29.29 heavy-p50-ms	     85410 light-events/s	        28.75 light-p50-ms	        39.88 light-p90-ms	        43.59 light-p95-ms	       268.0 light-p99-ms	       284.3 light-p999-ms	         0.9814 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    212373 events/s	    126157 heavy-events/s	        29.63 heavy-p50-ms	     86216 light-events/s	        29.09 light-p50-ms	        39.82 light-p90-ms	        43.33 light-p95-ms	       268.3 light-p99-ms	       282.8 light-p999-ms	         0.9819 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    213250 events/s	    127590 heavy-events/s	        29.23 heavy-p50-ms	     85660 light-events/s	        28.71 light-p50-ms	        38.05 light-p90-ms	        42.32 light-p95-ms	       269.1 light-p99-ms	       282.2 light-p999-ms	         0.9825 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    214557 events/s	    123085 heavy-events/s	        29.46 heavy-p50-ms	     91472 light-events/s	        28.64 light-p50-ms	        38.92 light-p90-ms	        43.20 light-p95-ms	       267.7 light-p99-ms	       283.4 light-p999-ms	         0.9722 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    213321 events/s	    125133 heavy-events/s	        29.32 heavy-p50-ms	     88188 light-events/s	        28.65 light-p50-ms	        39.78 light-p90-ms	        43.06 light-p95-ms	       268.7 light-p99-ms	       281.2 light-p999-ms	         0.9773 light-wait-ratio
+BenchmarkPipelineFairness/heavy=5x1024x1/light=295x10/slow=1in50x250ms-12         	       1	         0 closes	    212991 events/s	    126771 heavy-events/s	        29.24 heavy-p50-ms	     86220 light-events/s	        28.71 light-p50-ms	        37.93 light-p90-ms	        42.14 light-p95-ms	       268.8 light-p99-ms	       283.5 light-p999-ms	         0.9818 light-wait-ratio
 PASS
-ok  	github.com/driskell/log-courier/lc-lib/pipelinebench	306.255s
+ok  	github.com/driskell/log-courier/lc-lib/pipelinebench	301.352s

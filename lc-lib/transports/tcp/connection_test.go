@@ -34,6 +34,35 @@ func TestConnectionReadByteReadsInOrder(t *testing.T) {
 	}
 }
 
+func TestConnectionReadFillsAcrossBufferRefills(t *testing.T) {
+	conn := newTestConnection(t, strings.NewReader("abcdef"))
+	first := make([]byte, 2)
+	if n, err := conn.Read(first); err != nil || string(first[:n]) != "ab" {
+		t.Fatalf("Expected \"ab\", got %q (error: %v)", first[:n], err)
+	}
+	rest := make([]byte, 4)
+	if n, err := conn.Read(rest); err != nil || string(rest[:n]) != "cdef" {
+		t.Fatalf("Expected \"cdef\", got %q (error: %v)", rest[:n], err)
+	}
+}
+
+func TestConnectionReadStopsAtShutdownOnceBufferedDataIsRead(t *testing.T) {
+	conn := newTestConnection(t, strings.NewReader("abcd"))
+	first := make([]byte, 2)
+	if n, err := conn.Read(first); err != nil || string(first[:n]) != "ab" {
+		t.Fatalf("Expected \"ab\", got %q (error: %v)", first[:n], err)
+	}
+
+	close(conn.receiverShutdownChan)
+	buffered := make([]byte, 2)
+	if n, err := conn.Read(buffered); err != nil || string(buffered[:n]) != "cd" {
+		t.Fatalf("Expected buffered \"cd\" after shutdown, got %q (error: %v)", buffered[:n], err)
+	}
+	if _, err := conn.Read(make([]byte, 1)); err != io.EOF {
+		t.Fatalf("Expected io.EOF once buffered data was read after shutdown, got %v", err)
+	}
+}
+
 func TestConnectionReadByteStopsAtShutdownOnceBufferedDataIsRead(t *testing.T) {
 	conn := newTestConnection(t, strings.NewReader("ab"))
 	if value, err := conn.ReadByte(); err != nil || value != 'a' {

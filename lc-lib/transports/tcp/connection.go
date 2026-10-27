@@ -220,6 +220,11 @@ func (t *connection) receiver() (err error) {
 // then ErrIOWouldBlock is returned after the socketIntervalSeconds timeout even if the
 // data is incomplete, and the int return value will be the number of bytes read so far.
 func (t *connection) Read(data []byte) (int, error) {
+	// A read the buffer can satisfy in full needs no deadline or shutdown checks, which run whenever it must be refilled
+	if t.rwBuffer.Reader.Buffered() >= len(data) {
+		return io.ReadFull(t.rwBuffer.Reader, data)
+	}
+
 	var err error
 	received := 0
 
