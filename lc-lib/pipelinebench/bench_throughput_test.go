@@ -15,8 +15,7 @@ func BenchmarkPipelineThroughput(b *testing.B) {
 			const payloadEvents, depth = 1024, 10
 
 			p := startPipeline(b, pipelineConfig{
-				sink:                       sinkConfig{routines: 4},
-				receiverMaxPendingPayloads: depth,
+				sink: sinkConfig{routines: 4},
 			})
 			conns := make([]*benchConnection, connections)
 			for idx := range conns {

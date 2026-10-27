@@ -957,23 +957,16 @@ required)
 
 ### `max pending payloads` (receiver)
 
-Number. Optional. Default: 10
-Since 2.7.0
+Number. Optional. Deprecated  
+Since 2.7.0, deprecated since 2.14.0
 
-Only applicable to protocol-based transports such as "tls" and "tcp" that
-support acknowledgements.
+This setting has no effect and logs a warning if set. Memory used to receive
+from each connection is bounded by [`receive window size`](#receive-window-size)
+and [`max queue size`](#max-queue-size) instead, so a client may have any
+number of payloads awaiting acknowledgement.
 
-The maximum number of spools that can be in process from a connection at any
-one time. Each spool will be kept in memory until it is fully processed and
-acknowledged by the transport.
-
-If a connection attempts to send more than this many spools to Log Carver,
-Log Carver will stop reading from the connection until it has acknowledged
-all pending payloads, and will then close the connection, forcing the client
-to retry.
-
-*You should only change this value if you changed the equivilant value on a
-Log Courier client.*
+The [`network`](#network) setting of the same name, which limits what Log
+Carver sends to each endpoint, is unaffected.
 
 ### `max tls version` (receiver)
 

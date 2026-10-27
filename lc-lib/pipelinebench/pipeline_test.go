@@ -2,9 +2,7 @@ package pipelinebench
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"path/filepath"
 	"runtime/pprof"
 	"strings"
 	"testing"
@@ -30,8 +28,7 @@ type sinkConfig struct {
 
 // pipelineConfig describes the configuration differences between scenarios
 type pipelineConfig struct {
-	sink                       sinkConfig
-	receiverMaxPendingPayloads int
+	sink sinkConfig
 	// maxQueueSize overrides the receiver queue budget in bytes when set
 	maxQueueSize int64
 }
@@ -47,32 +44,27 @@ type benchPipeline struct {
 func startPipeline(tb testing.TB, cfg pipelineConfig) *benchPipeline {
 	tb.Helper()
 
-	dir := tb.TempDir()
-	path := filepath.Join(dir, "log-carver.yaml")
-	general := fmt.Sprintf("  persist directory: %q\n", dir)
+	general := map[string]interface{}{"persist directory": tb.TempDir()}
 	if cfg.maxQueueSize > 0 {
-		general += fmt.Sprintf("  max queue size: %d\n", cfg.maxQueueSize)
-	}
-	yaml := fmt.Sprintf(`general:
-%sadmin:
-  enabled: false
-receivers:
-- transport: %s
-  listen: [bench]
-  max pending payloads: %d
-network:
-  transport: %s
-  servers: [127.0.0.1]
-  routines: %d
-  payload latency: %s
-  slow every: %d
-  slow latency: %s
-`, general, benchTransport, cfg.receiverMaxPendingPayloads, benchTransport, cfg.sink.routines, cfg.sink.payloadLatency, cfg.sink.slowEvery, cfg.sink.slowLatency)
-	if err := os.WriteFile(path, []byte(yaml), 0600); err != nil {
-		tb.Fatal(err)
+		general["max queue size"] = int(cfg.maxQueueSize)
 	}
 	loaded := config.NewConfig()
-	if err := loaded.Load(path, true); err != nil {
+	err := loaded.Parse(map[string]interface{}{
+		"general": general,
+		"admin":   map[string]interface{}{"enabled": false},
+		"receivers": []interface{}{
+			map[string]interface{}{"transport": benchTransport, "listen": []interface{}{"bench"}},
+		},
+		"network": map[string]interface{}{
+			"transport":       benchTransport,
+			"servers":         []interface{}{"127.0.0.1"},
+			"routines":        cfg.sink.routines,
+			"payload latency": cfg.sink.payloadLatency.String(),
+			"slow every":      cfg.sink.slowEvery,
+			"slow latency":    cfg.sink.slowLatency.String(),
+		},
+	}, true)
+	if err != nil {
 		tb.Fatal(err)
 	}
 

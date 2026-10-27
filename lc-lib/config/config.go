@@ -79,12 +79,15 @@ func (c *Config) Load(path string, reportUnused bool) (err error) {
 		return
 	}
 
-	// Populate configuration - reporting errors on spelling mistakes etc.
-	if err = parseConfiguration(c, rawConfig, reportUnused); err != nil {
-		return
-	}
+	return c.Parse(rawConfig, reportUnused)
+}
 
-	return
+// Parse populates and validates the configuration from raw values as a configuration file decodes to
+// If reportUnused is false, unknown top level sections will be ignored and will
+// not raise a configuration error
+func (c *Config) Parse(rawConfig map[string]interface{}, reportUnused bool) error {
+	// Populate configuration - reporting errors on spelling mistakes etc.
+	return parseConfiguration(c, rawConfig, reportUnused)
 }
 
 // Section returns the requested dynamic configuration entry

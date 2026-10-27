@@ -299,21 +299,14 @@ func (r *Pool) receiveSegment(ctx context.Context, segment *transports.EventsSeg
 	var progress *poolEventProgress
 	if receiver.SupportsAck() {
 		if segment.Offset == 0 {
-			if len(connectionStatus.progress)+1 > int(r.receivers[receiver].config.MaxPendingPayloads) {
-				receiver.ShutdownConnectionRead(ctx, fmt.Errorf("max pending payloads exceeded"))
-				r.connectionLock.Unlock()
-				return 0
-			}
 			// Schedule partial ack if this is first set of events
 			if len(connectionStatus.progress) == 0 {
 				r.scheduler.Set(connection, 5*time.Second)
 			}
 			progress = &poolEventProgress{ctx: ctx, nonce: segment.Nonce}
 			connectionStatus.progress = append(connectionStatus.progress, progress)
-		} else if progress = connectionStatus.receiving(); progress == nil {
-			// The payload was refused when its first segment arrived
-			r.connectionLock.Unlock()
-			return 0
+		} else {
+			progress = connectionStatus.receiving()
 		}
 		progress.count += segment.Skipped + segment.Count()
 		progress.final = segment.Final
@@ -536,10 +529,6 @@ func (r *Pool) updateReceivers(newConfig *config.Config) {
 				receiverApi.SetEntry("listen", api.String(listen))
 				receiverApi.SetEntry("transport", api.String(cfgEntry.Transport))
 				receiverApi.SetEntry("name", api.String(cfgEntry.Name))
-				if newReceiversByListen[listen].SupportsAck() {
-					// Only applies if supports ack
-					receiverApi.SetEntry("maxPendingPayloads", api.Number(cfgEntry.MaxPendingPayloads))
-				}
 				r.apiListeners.AddEntry(listen, receiverApi)
 			}
 		}

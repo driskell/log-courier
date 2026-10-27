@@ -33,11 +33,12 @@ type ReceiverConfig []*ReceiverConfigEntry
 type ReceiverConfigEntry struct {
 	Factory ReceiverFactory
 
-	Name               string   `config:"name"`
-	Enabled            bool     `config:"enabled"`
-	Transport          string   `config:"transport"`
-	Listen             []string `config:"listen"`
-	MaxPendingPayloads int64    `config:"max pending payloads"`
+	Name      string   `config:"name"`
+	Enabled   bool     `config:"enabled"`
+	Transport string   `config:"transport"`
+	Listen    []string `config:"listen"`
+	// MaxPendingPayloads is deprecated and has no effect, as receive windows and the queue bound memory instead
+	MaxPendingPayloads int64 `config:"max pending payloads"`
 
 	Unused map[string]interface{} `json:",omitempty"`
 }
@@ -46,7 +47,6 @@ type ReceiverConfigEntry struct {
 func (c *ReceiverConfigEntry) Defaults() {
 	c.Enabled = true
 	c.Transport = defaultReceiverTransport
-	c.MaxPendingPayloads = defaultNetworkMaxPendingPayloads
 }
 
 // Init the receiver configuration
@@ -66,6 +66,10 @@ func (c *ReceiverConfigEntry) Validate(p *config.Parser, path string) (err error
 	if len(c.Listen) == 0 {
 		err = fmt.Errorf("%slisten is required", path)
 		return
+	}
+
+	if c.MaxPendingPayloads != 0 {
+		log.Warningf("%smax pending payloads is deprecated and has no effect", path)
 	}
 
 	return nil

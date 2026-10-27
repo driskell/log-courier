@@ -55,7 +55,7 @@ func newTestPool(maxQueueSize int64) (*Pool, *testReceiver, chan []*event.Event)
 	output := make(chan []*event.Event)
 	eventChan := make(chan transports.Event)
 	receiver := &testReceiver{eventChan: eventChan, acks: make(chan testAck, 64)}
-	status := &poolReceiverStatus{config: &transports.ReceiverConfigEntry{Name: "test", MaxPendingPayloads: 10}, listen: "test", active: true}
+	status := &poolReceiverStatus{config: &transports.ReceiverConfigEntry{Name: "test"}, listen: "test", active: true}
 	pool := &Pool{
 		output:            output,
 		shutdownChan:      make(chan struct{}),
@@ -537,5 +537,17 @@ func TestPoolAcknowledgesPayloadWhoseEventsWereAllSkipped(t *testing.T) {
 	requestTestTake(t, pool, window)
 	expectTestTaken(t, window, "Pool did not take the payload")
 	expectTestAck(t, receiver, testAck{nonce: "payload", sequence: 2})
+	stop()
+}
+
+func TestPoolKeepsConnectionWithManyPayloadsAwaitingAcknowledgement(t *testing.T) {
+	pool, receiver, output, ctx, stop := startTestPool(t)
+	for idx := 0; idx < 20; idx++ {
+		sendTestPayload(t, pool, newTestPayloadOf(ctx, fmt.Sprintf("payload%d", idx), 1, 1), "Pool did not receive a payload")
+		receiveTestOutput(t, output)
+	}
+	if closes := receiver.closes.Load(); closes != 0 {
+		t.Fatalf("Pool closed the connection %d times for having payloads awaiting acknowledgement", closes)
+	}
 	stop()
 }

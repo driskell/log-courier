@@ -43,9 +43,8 @@ func BenchmarkPipelineFairness(b *testing.B) {
 			var heavyLatencies, lightLatencies []time.Duration
 			for i := 0; i < b.N; i++ {
 				p := startPipeline(b, pipelineConfig{
-					sink:                       sinkConfig{routines: 4, payloadLatency: 10 * time.Millisecond, slowEvery: scenario.slowEvery, slowLatency: scenario.slowLatency},
-					receiverMaxPendingPayloads: 10,
-					maxQueueSize:               scenario.maxQueueSize,
+					sink:         sinkConfig{routines: 4, payloadLatency: 10 * time.Millisecond, slowEvery: scenario.slowEvery, slowLatency: scenario.slowLatency},
+					maxQueueSize: scenario.maxQueueSize,
 				})
 				heavy := make([]*benchConnection, scenario.heavyConnections)
 				for idx := range heavy {
