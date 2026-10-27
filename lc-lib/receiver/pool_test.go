@@ -624,3 +624,17 @@ func TestPoolListsCleanlyClosedConnectionAsClosed(t *testing.T) {
 	sendTestEvent(t, pool, transports.NewConnectEvent(ctx, "remote", "test"), "Pool did not accept the reconnection")
 	stop()
 }
+
+func TestPoolCountsLinesReceivedBeforeTheyAreAcknowledged(t *testing.T) {
+	pool, _, output, ctx, stop := startTestPool(t)
+	sendTestPayload(t, pool, newTestPayloadOf(ctx, "payload", 3, 3), "Pool did not receive the payload")
+	awaitTestAPIConnections(t, pool, "Expected lines counted as received but not yet acknowledged", func(connections []map[string]interface{}) bool {
+		return len(connections) == 1 && connections[0]["receivedLines"] == 3.0 && connections[0]["completedLines"] == 0.0
+	})
+
+	acknowledgeTestEvents(t, pool, receiveTestEvents(t, output))
+	awaitTestAPIConnections(t, pool, "Expected lines counted as acknowledged", func(connections []map[string]interface{}) bool {
+		return len(connections) == 1 && connections[0]["receivedLines"] == 3.0 && connections[0]["completedLines"] == 3.0
+	})
+	stop()
+}

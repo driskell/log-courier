@@ -29,14 +29,16 @@ import (
 
 type receiverResponse struct {
 	Connections []struct {
-		CompletedLines int      `json:"completedLines"`
-		Speed          *float64 `json:"speed"`
-		WindowBytes    int64    `json:"windowBytes"`
-		WindowSize     int64    `json:"windowSize"`
-		Remote         string   `json:"remote"`
-		Description    string   `json:"description"`
-		Status         string   `json:"status"`
-		Error          string   `json:"error"`
+		CompletedLines  int      `json:"completedLines"`
+		ReceivedLines   *int64   `json:"receivedLines"`
+		PendingPayloads *int     `json:"pendingPayloads"`
+		Speed           *float64 `json:"speed"`
+		WindowBytes     int64    `json:"windowBytes"`
+		WindowSize      int64    `json:"windowSize"`
+		Remote          string   `json:"remote"`
+		Description     string   `json:"description"`
+		Status          string   `json:"status"`
+		Error           string   `json:"error"`
 	} `json:"connections"`
 	Status struct {
 		ActiveConnections int `json:"activeConnections"`
@@ -63,7 +65,7 @@ func NewReceiver(client *admin.Client, updateChan chan<- interface{}) View {
 
 	p.view = newView()
 	p.table = lcwidgets.NewTable()
-	p.table.ColumnNames = []string{"Remote", "Description", "Lines", "Events/s", "Window"}
+	p.table.ColumnNames = []string{"Remote", "Description", "Acked", "Received", "Events/s", "Receive Buffer"}
 
 	return p
 }
@@ -130,6 +132,7 @@ func (p *Receiver) CompleteUpdate(resp interface{}) {
 			p.gauges[idx] = widgets.NewGauge()
 		}
 		p.gauges[idx].Percent = int(min(data.WindowBytes*100/data.WindowSize, 100))
+		p.gauges[idx].Label = receiveBufferLabel(p.gauges[idx].Percent, data.WindowBytes)
 		p.gauges[idx].Border = false
 		p.gauges[idx].BarColor = ui.Theme.Gauge.Bar
 		if p.gauges[idx].Percent >= receiverWindowWarnPercent {
@@ -145,25 +148,27 @@ func (p *Receiver) CompleteUpdate(resp interface{}) {
 	}
 
 	if p.data == nil {
-		rows[0] = []interface{}{"Loading...", "", "", "", ""}
+		rows[0] = []interface{}{"Loading...", "", "", "", "", ""}
 	} else {
 		idx := 0
 		for dataIdx, data := range p.data.Connections {
 			colour := receiverStatusColour(data.Status)
-			rows[idx] = make([]interface{}, 5)
+			acked, received := receiverLineCells(data.CompletedLines, data.ReceivedLines, data.PendingPayloads != nil)
+			rows[idx] = make([]interface{}, 6)
 			rows[idx][0] = styleCell(data.Remote, colour)
 			rows[idx][1] = styleCell(data.Description, colour)
-			rows[idx][2] = styleCell(fmt.Sprintf("%d", data.CompletedLines), colour)
-			rows[idx][3] = styleCell(formatSpeed(data.Speed), colour)
+			rows[idx][2] = styleCell(acked, colour)
+			rows[idx][3] = styleCell(received, colour)
+			rows[idx][4] = styleCell(formatSpeed(data.Speed), colour)
 			switch {
 			case data.Status == "failed":
-				rows[idx][4] = styleCell("failed: "+data.Error, colour)
+				rows[idx][5] = styleCell("failed: "+data.Error, colour)
 			case data.Status == "closed":
-				rows[idx][4] = styleCell("closed", colour)
+				rows[idx][5] = styleCell("closed", colour)
 			case p.gauges[dataIdx] == nil:
-				rows[idx][4] = "-"
+				rows[idx][5] = "-"
 			default:
-				rows[idx][4] = p.gauges[dataIdx]
+				rows[idx][5] = p.gauges[dataIdx]
 			}
 			idx += 1
 		}
@@ -176,12 +181,12 @@ func (p *Receiver) CompleteUpdate(resp interface{}) {
 func (p *Receiver) SetRect(x1, y1, x2, y2 int) {
 	p.view.SetRect(x1, y1, x2, y2)
 
-	// 4*3+2 for dividers and padding
-	// 20 for lines
+	// 5*3+2 for dividers and padding
+	// 14 each for acked and received
 	// 12 for events per second
 	// divide amongst remaining 3 columns
-	calculatedWidth := int((p.Inner.Dx() - 14 - 20 - 12) / 3)
-	columnWidths := []int{calculatedWidth, calculatedWidth, 20, 12, calculatedWidth}
+	calculatedWidth := int((p.Inner.Dx() - 17 - 14 - 14 - 12) / 3)
+	columnWidths := []int{calculatedWidth, calculatedWidth, 14, 14, 12, calculatedWidth}
 
 	p.table.ColumnWidths = columnWidths
 	p.table.SetRect(p.Min.X, p.Min.Y, p.Max.X, p.Max.Y)
@@ -217,4 +222,26 @@ func styleCell(text string, colour string) string {
 		return text
 	}
 	return "[" + strings.NewReplacer("[", "(", "]", ")").Replace(text) + "](fg:" + colour + ")"
+}
+
+// receiverLineCells returns the acked and received lines to show, with a dash for any the connection or remote does
+// not report: a remote reporting no received lines reports only completed ones, which a connection with
+// acknowledgements completes once acknowledged and one without completes once received
+func receiverLineCells(completed int, received *int64, supportsAck bool) (string, string) {
+	if received == nil {
+		return fmt.Sprintf("%d", completed), "-"
+	}
+	if !supportsAck {
+		return "-", fmt.Sprintf("%d", *received)
+	}
+	return fmt.Sprintf("%d", completed), fmt.Sprintf("%d", *received)
+}
+
+// receiveBufferLabel returns the label for a receive buffer gauge, which shows anything held as at least <1%, or
+// empty for the gauge's own percentage
+func receiveBufferLabel(percent int, held int64) string {
+	if percent == 0 && held > 0 {
+		return "<1%"
+	}
+	return ""
 }

@@ -195,12 +195,12 @@ func (r *Pool) dequeueSpool() {
 	r.admit()
 }
 
-// takeMeasurements measures how fast each connection is completing lines
+// takeMeasurements measures how fast each connection is receiving lines
 func (r *Pool) takeMeasurements(now time.Time) {
 	r.connectionLock.Lock()
 	defer r.connectionLock.Unlock()
 	for _, status := range r.connectionStatus {
-		status.lineSpeed.Measure(status.lines, now)
+		status.receivedSpeed.Measure(status.received, now)
 	}
 }
 
@@ -343,6 +343,7 @@ func (r *Pool) receiveSegment(ctx context.Context, segment *transports.EventsSeg
 		connectionStatus.lines += int64(segment.Count())
 	}
 	connectionStatus.bytes += segment.Size
+	connectionStatus.received += int64(segment.Skipped + segment.Count())
 	r.connectionLock.Unlock()
 	if segment.Count() == 0 {
 		return 0

@@ -100,11 +100,13 @@ type poolConnectionStatus struct {
 	failure error
 	// closing is set once the connection has finished sending, so it closes when progress empties
 	closing bool
-	lines   int64
-	// lineSpeed measures how fast lines are completed
-	lineSpeed   core.SpeedMeter
-	bytes       int
-	supportsAck bool
+	// lines counts the lines completed, which for a connection with acknowledgements is once they are acknowledged
+	lines int64
+	// received counts the lines taken from the connection, including any skipped, and receivedSpeed how fast
+	received      int64
+	receivedSpeed core.SpeedMeter
+	bytes         int
+	supportsAck   bool
 
 	api.KeyValue
 }
@@ -143,7 +145,8 @@ func (p *poolConnectionStatus) Update() error {
 	p.SetEntry("listener", api.String(p.listener))
 	p.SetEntry("description", api.String(p.desc))
 	p.SetEntry("completedLines", api.Number(p.lines))
-	p.SetEntry("speed", api.Float(p.lineSpeed.Speed()))
+	p.SetEntry("receivedLines", api.Number(p.received))
+	p.SetEntry("speed", api.Float(p.receivedSpeed.Speed()))
 	p.SetEntry("receivedBytes", api.Bytes(p.bytes))
 	if p.supportsAck {
 		p.SetEntry("pendingPayloads", api.Number(len(p.progress)))
